@@ -352,8 +352,8 @@ export const FLIP_NICHE_LIST = Object.freeze([
     // to). inAll:true — it takes value's slot in `--mode all` (THE SWAP). Console-only + inform-first at
     // launch (excluded from screen.json, no app tab), like value/scalp were — every threshold is a
     // PLACEHOLDER (n≈0). gate:'amplitude' routes gateCandidates → gateAmplitudeCandidates (Stage-1 proxy)
-    // and renderAmplitudeMode confirms Stage-2 off windowStats; estimator:'amplitude' is the two-leg
-    // daily-reach family. falling:'knife-guard' — the trend/knife guard lives in amplitudeGate (Stage 2),
+    // and renderAmplitudeMode confirms Stage-2 off windowStats; estimator:'amplitude' is the walk-forward
+    // round-trip family (pFill = ampWalkForward, DT1b). falling:'knife-guard' — the trend/knife guard lives in amplitudeGate (Stage 2),
     // exactly as value's knife guard lives in valueGate (amplitude never reaches surviveMode).
     key: 'amplitude', label: 'Amplitude', inAll: true,
     edge:amplitudeEdge, rank: 'amplitude', confirm: null,
@@ -370,8 +370,10 @@ export const FLIP_NICHE_LIST = Object.freeze([
     ],
     // priceBasis 'daily' — amplitude posts DAILY-quantile levels (trough-bid / peak-ask) the surface
     // computes itself (like value's 'term'), NOT the row's 2h band edges. fillShape 'symmetric' — the
-    // family pFill IS the two-leg product, so estimateRank's ask-reach discount is skipped (no double
-    // count), exactly as churn/value are exempt.
+    // family pFill is the MEASURED walk-forward round-trip rate, which already ENDS at the ask being
+    // reached, so estimateRank's ask-reach discount is skipped (no double count), exactly as churn/value
+    // are exempt. (The refuted two-leg PRODUCT that used to justify this was deleted at DT1; the
+    // exemption was briefly unsound while pFill was a bare prior, and DT1b restored it.)
     defaultPath: PATH_KEYS.SCALP, estimator: 'amplitude', priceBasis: 'daily', fillShape: 'symmetric',
   },
   {

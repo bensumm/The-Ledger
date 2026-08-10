@@ -297,7 +297,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `/timeseries` fetch is far too short. This is the DT1 study's own design and reproduces its published
   figures exactly; it separates live rows 0%/16%/21%/26%/48% where the in-sample figure read ~100% on all
   of them. Printed as `round-trip X/Y = Z% ≤4d`; `pFillAmplitude` ranks on it above `AMP_WF_MIN_JUDGED`
-  judged entries and falls back to the 0.5 prior below it) / `amplitudeGate` (after-tax daily-amplitude floor + both-leg reach +
+  judged entries and falls back to the 0.5 prior below it) / `amplitudeGate` (after-tax daily-amplitude floor + both-leg reach — ⚠ which at default quantiles reduces to a `staleOptimistic` check, since the level is the median of its own scoring window +
   trend/knife guard) / `amplitudeDeployUnits` (the deployable-units three-way min the `amplitude`
   estimator family reads — floored HONESTLY to an integer, 0 when unaffordable: amplitude is a
   CONCENTRATION lane so `capGp` is TOTAL REALIZABLE `liquidCapital` used UNDIVIDED, NOT value's
@@ -392,7 +392,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   validators,defaultPath,estimator,priceBasis,fillShape}`. THE SWAP (PLAN-AMPLITUDE-SCAN §3): `amplitude`
   is `inAll:true` (in `--mode all`) and `value` is now `inAll:false` (relabelled **Invest**, KEY unchanged,
   runnable via `--mode value`/`--mode invest`). `gate:'amplitude'` routes to `gateAmplitudeCandidates`;
-  `estimator:'amplitude'` is the two-leg daily-reach family; `priceBasis:'daily'` = a surface-computed
+  `estimator:'amplitude'` is the walk-forward round-trip family (pFill = `ampWalkForward`, DT1b); `priceBasis:'daily'` = a surface-computed
   daily-quantile pair. RF2 (PLAN-REVERSE-FLIP, 2026-07-25): the `reverse` spec — `inAll:false` (explicit
   `--mode reverse` only, like scalp), `gate:'reverse'` (routes to `gateReverseFlipCandidates` over the
   OWNED-item pool, NOT the v24 fetch universe), `validators:[]` (reverseFlipGate does its own gating),
@@ -583,8 +583,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   within an item day-to-day), and `edge-map-study.mjs` + its shared `edge-map-lib.mjs` panel builder
   (realized-P&L-vs-characteristics · liquidity-gate placement + the subsampling artifact test · the
   volume→band lead/lag null · the price×volume exclusion map, strike-checked against our own lots;
-  `--section a|b|c|d`, panel cached to the gitignored `pipeline/.cache/edge-map-panel.jsonl`). All
-  read the `/1h` SQLite archive read-only and gate nothing. Retire by deleting the dir.
+  `--section a|b|c|d`, panel cached to the gitignored `pipeline/.cache/edge-map-panel.jsonl`). Plus
+  **`amp-cycle-reproduction.mjs`** (2026-08-09, DT1b) — the head-to-head that settled which of two
+  round-trip measurements was broken: the in-sample day-grain `cycleCompletion` vs the DT1 study's
+  out-of-sample hour-grain design. The study reproduces exactly (Saturated heart 0.0% @96h n=41; Masori
+  chaps 12.9% @24h n=31) while the in-sample version reads ~100% on the same items, which is why
+  `ampWalkForward` ships and `pFillAmplitude` ranks on it. UNLIKE the others it is NOT freely deletable:
+  `js/amplitudescreen.mjs` and `js/estimators/families.mjs` both cite it as their validation source, and
+  it is the standing regression check — if its two columns ever converge, the pre-origin fit has broken.
+  All read the `/1h` SQLite archive read-only and gate nothing.
 - `ignored-items.json` — tracked repo-root config (2026-07-07): items QUARANTINED from the MERCH
   book (farming inputs / loot / personal-use — e.g. snapdragon seed 5300, snapdragon 3000). Its
   `items` are dropped from the DERIVED merch views (`positions.json` phantom lots + unmatched-harvest

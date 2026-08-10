@@ -34,8 +34,9 @@
  *            pool, exactly like proxyDrift. Cold slice ⇒ null (degrade honestly, never a fake amplitude).
  *   Stage 2 (post-fetch, per-item 1h series) — amplitudeRanges()/amplitudeGate() off ONE
  *            windowStats(series1h, { wStart:0, wEnd:0 }) call: the daily-amplitude median floor, the
- *            both-leg recent-3 daily reach (bid TOUCHED + ask REACHED on ≥2 of recent-3 days via
- *            recencySplit), and a trend/knife guard (the caller passes trendDominates + knife flags —
+ *            both-leg reach test (bid TOUCHED + ask REACHED via recencySplit — but READ ITS HEADER: at
+ *            the default 0.5/0.5 quantiles this reduces to a STALENESS check, it is not the viability
+ *            gate it reads as), and a trend/knife guard (the caller passes trendDominates + knife flags —
  *            a trending item's "amplitude" is drift you get run over on, not a cycle).
  *
  * RANKING (§2.2 — NOT a bespoke ampScore). Amplitude registers an `'amplitude'` ESTIMATOR FAMILY
@@ -51,10 +52,11 @@
  * the family reads it. No parallel ranking composite.
  *
  * HONESTY (rule 4 — n≈0). EVERY threshold below is a NAMED PLACEHOLDER. The lane is a hypothesis
- * surfaced inform-first until it has a record (§4): the make-or-break question — do BOTH legs actually
- * fill within the hold horizon, repeatably? — is measured by the §A5 shadow both-leg replay (an UPPER
- * bound: a printed level ≠ your fill) + the realized retro-join. Do NOT cite any constant here as
- * validated.
+ * surfaced inform-first until it has a record (§4). The make-or-break question — do BOTH legs actually
+ * fill within the hold horizon, repeatably? — is now answered HISTORICALLY by `ampWalkForward` (DT1b),
+ * which drives the rank; the §A5 shadow both-leg replay is the FORWARD check and the realized retro-join
+ * the only ground truth (a printed level ≠ your fill, so every rate here is an upper bound). Do NOT cite
+ * any constant here as validated.
  */
 import { tax } from './money-math.js';
 import { quantLow, quantHigh, recencySplit, windowStats, RECENT_NIGHTS } from './windowread.mjs';
@@ -91,11 +93,21 @@ export const AMP_MAX_PRICE     = Infinity;
 // median daily low/high keeps both legs genuinely two-sided-reachable (the thesis). PLACEHOLDERS.
 export const AMP_BID_Q         = 0.5;      // trough-bid = median daily low
 export const AMP_ASK_Q         = 0.5;      // peak-ask  = median daily high
-// The load-bearing viability test (§4): the quoted bid AND ask must each hit on ≥ AMP_MIN_RECENT_HITS
-// of the recent AMP_RECENT_N (=3) days (recencySplit's staleOptimistic guard honored). PLACEHOLDERS.
+// ⚠ THESE TWO CONSTANTS ARE INERT AT THE DEFAULT QUANTILES — measured 2026-08-09, do not read them as
+// live tuning knobs. `ampBid`/`ampAsk` are the MEDIAN low/high of the very days recencySplit then counts
+// touches over, so `fullFrac` ≥ 0.5 = AMP_MIN_FULL_FRAC BY CONSTRUCTION whenever AMP_BID_Q/AMP_ASK_Q are
+// 0.5. That makes legOk's second disjunct always true, the AMP_MIN_RECENT_HITS branch unreachable, and
+// the whole test equivalent to bare `!staleOptimistic`. Measured across 335 items / 670 legs: fullFrac
+// min = p10 = median = p90 = 0.500 (sd 0.000), 100% of legs cleared the floor, and legOk returned an
+// IDENTICAL verdict to `!staleOptimistic` on 670/670. This is the same in-sample-level defect that sank
+// `cycleCompletion` (see pFillAmplitude's header) — a level scored against its own fitting window.
+// They DO bind at non-default quantiles (`--amp-ask-q 0.25` ⇒ fullFrac ≈ 0.25), which is the only reason
+// they are still here. The honest repair is to make the legs walk-forward like `ampWalkForward`; that is
+// a GATE-BEHAVIOUR change (it moves which rows appear) and is deliberately NOT done unilaterally.
+// PLACEHOLDERS either way.
 export const AMP_RECENT_N        = RECENT_NIGHTS;   // 3 — the recency window recencySplit compares against
-export const AMP_MIN_RECENT_HITS = 2;               // ≥2 of recent-3 is the STRONG both-leg reach signal
-export const AMP_MIN_FULL_FRAC   = 0.5;             // …or the level prints on ≥ half the FULL window (recent-3 is the strong signal, the full window the fallback — the staleOptimistic guard still bites)
+export const AMP_MIN_RECENT_HITS = 2;               // ≥2 of recent-3 — UNREACHABLE branch at default quantiles (see above)
+export const AMP_MIN_FULL_FRAC   = 0.5;             // …or the level prints on ≥ half the FULL window — TAUTOLOGICALLY satisfied at default quantiles (see above); only the staleOptimistic guard actually bites
 export const AMP_MIN_DAYS        = 5;               // thinner day sample than this ⇒ no read (mirrors ASYM_MIN_DAYS)
 // Deployable-units bound (mirrors valueScore's three-way min + expUnits): bankroll ÷ trough-bid,
 // vol-share × limiting-side volume × hold days, buy-limit × windows/day × hold days. PLACEHOLDERS.
@@ -249,7 +261,9 @@ export function cycleCompletion(days, { bid = null, ask = null, horizonDays = AM
    VALIDATION. This is the design of the DT1 study (PLAN-DIURNAL-TRIAGE), which re-runs and reproduces
    its published figures exactly — Saturated heart 0.0% @96h (n=41), Masori chaps 12.9% @24h (n=31);
    harness `pipeline/experiments/amp-cycle-reproduction.mjs`. It discriminates strongly across live
-   rows (0% / 24% / 42% / 48% @96h), which is the property the saturated in-sample figure lacked.
+   items (0% / 24% / 42% / 48% @96h on Saturated heart / Virtus / Masori chaps / Fury — the PRE-BUILD
+   validation run, not the shipped board), which is the property the saturated in-sample figure lacked.
+   The shipped DT1b board is a separate set; CHANGELOG 0.71.6 is its one home.
 
    HONESTY LIMITS — carry them, they are not boilerplate. The touch proxies are 1h avgLow/avgHigh
    AGGREGATES, not executed fills: no queue position, no partial fills, no competition for the same
@@ -372,9 +386,10 @@ export function amplitudeRanges(stats, live, { holdDays = AMP_HOLD_DAYS_DEFAULT,
   // DT1 (2026-08-09): `pFill2leg = bidFrac × askFrac` is DELETED. It was a PRODUCT OF MARGINALS standing
   // in for a joint, and the independence it assumed is measured FALSE — entry is adverse selection, so
   // rows it predicted at ≥0.25 realized ~5%. `cycleCompletion` below measures the ordered round trip
-  // directly instead of multiplying two leg rates that don't compose. bidTouch/askReach SURVIVE — they
-  // still gate leg printability in amplitudeGate's legOk, which is a different question (can this level
-  // print at all?) from "does the round trip complete?".
+  // directly instead of multiplying two leg rates that don't compose. bidTouch/askReach SURVIVE, but the
+  // DT1 claim that they "still gate leg printability" was measured WRONG on 2026-08-09: at the default
+  // quantiles the level is the median of the days being counted, so the test collapses to staleness (see
+  // AMP_MIN_FULL_FRAC's header). They remain honest as a DISPLAYED recent-vs-full divergence read.
   const cycle = cycleCompletion(stats.days, { bid: ampBid, ask: ampAsk, horizonDays: holdDays });
 
   return {
@@ -388,7 +403,8 @@ export function amplitudeRanges(stats, live, { holdDays = AMP_HOLD_DAYS_DEFAULT,
 
 /* amplitudeGate(ar, { trendDominates, knife, oscillating, driftMargin }) → { pass, reason }. Two-sided
    liquidity + the price window are the CALLER's (shared stack, kept); this owns the amplitude-specific gate:
-   the daily after-tax amplitude floor, the both-leg recent-3 reach viability test, the trend/knife guard
+   the daily after-tax amplitude floor, the both-leg reach test (⚠ a STALENESS check at default quantiles,
+   not a reachability gate — see AMP_MIN_FULL_FRAC's header), the trend/knife guard
    (a trending item's "amplitude" is drift — reject; oscillation around a flat level is the thesis), and
    PLAN-OSCILLATION-CYCLE Chunk 3's drift-adjusted `margin-below-floor` gate — THE ONLY GATE in that program.
    reason is null on pass; reject reasons (in order): no-history / amp-below-floor / bid-unreachable /
@@ -409,10 +425,13 @@ export function amplitudeRanges(stats, live, { holdDays = AMP_HOLD_DAYS_DEFAULT,
 export function amplitudeGate(ar, { trendDominates = false, knife = false, oscillating = false, driftMargin = null, recentN = AMP_RECENT_N } = {}) {
   if (!ar || !ar.hasData) return { pass: false, reason: 'no-history' };
   if (!(ar.medAmpPct != null && ar.medAmpPct >= AMP_MIN_AMP_PCT)) return { pass: false, reason: 'amp-below-floor' };
-  // both-leg daily reach — the load-bearing viability test (§4). A leg is reachable when the level prints
-  // on ≥2 of recent-3 days (the STRONG signal) OR on ≥ half the FULL window (the fallback the plan spells
-  // out: "the full-window count shown BESIDE recent-3"), and — either way — is NOT staleOptimistic (a
-  // level the full window reaches but recent days have abandoned is stranded/pre-regime; recencySplit's guard).
+  // both-leg daily reach. ⚠ AT THE DEFAULT QUANTILES THIS IS A STALENESS CHECK, NOT A REACHABILITY GATE:
+  // the fullFrac disjunct is satisfied by construction (median level vs its own window ⇒ fullFrac ≡ 0.5),
+  // so the recentHit branch never binds and legOk ≡ !staleOptimistic — verified identical on 670/670 legs.
+  // Full measurement + why it is not silently "fixed" here: AMP_MIN_FULL_FRAC's header. The disjuncts DO
+  // bind at non-default --amp-bid-q/--amp-ask-q, so the structure is kept rather than collapsed.
+  // NOTE the 'bid-unreachable'/'ask-unreachable' reasons below are therefore MISNAMED on a default run —
+  // every such drop is a stale-optimistic drop (the full window reaches a level recent days abandoned).
   const legOk = rs => !rs.staleOptimistic
     && ((recencyScored(rs, recentN) && rs.recentHit >= AMP_MIN_RECENT_HITS) || rs.fullFrac >= AMP_MIN_FULL_FRAC);
   if (!legOk(ar.bidTouch)) return { pass: false, reason: 'bid-unreachable' };

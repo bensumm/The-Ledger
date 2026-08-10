@@ -196,7 +196,9 @@ band + churn + AMPLITUDE — `value` is OUT of the default (took its slot); valu
   era — so relay it as "this ask reprinted after entry X of Y times", not as a fill probability you can
   size on. Anchor: Saturated heart graded A- at +5.88m/cycle under the old prior and fell to **D on a
   measured 0 of 37** the moment this landed. The both-leg reach columns answer the weaker printability
-  question; treat them as a gate on whether a level prints, never as evidence of a completed round trip. (3) These are **thin-class by construction** (big tickets enter via
+  question — and weaker even than that: at the default quantiles the level is the median of the days it is
+  counted over, so the columns are DESCRIPTIVE (a recent-vs-full divergence read), not a reachability gate.
+  Never relay them as evidence of a completed round trip; the round-trip cell is the only such evidence. (3) These are **thin-class by construction** (big tickets enter via
   gp-flow, grade-capped A-): state the real unit reality (a few units/day, slow day-long fills) on every
   row — never size like a liquid flip. **Thin-exit caveat (INFORM, not a gate):** thin BY CONSTRUCTION is
   exactly why a large concentrated amplitude position CANNOT be exited fast if the thesis breaks — surface

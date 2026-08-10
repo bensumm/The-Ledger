@@ -309,7 +309,10 @@ ATTENUATED daily-range proxy off the bulk 6h archive picks the fetch pool (exact
 Stage-2 the exact `amplitudeGate` off ONE full-day `windowStats(series1h)` — the recent-median after-tax
 daily amplitude floor (~2% PLACEHOLDER, on the taxed median-per-day basis, which reads lower than the raw
 hi↔lo range), the both-leg daily reach (the quoted trough-bid TOUCHED and peak-ask REACHED on ≥2 of
-recent-3 days OR ≥ half the full window, `staleOptimistic`-guarded — the load-bearing viability read),
+recent-3 days OR ≥ half the full window, `staleOptimistic`-guarded — ⚠ but at the DEFAULT 0.5/0.5 quantiles
+this is NOT a reachability read at all: the level is the median of the very days it is scored against, so
+the full-window disjunct holds by construction and the test reduces to `!staleOptimistic` (measured
+identical on 670/670 legs, 2026-08-09). It bites only at non-default `--amp-bid-q`/`--amp-ask-q`),
 and a trend/knife guard (`hourProfile().trendDominates` + the warm 1h trajectory — a trending item's
 "amplitude" is drift). **The margin-below-floor gate (PLAN-OSCILLATION-CYCLE Chunk 3 — THE ONLY GATE
 in that program, sequenced LAST after trend/knife):** reject when the drift-adjusted margin
@@ -411,7 +414,7 @@ costs the same at every bankroll. Making the three reserves capital-conditioned 
 (PLAN.md Open list) — until then, read a mid-tier row as "this class was given a look", not as "this
 class is worth capital right now". Two populations remain unreached and are NOT addressed here —
 Berserker helm/Dragon scimitar (pre-fetch liquidity-gated) and Rune platebody (edge-gated). Still n=0.
-F-F (2026-07-22) reworked the **Both-leg reach cell** ("Both-leg reach (recent / full) + phase"): it now
+F-F (2026-07-22) reworked the **Both-leg reach cell** (since DT1b: "Both-leg reach + ROUND-TRIP (measured) + phase"): it now
 prints the FULL-window hit count alongside recent-3 for BOTH legs (`recentHit/recentDays·fullHit/fullN`,
 straight off `recencySplit`) and appends a **trough-vs-decay phase annotation** (`reachPhaseNote`). WHY:
 a 3-day recent window is shorter than the ~7–8d oscillation cycle, so a trough-phase oscillator reads a
@@ -424,7 +427,7 @@ sign → *oscillating + floor≥0* = "trough phase — floor holding, oscillatio
 carries NO floor-direction word ("decay"/"rising"/"falling") — a rising-floor collapsed-amplitude mirage
 (Aldarium) ALSO lands in `knife`, and "decay" there would be a false direction-label. DISPLAY-ONLY —
 touches nothing upstream of the gate, no admission/rank change. **Ranked by the STANDARD `net × P ÷ TTF`** at the `amplitude` estimator family
-(`js/estimators/families.mjs`: `pFill` = the bare 0.5 PRIOR at n=0 since DT1 (see below), `ttf` = the
+(`js/estimators/families.mjs`: `pFill` = the MEASURED walk-forward round-trip rate (`ampWalkForward`, DT1b — see below; the bare 0.5 prior only below `AMP_WF_MIN_JUDGED` judged entries), `ttf` = the
 `--hold-days` horizon prior (4 by default since DT1; `--hold-days 7` for the weekly-oscillator horizon),
 `lapUnits` = the deployable-units min) — NOT a bespoke composite. Amplitude picks are patient multi-DAY
 plays → they surface under deploy/accumulate, NEVER as act-now rows. Every threshold is a PLACEHOLDER.
@@ -464,12 +467,13 @@ Reconciles with PLAN-BOTH-LEG-ENTRY's "approximately calibrated" finding (mean 0
 that measured the UNORDERED hold-≤1d joint, this measures the ORDERED entry-conditional round trip — both
 true, and the product overstates only the ordered one. *Honesty limits: one 74-day era, one update cycle;
 completion measured on hourly `avgLow`/`avgHigh` aggregates, NOT executed fills, so every rate is an UPPER
-BOUND; item-day clustering ⇒ effective n well below nominal; per-row n is ~9–10 judged entries — never
-calibrated.* Note deploy units scale with the horizon, so the re-horizon raised them ~4×.
+BOUND; item-day clustering ⇒ effective n well below nominal; a MEASURED row carries ~30–50 judged entries
+(below `AMP_WF_MIN_JUDGED` the row falls back to the prior instead) — never calibrated.* Note deploy units scale with the horizon, so the re-horizon raised them ~4×.
 
 Forward measurement stays the shadow replay (`join-amplitude-outcomes.mjs`, an UPPER BOUND) + the
-realized retro-join (`/analyze`); the shadow ledger now logs the `cycle` block so the retro scores the
-re-horizoned premise rather than the refuted product. Console-only (excluded from `screen.json`, no app tab).
+realized retro-join (`/analyze`); the shadow ledger logs BOTH a `walkForward` block (the out-of-sample rate
+that actually drives P(fill) since DT1b — the one to join on) and the legacy `cycle` block (in-sample and
+circular, kept only for continuity with rows logged between DT1 and DT1b). Console-only (excluded from `screen.json`, no app tab).
 
 **The reverse-flip lane (`--mode reverse`, console-only, provisional n≈0 — RF2, PLAN-REVERSE-FLIP).** A
 HARVEST-AN-OWNED-ITEM flip-niche, the mirror image of every other lane: instead of deploying capital to buy low
@@ -694,8 +698,10 @@ placeholder cutoffs.
   suppressed when nothing moved). In-distribution churn rows are byte-identical to the AC5/AC6 behavior;
   read the rank/grade (not the Est. reach token) for an exempt churn row's fill risk.
 - **Value + amplitude compute their own pair** (`fillShape:'symmetric'`, surface-computed, so the
-  ask-reach discount isn't double-applied). Amplitude's `pFill` IS the two-leg daily-reach product, so
-  it's the honest "round trip completes" number as the first-class rank input; amplitude rows are
+  ask-reach discount isn't double-applied). Amplitude's `pFill` is the MEASURED walk-forward round-trip
+  rate (`ampWalkForward`, DT1b) — it already CONTAINS the ask leg, which is what keeps the symmetric
+  exemption sound (it was briefly unsound between DT1 and DT1b, while pFill was a bare prior with no
+  exit leg in it at all); amplitude rows are
   thin-class by construction (big tickets enter via gp-flow) so they carry `THIN_GRADE_CAP` (A-).
 - **Churn ranks the LAP, not the unit:** `net/u × min(limit, feasibleDepth) × P(fill) ÷ TTF` (we max
   the buy limit on commodities, so the exact limit is a fact). In `--mode all`, churn (volume lane) and

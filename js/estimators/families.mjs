@@ -105,7 +105,10 @@ export const DEADBID_PFILL_FLOOR = 0.10;
    BOUNDED: it holds only while placement ≤ the bound (or no placement read exists — an absent read never
    punishes, the standard degrade). Returns false for any non-symmetric spec (they were never exempt).
    ⚠ AMPLITUDE CAVEAT: the amplitude family is also fillShape 'symmetric', but its pFill ALREADY folds
-   the exit leg (basis 'daily-reach-2leg'), so applying askReachFactor on top would DOUBLE-discount. The
+   the exit leg (basis 'walkforward' — the measured round trip ends AT the ask being reached), so applying
+   askReachFactor on top would DOUBLE-discount. NOTE the premise is genuinely weaker in the 'prior'
+   fallback case, where pFill contains no exit leg at all; that is tolerated because the prior is already
+   a deliberately wide, uninformative 0.5 and discounting it further would fake precision. The
    amplitude surface builds its own rank and passes NO askPlacement/askReach into estimateRank — keep it
    that way (the bound only ever fires when the caller passes a placement read). */
 export function symmetricExemptionHolds(spec, askPlacement) {
@@ -175,7 +178,8 @@ export function pFillValue(ctx = {}) {
 // scores entry→completion at hour grain — the design of the DT1 study, which re-runs and reproduces
 // its published figures exactly (Saturated heart 0.0% @96h n=41; Masori chaps 12.9% @24h n=31;
 // harness pipeline/experiments/amp-cycle-reproduction.mjs). It discriminates strongly across live rows
-// (0% / 24% / 42% / 48% @96h) where the in-sample figure read ~100% on all of them. Do not "simplify"
+// (0% / 24% / 42% / 48% @96h — the pre-build validation run on 4 items) where the in-sample figure read
+// ~100% on all of them. Do not "simplify"
 // it back onto the in-hand windowStats days — the pre-origin fit IS the correctness property.
 //
 // Unchanged from the original design: this REPLACES the Proposal-A ask-reach discount rather than

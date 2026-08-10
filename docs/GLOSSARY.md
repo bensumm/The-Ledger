@@ -17,7 +17,7 @@ These are different things at different levels — kept as two words on purpose.
 
 - **flip-niche** — a *screen-level* style for finding & flipping items. The frame (PLAN-AMPLITUDE-SCAN
   §1): band / **amplitude** / invest are ONE operation — *buy the low of the N-period cycle, sell the
-  high, capture the amplitude minus tax* — at three cycle periods (2h / 24h / multi-week); churn + scalp
+  high, capture the amplitude minus tax* — at three cycle periods (2h / multi-day / multi-week); churn + scalp
   sit off that axis (a volume-throttled lap and a directional regime bet). The niches:
   - **band** — flip the ~2h intraday price band: bid the band low, ask the band top on a liquid item
     with a stable regime. The default niche. (cycle period ~2h.)
@@ -27,8 +27,9 @@ These are different things at different levels — kept as two words on purpose.
     oscillates ~a few % *daily* — the swing the band screen's 2h grain + `net×P÷TTF` rank is
     structurally blind to (Masori-body class). Its gate is two-stage (a cheap daily-range proxy off the
     6h archive → the exact `amplitudeGate` off the per-item 1h `windowStats`); ranked by the standard
-    `net × P(both-leg daily reach) ÷ hold-horizon` at the `amplitude` estimator family. In `--mode all`
-    (THE SWAP — took value's slot). Console-only, provisional, n≈0. (cycle period ~24h.)
+    `net × P(measured walk-forward round trip) ÷ hold-horizon` at the `amplitude` estimator family — see
+    `ampWalkForward` (DT1b). In `--mode all` (THE SWAP — took value's slot). Console-only, provisional,
+    n≈0. (cycle period MULTI-DAY — re-horizoned 1d → 4d at DT1 after the 24h premise was refuted.)
   - **scalp** — a deliberate intraday flip on a *falling* market; flip-only, hard stop, no hold.
     Provisional, off by default. (off the amplitude axis — a regime bet.)
   - **invest** (spec KEY `value`) — buy-and-hold near a multi-week low, sell one big move up the cycle.

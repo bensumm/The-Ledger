@@ -5,8 +5,9 @@
  * fixture-testable with synthetic windowStats-shaped inputs — NO live data (CLAUDE.md rule 4).
  *
  * BUSINESS REQUIREMENTS pinned here (§2.1/§2.2):
- *   - an oscillating big-ticket with a ≥3% after-tax daily swing, both legs reachable on ≥2 of recent-3
- *     days, PASSES the amplitude gate.
+ *   - an oscillating big-ticket with a ≥3% after-tax daily swing PASSES the amplitude gate. (NOTE: the
+ *     recent-3 reach clause is NOT what admits it — at default quantiles legOk reduces to
+ *     !staleOptimistic; the REPRICED reject case below fires on staleness, not unreachability.)
  *   - a razor-thin daily range (amp below the floor) is REJECTED (amp-below-floor).
  *   - a bid the recent days no longer touch (repriced-up floor) is REJECTED (bid-unreachable).
  *   - the caller's trend/knife flags REJECT (trend / knife) — a trending item's "amplitude" is drift.

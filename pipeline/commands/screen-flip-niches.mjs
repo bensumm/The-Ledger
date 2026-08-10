@@ -134,7 +134,7 @@ import { pickFetchPool, buildTrackIndex, clampUnionFetch, TOTAL_FETCH_MAX, GEAR_
 import { pathAGpDay, comparePathARows, assignRankInLane } from '../lib/signal/patha.mjs';   // PLAN-LANE-ADMISSION Chunk C/D — the Path-A intraday-flip gp/day scorer (captureFrac PLACEHOLDER n≈0) + the pure two-tier console ranker (comparePathARows) & in-lane ranker (assignRankInLane); Chunk D makes Path-A gp/day the CONSOLE/last-report PRIMARY sort with rateItem's grade shown as the A/B backup (console-only; screen.json unchanged)
 import { classifyVolLane } from '../lib/signal/structural-admission.mjs';   // PLAN-LANE-ADMISSION Chunk B — the gear/churn volume lane selecting Path-A's captureFrac
 import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST follow-up) = the shared three-way-min deployable position size, reused for the digest's deployable-throughput ranking
-import { amplitudeRanges, amplitudeGate, amplitudeDriftMargin, ampWalkForward, AMP_HOLD_DAYS_DEFAULT, AMP_ASK_Q, AMP_BID_Q, AMP_WF_WARMUP_DAYS, AMP_WF_FIT_DAYS, AMP_WF_MIN_JUDGED } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the 24h-cycle niche's Stage-2 gate + hold-horizon default; PLAN-OSCILLATION-CYCLE Chunk 2 — amplitudeDriftMargin = the shadow-logged drift-adjusted margin; F-E — AMP_ASK_Q/AMP_BID_Q = the DEFAULT reach-vs-margin quantiles the --amp-ask-q/--amp-bid-q flags fall back to
+import { amplitudeRanges, amplitudeGate, amplitudeDriftMargin, ampWalkForward, AMP_HOLD_DAYS_DEFAULT, AMP_ASK_Q, AMP_BID_Q, AMP_WF_WARMUP_DAYS, AMP_WF_FIT_DAYS, AMP_WF_MIN_JUDGED } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the MULTI-DAY-cycle niche's Stage-2 gate + hold-horizon default (re-horizoned 1d → 4d at DT1); DT1b — ampWalkForward = the measured round-trip P(fill) + its AMP_WF_* window/sample constants; PLAN-OSCILLATION-CYCLE Chunk 2 — amplitudeDriftMargin = the shadow-logged drift-adjusted margin; F-E — AMP_ASK_Q/AMP_BID_Q = the DEFAULT reach-vs-margin quantiles the --amp-ask-q/--amp-bid-q flags fall back to
 import { driftExitFrom, oscillationVsKnife, OSC_DETECTOR_NIGHTS } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 2 — driftExitFrom = the ONE slope-sourcing + drift-adjusted-exit composition (Chunk 6 reuses it); off in-hand hourProfile + windowStats().days, NO fetch. Chunk 3 — oscillationVsKnife tempers the knife guard (a drift-riding oscillator is not a false knife). F-H — OSC_DETECTOR_NIGHTS = the detector's OWN longer trailing window, decoupled from the gate's AMP_NIGHTS
 import { amplitudeShadow } from '../lib/render/suggestlog.mjs';   // A5 — the amplitude lane shadow block on suggestions.jsonl
 // P4c: the four niches are DECLARATIVE strategy specs now. screen-flip-niches.mjs derives its mode-name lists from
@@ -2138,7 +2138,7 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
 // NOT a bespoke composite). Every row is flagged PROVISIONAL (n≈0). Picks accrue via the O1 suggestions
 // ledger (mode 'amplitude') with the §A5 shadow both-leg-replay block. OFF the app (excluded from
 // screen.json); surfaces under deploy/accumulate, never as act-now rows (patient multi-hour plays).
-const AMP_HEADERS = ['Item', 'Guide', 'Live', 'Daily swing (trough→peak)', 'Both-leg reach (recent / full) + phase', 'Net/cycle (after-tax)', 'Hold horizon', 'Deploy units', 'Grade'];
+const AMP_HEADERS = ['Item', 'Guide', 'Live', 'Daily swing (trough→peak)', 'Both-leg reach + ROUND-TRIP (measured) + phase', 'Net/cycle (after-tax)', 'Hold horizon', 'Deploy units', 'Grade'];
 const AMP_NIGHTS = 14;   // the per-item daily windowStats lookback (full-day wStart:0,wEnd:0)
 
 // PLAN-OSCILLATION-CYCLE F-F — the trough-vs-decay DISPLAY annotation for the amplitude reach cell.
@@ -2230,7 +2230,8 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
     const driftShadow = amplitudeDriftMargin(dae, { entry: ar.ampBid });
     const g = amplitudeGate(ar, { trendDominates, knife, oscillating: !!(osc && osc.oscillating), driftMargin: driftShadow });
     if (!g.pass) { dropped[DROP_KEY[g.reason] ?? 'ampFloor']++; continue; }
-    // rank via the EXISTING spine: the 'amplitude' estimator family (pFill = two-leg daily reach, ttf =
+    // rank via the EXISTING spine: the 'amplitude' estimator family (pFill = the measured walk-forward
+    // round-trip rate (DT1b), ttf =
     // hold horizon, lapUnits = deployable min) → rankScore(net×P÷TTF). capGp = TOTAL REALIZABLE capital
     // (liquidCapital), UNDIVIDED — amplitude is a concentration lane, NOT ÷slots like value (Ben 2026-07-19).
     const capGp = AMP_CAPITAL;
@@ -2326,7 +2327,11 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
     sugg.push(suggestionEntry(row, {
       itemId: s.id, cls: liqClass(row), volSrc: 'bulk', verdict: 'AMP-CYCLE', grade, cappedBy: r.cappedBy, posture: POSTURE, path: 'scalp',   // R7: amplitude only applies rateItem's THIN cap → r.cappedBy
       bid: ar.ampBid, ask: ar.ampAsk, pFill: round2(pFill.value), ttfSec: ttf.value, rank: Math.round(rank),
-      estBasis: `${pFill.basis}/${ttf.basis}`, estN: ar.nDays,
+      // DT1b: estN must track the estimator NAMED in estBasis — pFill.n is the walk-forward `judged`
+      // count (30–50 on a measured row, 0 on a prior fallback), NOT ar.nDays (the ~14-day windowStats
+      // sample). Logging the latter beside a `walkforward` basis mis-states the sample to any retro join.
+      // ar.nDays is not lost: `amplitude.nDays` in the shadow block below still carries it.
+      estBasis: `${pFill.basis}/${ttf.basis}`, estN: pFill.n,
       amplitude: amplitudeShadow(ar, { holdDays: AMP_HOLD_DAYS, profile: prof, drift: driftShadow, walkForward: wf }),
       volDayRolling: rollShadow(series1h, s.id),
       // EF-0a: the ampProxy pre-fetch position stamp. Amplitude's watchlist reserve carries no `via`
