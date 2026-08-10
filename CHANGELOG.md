@@ -31,13 +31,49 @@ default constant, the other pins the CALL SITE (`diurnalTimedLap` fitted at `nig
 ever simplified back" was FALSE as written — forwarding the caller's `nights` into the gate, which is
 exactly what the plan's spec said to do, passed the entire suite green.
 
-**Known gap, unresolved and flagged rather than papered over:** the gate judges a 14-day shape and the
-lift was measured on a ~30-day fit, but the two highest-traffic surfaces render a **7-day-fitted** window.
-Measured over the archive (gate-passers, n=32) the 7d and 14d fits agree on the dip hour 34.4% of the
-time and on the dip window SPAN 18.8% (median |Δ| 1h). Usually adjacent, so the marker isn't fabricated —
-but it is a looser warrant than "these exact hours were verified", and it is the same transfer problem
-that justified re-measuring the gate, left unapplied to the fit. Closing it is a tuning decision beyond
-DT4's scope.
+**Known gap, flagged rather than papered over — now CLOSED by DT4b below:** the gate judges a 14-day
+shape and the lift was measured on a ~30-day fit, but the two highest-traffic surfaces rendered a
+**7-day-fitted** window. Measured over the archive (gate-passers, n=32) the 7d and 14d fits agree on the
+dip hour 34.4% of the time and on the dip window SPAN 18.8% (median |Δ| 1h). Usually adjacent, so the
+marker isn't fabricated — but it is a looser warrant than "these exact hours were verified", and it is
+the same transfer problem that justified re-measuring the gate, left unapplied to the fit.
+
+### DT4b — the rendered diurnal window is now the window the gate verified (2026-08-10)
+
+Closes DT4's flagged fit-window transfer gap. New `displayFitNights()` (`js/windowread.mjs`) is the ONE
+home for "which window does a DISPLAYED diurnal window get fitted over": when the split-half gate passes,
+`diurnalTimedLap` refits the **whole lap** over the gate's own 14-day window; when it doesn't, the
+caller's `nights` is untouched. Scoped precisely: `reliable === true` is the only branch in which hours
+are printed at all, so the ~99% that render "levels only" are byte-identical to before — pinned by its
+own test. Console/pipeline-only (the deployed app imports `hourProfile`/`deriveDiurnalRange`/
+`windowStats`/`hourConcentration`, none of the gated surfaces), so **no `APP_VERSION` bump**.
+
+**Why the fit moved rather than the wording.** The alternative — print the gate's 14d hours beside the
+caller's 7d levels — is not implementable coherently: `deriveDiurnalRange` reads the LEVEL off the
+dip/peak window, so hours and levels are one fit and splitting them names a price that is not the price
+at that hour. That constraint, not a preference, picked the fix.
+
+**Two basis-mismatch holes closed structurally, not by convention.** `pushSoftBuy`'s `prof` parameter and
+`digestSoftBuy`'s were both *deleted*: each took a caller-supplied `nights=7` profile built for other
+consumers, which is exactly the mismatch this chunk exists to prevent. Both now fit their own profile at
+the resolved basis and take the already-built lap to do it at zero recompute — the mismatch is
+unrepresentable rather than merely unlikely. The screen's `phase` column deliberately KEEPS the 7-day
+`prof`: it is a cycle-position word, not a printed hour span, so it is not gated.
+
+**Verification.** Four new tests, built on a two-dip fixture where the 7d and 14d fits genuinely
+disagree — a fixture where they agree cannot detect the bug, and one test asserts the fixture's own
+validity. The first fixture attempted (a single dip moving 03:00 → 09:00 mid-window) **did not work**:
+the opposing cosines partially cancel inside each parity half, dropping r to ~0.31 so the gate failed and
+the branch was never exercised. That was caught by the validity assertion, not by assuming. Mutation-
+verified: reverting `displayFitNights` to the caller's `nights` fails the suite on the named guard.
+Then RUN on the live path (rule 10 — a green suite is not evidence a line executed): the full board
+produced **no** gate-passer, so four real passers were located in the 1h archive and quoted directly —
+ids 1603, 449, 1607, 6034 each rendered their 14d window and not their 7d one (1603: `20:00–02:00`
+vs a 7d `01:00–04:00`).
+
+**What this does NOT claim (rule 4):** 14d-fitted levels are not measured to beat 7d-fitted ones. The
+lift numbers behind DT4 are an hour-RANKING result and say nothing about level quality. What DT4b buys
+is coherence between the warrant and the display, on the ~0.8% of rows that carry the marker.
 
 **The 14-day gate is a different selection from the study's 30-day one** (only 25% of 30d-passers also
 pass at 14d), so the study's +14.8pp could not be inherited and was re-measured directly — study TEST arm

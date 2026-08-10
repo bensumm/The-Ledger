@@ -161,6 +161,14 @@ gate to the caller's `nights` would have shipped a gate that passes nothing and 
 window on the board. `windowReliability` therefore **pins its own 14-day window** and takes the RAW
 series, independent of whatever `nights` the rendered profile used. Pinned by a regression test.
 
+> **Superseded detail (DT4b, 2026-08-10).** The sentence above — "the surfaces that render hours
+> profile at `nights=7`" — described the state at DT4 and is no longer true on a gate-PASSING item.
+> The gap that created (a 7-day-fitted window carrying a 14-day-measured warrant; the 7d/14d fits
+> agree on the dip hour only 34.4% of the time, on the span 18.8%) was closed by `displayFitNights`:
+> when the gate passes, the whole lap refits over the gate's own window, so what is rendered is what
+> was verified. `windowReliability` itself is UNCHANGED — it still pins its own window and still takes
+> the raw series, so everything else in this section stands as written.
+
 The 30d run reproduces this study's headline (4.6% vs its 4.5% pass rate), which is the harness
 agreeing with the study where it should.
 

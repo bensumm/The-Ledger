@@ -1682,17 +1682,23 @@ export function hourConcentration(series, { nights = 14, now = new Date() } = {}
 // n=4 (+30.0pp dip / +36.7pp peak), so the monotonicity is carried at its decisive end by anecdote
 // (rule 4). ~2% of items pass on that panel; ~0.8% on the live board, which is less selective.
 //
-// WHAT THIS GATE DOES **NOT** AUTHORISE — the fit-window transfer gap (found by review 2026-08-10).
+// THE FIT-WINDOW TRANSFER GAP — found by review 2026-08-10, CLOSED by DT4b the same day.
 // The gate judges a 14-day shape; the lift was measured on a ~30-day FIT; but the surfaces that render
-// the window fit it at nights=7 (screen's DIURNAL_NIGHTS, quote's diurnal note). So a passing item is
-// showing a 7-day-fitted window carrying a 14-day-measured warrant. Measured over the archive
+// the window fitted it at nights=7 (screen's DIURNAL_NIGHTS, quote's diurnal note). So a passing item
+// showed a 7-day-fitted window carrying a 14-day-measured warrant. Measured over the archive
 // (gate-passers only, n=32): the 7d and 14d fits agree on the dip hour 34.4% of the time, the peak hour
 // 31.3%, and on the dip window SPAN only 18.8% — median |Δ| 1h, max 10h. Usually adjacent, so the
-// marker is not fabricated, but it is looser than "these exact hours were verified". The same
-// reasoning that rejected inheriting the 30d lift for a 14d GATE applies here to the FIT and was not
-// applied. UNRESOLVED, deliberately: closing it means either raising the render fit to 14d (a tuning
-// change with effects well beyond DT4) or rendering the gate's own 14d window beside 7d-derived LEVELS
-// (a new inconsistency). Ben's call — do not paper over it by softening the wording alone.
+// marker was not fabricated, but it was looser than "these exact hours were verified".
+// FIXED by `displayFitNights` (below): when — and ONLY when — this gate passes, the whole lap refits
+// over the gate's own window, so the hours rendered are the hours verified. The rejected alternative,
+// rendering 14d hours beside 7d LEVELS, is not implementable coherently: deriveDiurnalRange reads the
+// level OFF the dip/peak window, so the two cannot be split without naming a price that is not the
+// price at that hour. The other ~99% (reliable false/null) keep the caller's window untouched and
+// print no hours at all, so they have no gap to close. Confirmed on the live path 2026-08-10: four
+// real gate-passers (ids 1603/449/1607/6034) each rendered their 14d window, not their 7d one.
+// NOTE what this does NOT claim: 14d-fitted LEVELS are not measured to beat 7d-fitted ones. The fix
+// buys coherence between warrant and display — the lift table above is an hour-RANKING result and
+// says nothing about level quality (rule 4).
 // (PER-SIDE VARIANT, corrected 2026-08-10 after review — an earlier version of this comment stated
 // this BACKWARDS and used the error to justify the choice. The measured run: gating the peak side by
 // its OWN rHi scored +13.4pp; gating it by the LOW-side rLow scored +17.0pp; min(both) scored +17.4pp.
@@ -1790,6 +1796,44 @@ export function windowReliability(series, { nights = WINDOW_RELIABLE_NIGHTS, now
   return { rLow: cLow.r, rHi: cHi.r, r, reliable: r >= minR, daysUsed: keep.size, degraded: false, reason: null };
 }
 
+/**
+ * displayFitNights — DT4b (2026-08-10): CLOSES the fit-window transfer gap documented in
+ * windowReliability's header. ONE home for the rule "which window does a DISPLAYED diurnal
+ * window get fitted over"; every surface that renders gated hours must route through it.
+ *
+ * THE GAP IT CLOSES. The gate judges a 14-day shape (its window is pinned — a 7-day window is
+ * uncomputable for ~100% of items). The surfaces rendered the window at nights=7. So a passing
+ * item printed a 7-day-fitted span carrying a 14-day-measured warrant, and MEASURED over the
+ * archive (gate-passers, n=32) those two fits agree on the dip hour only 34.4% of the time and
+ * on the SPAN only 18.8%. The marker was not fabricated (median |Δ| 1h) but it was looser than
+ * "these exact hours were verified", which is what the marker says.
+ *
+ * WHY THE FIT MOVES RATHER THAN THE WORDING. The alternative — print the gate's 14d hours beside
+ * the caller's 7d levels — is not implementable coherently: deriveDiurnalRange derives the BID/ASK
+ * LEVELS *from* the dip/peak windows, so hours and levels are one fit and cannot be separated. A
+ * 14d hour with a 7d level would name a price that is not the price at that hour. So when the gate
+ * passes, the WHOLE lap refits at the gate's window.
+ *
+ * WHAT THIS DOES AND DOES NOT CHANGE. It changes the fit ONLY when `reliable === true` — and that
+ * is precisely the branch in which hours are displayed at all (false/null render "levels only", so
+ * they have no gap to close and keep the caller's window untouched). ~0.8% of a live board passes.
+ * DO NOT "simplify" this into a blanket nights=14 for the callers: that would move the levels of
+ * the other ~99%, which no measurement here covers.
+ *
+ * HONEST LIMIT (rule 4). This makes the displayed window the one the gate verified. It does NOT
+ * make the levels better — 14d-fitted levels are not measured to beat 7d-fitted ones, and the lift
+ * numbers in windowReliability's header were measured on hour RANKING, not on levels. The claim is
+ * coherence between warrant and display, nothing more. The change is visible in the printed span
+ * on exactly the rows that carry the "repeats" marker.
+ *
+ * PURE, zero fetch (windowReliability is pure and is computed once here, not twice).
+ * @returns {{ reliability, fitNights }}
+ */
+export function displayFitNights(series, { nights = 7, now = new Date() } = {}) {
+  const reliability = windowReliability(series, { now });
+  return { reliability, fitNights: reliability.reliable === true ? WINDOW_RELIABLE_NIGHTS : nights };
+}
+
 // --- the timed-lap layer (PLAN-DIURNAL-TIMING §0/§1, DT1) ---------------------------------------
 // diurnalTimedLap is NOT a parallel computation — it is deriveDiurnalRange's output, EXTENDED with the
 // genuinely new fields (recent-N trend, reach, liquidity pools, tranche sizing, the concentration
@@ -1833,36 +1877,37 @@ export function diurnalTimedLap(series, {
   nights = 7, recentN = RECENT_NIGHTS, buyLimit = null, volDay = null,
   liveLo = null, liveHi = null, now = new Date(),
 } = {}) {
-  const profile = hourProfile(series, { nights, now, recentN });
+  // DT4b — resolve the FIT window BEFORE fitting anything. When the split-half gate passes, the whole
+  // lap is fitted over the gate's own 14-day window, so the hours this renders are the hours that were
+  // verified; when it does not pass, the caller's `nights` is untouched (and no hours are printed at
+  // all). ONE home for the rule: displayFitNights. Every `nights`-scoped read below uses `fitNights`,
+  // deliberately — a mixed-window lap would pair an hour from one fit with a level from another.
+  const { reliability, fitNights } = displayFitNights(series, { nights, now });
+  const profile = hourProfile(series, { nights: fitNights, now, recentN });
   if (!profile) return { degraded: true, reason: 'thin-history' };
   const dr = deriveDiurnalRange(profile, { liveLo, liveHi });
   if (!dr || dr.bid == null || dr.ask == null) return { degraded: true, reason: 'no-window' };
 
   const net = netMargin(dr.bid, dr.ask);
   const roi = (net != null && dr.bid) ? net / dr.bid * 100 : null;
-  const { instantNet, instantRoi } = instantMargin(series, { nights, now });
+  const { instantNet, instantRoi } = instantMargin(series, { nights: fitNights, now });
 
   // §2: score the CHOSEN dip/peak levels against their OWN window-scoped windowStats slice via
   // recencySplit — the same primitive amplitudeRanges is built from, NOT the amplitude wrapper itself
   // (which would derive a second, independently-quantiled trough/peak level — a two-homes bug).
-  const dipStats = windowStats(series, { wStart: profile.dip.startH, wEnd: profile.dip.endH, nights, now });
+  const dipStats = windowStats(series, { wStart: profile.dip.startH, wEnd: profile.dip.endH, nights: fitNights, now });
   const bidReach = dipStats ? recencySplit(dipStats.days, 'bid', dr.bid, recentN) : null;
-  const peakStats = windowStats(series, { wStart: profile.peak.startH, wEnd: profile.peak.endH, nights, now });
+  const peakStats = windowStats(series, { wStart: profile.peak.startH, wEnd: profile.peak.endH, nights: fitNights, now });
   const askReach = peakStats ? recencySplit(peakStats.days, 'ask', dr.ask, recentN) : null;
 
   // recent-N trend off the FULL-day windowStats' days — the existing recency-weighted slope primitive
   // (projectTrajectory), not a new trend fit.
-  const fullStats = windowStats(series, { wStart: 0, wEnd: 0, nights, now });
+  const fullStats = windowStats(series, { wStart: 0, wEnd: 0, nights: fitNights, now });
   const lowTrend = fullStats ? projectTrajectory(fullStats.days, n => n.low, { recentN }) : null;
   const hiTrend = fullStats ? projectTrajectory(fullStats.days, n => n.hi, { recentN }) : null;
 
   const holdHrs = ((profile.peak.atHour - profile.dip.atHour) % 24 + 24) % 24;
-  const clean = hourConcentration(series, { nights, now }).clean;
-  // DT4 — the split-half reliability gate on whether the dip/peak HOURS are worth printing. Computed
-  // off the RAW `series` at its OWN pinned 14-day window, deliberately NOT the caller's `nights`: at
-  // nights=7 (what quote/screen pass) the parity halves fall under HOURPROFILE_MIN_DAYS and the gate is
-  // uncomputable for ~100% of items. See windowReliability's header for the measurement.
-  const reliability = windowReliability(series, { now });
+  const clean = hourConcentration(series, { nights: fitNights, now }).clean;
 
   const dipPool = dipStats ? dipStats.medVolLo : null;
   const peakPool = peakStats ? peakStats.medVolHi : null;
@@ -1878,13 +1923,13 @@ export function diurnalTimedLap(series, {
   const bidReaches = [{ level: dr.bid, window: dr.dipWindow, reach: bidReach, pool: dipPool }];
   if (profile.peaks.length > 1) {
     const pk = profile.peaks[1];
-    const st = windowStats(series, { wStart: pk.startH, wEnd: pk.endH, nights, now });
+    const st = windowStats(series, { wStart: pk.startH, wEnd: pk.endH, nights: fitNights, now });
     askReaches.push({ level: pk.level, window: { startH: pk.startH, endH: pk.endH },
       reach: st ? recencySplit(st.days, 'ask', pk.level, recentN) : null, pool: st ? st.medVolHi : null });
   }
   if (profile.dips.length > 1) {
     const dp = profile.dips[1];
-    const st = windowStats(series, { wStart: dp.startH, wEnd: dp.endH, nights, now });
+    const st = windowStats(series, { wStart: dp.startH, wEnd: dp.endH, nights: fitNights, now });
     bidReaches.push({ level: dp.level, window: { startH: dp.startH, endH: dp.endH },
       reach: st ? recencySplit(st.days, 'bid', dp.level, recentN) : null, pool: st ? st.medVolLo : null });
   }
@@ -1904,8 +1949,13 @@ export function diurnalTimedLap(series, {
     peakReality: profile.peak.reality, dipReality: profile.dip.reality,
     dipPool, peakPool, trancheComfort, trancheCeiling, clean,
     // DT4: `reliability` is the whole read (r + the reason it degraded); `reliable` is the tri-state
-    // the renderer keys on (true/false/null — see windowReliability). Levels are UNAFFECTED by both.
-    reliability, reliable: reliability.reliable, degraded: false,
+    // the renderer keys on (true/false/null — see windowReliability).
+    // DT4b: `fitNights` is the window this lap was ACTUALLY fitted over — the gate's own 14 when the
+    // gate passed, the caller's `nights` otherwise. Exposed so a caller can state its own basis rather
+    // than assume the one it passed in. (The older comment here claimed levels are unaffected by the
+    // gate; that is no longer true and was the fit-window transfer gap — on a PASSING item the levels
+    // now come from the verified window, because hours and levels are one fit. See displayFitNights.)
+    reliability, reliable: reliability.reliable, fitNights, degraded: false,
   };
 }
 

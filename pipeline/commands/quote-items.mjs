@@ -33,7 +33,7 @@ import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHe
 import { diurnalForecast, whenBuyable, whenSellable, fmtEta, driftExitFrom } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile; driftExitFrom (PLAN-OSCILLATION-CYCLE Chunk 5) — the drift-adjusted exit LEVEL folded into the trajectory note
 import { tax } from '../../js/money-math.js';
 import { fmtP, fmt, fmtHour, fmtHourRange } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, diurnalTimedLap, softBuyRead, formatSoftBuy, windowReliability, windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement, askExitRead, realityClause, askReachDecayNote, liveAgeTag } from '../../js/windowread.mjs';   // softBuyRead/formatSoftBuy — per-held-lot ⏳ soft-buy timing (ADD-while-holding); PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read folded under the trajectory line (both quote surfaces); COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch); PLAN-DIURNAL-TIMING DT3 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal NOTE computation (prof/dr themselves stay — they still feed extraEst.diurnal, windowClear's peak window, pushTrajectory, and the forward E4 inputs); PLAN-DIURNAL-TRIAGE DT3 — askReachDecayNote, the shared compact ask-reach-decay note (replaced the deleted hourly-drift note)
+import { hourProfile, deriveDiurnalRange, diurnalTimedLap, softBuyRead, formatSoftBuy, displayFitNights, windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement, askExitRead, realityClause, askReachDecayNote, liveAgeTag } from '../../js/windowread.mjs';   // softBuyRead/formatSoftBuy — per-held-lot ⏳ soft-buy timing (ADD-while-holding); PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read folded under the trajectory line (both quote surfaces); COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch); PLAN-DIURNAL-TIMING DT3 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal NOTE computation (prof/dr themselves stay — they still feed extraEst.diurnal, windowClear's peak window, pushTrajectory, and the forward E4 inputs); PLAN-DIURNAL-TRIAGE DT3 — askReachDecayNote, the shared compact ask-reach-decay note (replaced the deleted hourly-drift note)
 import { askReachDecay } from '../lib/market/hourly-lmh.mjs';   // DT3 — the ask-reach decay read (is the intended ask sliding out of reach?), folded onto every price-recommendation surface (bare quote + held/watched positions), reusing the already-fetched 1h series. Replaced the deleted hourlyDrift slope read — see hourly-lmh.mjs's tombstone.
 import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/signal/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic); PC3 — SELL_TOP_MODELS validates --est-sell
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
@@ -234,15 +234,24 @@ function localDayKey(d = new Date()) {
 // own 14-day window, because at the nights=7 window this note's profile uses, the parity halves fall under
 // HOURPROFILE_MIN_DAYS and the gate is uncomputable for ~100% of items. Both call sites pass ts1h; without
 // it `reliable` stays null and the note honestly says the hours are unverified rather than asserting them.
-function pushSoftBuy(notes, { prof = null, ts1h = null, live = null, itemId = null, fc = null, durable = null, reliable: reliableIn } = {}) {
-  const p = prof || (ts1h ? hourProfile(ts1h, { nights: 7 }) : null);
+// DT4b (2026-08-10) — the `prof` PARAMETER WAS DELETED, deliberately. The dip WINDOW this note prints
+// has to be fitted over the window the gate verified (the fit-window transfer gap; see displayFitNights),
+// and the only caller that passed `prof` handed in a nights:7 fit built for OTHER consumers — so an
+// optional caller-supplied profile is exactly the basis-mismatch hole this chunk exists to close. This
+// now always fits its own profile at the resolved `fitNights`, which makes the mismatch unrepresentable
+// rather than merely unlikely. Pass `lap` (the already-built diurnalTimedLap) to reuse its resolved
+// basis at zero recompute; without one — the --positions site has no lap — it resolves its own.
+function pushSoftBuy(notes, { ts1h = null, live = null, itemId = null, fc = null, durable = null, lap = null } = {}) {
+  if (!ts1h) return;
+  // PREFER the lap's already-computed values over re-deriving them — softBuyRead's header states that
+  // re-deriving `reliable` is a second home for it, and the first version of this line broke that rule
+  // at the very site where it was written. `fitNights` rides along for the same reason: one basis.
+  const fit = (lap && !lap.degraded && lap.fitNights != null)
+    ? { fitNights: lap.fitNights, reliable: lap.reliable ?? null }
+    : (({ fitNights, reliability }) => ({ fitNights, reliable: reliability.reliable }))(displayFitNights(ts1h, { nights: 7 }));
+  const p = hourProfile(ts1h, { nights: fit.fitNights });
   if (!p) return;
-  // PREFER the caller's already-computed value (the lap's) over re-deriving it — softBuyRead's header
-  // states that re-deriving this number is a second home for it, and the first version of this line
-  // broke that rule at the very site where it was written: runItems has `timedLap.reliable` in scope
-  // one screen up. The ts1h fallback stays for callers with no lap in hand (--positions).
-  const reliable = reliableIn !== undefined ? reliableIn : (ts1h ? windowReliability(ts1h).reliable : null);
-  const sbTxt = formatSoftBuy(softBuyRead(p, { live, fc, durable, reliable }), { fmtHour, fmt });
+  const sbTxt = formatSoftBuy(softBuyRead(p, { live, fc, durable, reliable: fit.reliable }), { fmtHour, fmt });
   if (sbTxt) notes.push({ kind: 'softBuy', itemId, text: sbTxt });
 }
 
@@ -390,9 +399,15 @@ async function runItems() {
     // (pipeline/lib/emit.mjs) — same `diurnal` NOTE_KIND/sigil, richer text (timed AND same-hour net,
     // range, bid/ask reach, hold horizon, base trend, liquidity/tranche segment). prof/dr above are KEPT
     // AS-IS — they still feed extraEst.diurnal, windowClear's peak window, pushTrajectory, and the
-    // forward E4 inputs below (zero behavior change to those paths); diurnalTimedLap recomputes its own
-    // hourProfile internally off the SAME inp.ts1h/nights:7/liveLo/liveHi, so dr.bid/dr.ask are identical
-    // to what the timed lap derives. §7 softened: no note on a degrade (formatTimedLap returns null).
+    // forward E4 inputs below (zero behavior change to those paths).
+    // DT4b (2026-08-10) CORRECTS what this comment used to claim: it said diurnalTimedLap "recomputes its
+    // own hourProfile internally off the SAME inp.ts1h/nights:7 … so dr.bid/dr.ask are identical to what
+    // the timed lap derives". That is NO LONGER TRUE on a gate-PASSING item — the lap now refits over the
+    // gate's 14-day window (displayFitNights), so its bid/ask can differ from `dr`'s. This is intended and
+    // is the point of the chunk: the lap renders the window that was VERIFIED, while `dr`/`prof` stay on
+    // the 7-day basis their own consumers were built and measured against. Read `timedLap.fitNights` if
+    // you need to know which basis a lap is on; do NOT assume the two agree.
+    // §7 softened: no note on a degrade (formatTimedLap returns null).
     const timedLap = { ...diurnalTimedLap(inp.ts1h, {
       nights: 7, buyLimit: map.byId[id]?.limit ?? null, volDay: row.volDay ?? null,
       liveLo: row.quickBuy ?? null, liveHi: row.quickSell ?? null,
@@ -489,7 +504,7 @@ async function runItems() {
       prof, ctx: { liveLo: row.quickBuy, liveHi: row.quickSell, phase: ph?.phase ?? null, mom: row.mom, reliable: row.reliable } });
     // The ADD-while-holding SOFT-BUY timing read — pushed AFTER pushTrajectory so its @floor cue reuses the
     // floorCeilingTrack fc just computed (bare-quote & --positions surfaces stay identical; zero new fetch).
-    pushSoftBuy(notes, { prof, ts1h: inp.ts1h, reliable: timedLap ? (timedLap.reliable ?? null) : undefined, live: row.quickBuy ?? null, itemId: id, fc: fcTraj, durable: durableFloorRead(vres) });
+    pushSoftBuy(notes, { ts1h: inp.ts1h, lap: timedLap, live: row.quickBuy ?? null, itemId: id, fc: fcTraj, durable: durableFloorRead(vres) });
     // PLAN-WINDOW-CLEAR B2: the within-window CLEAR read — does the quoted ask actually PRINT inside its
     // diurnal PEAK window (not just on N/M days), and does that window's volume absorb a buy-limit tranche?
     // Inform-only (the ⤴ ask-headroom / ◆ asym pattern): a divergence — healthy all-day reach but the ask

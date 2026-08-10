@@ -25,6 +25,7 @@ import { trajectoryRead } from '../../js/windowread.mjs';   // the fang under-re
 import { floorCeilingTrack, formatFloorCeiling, FC_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — the phase-aligned floor+ceiling slope-asymmetry classifier
 import { fmtHoldHorizon } from '../../js/windowread.mjs';   // PLAN-ESTIMATOR-HONEST-SELL follow-up — the shared "~Nh/Nd hold" renderer
 import { hourConcentration, HOURCONC_MIN_DAYS, HOURCONC_MIN_R, diurnalTimedLap, DT_TRANCHE_COMFORT_VOL_PCT, DT_TRANCHE_CEILING_VOL_PCT } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT1 — the timed-lap layer
+import { displayFitNights, WINDOW_RELIABLE_NIGHTS } from '../../js/windowread.mjs';   // DT4b — the ONE home for "which window does a DISPLAYED diurnal window get fitted over"
 import { askReachDecayNote, liveAgeTag, LIVE_FRESH_MIN_FALLBACK } from '../../js/windowread.mjs';
 import { QUICK_FRESH_MIN } from '../../js/quotecore.js';   // drift guard: windowread cannot IMPORT this (cycle), so the test pins the mirror   // PLAN-DIURNAL-TRIAGE DT3 — the compact render of an askReachDecay() result
 import * as WR from '../../js/windowread.mjs';   // DT3 — namespace import for the stays-deleted pin
@@ -1544,12 +1545,95 @@ ok('windowReliability: the MIN_HOURS guard holds — a handful of scored hours c
 // THE CALL SITE, not just the constant. The §12 window test pins windowReliability's DEFAULT; it does
 // NOT stop diurnalTimedLap from forwarding its caller's `nights` into the gate — which is exactly what
 // the plan's original spec said to do, and it passed the whole suite green. This pins the composition.
-ok('diurnalTimedLap: the gate keeps its OWN 14-day window even when the lap is fitted at nights=7', () => {
+ok('diurnalTimedLap: the gate keeps its OWN 14-day window regardless of the caller\'s nights', () => {
   const lap = diurnalTimedLap(reliableSeries(), { nights: 7, now: new Date(2026, 0, 17, 12, 0, 0), liveLo: 900, liveHi: 1100 });
   assert.equal(lap.degraded, false);
   assert.equal(lap.reliable, true,
     'MUTATION GUARD: forwarding `nights` into windowReliability makes the halves 4+3, which is under HOURPROFILE_MIN_DAYS ⇒ null for ~100% of items');
-  assert.ok(lap.reliability && lap.reliability.daysUsed > 7, `the gate read more days than the lap fitted on (got ${lap.reliability?.daysUsed})`);
+  assert.ok(lap.reliability && lap.reliability.daysUsed > 7, `the gate read more days than the caller asked for (got ${lap.reliability?.daysUsed})`);
+  // (This test's title used to end "…even when the lap is fitted at nights=7". DT4b made that false:
+  // a PASSING lap is now refitted at the gate's window, so nights=7 is the request, not the fit.)
+});
+
+// --- §12c DT4b — the fit-window transfer gap -----------------------------------------------------
+// The gap: the gate judged a 14-day shape while the surfaces rendered a 7-day-fitted window, so a
+// passing item printed hours carrying a warrant measured on a DIFFERENT window (archive-measured
+// agreement: dip hour 34.4%, span 18.8%). These tests pin the closure, and they are built on a
+// fixture where the two fits genuinely DISAGREE — a fixture where they agree cannot detect the bug.
+//
+// shiftedSeries: TWO competing dips, at 03:00 and 09:00, present on every day of the window — only
+// their relative DEPTH flips for the most recent 7 days (03 is the deeper one early, 09 is the deeper
+// one late). Because both dips are present throughout, the two parity halves see the same two-dip
+// shape and correlate (r ≈ 0.80 ⇒ the gate PASSES), while the 7-day fit is dominated by the late
+// regime and names a different dip than the 14-day fit does.
+//
+// The FIRST fixture tried here was simpler — one dip that moved 03:00 → 09:00 halfway through — and it
+// did NOT work: two opposing cosines partially cancel inside each parity half, dropping r to ~0.31, so
+// the gate failed and the fixture could not exercise the branch at all. It is recorded because the
+// difference matters: a fixture that fails the gate proves nothing about a gap that only exists on
+// PASSING items, and this one was caught by asserting the fixture's own validity below rather than by
+// assuming it.
+const shiftedSeries = (days = RELDAYS) => {
+  const out = [];
+  const wrap = (h, c) => ((h - c + 12 + 24) % 24) - 12;          // signed hour distance, wrapping midnight
+  const bump = (h, c, depth) => -depth * Math.exp(-Math.pow(wrap(h, c), 2) / 8);
+  for (let d = 0; d < days; d++) for (let h = 0; h < 24; h++) {
+    const late = d >= days - 7;
+    const shape = Math.cos(2 * Math.PI * (h - 15) / 24) * 10     // a mild common diurnal carrier
+      + bump(h, 3, late ? 30 : 60)                               // the 03:00 dip — deeper EARLY
+      + bump(h, 9, late ? 60 : 30);                              // the 09:00 dip — deeper LATE
+    out.push(dpt(dts(2026, 0, 1 + d, h), 1000 + shape - 10, 1000 + shape + 10));
+  }
+  return out;
+};
+
+ok('DT4b: the fixture is valid — the 7d and 14d fits really do disagree, and the gate still passes', () => {
+  const s = shiftedSeries();
+  const now = new Date(2026, 0, 17, 12, 0, 0);
+  const p7 = hourProfile(s, { nights: 7, now });
+  const p14 = hourProfile(s, { nights: WINDOW_RELIABLE_NIGHTS, now });
+  assert.ok(p7 && p14, 'both fits are computable — otherwise the rest of this section proves nothing');
+  assert.notEqual(p7.dip.atHour, p14.dip.atHour,
+    `the fixture must DISAGREE across fit windows or it cannot detect the bug (both said ${p7.dip.atHour})`);
+  assert.equal(windowReliability(s, { now }).reliable, true,
+    'and it must PASS the gate — the gap only exists on items whose hours are actually printed');
+});
+
+ok('DT4b: a gate-PASSING lap is fitted over the window the gate verified, not the caller\'s', () => {
+  const s = shiftedSeries();
+  const now = new Date(2026, 0, 17, 12, 0, 0);
+  const lap = diurnalTimedLap(s, { nights: 7, now, liveLo: 900, liveHi: 1100 });
+  assert.equal(lap.degraded, false);
+  assert.equal(lap.reliable, true);
+  assert.equal(lap.fitNights, WINDOW_RELIABLE_NIGHTS,
+    'MUTATION GUARD: revert the fit to the caller\'s `nights` and this is 7 — the transfer gap, exactly');
+  const p14 = hourProfile(s, { nights: WINDOW_RELIABLE_NIGHTS, now });
+  const p7 = hourProfile(s, { nights: 7, now });
+  assert.equal(lap.dipWindow.startH, p14.dip.startH, 'the RENDERED dip window is the verified fit\'s');
+  assert.notEqual(lap.dipWindow.startH, p7.dip.startH,
+    'and is demonstrably NOT the 7-day fit\'s — this assertion is the whole point of the chunk');
+});
+
+ok('DT4b: a NON-passing lap keeps the caller\'s window untouched — the other ~99% do not move', () => {
+  const now = new Date(2026, 0, 17, 12, 0, 0);
+  const lap = diurnalTimedLap(noisySeries(), { nights: 7, now, liveLo: 900, liveHi: 1100 });
+  assert.equal(lap.reliable, false, 'the noisy fixture is a MEASURED failure, not a degrade');
+  assert.equal(lap.fitNights, 7,
+    'MUTATION GUARD: a blanket nights=14 would move the levels of every item that shows no hours at all');
+  const p7 = hourProfile(noisySeries(), { nights: 7, now });
+  assert.equal(lap.dipWindow.startH, p7.dip.startH, 'byte-identical to the pre-DT4b behavior on a failing item');
+});
+
+ok('DT4b: hours and levels come from ONE fit — the pair a mixed-window render would break', () => {
+  const s = shiftedSeries();
+  const now = new Date(2026, 0, 17, 12, 0, 0);
+  const lap = diurnalTimedLap(s, { nights: 7, now, liveLo: 900, liveHi: 1100 });
+  const p14 = hourProfile(s, { nights: WINDOW_RELIABLE_NIGHTS, now });
+  const dr14 = deriveDiurnalRange(p14, { liveLo: 900, liveHi: 1100 });
+  // The reason "render 14d hours beside 7d levels" was rejected as incoherent: deriveDiurnalRange
+  // reads the LEVEL off the dip/peak window, so an hour from one fit names a price from another.
+  assert.equal(lap.bid, dr14.bid, 'the BID is the level at the hours actually shown');
+  assert.equal(lap.ask, dr14.ask, 'and so is the ASK');
 });
 
 // The tri-state must survive INTO THE RENDER. render.test.mjs only asserted the null case renders

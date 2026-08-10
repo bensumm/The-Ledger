@@ -106,7 +106,7 @@
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, reachedDays, RECENCY_DIVERGE, RECENT_NIGHTS, askReachDecayNote, softBuyRead, softBuyHoursClause, windowReliability, SOFT_BUY_CUE_TEXT, floorCeilingTrack } from '../../js/windowread.mjs';   // reachedDays (RF6) — daily-HIGH reach count for the thin big-ticket ask-spread flag   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment (DC3 demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS); PLAN-DIURNAL-TIMING DT2 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal note computation; PLAN-HOURLY-3DAY-TREND HT3 → DT3 — askReachDecayNote, the shared compact note renderer used to enrich the top-X digest picks (the per-hour drift-slope renderer it replaced was DELETED as a measured non-signal)
+import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, reachedDays, RECENCY_DIVERGE, RECENT_NIGHTS, askReachDecayNote, softBuyRead, softBuyHoursClause, displayFitNights, SOFT_BUY_CUE_TEXT, floorCeilingTrack } from '../../js/windowread.mjs';   // reachedDays (RF6) — daily-HIGH reach count for the thin big-ticket ask-spread flag   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment (DC3 demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS); PLAN-DIURNAL-TIMING DT2 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal note computation; PLAN-HOURLY-3DAY-TREND HT3 → DT3 — askReachDecayNote, the shared compact note renderer used to enrich the top-X digest picks (the per-hour drift-slope renderer it replaced was DELETED as a measured non-signal)
 import { askReachDecay } from '../lib/market/hourly-lmh.mjs';   // DT3 — the ask-reach decay read, run on the top-X digest picks ONLY (bounded enrichment, not the full candidate universe). Replaced the deleted hourlyDrift slope read — see hourly-lmh.mjs's tombstone.
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
@@ -893,12 +893,23 @@ export function digestReachAndPlacement({ spec, row, askReachExtra, his, days } 
 // new fetch) that drives the positions cue; on @floor it appends the caution/favorable tag (a breaking floor
 // = a dump artifact, not a discount — the fang under-read fix). Compact CELL shape (window · marker · [cue]),
 // NOT formatSoftBuy's prefixed line. STDOUT-ONLY: never gates/drops/regrades, never enters screen.json.
-// DT4 (2026-08-10): `reliable` is the windowReliability tri-state, read off the row's ALREADY-computed
-// timedLap (zero recompute, zero fetch). The dip HOURS render only when the split-half gate passes; the
-// @floor/+X% marker and the floor-aware cue are LEVEL reads and are unaffected either way.
-function digestSoftBuy(prof, row, fc = null, durable = null, reliable = null) {
+// DT4 (2026-08-10): the tri-state + the fit basis both ride in on the row's ALREADY-computed timedLap
+// (zero recompute, zero fetch). The dip HOURS render only when the split-half gate passes; the @floor/+X%
+// marker and the floor-aware cue are LEVEL reads, so they still render either way — but note DT4b: on a
+// PASSING row the levels are now read off the gate's own 14-day fit, since hours and levels are one fit.
+// DT4b (2026-08-10): takes the RAW 1h series, not a caller-fitted profile. The dip window this cell
+// prints must be fitted over the window the gate verified (the fit-window transfer gap; see
+// displayFitNights) — and the caller's `prof` is a DIURNAL_NIGHTS=7 fit built for the `phase` column,
+// which is precisely the basis mismatch this closes. `lap` (the row's already-built diurnalTimedLap)
+// supplies the resolved basis at zero recompute; without one the fit is resolved here.
+function digestSoftBuy(ts1h, row, fc = null, durable = null, lap = null) {
+  if (!ts1h) return null;
+  const fit = (lap && !lap.degraded && lap.fitNights != null)
+    ? { fitNights: lap.fitNights, reliable: lap.reliable ?? null }
+    : (({ fitNights, reliability }) => ({ fitNights, reliable: reliability.reliable }))(displayFitNights(ts1h, { nights: DIURNAL_NIGHTS }));
+  const prof = hourProfile(ts1h, { nights: fit.fitNights });
   const live = row ? (row.quickBuy ?? null) : null;
-  const read = softBuyRead(prof, { live, fc, durable, reliable });
+  const read = softBuyRead(prof, { live, fc, durable, reliable: fit.reliable });
   if (!read) return null;
   const win = softBuyHoursClause(read.reliable, read.dipWindow, fmtHour, { style: 'compact' });
   if (read.marker == null) return win;                            // window known, live-vs-floor unavailable
@@ -911,7 +922,10 @@ function digestSoftBuy(prof, row, fc = null, durable = null, reliable = null) {
   const cueTag = (read.cue === 'favorable' || read.cue === 'caution' || read.cue === 'unproven-base') ? ` · ${SOFT_BUY_CUE_TEXT[read.cue]}` : '';
   return `${win} · ${read.marker}${cueTag}`;
 }
-function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacement, marginTrend = null, placementDiverges = false, prof, fc = null, durable = null, reliable = null, subFloor }) {
+// DT4b: `prof` (a DIURNAL_NIGHTS fit) still drives the `phase` column — phase is a cycle-position WORD,
+// not a printed hour span, so it is not gated and keeps the basis it was built on. `ts1h`/`lap` are the
+// soft-buy cell's inputs; it fits its own profile on the gate's basis. Two bases on purpose, each named.
+function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacement, marginTrend = null, placementDiverges = false, prof, ts1h = null, lap = null, fc = null, durable = null, subFloor }) {
   if (subFloor) return;                       // sub-floor fallback rows are never "top-8 decision" candidates
   if (HELD_IDS.has(id)) return;               // a held item's read belongs to the positions surface, not the buy-triage digest
   const ph = prof ? (diurnalPhase(prof)?.phase ?? null) : null;
@@ -936,7 +950,7 @@ function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacem
     reachFrac,
     marginTrend,   // R4b: ask-side cushion trend (fading|stable|extending|null) — informs the reach ✓/✗, stdout-only
     phase: ph,
-    softBuy: digestSoftBuy(prof, row, fc, durable, reliable),   // inform-only n≈0 dip window (DT4-gated) + live-vs-floor marker + floor-aware cue (stdout-only)
+    softBuy: digestSoftBuy(ts1h, row, fc, durable, lap),   // inform-only n≈0 dip window (DT4-gated, DT4b-fitted) + live-vs-floor marker + floor-aware cue (stdout-only)
     grade,
     bigTicket: isBigTicket(row),
     crossable,   // W3-1: FLOORS the sort key when === false (uncrossable), NEVER mutates the displayed capEff; null = unknown-neutral
@@ -1659,7 +1673,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // cross-niche decision digest (printed ONCE after every niche in main() under --digest). collectDigestRow
   // excludes sub-floor + held rows. This never reorders/alters `rows` — the per-niche table + screen.json
   // are untouched (§1.4: the digest is a DIGEST-ONLY presentation choice, not the table's sort key).
-  for (const r of rows) collectDigestRow({ id: r.id, name: map.byId[r.id]?.name || ('#' + r.id), spec: FLIP_NICHES[mode], row: r.row, er: r.er, grade: r.grade, reachFrac: r.digestReach, askPlacement: r.digestAskPlacement, marginTrend: r.digestMarginTrend, placementDiverges: r.digestPlacementDiverges, prof: r.prof, fc: r.softBuyFc, durable: r.durable, reliable: r.timedLap ? (r.timedLap.reliable ?? null) : null, subFloor });
+  for (const r of rows) collectDigestRow({ id: r.id, name: map.byId[r.id]?.name || ('#' + r.id), spec: FLIP_NICHES[mode], row: r.row, er: r.er, grade: r.grade, reachFrac: r.digestReach, askPlacement: r.digestAskPlacement, marginTrend: r.digestMarginTrend, placementDiverges: r.digestPlacementDiverges, prof: r.prof, ts1h: (series1h && series1h.get(r.id)) || null, lap: r.timedLap || null, fc: r.softBuyFc, durable: r.durable, subFloor });
 
   // O1 suggestions ledger: log every rated (surfaced) row at emit time, unconditionally. The niche
   // is `mode`; the emitted "verdict" is the letter grade the row was surfaced under.
@@ -2327,7 +2341,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
     const ampEr = { pair: { bid: ar.ampBid, ask: ar.ampAsk }, net: (driftShadow && driftShadow.margin != null) ? driftShadow.margin : ar.netPerCycle, ttf, pFill, rank, lapUnits };
     // softBuyFc off the in-hand amplitude windowStats days (zero new fetch) → digestSoftBuy's floor-aware @floor cue.
     const softBuyFc = (stats && stats.days) ? floorCeilingTrack(stats.days) : null;
-    collectDigestRow({ id: s.id, name, spec: FLIP_NICHES.amplitude, row, er: ampEr, grade, reachFrac: null, askPlacement: null, prof, fc: softBuyFc, reliable: windowReliability(series1h && series1h.get(s.id) || []).reliable, subFloor: null });
+    collectDigestRow({ id: s.id, name, spec: FLIP_NICHES.amplitude, row, er: ampEr, grade, reachFrac: null, askPlacement: null, prof, ts1h: ts1h || null, lap: null, fc: softBuyFc, subFloor: null });
     // A3: the day-crossing day-of-week seasonality read (fires whenever holdDays > 1 — i.e. always at
     // the 4-day default since DT1; it originated with the 1.5-day experiment) (net-new — no day-of-week tooling existed).
     // Only surfaced when the hold crosses a day boundary (holdDays > 1) so leg-2 lands on a different weekday.
