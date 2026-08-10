@@ -343,9 +343,9 @@ more history WITHOUT widening the gate's daily-range/reach/recency read (a delib
 separation). HONESTY: the wiki `/timeseries?timestep=1h` endpoint returns only ~16 calendar days, so
 `OSC_DETECTOR_NIGHTS` effectively caps near ~15d on real data — a sample-size fix BOUNDED by the endpoint,
 not a calibration. All still n≈0.
-F-B (2026-07-22) added a WATCHLIST RESERVE to the Stage-1 fetch-pool cut (`AMP_TOP_DEFAULT=25`,
+F-B (2026-07-22) added a WATCHLIST RESERVE to the Stage-1 fetch-pool cut (`AMP_TOP_DEFAULT=40`,
 `pipeline/lib/signal/gatecandidates.mjs`/`admission.mjs`): a big-ticket on `watchlist.json` now bypasses the
-Stage-1 amplitude-proxy floor and gets a guaranteed fetch slot even if it ranks below the top-25, so it
+Stage-1 amplitude-proxy floor and gets a guaranteed fetch slot even if it ranks below the top-40, so it
 actually reaches this margin gate instead of being silently crowded out every scan (it can still be
 dropped by the gate on its real numbers — the fix is REACHING the gate, not a free pass through it).
 PLAN-FETCH-POOL-SCALING (2026-07-24, blindspot-audit #1/#7) generalizes the reserve/sizing story across

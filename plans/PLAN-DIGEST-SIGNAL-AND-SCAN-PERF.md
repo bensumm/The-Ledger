@@ -1,6 +1,6 @@
 # PLAN-DIGEST-SIGNAL-AND-SCAN-PERF — make the decision digest's top rows worth reading, and stop the scan spending 40% of its wall clock in a serial loop
 
-**Status: PLANNING ONLY (2026-08-07). No code changed. Two independent workstreams in one doc
+**Status: PARTLY SHIPPED — SP1 landed (see the Status table below). The original header read "PLANNING ONLY (2026-08-07). No code changed"; that is no longer true. Two independent workstreams in one doc
 because they share one file (`pipeline/commands/screen-flip-niches.mjs`) and therefore one
 parallel-safety contract — but they are otherwise unrelated and can ship in either order.**
 

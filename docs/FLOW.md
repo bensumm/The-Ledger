@@ -213,5 +213,5 @@ this table is the flow view, not a second inventory.
 - **`dev-server.mjs`** (LW4, localhost) serves the static app AND exposes `POST /api/scan`, so the
   app's Scan-tab "Refresh scan" runs a REAL local `screen-flip-niches.mjs --publish` (zero git).
 - **CI** (`.github/workflows/checks.yml`) runs the `pipeline/ci/` guards on every push/PR: the
-  cheap `checks` job (syntax, `run-tests`, `check-imports`, `check-dead-exports`, `lint-arch`,
-  `lint-docs`, `lint-skills`) + the `smoke` job (headless-chromium app load).
+  cheap `checks` job (syntax, `run-tests`, `check-imports`, `check-dead-exports`, `check-daemon-safety`,
+  `check-forecast-guards`, `lint-arch`, `lint-docs`, `lint-skills`) + the `smoke` job (headless-chromium app load).

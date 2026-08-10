@@ -1,7 +1,13 @@
 # PLAN-AMPLITUDE-SCAN — a 24h-cycle discovery lane (+ the cycle-period unification question)
 
-**Status:** HARDENED (Fable pass, 2026-07-19) — validated against the code, ready for Ben+Claude
-review, then the Opus implementation pass. Not yet scheduled. This is a plan, not code.
+**Status: ✅ SHIPPED (2026-07-19 → 2026-08-09). This is CODE, not a proposal — do NOT rebuild it.**
+Every chunk landed: A1 `js/amplitudescreen.mjs` · A3 the day-crossing hold (`js/windowread.mjs`) ·
+A4 "THE SWAP" putting amplitude into `--mode all` (`js/flip-niches.mjs`) · A5 the shadow both-leg replay
+(`pipeline/commands/join-amplitude-outcomes.mjs`). `CLAUDE.md` documents the lane as live.
+**Superseded since:** PLAN-DIURNAL-TRIAGE DT1 REFUTED the 24h-cycle premise in this file's title and
+re-horizoned the lane 1d → 4d; DT1b replaced the P(fill) with the walk-forward `ampWalkForward`. Read
+those before trusting any cycle-period claim below. Kept as a don't-rebuild record.
+Original status line (2026-07-19): "HARDENED (Fable pass) — ready for review, then the Opus pass."
 Original author: session 2026-07-19 (Ben's "Masori chestplate category" thread).
 
 ---

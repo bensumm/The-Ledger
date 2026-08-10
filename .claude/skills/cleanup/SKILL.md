@@ -1,6 +1,6 @@
 ---
 name: cleanup
-version: 1.0
+version: 1.1
 description: A repeatable post-wave hygiene + architectural-integrity pass — run the CI guards, then a SESSION/WAVE-scoped judgment sweep for drift, duplication, dead code, doc-honesty, and worktree/branch staleness, and produce a proposed-fix list. Triggers — "clean up after this session/wave", "check the architecture", "did we leave a mess", "run a cleanup", "post-wave cleanup", "cleanup".
 ---
 
@@ -31,6 +31,7 @@ node pipeline/ci/run-tests.mjs
 node pipeline/ci/check-imports.mjs
 node pipeline/ci/check-dead-exports.mjs
 node pipeline/ci/check-daemon-safety.mjs
+node pipeline/ci/check-forecast-guards.mjs
 node pipeline/ci/lint-arch.mjs
 node pipeline/ci/lint-skills.mjs
 node pipeline/ci/lint-docs.mjs

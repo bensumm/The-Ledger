@@ -1,8 +1,8 @@
 # CHANGELOG — The Coffer / The-Ledger
 
 Deep per-version writeups (rationale, superseded approaches, the "why" behind each shipped
-change) live here. `CLAUDE.md`'s "Done (recent)" section keeps only a one-line load-bearing
-pointer per entry — the "do not rebuild this" signal — and points here for the full story.
+change) live here. `CLAUDE.md` keeps only a one-line load-bearing pointer per entry where one is still needed (its
+"Done (recent)" section has since been removed — this file plus `git log` is the record) — the "do not rebuild this" signal — and points here for the full story.
 Moved out of `CLAUDE.md` by PLAN.md chunk K3 (2026-07-04). Newest entries at the top of the
 recent block; the ordering below preserves the original CLAUDE.md sequence.
 

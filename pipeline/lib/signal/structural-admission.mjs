@@ -10,7 +10,7 @@
  *
  * SCOPE (Chunk B — library only, purely additive behind a flag):
  *   - This is a NEW ALTERNATE iterator with the SAME callback shape as
- *     `eachLiquidCandidate` (gatecandidates.mjs:211), selectable via `--gate structural` (default
+ *     `eachLiquidCandidate` (gatecandidates.mjs:211), selected via the library-level `t.GATE` (default
  *     `legacy`). With `--gate legacy` (or the flag omitted) NOTHING here runs and the screen is
  *     byte-identical to today. It does NOT replace `eachLiquidCandidate`, and it does NOT touch
  *     `spec.edge`/`rankAndSlice`/`surviveMode` — the per-mode edge STILL runs post-admission in this

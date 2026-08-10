@@ -232,7 +232,7 @@ metadata, not a leak; the concern is content, not commit authorship.
   local/zero-git (the default in-session book read) and pushes nothing. No unattended writer / machine
   bypass identity exists — the schedule was eliminated (`pipeline/FILLS-PIPELINE.md` §12).
 - **CI: `.github/workflows/checks.yml`** — a cheap `checks` job (JS syntax sweep, quotecore
-  + reconstruct acceptance fixtures, **`check-imports.mjs`** — the import-RESOLUTION guard that statically
+  + reconstruct acceptance fixtures, **`check-dead-exports.mjs`**, **`lint-arch.mjs`**, **`check-imports.mjs`** — the import-RESOLUTION guard that statically
   verifies every pipeline entrypoint's imports resolve against module exports (catches a missing-export that
   `node --check`'s syntax-only pass lets through), `fills.json`/`positions.json` parse, `lint-skills.mjs`, and
   `lint-docs.mjs` — DL1's structural doc-drift lint: a denylist of superseded terms/commands +

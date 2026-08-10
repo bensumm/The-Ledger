@@ -269,11 +269,12 @@ which held lots want action, what filled today).
 Boundaries are **tunable named constants** at the top of `watch-positions.mjs`, not magic numbers:
 
 - `LIQUID_FLOOR_PER_DAY = 100` — two-sided daily volume (the limiting side, `min(hi,lo)` from
-  `computeQuote`) below which a book is **thin**. 100/d is the practical floor codified in
-  the `/scan` skill (`.claude/skills/scan/SKILL.md`); below it, exits are unreliable
-  ghost-spreads. **Two different things are both called "the floor" — don't conflate them:**
+  `computeQuote`) below which a book is **thin**. ⚠ The old "~100/d practical floor" this bullet used to
+  cite was RETIRED by the PLAN-VOL24 recalibration — `/scan` now says the practical mental floor is a few
+  THOUSAND limiting-side units/day, not the old deflated ~100 (the `/24h` endpoint was under-reporting).
+  Below the real floor, exits are unreliable ghost-spreads. **Two different things are both called "the floor" — don't conflate them:**
   this ~100/d is the *judgment* ghost-spread floor (in `watch-positions.mjs`/`/scan`, "is a book liquid
-  enough to trust an exit?"). `screen-flip-niches.mjs`'s `--floor` (default **50**) is a separate *script
+  enough to trust an exit?"). `screen-flip-niches.mjs`'s `--floor` (default **3500** since the PLAN-VOL24 recal — was 50) is a separate *script
   gate* — the raw per-unit `limitVol ≥ FLOOR` liquidity threshold that a candidate must clear
   (OR the `--gp-floor` gp-flow path, S1) to even enter the screen. Different purposes,
   different values.
@@ -350,7 +351,7 @@ unscheduled/exogenous), so DL2 adds a **reactive** detector that fires a `FLUSH`
   (`nominateDip`) over that universe and re-scores flush-SUITABLE candidates into a **self-pruning** pool
   (`reconcileDipPool` — NOT append-only) so the reactive `--dip` loop always has a fresh, breadth-discovered,
   BOUNDED pool to poll. Suitability = two-sided + wide-enough amplitude + **two floors**: a gp-SCALE floor
-  (gp-flow `mid × limitVol ≥ DL4_MIN_GP_FLOW`, the 500k attention scale) AND a **per-unit swing floor**
+  (gp-flow `mid × limitVol ≥ DL4_MIN_GP_FLOW` (9m since the PLAN-VOL24 recal — was 500k, scaled ~18× to the corrected rolling-24h gp-flow)) AND a **per-unit swing floor**
   (`bandHi−bandLo ≥ DL4_MIN_ABS_SWING`, 2026-07-12) — the swing floor EXCLUDES cheap high-throughput churn
   (a flush on a 2gp item is worth ~nothing/unit; that's the CHURN niche's job), superseding the old "cheap
   churn passes" behavior. A survivor flushing NOW is score-bonused. **Pool hygiene:** each scan keeps the
@@ -358,7 +359,7 @@ unscheduled/exogenous), so DL2 adds a **reactive** detector that fires a `FLUSH`
   after `DL4_POOL_MAX_AGE_DAYS`; **`--dip` watches the LIQUID track only** (each target is a live fetch per
   ~5m pass; illiquid is DL3 backlog). It's a **proposal to watch, not a validated pick** (n=2, `DL4_*`
   placeholders, F1 owns calibration). The scan prints a `Dip pool` line; curate it.
-- **FILLABILITY is UNIT-FLOW, not deployability.** The gate is `volDay ≥ DIP_LOOP_LIQUID_FLOOR` (1000/d,
+- **FILLABILITY is UNIT-FLOW, not deployability.** The gate is `volDay ≥ DIP_LOOP_LIQUID_FLOOR` (40000/d since the PLAN-VOL24 recal — was 1000/d,
   a PLACEHOLDER) — `price×limit` measures whether you can PARK capital, but whether a seller actually
   crosses down to your bid is unit-flow. The retro anchor (n=2): a Searing-page flush (~14.4k/d, 4,732
   units in one 5m bucket, fillable ~45 min) was missed by a ~15-min-stale scan; the Abyssal-bludgeon twin

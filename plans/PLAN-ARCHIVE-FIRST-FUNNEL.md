@@ -1,6 +1,6 @@
 # PLAN-ARCHIVE-FIRST-FUNNEL — gate on what we already own; rank on quality, not on wallet
 
-**Status: PLANNING ONLY (2026-08-07). No code changed.** Two SEPARABLE changes in one doc: (A) the
+**Status: SHIPPED — AF1/AF2/AF4/AF5/AF5b all landed (see the Status table below). The original header read "PLANNING ONLY (2026-08-07). No code changed."; that is no longer true.** Two SEPARABLE changes in one doc: (A) the
 capital-layer split, small and independently valuable; (B) the archive-first funnel, structural.
 A does not depend on B. Every number below is measured this session and cited to how it was obtained.
 

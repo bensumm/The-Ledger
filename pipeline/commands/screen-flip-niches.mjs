@@ -3,7 +3,7 @@
  * screen-flip-niches.mjs — opportunity screen. ONE command → a finished, RATED table per niche.
  *
  *   node pipeline/commands/screen-flip-niches.mjs [--mode band|churn|scalp|value|amplitude|reverse|all]
- *     [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m] [--top 40]
+ *     [--floor 3500] [--min-roi 1.5] [--min-price 0] [--max-price <capital-derived>] [--top 90]
  *     [--band-hours 2] [--min-traded 6] [--stats] [--publish] [--verbose]
  *     [--thin-reserve 6] [--gear-reserve 4] [--mid-tier-reserve 2] [--mid-tier-offset 0]
  *     [--archive-regime]
@@ -173,7 +173,7 @@ const A = parseArgs(process.argv.slice(2));
 // so a future config file can set the same default without editing each script.
 const CONFIG = loadPipelineConfig();
 const MODES = MODE_KEYS;         // P4c: valid explicit --mode values, from the strategy registry (band/churn/scalp/value — spread+rising deleted, Steps 3+4)
-// --mode all runs the inAll specs — band/churn/value (Ben 2026-07-10 added value; scalp explicit-only).
+// --mode all runs the inAll specs — band/churn/AMPLITUDE since THE SWAP (PLAN-AMPLITUDE-SCAN §3, 2026-07-19: amplitude took value's slot; value/invest + scalp are explicit-only).
 // PC3 pickup: the niche SET for `--mode all` is config-overridable via pipeline-config.json "modes":[…]
 // — an ARRAY, distinct from the scalar `mode` selection above. Resolved through the SAME precedence
 // resolver (no CLI flag — `--mode all` is the trigger — so config-or-default only); unknown entries are
@@ -484,7 +484,7 @@ const ASYM_NIGHTS = 14;
 // AF6 promotes the source.
 const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_TRADED, posture: POSTURE, volSource: VOL_SOURCE, ...(ARCHIVE_REGIME ? { archiveRegime: true } : {}) };
 
-const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // `all` = band/churn/value (Ben 2026-07-10 added value); scalp explicit-only
+const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // `all` = band/churn/amplitude (THE SWAP, 2026-07-19); value/invest + scalp explicit-only
 const NEED_BANDS = true;   // every remaining niche prices its edge off the 2h band (spread, the one 24h-avg niche, is deleted)
 const IS_VALUE = RUN_MODES.includes('value');                    // P5 — the value niche needs the 28d term structure
 const N_WIN = Math.max(1, Math.ceil(BAND_HOURS * 3600 / 300));   // 5m windows in the band (confidence denom)
