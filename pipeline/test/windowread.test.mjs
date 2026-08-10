@@ -25,7 +25,7 @@ import { trajectoryRead } from '../../js/windowread.mjs';   // the fang under-re
 import { floorCeilingTrack, formatFloorCeiling, FC_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — the phase-aligned floor+ceiling slope-asymmetry classifier
 import { fmtHoldHorizon } from '../../js/windowread.mjs';   // PLAN-ESTIMATOR-HONEST-SELL follow-up — the shared "~Nh/Nd hold" renderer
 import { hourConcentration, HOURCONC_MIN_DAYS, HOURCONC_MIN_R, diurnalTimedLap, DT_TRANCHE_COMFORT_VOL_PCT, DT_TRANCHE_CEILING_VOL_PCT } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT1 — the timed-lap layer
-import { displayFitNights, WINDOW_RELIABLE_NIGHTS } from '../../js/windowread.mjs';   // DT4b — the ONE home for "which window does a DISPLAYED diurnal window get fitted over"
+import { displayFitNights, WINDOW_RELIABLE_NIGHTS, phaseFromLap, diurnalPhase } from '../../js/windowread.mjs';   // DT4b — the ONE home for "which window does a DISPLAYED diurnal window get fitted over"
 import { askReachDecayNote, liveAgeTag, LIVE_FRESH_MIN_FALLBACK } from '../../js/windowread.mjs';
 import { QUICK_FRESH_MIN } from '../../js/quotecore.js';   // drift guard: windowread cannot IMPORT this (cycle), so the test pins the mirror   // PLAN-DIURNAL-TRIAGE DT3 — the compact render of an askReachDecay() result
 import * as WR from '../../js/windowread.mjs';   // DT3 — namespace import for the stays-deleted pin
@@ -1624,16 +1624,67 @@ ok('DT4b: a NON-passing lap keeps the caller\'s window untouched — the other ~
   assert.equal(lap.dipWindow.startH, p7.dip.startH, 'byte-identical to the pre-DT4b behavior on a failing item');
 });
 
-ok('DT4b: hours and levels come from ONE fit — the pair a mixed-window render would break', () => {
+ok('DT4b: the LEVEL comes from the verified fit — and this assertion can actually tell the difference', () => {
   const s = shiftedSeries();
   const now = new Date(2026, 0, 17, 12, 0, 0);
-  const lap = diurnalTimedLap(s, { nights: 7, now, liveLo: 900, liveHi: 1100 });
-  const p14 = hourProfile(s, { nights: WINDOW_RELIABLE_NIGHTS, now });
-  const dr14 = deriveDiurnalRange(p14, { liveLo: 900, liveHi: 1100 });
-  // The reason "render 14d hours beside 7d levels" was rejected as incoherent: deriveDiurnalRange
-  // reads the LEVEL off the dip/peak window, so an hour from one fit names a price from another.
-  assert.equal(lap.bid, dr14.bid, 'the BID is the level at the hours actually shown');
-  assert.equal(lap.ask, dr14.ask, 'and so is the ASK');
+  // NO liveLo/liveHi, deliberately. The first version of this test passed { liveLo: 900 }, which
+  // clamps BOTH fits' bids to 900 via deriveDiurnalRange's dip-not-below-live guard — so it asserted
+  // `900 === 900` and passed identically under the reverted code. Review caught it; it was the test
+  // named for this chunk's central justification and it guarded nothing. Whenever an assertion here
+  // compares two derived numbers, prove first that they CAN differ.
+  const lap = diurnalTimedLap(s, { nights: 7, now });
+  const dr14 = deriveDiurnalRange(hourProfile(s, { nights: WINDOW_RELIABLE_NIGHTS, now }), {});
+  const dr7 = deriveDiurnalRange(hourProfile(s, { nights: 7, now }), {});
+  assert.notEqual(dr7.bid, dr14.bid,
+    `FIXTURE VALIDITY: the two fits must give different BIDs or the assertions below prove nothing (both ${dr7.bid})`);
+  assert.equal(lap.bid, dr14.bid, 'MUTATION GUARD: the BID is the level from the VERIFIED fit');
+  assert.notEqual(lap.bid, dr7.bid, 'and demonstrably not the caller-window fit\'s');
+  // The ASK is fit-INVARIANT on this fixture (both fits read 1015 — the peak carrier never moves), so
+  // it is asserted for coherence but is NOT a guard. Labelled rather than deleted so nobody later
+  // mistakes it for one; the bid above is what has teeth.
+  assert.equal(lap.ask, dr14.ask, 'coherence only — this fixture cannot distinguish the two fits on the ask side');
+});
+
+// The phase REGRESSION (DT4b review): diurnalPhase is a pure function of peak.startH/endH, so once a
+// passing lap refitted at 14d while the screen fed diurnalPhase a 7d profile, one printed line carried
+// two contradictory claims — id 6034 rendered "peak 13:00–18:00 … ⏲ post-peak" at 12:00, an hour
+// BEFORE its own stated peak opened. phaseFromLap ties the token to the rendered window structurally.
+// A SECOND fixture, because `shiftedSeries` cannot test this: its peak carrier never moves, so its 7d
+// and 14d PEAK windows are identical and it is structurally blind to a phase bug. (Its validity
+// assertion caught that — the first draft of the phase test used it and failed on the fixture check,
+// not on the code.) This one flips the relative height of two competing PEAKS as well as two dips.
+const shiftedPeakSeries = (days = RELDAYS) => {
+  const out = [];
+  const wrap = (h, c) => ((h - c + 12 + 24) % 24) - 12;
+  const bump = (h, c, depth) => depth * Math.exp(-Math.pow(wrap(h, c), 2) / 8);
+  for (let d = 0; d < days; d++) for (let h = 0; h < 24; h++) {
+    const late = d >= days - 7;
+    const shape = -bump(h, 3, late ? 30 : 60) - bump(h, 9, late ? 60 : 30)   // dips at 03/09
+      + bump(h, 14, late ? 30 : 60) + bump(h, 20, late ? 60 : 30);           // peaks at 14/20
+    out.push(dpt(dts(2026, 0, 1 + d, h), 1000 + shape - 10, 1000 + shape + 10));
+  }
+  return out;
+};
+
+ok('phaseFromLap: the ⏲ token reads the SAME peak window the lap renders, on any fit', () => {
+  const s = shiftedPeakSeries();
+  const now = new Date(2026, 0, 17, 12, 0, 0);
+  const lap = diurnalTimedLap(s, { nights: 7, now });
+  assert.equal(lap.reliable, true, 'this fixture must pass the gate — the regression only existed on passers');
+  const ph = phaseFromLap(lap, { now });
+  assert.ok(ph, 'a non-degraded lap with a peak window yields a token');
+  assert.equal(ph.startH, lap.peakWindow.startH, 'MUTATION GUARD: token window === rendered window (start)');
+  assert.equal(ph.endH, lap.peakWindow.endH, 'MUTATION GUARD: token window === rendered window (end)');
+  // and the shape the regression actually took: reading phase off the caller-window profile disagrees
+  const phWrong = diurnalPhase(hourProfile(s, { nights: 7, now }), { now });
+  assert.notEqual(phWrong.startH, lap.peakWindow.startH,
+    'FIXTURE VALIDITY: the 7d-fitted profile must disagree here, else this test cannot detect the bug');
+});
+
+ok('phaseFromLap: degrades to null rather than fabricating a token', () => {
+  assert.equal(phaseFromLap(null), null);
+  assert.equal(phaseFromLap({ degraded: true, reason: 'thin-history' }), null);
+  assert.equal(phaseFromLap({ degraded: false, peakWindow: { startH: null, endH: null } }), null);
 });
 
 // The tri-state must survive INTO THE RENDER. render.test.mjs only asserted the null case renders

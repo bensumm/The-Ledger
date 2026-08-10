@@ -106,7 +106,7 @@
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, reachedDays, RECENCY_DIVERGE, RECENT_NIGHTS, askReachDecayNote, softBuyRead, softBuyHoursClause, displayFitNights, SOFT_BUY_CUE_TEXT, floorCeilingTrack } from '../../js/windowread.mjs';   // reachedDays (RF6) — daily-HIGH reach count for the thin big-ticket ask-spread flag   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment (DC3 demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS); PLAN-DIURNAL-TIMING DT2 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal note computation; PLAN-HOURLY-3DAY-TREND HT3 → DT3 — askReachDecayNote, the shared compact note renderer used to enrich the top-X digest picks (the per-hour drift-slope renderer it replaced was DELETED as a measured non-signal)
+import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, reachedDays, RECENCY_DIVERGE, RECENT_NIGHTS, askReachDecayNote, softBuyRead, softBuyHoursClause, displayFitNights, phaseFromLap, SOFT_BUY_CUE_TEXT, floorCeilingTrack } from '../../js/windowread.mjs';   // reachedDays (RF6) — daily-HIGH reach count for the thin big-ticket ask-spread flag   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment (DC3 demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS); PLAN-DIURNAL-TIMING DT2 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal note computation; PLAN-HOURLY-3DAY-TREND HT3 → DT3 — askReachDecayNote, the shared compact note renderer used to enrich the top-X digest picks (the per-hour drift-slope renderer it replaced was DELETED as a measured non-signal)
 import { askReachDecay } from '../lib/market/hourly-lmh.mjs';   // DT3 — the ask-reach decay read, run on the top-X digest picks ONLY (bounded enrichment, not the full candidate universe). Replaced the deleted hourlyDrift slope read — see hourly-lmh.mjs's tombstone.
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
@@ -922,13 +922,15 @@ function digestSoftBuy(ts1h, row, fc = null, durable = null, lap = null) {
   const cueTag = (read.cue === 'favorable' || read.cue === 'caution' || read.cue === 'unproven-base') ? ` · ${SOFT_BUY_CUE_TEXT[read.cue]}` : '';
   return `${win} · ${read.marker}${cueTag}`;
 }
-// DT4b: `prof` (a DIURNAL_NIGHTS fit) still drives the `phase` column — phase is a cycle-position WORD,
-// not a printed hour span, so it is not gated and keeps the basis it was built on. `ts1h`/`lap` are the
-// soft-buy cell's inputs; it fits its own profile on the gate's basis. Two bases on purpose, each named.
+// DT4b-fix (2026-08-10): the `phase` column reads off the LAP's peak window, not the `prof` fit. The
+// original DT4b claim — "phase is a cycle-position WORD, not a printed hour span, so it is not gated" —
+// was WRONG: diurnalPhase is a pure function of peak.startH/endH, so leaving it on a 7-day fit made the
+// digest row's phase disagree with the window rendered beside it. `prof` survives ONLY as the no-lap
+// fallback. See phaseFromLap's header in js/windowread.mjs.
 function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacement, marginTrend = null, placementDiverges = false, prof, ts1h = null, lap = null, fc = null, durable = null, subFloor }) {
   if (subFloor) return;                       // sub-floor fallback rows are never "top-8 decision" candidates
   if (HELD_IDS.has(id)) return;               // a held item's read belongs to the positions surface, not the buy-triage digest
-  const ph = prof ? (diurnalPhase(prof)?.phase ?? null) : null;
+  const ph = (lap ? phaseFromLap(lap)?.phase : null) ?? (prof ? (diurnalPhase(prof)?.phase ?? null) : null);
   const buyLow = (er && er.pair && er.pair.bid != null) ? er.pair.bid : null;
   const units = deployUnits({ buyLow, limitVol: row ? (row.volDay ?? null) : null, limit: row ? (row.limit ?? null) : null, capGp: VALUE_CAPITAL });
   const deployable = (units != null && buyLow != null) ? units * buyLow : null;
@@ -1852,7 +1854,10 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // post-peak/cooling entry (the blowpipe miss — maxed the buy limit as the peak closed → 5u stranded
     // ~16h) is flagged AT entry, not discovered hours later. Orthogonal to the clean/range-churn split —
     // never gates/drops/regrades, a stdout support token only.
-    const ph = r.prof ? diurnalPhase(r.prof) : null;
+    // DT4b-fix: read the phase off the lap's OWN peak window — the one printed two tokens to the left
+    // on this very line — not off a separately-fitted profile. See phaseFromLap's header for the
+    // self-contradicting output this replaced. Falls back to `r.prof` only when there is no lap.
+    const ph = r.timedLap ? phaseFromLap(r.timedLap) : (r.prof ? diurnalPhase(r.prof) : null);
     const phaseTok = !ph ? ''
       : ph.phase === 'in-peak' ? ` · ⏲ in-peak (closes ~${ph.hoursToPeakClose}h)`
       : ph.phase === 'pre-peak' ? ` · ⏲ pre-peak (opens ~${ph.hoursToNextPeak}h)`

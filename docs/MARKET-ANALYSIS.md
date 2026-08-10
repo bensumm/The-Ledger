@@ -982,7 +982,7 @@ simultaneous independent rungs on one item.
   `softBuyRead`/`formatSoftBuy`: `soft-buy: floor ~X · live @floor | +X% · <cue> (<hours clause>)`.
   The hours clause is DT4-GATED (2026-08-10): `attended dip hours HH:00–HH:00 · repeats most days` when
   `windowReliability`'s split-half `min(rLow,rHi) ≥ 0.6` (~0.8% of items), else `no reliable dip hours`
-  (measured fail) or `dip hours unverified` (too little history to judge). The floor + cue never change. The **floor** is the dip-cluster level — the number you place at, and since DT2 it LEADS
+  (measured fail) or `dip hours unverified` (too little history to judge). The floor + cue always RENDER, whatever the gate says — but on a PASSING row the floor does MOVE (DT4b refits those rows over the gate's 14-day window; hours and levels are one fit). It is unchanged on the ~99% that don't pass. The **floor** is the dip-cluster level — the number you place at, and since DT2 it LEADS
   the line; the marker is `@floor` when live sits ≤ `SOFT_BUY_AT_FLOOR_PCT` (0.5%) over that floor (or
   below → **buy now**) vs `+X%` above it. It fills the gap the decision-digest soft-buy COLUMN leaves —
   the digest excludes held items, so it was blind to mistiming an ADD to a lot we already hold (Dragon

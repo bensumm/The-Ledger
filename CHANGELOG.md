@@ -16,7 +16,11 @@ PLAN-DIURNAL-TRIAGE **DT4**, shipped as Ben's **option B**: keep the levels, sup
 whose daily shape doesn't reproduce, and MARK the ones that pass. New `windowReliability()`
 (`js/windowread.mjs`) splits an item's days by parity, runs `hourProfile` on each half and Pearson-
 correlates the two de-trended 24h shape vectors; the gate is `min(rLow, rHi) ≥ 0.6`. Display-only — it
-never moves a level, grade, rank, verdict or `screen.json` field.
+never moves a grade, rank, verdict or `screen.json` field. (**Amended 2026-08-10:** this line originally
+read "never moves a **level**". DT4b below made that false — on a gate-PASSING row the levels are now
+read off the gate's own 14-day fit, because hours and levels come from one fit. Measured on 31 passers:
+the soft-buy floor moves on 23, median 0.18% but up to 55%. Corrected here rather than left standing
+beside a section that says the opposite.)
 
 **The plan's implementation spec was wrong, and the correction is the load-bearing part.** DT4's row said
 to compute r "on the in-hand series (~4ms, 2 extra `hourProfile` calls)". The surfaces that render hours

@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.57
+version: 1.58
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -62,8 +62,11 @@ sections plus your own prose:
   hours HH:00–HH:00 · repeats most days` (the item's daily shape reproduces across a parity split,
   `min(rLow,rHi) ≥ 0.6` — only ~0.8% of items), `no reliable dip hours` (measured fail), or `dip
   hours unverified` (under ~14 days of history — we did not check, which is not the same claim).
-  **An absent window is now the normal case: the FLOOR and the CUE are unaffected by the gate and are
-  what you act on.** When the hours DO appear they mark an item worth timing an attended TAKE on. The **cue** is
+  **An absent window is now the normal case: the FLOOR and the CUE still render whatever the gate says,
+  and are what you act on.** (Corrected 2026-08-10 — this used to say the floor and cue are "unaffected
+  by the gate". On a PASSING row that is false: DT4b refits those rows over the gate's 14-day window and
+  the floor moves with it, on 23 of 31 measured passers — median 0.18%, max 55%. They are unaffected on
+  the ~99% that do NOT pass, which is the common case this sentence was describing.) When the hours DO appear they mark an item worth timing an attended TAKE on. The **cue** is
   **FLOOR-AWARE** (2026-07-22, the fang under-read fix) — when the marker
   is `@floor` it consults the SAME multi-day floor read the adjacent `⇅ floor/ceiling` (`fcTrack`) note
   already prints, so a post-update dump sitting at its diurnal floor EVERY day no longer misreads as a

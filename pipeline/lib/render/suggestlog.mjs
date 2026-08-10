@@ -75,7 +75,10 @@
  *                 peakWindow:[startH,endH], net, roi, instantNet, instantRoi, holdHrs, clean, lowTrend,
  *                 hiTrend (both just the trend DIRECTION string — the full projectTrajectory detail is
  *                 dropped, SR1 lean discipline), bidReach, askReach (each { fullHit, fullN, recentHit,
- *                 recentDays, diverges }), dipPool, peakPool, trancheComfort, trancheCeiling }. PLACEHOLDER,
+ *                 recentDays, diverges }), dipPool, peakPool, trancheComfort, trancheCeiling, fitNights
+ *                 (DT4b — the window the LEVEL fields above were fitted over: 14 on a gate-passer, the
+ *                 caller's `nights` otherwise. Rows written before 2026-08-10 lack it and are all
+ *                 caller-basis; do NOT join level fields across that boundary without splitting on it) }. PLACEHOLDER,
  *                 n≈0 — shadow-logged for the eventual F1 retro-join, NEVER a gate/rank/screen.json input.
  *                 Lean-included (YS2 pattern): screen-flip-niches.mjs's renderMode survivors always supply
  *                 it (DT2 computes diurnalTimedLap for every survivor); quote/watch don't pass it yet
@@ -448,6 +451,12 @@ export function timedLapShadow(lap) {
     rHi: r2(lap.reliability ? lap.reliability.rHi : null),
     relReason: lap.reliability ? (lap.reliability.reason ?? null) : null,
     relDays: lap.reliability ? (lap.reliability.daysUsed ?? null) : null,
+    // DT4b: the window every LEVEL field on this row was actually fitted over. Load-bearing for any
+    // retro that spans 2026-08-10: from that date a `reliable:true` row's bid/ask/windows/pools are
+    // 14d-fitted and a non-passing row's are the caller's (7d on the screen), so a join across the
+    // boundary silently mixes two populations. `reliable` alone only implies the basis for callers
+    // whose `nights` is a constant — record the basis itself rather than making the retro infer it.
+    fitNights: lap.fitNights ?? null,
     lowTrend: lap.lowTrend ? lap.lowTrend.dir : null, hiTrend: lap.hiTrend ? lap.hiTrend.dir : null,
     bidReach: reach(lap.bidReach), askReach: reach(lap.askReach),
     dipPool: lap.dipPool ?? null, peakPool: lap.peakPool ?? null,

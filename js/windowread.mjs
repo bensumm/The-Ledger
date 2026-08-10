@@ -1584,6 +1584,31 @@ export function diurnalPhase(profile, { now = new Date() } = {}) {
   return { phase, hoursToPeakClose: null, hoursToNextPeak, hoursSinceClose, startH, endH };
 }
 
+/**
+ * phaseFromLap(lap, { now }) — the ⏲ cycle-position token read off the peak window the lap ACTUALLY
+ * RENDERS, rather than off a separately-fitted profile.
+ *
+ * WHY THIS EXISTS (DT4b review, 2026-08-10 — this was a shipped REGRESSION, not a tidy-up). DT4b made
+ * a passing lap refit at the gate's window while the screen kept feeding `diurnalPhase` its own
+ * nights=7 profile, and joined BOTH onto one printed line. `diurnalPhase` is a pure function of
+ * `profile.peak.startH/endH` — the very span DT4b moved — so the line began contradicting itself:
+ * id 6034 rendered "ASK 40 (peak 13:00–18:00) … hours repeat most days · ⏲ post-peak — cooling …
+ * starter size" at 12:00, i.e. one hour BEFORE its own stated peak opened. 3 of the 4 ids cited as
+ * that chunk's live verification did this; ~19% of gate-passers board-wide.
+ *
+ * The commit dismissed the risk with "phase is a cycle-position WORD, not a printed hour span, so it
+ * is not gated". That reasoning was simply wrong, and it is recorded here because the shape recurs:
+ * a field derived FROM a span is not insulated from that span moving. Deriving the token from the
+ * lap's own `peakWindow` makes the two agree by construction, on any fit, forever — which is why this
+ * is the fix rather than "also pass nights=14 at the call site".
+ *
+ * PURE, zero fetch. Null lap / degraded / no peak window ⇒ null (caller renders no token).
+ */
+export function phaseFromLap(lap, { now = new Date() } = {}) {
+  if (!lap || lap.degraded || !lap.peakWindow || lap.peakWindow.startH == null || lap.peakWindow.endH == null) return null;
+  return diurnalPhase({ peak: { startH: lap.peakWindow.startH, endH: lap.peakWindow.endH } }, { now });
+}
+
 // --- hour-of-day CONCENTRATION (PLAN-DIURNAL-TIMING §3, DT1) ------------------------------------
 // hourProfile's dip/peak cluster width measures something ADJACENT but distinct: how wide the
 // low/high plateau is in the AGGREGATE, de-trended 24h profile — not whether each individual day's
@@ -1799,7 +1824,16 @@ export function windowReliability(series, { nights = WINDOW_RELIABLE_NIGHTS, now
 /**
  * displayFitNights — DT4b (2026-08-10): CLOSES the fit-window transfer gap documented in
  * windowReliability's header. ONE home for the rule "which window does a DISPLAYED diurnal
- * window get fitted over"; every surface that renders gated hours must route through it.
+ * window get fitted over".
+ *
+ * ⚠ ROUTING IS A CONVENTION, NOT AN ENFORCED INVARIANT — corrected after review. An earlier version of
+ * this line said "every surface that renders gated hours MUST route through it", which reads as a
+ * guarantee and is not one. Two surfaces render gated hours WITHOUT routing through it:
+ * `read-schedule.mjs` (its own `PROFILE_NIGHTS`) and `read-window-range.mjs` (its own `NIGHTS`). They
+ * agree with the gate today only because both constants happen to equal WINDOW_RELIABLE_NIGHTS — an
+ * UNPINNED coincidence with no test on it, so changing the gate window silently reopens the gap on
+ * `/schedule`. And `read-window-range --profile --nights 7` ships the original gap right now.
+ * If you change WINDOW_RELIABLE_NIGHTS, grep those two files before assuming this function covered you.
  *
  * THE GAP IT CLOSES. The gate judges a 14-day shape (its window is pinned — a 7-day window is
  * uncomputable for ~100% of items). The surfaces rendered the window at nights=7. So a passing
@@ -1809,22 +1843,49 @@ export function windowReliability(series, { nights = WINDOW_RELIABLE_NIGHTS, now
  * "these exact hours were verified", which is what the marker says.
  *
  * WHY THE FIT MOVES RATHER THAN THE WORDING. The alternative — print the gate's 14d hours beside
- * the caller's 7d levels — is not implementable coherently: deriveDiurnalRange derives the BID/ASK
- * LEVELS *from* the dip/peak windows, so hours and levels are one fit and cannot be separated. A
- * 14d hour with a 7d level would name a price that is not the price at that hour. So when the gate
- * passes, the WHOLE lap refits at the gate's window.
+ * the caller's 7d levels — is incoherent in principle: deriveDiurnalRange derives the BID/ASK LEVELS
+ * *from* the dip/peak windows, so a 14d hour paired with a 7d level can name a price that is not the
+ * price at that hour. So when the gate passes, the WHOLE lap refits at the gate's window.
+ *   (CALIBRATED after review. An earlier version said the two "cannot be separated", full stop, and
+ *   that overstates it — the reason was load-bearing in three places, so it is worth being exact.
+ *   Each hour's `lowRecent`/`hiRecent` comes from `recentSet = allDays.slice(-recentN)`, which does
+ *   NOT depend on `nights`; measured across 3,233 items, only 10.9% of shared hour-entries differ
+ *   between a 7d and a 14d fit. The mixed render is therefore implementable and would agree ~89% of
+ *   the time. The coupling is real but NARROW, and this fix stands on the coherence numbers in the ⚠
+ *   block below — not on an impossibility that isn't one.)
  *
  * WHAT THIS DOES AND DOES NOT CHANGE. It changes the fit ONLY when `reliable === true` — and that
  * is precisely the branch in which hours are displayed at all (false/null render "levels only", so
  * they have no gap to close and keep the caller's window untouched). ~0.8% of a live board passes.
  * DO NOT "simplify" this into a blanket nights=14 for the callers: that would move the levels of
- * the other ~99%, which no measurement here covers.
+ * the other ~99%, which no measurement here covers. (Byte-identity for non-passers is not an
+ * assumption — it was checked over 8,000 lap pairs, pre- vs post-change, and 0 non-passers differ.)
  *
- * HONEST LIMIT (rule 4). This makes the displayed window the one the gate verified. It does NOT
- * make the levels better — 14d-fitted levels are not measured to beat 7d-fitted ones, and the lift
- * numbers in windowReliability's header were measured on hour RANKING, not on levels. The claim is
- * coherence between warrant and display, nothing more. The change is visible in the printed span
- * on exactly the rows that carry the "repeats" marker.
+ * ⚠ WHAT THIS IS **NOT** — CORRECTED 2026-08-10 AFTER REVIEW, READ THIS BEFORE CITING THE CHUNK.
+ * An earlier version of this header (and of the DT4b commit message) claimed the fix means "the hours
+ * rendered are the hours verified". THAT IS FALSE, and it is the kind of false-for-a-good-reason claim
+ * this repo keeps shipping. `windowReliability` correlates the two parity halves' 24-element de-trended
+ * SHAPE VECTORS. It never compares their dip/peak HOURS, and a pooled 14-day fit is a third object that
+ * neither half produced. Measured over the 31 live gate-passers:
+ *     the two halves agree on the dip hour     8/31 = 25.8%   (peak hour 6/31 = 19.4%)
+ *     median circular |Δ| between half dip hours   3h         (peak 2h)
+ *     halves with ZERO dip-hour-set overlap    13/31 = 42%
+ *     pooled 14d dip hour matches NEITHER half  9/31 = 29%
+ * id 6034 — r=0.90, the strongest passer on the board — has even-half dip 20:00 vs odd-half dip 08:00,
+ * 12 hours apart, and still renders "hours repeat most days".
+ *
+ * WHAT IS ACTUALLY TRUE: the displayed fit now uses the same DAYS the gate examined, and the rendered
+ * hour set is measurably CLOSER to what the gate saw than the 7-day fit was (mean Jaccard against the
+ * two halves 0.475 at 14d vs 0.352 at 7d; better on 20 items, worse on 5, tied on 6). That is a real
+ * improvement and it is the whole of the claim. It is NOT a verification of the specific hours shown.
+ *
+ * HONEST LIMIT (rule 4). 14d-fitted levels are not measured to beat 7d-fitted ones; the lift numbers in
+ * windowReliability's header are an hour-RANKING result. And note the 34.4%/18.8% cross-fit agreement
+ * quoted there cuts BOTH ways: two subwindows of the same passing item disagreeing that often is itself
+ * evidence the argmin hour is not very reproducible — which is an open question about the MARKER's
+ * wording ("hours repeat most days"), not just about which window feeds it. Flagged, not silently
+ * reworded: the gate's measured lift is real, so the marker earns its place; only its phrasing
+ * overclaims. Ben's call.
  *
  * PURE, zero fetch (windowReliability is pure and is computed once here, not twice).
  * @returns {{ reliability, fitNights }}

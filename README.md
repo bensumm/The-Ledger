@@ -93,7 +93,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   OWN 14-day window off the RAW series, never the caller's `nights`. Consumed by `diurnalTimedLap`
   (`lap.reliable`), `formatTimedLap`, `softBuyRead`/`softBuyHoursClause`, the `/scan` digest soft-buy cell,
   `read-schedule.mjs` and `read-window-range --profile`; shadow-logged by `suggestlog.mjs`. DISPLAY-ONLY —
-  it gates no price, grade, rank, verdict or `screen.json` field) + `softBuyHoursClause` (the ONE wording
+  it gates no grade, rank, verdict or `screen.json` field. It DOES move displayed prices on the ~0.8% of
+  rows that PASS: DT4b refits those over the gate's window, and hours and levels come from one fit, so the
+  soft-buy floor/diurnal levels shift there — see `displayFitNights`) + `softBuyHoursClause` (the ONE wording
   for the three hours states, `full` + `compact` styles) +
   `windowStats`/`quantLow`/`quantHigh`/`touchedDays`/`reachedDays` + the RC1
   `recencySplit`/`recentQuant` reach-contamination guard + **`askExitRead`** (PLAN-POSITIONS-WINDOW-READ

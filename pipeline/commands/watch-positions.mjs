@@ -824,8 +824,15 @@ async function main() {
       let diurnalAsk = null;
       if (it._thesis && it._thesis.tripwire != null && it._thesis.exitPrice == null) {
         try {
-          // PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the hourProfile+deriveDiurnalRange pair —
-          // SAME nights:7/liveLo/liveHi as before, so the fallback ask is identical to the old direct call.
+          // PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the hourProfile+deriveDiurnalRange pair.
+          // ⚠ CORRECTED 2026-08-10 (DT4b review): this comment used to end "SAME nights:7/liveLo/liveHi as
+          // before, so the fallback ask is identical to the old direct call." That is NO LONGER TRUE on a
+          // gate-PASSING item — DT4b makes the lap refit over windowReliability's 14-day window, so
+          // `lap.ask` here can differ from the old 7d-derived number. This value becomes `diurnalAsk` →
+          // heldDisplay → the rendered "HOLD — per thesis: exit <price>", i.e. a HELD-LOT EXIT PRICE on a
+          // surface that was outside DT4b's diff and whose comment asserted it was unaffected. It moved on
+          // 19 of 31 measured passers (max 11%). Intended — the exit should read the same window the rest
+          // of the row does — but it must not go unrecorded at the site it actually changes.
           const lap = diurnalTimedLap(it.ts1h, { nights: 7, liveLo: it.row.quickBuy ?? null, liveHi: it.row.quickSell ?? null });
           diurnalAsk = (!lap.degraded && lap.ask != null) ? lap.ask : null;
         } catch { /* fallback only — the frame degrades to "exit per plan" */ }
