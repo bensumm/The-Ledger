@@ -275,9 +275,15 @@ metadata, not a leak; the concern is content, not commit authorship.
   structural checker, never a semantic/LLM one**, and `check-daemon-safety.mjs` — the daemon zero-git
   guard (fails if any local/auto-runnable daemon imports or shells `sync-fills --publish`;
   same denylist philosophy), and `check-forecast-guards.mjs` — the FAIL-OPEN-refusal pin: every
-  `diurnalForecast`/`driftExitFrom` call must pass `phase`, since an omitted guard field silently
-  disables the `post-shock-shape` refusal (the 2026-08-06 Snape grass miss — the verification trio
-  projected a mid-decay item for a day; CHANGELOG 0.71.1)) plus a separate
+  `diurnalForecast`/`driftExitFrom` call must pass `phase` **as a resolvable VALUE**, since an omitted
+  OR undefined guard field silently disables the `post-shock-shape` refusal (the 2026-08-06 Snape grass
+  miss — the verification trio projected a mid-decay item for a day; CHANGELOG 0.71.1). **The v1 guard
+  was itself fail-open (fixed 0.71.8): it matched the WORD `phase` in the argument text, so the seven
+  sites passing `phase: row.phase` — a field `computeQuote` does not return — read `undefined` and
+  passed green, including the one feeding `amplitudeGate`. It now duck-types the source object against
+  `computeQuote`'s REAL key set (obtained by calling it, so it self-heals) and rejects a phase read off
+  a quote row.** Anchor for the class: a guard's own header claiming "these call sites had always
+  passed the fields" is a verification claim, and it was false for two commits)) plus a separate
   **`smoke` job** (CI1) that loads `index.html` in headless Playwright chromium with all
   external network stubbed and fails on any page error / app console error / empty pane —
   the "syntax passed but the app broke" class the process rules warn about (`pipeline/ci/smoke-test.mjs`).

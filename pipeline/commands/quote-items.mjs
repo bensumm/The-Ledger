@@ -337,6 +337,13 @@ async function runItems() {
     // reference, reach-relief input — reads the corrected value. computeQuote itself is untouched (app-safe).
     const _cv = vol24FromInputs(inp); inp.vol24 = _cv.vol24;
     const row = computeQuote({ ...inp, id, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true });
+    // PHASE — computed ONCE here, up front, because every diurnalForecast/driftExitFrom ctx below needs it.
+    // DO NOT write `phase: row.phase`: computeQuote() returns NO `phase` field (js/quotecore.js:470-479),
+    // so that reads `undefined` and js/forecast.mjs's `ctx.phase === 'spike'|'decay'` post-shock-shape
+    // refusal is FAIL-OPEN by absence — the exact 2026-08-06 Snape-grass miss the refusal exists to stop.
+    // It shipped that way at 3 sites in this file and passed check-forecast-guards.mjs, which used to match
+    // the WORD `phase` in the argument text; it now resolves the VALUE. Reused at the validator ctx below.
+    const ph = phase(inp.ts6h);
     const std = stdCells(name, row);   // PLAN-OUTPUT-TABLE: the row is pushed AFTER the est pair is computed below (view-dependent cells)
     const limWin = limitWindow({ buys: buysByItemMap.get(id) || [], limit: map.byId[id]?.limit ?? null });
     notes.push({ kind: 'regime', itemId: id, text: regimeLine(name, row, map.byId[id]?.limit ?? null, limWin) });
@@ -388,7 +395,7 @@ async function runItems() {
     // Inform-only, provisional (n≈0, diurnal+trend only) — zero new fetch (reuses the in-hand prof); never
     // a table/verdict/price input. The projection is computed ONCE and shared by both timing lines.
     const { forecast: fc } = prof
-      ? diurnalForecast(prof, { liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable })
+      ? diurnalForecast(prof, { liveLo: row.quickBuy, liveHi: row.quickSell, phase: ph?.phase ?? null, mom: row.mom, reliable: row.reliable })
       : { forecast: null };
     // BUY timing (any item): profitable target = maxBuyForExit(optSell,0), the tax-exact inverse of
     // breakEven; optSell OVER-states the in-window exit, so the ceiling is conservative and "not buyable
@@ -469,7 +476,7 @@ async function runItems() {
     // Chunk 5: prof (line 330) + the diurnalForecast ctx bits (already used for the forecast lines above)
     // fold the drift-adjusted exit level into the note — all in-hand, no new fetch.
     const fcTraj = pushTrajectory(notes, ast && ast.days, { liveRef: row.quickBuy ?? row.quickSell,
-      prof, ctx: { liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable } });
+      prof, ctx: { liveLo: row.quickBuy, liveHi: row.quickSell, phase: ph?.phase ?? null, mom: row.mom, reliable: row.reliable } });
     // The ADD-while-holding SOFT-BUY timing read — pushed AFTER pushTrajectory so its @floor cue reuses the
     // floorCeilingTrack fc just computed (bare-quote & --positions surfaces stay identical; zero new fetch).
     pushSoftBuy(notes, { prof, live: row.quickBuy ?? null, itemId: id, fc: fcTraj, durable: durableFloorRead(vres) });
@@ -531,8 +538,11 @@ async function runItems() {
       // Follow-up (2026-07-22): this file quotes every row against FLIP_NICHES.band (line below), so the
       // forward horizon is band's own driftInform.holdDays (~2h), NOT the shell's 1.5d OSC_HOLD_HORIZON_DAYS default (which is NOT the amplitude hold — that is 4d since DT1) —
       // matching the screen's F-C niche-conditioning so "list at X (~Nd hold)" isn't a mis-scaled 1.5d.
+      // `phase` rides the bundle because pair.mjs is a PURE module with no series of its own — it used to
+      // read `row.phase` (nonexistent ⇒ undefined ⇒ forecast's post-shock-shape refusal fail-open). The
+      // series lives here, so the caller resolves it and hands over the value.
       forward: (prof && ast && ast.days && ast.days.length)
-        ? { profile: prof, days: ast.days, holdHorizonDays: FLIP_NICHES.band.driftInform?.holdDays }
+        ? { profile: prof, days: ast.days, phase: ph?.phase ?? null, holdHorizonDays: FLIP_NICHES.band.driftInform?.holdDays }
         : null,
     };
     // The NEUTRAL est is what the retro co-log scores (unbiased); PB4's pressure est is DISPLAY-ONLY.
@@ -560,7 +570,7 @@ async function runItems() {
     // PM1: probes over this per-item read (OUTPUT-ONLY — no verdict/gate/rating input). ctx carries the
     // 24h avg (dip) + the phase trajectory (froth) + an advisory ask price (anchor). decant stays silent
     // here (no whole-market map on the per-item surface — see probes.mjs NEEDS).
-    const ph = phase(inp.ts6h);
+    // (`ph` is computed once beside `row` above — the forecast ctxs need it earlier than this.)
     const fired = runProbes(row, 'quote', {
       surface: 'quote', owned: false, id, name, thin: false,
       phase: ph, avgLow24: inp.vol24?.avgLowPrice ?? null, avgHigh24: inp.vol24?.avgHighPrice ?? null,
@@ -893,8 +903,11 @@ async function runPositions() {
     // already fetched this pass — NO new fetch; the bigTicket block's profH is scoped there, so compute a
     // profile here for the general held-lot path) + the row's diurnalForecast ctx bits.
     const profT = inp.ts1h ? hourProfile(inp.ts1h, { nights: 14 }) : null;
+    // phase off the 6h series, NOT `row.phase` — computeQuote returns no such field, and an absent
+    // ctx.phase silently disables forecast's post-shock-shape refusal (see the note beside `ph` in runItems).
+    const phHeld = phase(inp.ts6h);
     const fcHeld = pushTrajectory(notes, astHeld && astHeld.days, { liveRef: row.quickBuy ?? row.quickSell, label: name,
-      prof: profT, ctx: { liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable } });
+      prof: profT, ctx: { liveLo: row.quickBuy, liveHi: row.quickSell, phase: phHeld?.phase ?? null, mom: row.mom, reliable: row.reliable } });
     // ADD-while-holding SOFT-BUY timing — the held-lot surface is exactly where the "should I add at the dip?"
     // decision lives. inp.ts1h is in hand (fetched at the vol24 parity step above), so this is zero new fetch.
     // fcHeld (the floorCeilingTrack just computed) drives the @floor floor-aware cue — caution on a breaking floor.

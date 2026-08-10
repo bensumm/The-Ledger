@@ -267,13 +267,17 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
   // FORWARD "list at X" (PLAN-ESTIMATOR-HONEST-SELL E1) — the phase-aware forward-projected exit LEVEL, homed
   // in the SHELL (the sell-model ctx carries no profile/days). driftExitFrom off the caller's in-hand
   // hourProfile + windowStats().days (extra.forward — ZERO new fetch); the diurnal ctx is built from the live
-  // pair (liveLo = the instasell qs, liveHi = the instabuy qb) + the row's momentum/reliability/phase. Absent
+  // pair (liveLo = the instasell qs, liveHi = the instabuy qb) + the row's momentum/reliability and the
+  // forward bundle's resolved `phase` (the row carries no phase — see the fwdCtx note below). Absent
   // extra.forward → all forward fields null (honest degrade); on a KNIFE driftExitFrom returns a labeled
   // trend-only level (no crash, no new detector call site). holdHorizonDays is the forward number's own tunable.
   let estSellForward = null, forwardPeak = null, forwardTrough = null, forwardConfidence = null, holdHorizonDays = null;
   const fwd = extra.forward;
   if (fwd && fwd.profile) {
-    const fwdCtx = { liveLo: qs, liveHi: qb, mom: row.mom ?? null, reliable: row.reliable, phase: row.phase, now: fwd.now };
+    // phase comes off the FORWARD BUNDLE, not `row` — computeQuote returns no `phase` field, so the old
+    // `row.phase` was always undefined and forecast's spike/decay refusal never fired here. This module is
+    // pure (no series), so the caller that owns the 6h series resolves phase() and passes the value in.
+    const fwdCtx = { liveLo: qs, liveHi: qb, mom: row.mom ?? null, reliable: row.reliable, phase: fwd.phase ?? null, now: fwd.now };
     const dae = driftExitFrom(fwd.profile, fwd.days ?? null, fwdCtx, fwd.holdHorizonDays != null ? { holdHorizonDays: fwd.holdHorizonDays } : {});
     if (dae) {
       forwardPeak = num(dae.driftAdjustedPeak);

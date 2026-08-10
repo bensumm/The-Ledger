@@ -10,6 +10,45 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.71.8 — the fail-open guard was itself fail-open (2026-08-10)
+
+**The guard shipped two commits earlier to close a fail-open hole had the same hole.** `check-forecast-guards.mjs`
+(0.71.1, the Snape grass miss) exists because `js/forecast.mjs`'s refusals are false-by-absence: `ctx.phase === 'spike'`
+is simply false when the caller never passes `phase`, so a blind call yields an unguarded projection that renders
+byte-identically to a guarded one. The guard enforced this by asking whether the WORD `phase` appeared in the call's
+argument region. Seven call sites passed `phase: row.phase` — and **`computeQuote` returns no `phase` field** (32 keys,
+none of them that). The text matched, the value was `undefined`, the refusal was dead, and CI printed
+`✓ … every ctx passes phase` over all seven.
+
+**One of the seven was a real gate, not an inform-only note.** `screen-flip-niches.mjs`'s amplitude lane fed the
+projection into `amplitudeGate({driftMargin})`. The other six: `quote-items.mjs` ×3, `screen-flip-niches.mjs`'s
+`renderMode` drift note, `js/estimators/pair.mjs`'s forward "list at X" exit level, and **`js/trends.js` — in the
+deployed app**, whose forecast caption already carried a "mid-spike/decay" explanation string for an outcome its own
+ctx made unreachable. Proof the fix has teeth, on a synthetic profile: `phase: undefined` projects a peak at
+confidence `med`; `phase: 'spike'` and `'decay'` return REFUSED.
+
+**Measured board impact today: none.** Two back-to-back `--mode amplitude` runs, before and after, produced identical
+output — 71 rows, identical drop counts including the single `margin-below-floor`. That means no amplitude candidate
+is currently in a shock shape, not that the change is cosmetic. Note the DIRECTION when it does bite: `amplitudeGate`
+is degrade-OPEN on a null `driftMargin`, so a firing refusal REMOVES a drop that was computed from a projection the
+doctrine says must be refused — it does not add drops.
+
+**The guard now checks the VALUE.** New `dead-phase-value` rule: find any `phase:` whose value reads `X.phase`, then
+duck-type `X` by the other properties the file reads off it against `computeQuote`'s real key set — obtained by
+CALLING computeQuote, never parsed or hardcoded, so the rule retires itself if a `phase` field is ever legitimately
+added. If that probe throws, the guard exits nonzero rather than skipping the rule.
+
+**Two false greens during the rewrite, both worth recording**, because they are the same class as the bug: the first
+draft anchored the read immediately after `phase:` and so missed `js/trends.js`'s TERNARY (`phase: qrow ? qrow.phase : null`);
+the second followed a ctx built away from the call but used a first-match lookup, which resolved `ctx` to an unrelated
+decoy object at `trends.js:374` instead of the real one at `:411`. Both were caught by MUTATION-testing the guard
+(reintroduce the bug in six shapes, confirm each fails) rather than by running it and seeing green — the verification
+that had certified the original guard. A name is not unique in a file, and a value is not a shape.
+
+**Also corrected: the guard's own header asserted "the other four call sites … had always passed the fields."** That
+was false, and a verification claim in a comment is the most dangerous kind of stale doc — a future reader trusts it
+instead of re-checking. It is now replaced with the true account.
+
 ### 0.71.7 — the /latest print age is always shown (2026-08-09)
 
 **A wrong diagnosis is what motivated this, and the fix is aimed at the ambiguity that caused it.** Two

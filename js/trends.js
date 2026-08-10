@@ -11,7 +11,7 @@ import { diurnalForecast, fmtEta, driftExitFrom } from './forecast.mjs';        
 import { fetchGuideSeries, resolveItem, resolveId, searchCatalog, rebuildDatalist, coarseTrend, refineTrend } from './market.js';
 import { toggleWatch } from './ui.js';
 import { switchTab } from './main.js';
-import { regimeDrift, regimeLabel, momVerdict, momCell, breakEven } from './quotecore.js';   // shared impls (regime + regimeLabel classification mapping + cut-trigger + T2 momentum token + tax-capped break-even) so quotes/positions/Trends reuse them
+import { regimeDrift, regimeLabel, momVerdict, momCell, breakEven, phase } from './quotecore.js';   // shared impls (regime + regimeLabel classification mapping + cut-trigger + T2 momentum token + tax-capped break-even) so quotes/positions/Trends reuse them; phase — the spike/decay shape the forecast refuses to project through (renderForecast; was read off the nonexistent qrow.phase)
 import { fetchQuote, quoteTableHtml } from './quote.js';
 // TC1: the pure DOM-free analytics moved to js/trendcore.js (node-importable + fixture-tested in
 // pipeline/test/trendcore.test.mjs). trends.js re-imports what runTrends/renderPositionCard
@@ -394,7 +394,7 @@ function renderTermNote(ts, it){
    the already-fetched profSeries (zero new fetch, forks nothing). A projected LEVEL, never a direction
    verdict; display-only (never a gate/verdict/price input); degrades to omission when the projection is
    unavailable. This is why Chunk 5 bumps APP_VERSION (like R2/R3 — it reaches this rendering). */
-function renderForecast(profSeries, qrow, it, showAnalysis){
+function renderForecast(profSeries, qrow, it, showAnalysis, s6h){
   const el=document.getElementById('trForecast'); if(!el) return;
   const chartEl=document.getElementById('trForecastChart'), cap=document.getElementById('trForecastCap');
   if(forecastChart){ try{ forecastChart.destroy(); }catch(_){ } forecastChart=null; }
@@ -403,7 +403,12 @@ function renderForecast(profSeries, qrow, it, showAnalysis){
   let prof=null; try{ prof=hourProfile(profSeries||[], {nights:7}); }catch(_){ prof=null; }
   const liveLo=(qrow&&qrow.quickBuy!=null)?qrow.quickBuy:it.low;
   const liveHi=(qrow&&qrow.quickSell!=null)?qrow.quickSell:it.high;
-  const ctx={ liveLo, liveHi, mom:qrow?qrow.mom:null, reliable:qrow?qrow.reliable:undefined, phase:qrow?qrow.phase:null, now:new Date() };
+  // phase() off the 6h series — NOT `qrow.phase`, which never existed (computeQuote returns no such
+  // field), so this ctx carried null and diurnalForecast's 'post-shock-shape' refusal could never fire
+  // here. That refusal is the whole reason the caption below has a 'mid-spike/decay' explanation string:
+  // the UI was written to display an outcome the ctx made unreachable.
+  let ph=null; try{ ph=phase(s6h||[]); }catch(_){ ph=null; }
+  const ctx={ liveLo, liveHi, mom:qrow?qrow.mom:null, reliable:qrow?qrow.reliable:undefined, phase:(ph&&ph.phase)||null, now:new Date() };
   let fc=null; try{ fc=diurnalForecast(prof, ctx); }catch(_){ fc={forecast:null, reason:'error'}; }
   if(!fc || !fc.forecast){
     if(chartEl) chartEl.innerHTML='';
@@ -560,7 +565,7 @@ export async function runTrends(){
     renderDiurnal(pts.length>1?pts:s1h, qrowT, it, showAnalysis);
     // ---- TV: "Forward forecast" (timing tier) — next-24h projection off the SAME hourProfile the
     // diurnal chart reads; the "buyable at ~X in ~4h" answer. Provisional (PF, n≈0); degrades loudly. ----
-    renderForecast(pts.length>1?pts:s1h, qrowT, it, showAnalysis);
+    renderForecast(pts.length>1?pts:s1h, qrowT, it, showAnalysis, s6h);
 
     // ---- "Why this trend?" expander (Tier 2): plain-language guide divergence, σ only in the detail ----
     if(showAnalysis){

@@ -1335,8 +1335,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // oscillation-forecast 1.5-DAY horizon (NOT the amplitude hold, 4d since DT1), wildly overstating the residual-horizon drift shift on an
     // hours-long flip) — undefined ⇒ driftExitFrom's own generic fallback (unaffected for any future spec
     // that doesn't set it).
+    // `ph` (the phase() read at the top of this same loop body) — NOT `row.phase`, which does not exist:
+    // computeQuote returns no `phase` field, so that read `undefined` and silently disabled forecast's
+    // post-shock-shape refusal here. See the note beside `ph` in quote-items.mjs runItems.
     const driftExit = (prof && rbStats && rbStats.days) ? driftExitFrom(prof, rbStats.days, {
-      liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable,
+      liveLo: row.quickBuy, liveHi: row.quickSell, phase: ph?.phase ?? null, mom: row.mom, reliable: row.reliable,
     }, { holdHorizonDays: FLIP_NICHES[mode].driftInform?.holdDays }) : null;
     const driftNote = driftInformNote(FLIP_NICHES[mode], driftExit, { entry: row.optBuy, fmt });
     if (driftNote) driftNotes.push(`${name}: ${driftNote.text}`);
@@ -2185,7 +2188,12 @@ function wfArchive() {
 // by the archive era, not by this number; the read costs ~20ms/item and the whole board ~0.3s.
 const WF_ARCHIVE_DAYS = AMP_WF_WARMUP_DAYS + AMP_WF_FIT_DAYS + 60;
 
-function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, daily) {
+// `series6h` is threaded in (2026-08-10) for ONE reason: the driftExitFrom ctx below needs a real
+// `phase`. It previously passed `row.phase`, which computeQuote does not return — so the ctx carried
+// `undefined`, forecast's post-shock-shape refusal was fail-open, and amplitudeGate's driftMargin was
+// computed off a projection the doctrine says must be REFUSED on a spike/decay shape. This is the one
+// site of the seven where the dead guard fed a real gate rather than an inform-only note.
+function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1h, guide, daily) {
   const rows = [], sugg = [];
   const informNotes = [];
   // DT1b: why each row fell back to the 0.5 prior instead of a measured rate — surfaced in the footer so
@@ -2227,8 +2235,9 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
     // ceiling/floor slope, `prof` (the hourProfile) → diurnalForecast — via the shared driftExitFrom
     // pattern (NO new fetch). Direction-agnostic by construction (driftExitFrom passes the slope as a
     // signed number; amplitudeDriftMargin's arithmetic has NO branch on its sign).
+    const phAmp = phase(series6h && series6h.get(s.id));   // real phase — `row.phase` is undefined (see the fn header)
     const dae = driftExitFrom(prof, stats.days, {
-      liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable,
+      liveLo: row.quickBuy, liveHi: row.quickSell, phase: phAmp?.phase ?? null, mom: row.mom, reliable: row.reliable,
     }, { holdHorizonDays: AMP_HOLD_DAYS });
     const driftShadow = amplitudeDriftMargin(dae, { entry: ar.ampBid });
     const g = amplitudeGate(ar, { trendDominates, knife, oscillating: !!(osc && osc.oscillating), driftMargin: driftShadow });
@@ -2957,7 +2966,7 @@ async function main() {
   for (const m of RUN_MODES) niches[m] = FLIP_NICHES[m].gate === 'value'
     ? renderValueMode(gated[m], qcache, map, series6h, series1h, guide, daily)   // P5 — the value niche's own term-structure table
     : FLIP_NICHES[m].gate === 'amplitude'
-    ? renderAmplitudeMode(gated[m], qcache, map, series1h, guide, daily)         // A2 — the amplitude niche's own daily-cycle table; DT6 — `daily` threaded in for the base-position note
+    ? renderAmplitudeMode(gated[m], qcache, map, series6h, series1h, guide, daily)   // A2 — the amplitude niche's own daily-cycle table; DT6 — `daily` threaded in for the base-position note; series6h — phase() for the drift ctx (was fail-open on `row.phase`)
     : renderMode(m, gated[m], qcache, map, series5m, series6h, series1h, v24, daily, { partition: m === 'churn' && partitionChurn, dailyRanges });
   // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST (Workstream C): print the ONE cross-niche decision digest, collected
   // during the niche renders above (the watchClosely precedent). --digest-gated + printed via `realLog` so it

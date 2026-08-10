@@ -1957,7 +1957,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     bodies offset-preservingly so a doc comment quoting a call shape can't trip it. Only `phase` is REQUIRED —
     `mom`/`reliable` aren't computed on every surface, and their absence is surfaced at runtime by the
     forecast's `guardsUnchecked` field rendering `⚠ guards unchecked: …` on the drift-adj clause instead.
-    Produces/consumes nothing; exit 1 + a per-site report on violation)
+    **SECOND RULE, `dead-phase-value` (0.71.8): the v1 guard above was ITSELF fail-open** — it asked only whether
+    the WORD `phase` appeared in the argument region, and `phase: row.phase` contains it while evaluating to
+    `undefined`, because `computeQuote` returns no `phase` field. Seven call sites shipped that way and the guard
+    reported ✓ on all of them; one (`screen-flip-niches.mjs`'s amplitude lane) fed `amplitudeGate({driftMargin})`,
+    a REAL gate. Rule 2 therefore checks the VALUE: it finds any `phase:` whose value reads `X.phase`
+    (including inside a ternary, and inside a ctx built away from the call — BOTH shapes produced a false green in
+    the first drafts, the second because a first-match lookup resolved `ctx` to an unrelated decoy object earlier
+    in the same file), then duck-types `X` by the other properties the file reads off it against `computeQuote`'s
+    REAL key set — obtained by CALLING computeQuote, never parsed or hardcoded, so the rule retires itself if a
+    `phase` field is ever legitimately added. A throw while probing that shape EXITS NONZERO rather than skipping
+    the rule. Produces/consumes nothing; exit 1 + a per-site report on violation)
   - `check-daemon-safety.mjs` (PLAN-DAEMON-SUBSYSTEM Hardening finding #1, the CI half approved for Phase 1 —
     a STRUCTURAL, DENYLIST-style zero-git guard run in the cheap `checks` job. Scans `pipeline/daemons/registry.mjs`
     + every `pipeline/daemons/*.mjs` (non-test) and FAILS the build if a local/auto-runnable daemon (1) IMPORTs
