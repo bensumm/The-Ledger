@@ -1,6 +1,6 @@
 ---
 name: schedule
-version: 1.3.0
+version: 1.4.0
 description: Consolidated buy/sell WINDOW AGENDA — a time-sorted "what to buy/sell and when" across current positions (default) or the watchlist, plus a flipped-but-not-watchlisted audit. Triggers — "what's my agenda", "what should I buy/sell and when", "when's the next window", "what's coming up", "schedule".
 ---
 
@@ -46,7 +46,7 @@ Column legend (the render columns of `read-schedule.mjs`):
 | --- | --- |
 | `In (h)` | hours to the window's next start, nearest 0.5h; `now` when currently inside it. |
 | Window | the dip/peak hour range in BOTH zones (local / UK). |
-| Action | `BUY dip` / `SELL peak`. Each item contributes up to 2 rows (its dip + its peak). |
+| Action | `BUY dip` / `SELL peak`, plus `BUY dip·2` / `SELL peak·2` for a SECOND elevated/depressed window. Each item contributes up to **4** rows (`dips.slice(0,2)` × `peaks.slice(0,2)`) — this said 2 until 2026-08-09, which would make a real second window read as a typo (memory `surface-secondary-local-peaks`). |
 | Level | the recent dip/peak price guide (the bid/ask candidate). Rendered with `fmtP` — FULL gp resolution under 100k (`1,081`, not `1.1k`), compact above it (`26.30m`) — because it is a price to place an offer at. Ben, 2026-08-05: the old `fmt` render collapsed all four Snape-grass rows (1,081 / 1,093 / 1,122 / 1,123) onto one `1.1k`, hiding a 42gp spread on a trade whose whole margin was ~36/u. |
 | List | C / W tag(s). |
 
@@ -68,7 +68,10 @@ without running the skill.
 ## Reverse-flip cycles (RF4)
 When `reverse-flip-state.json` holds declared in-flight cycles (`awaiting-rebuy`/`rebuy-armed`), the
 agenda unions `RF`-tagged rows (`SELL peak`/`REBUY dip`/`REBUY armed`) and prints a "Reverse-flip cycles"
-note block under the table — the thin rebuy-strand caution and the `REBUY_STALE_DAYS` nudge.
+note block under the table — the `REBUY_STALE_DAYS` nudge. **The thin rebuy-strand caution does NOT
+print on this surface** (corrected 2026-08-09: it was listed here but was dead code — `read-schedule`
+has no guide/volDay, so `isThinBigTicket` always short-circuited to false. Use `/book` or a quote for
+the liquidity read on a big-ticket strand).
 INFORM-ONLY n≈0; relay it when present. An empty store surfaces nothing extra.
 DT3 (2026-08-09) removed this block's third note, the shared hourly-drift line ("a RISING drift is the
 reverse-flip's OWN bad signal — you'd rebuy into strength"): the per-hour slope behind it was measured to

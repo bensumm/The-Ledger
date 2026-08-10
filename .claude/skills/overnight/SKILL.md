@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.23
+version: 1.24
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -92,12 +92,22 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    (band · churn · amplitude, post-THE-SWAP) while the direct branch screened band ALONE — and, because
    it also passes `--publish`, wrote a band-only `screen.json` to the deployed app's Scan tab every night.
    That reads as a THE-SWAP (2026-07-19) leftover rather than a decision, so the flag is now explicit;
-   amplitude stays console-only either way, so the published file gains churn, never loses a row. The posture already does the
+   amplitude stays console-only either way, so the published file gains churn, never loses a row.
+   **⚠ The posture filters the BAND/CHURN lanes ONLY — the amplitude table is UNFILTERED.**
+   _(judgment: coverage/safety caveat)_ `surviveMode` — which is what applies every posture rule below —
+   is called only from `renderMode` (`screen-flip-niches.mjs:1160`). `renderAmplitudeMode` never calls it;
+   its only use of `POSTURE` is TAGGING the logged suggestion row. So amplitude rows appear having passed
+   none of the exclusions in the next sentence, and they are the multi-day big-ticket lane (provisional
+   n≈0) — the worst class to leave an unattended overnight bid on. Treat amplitude rows here as a
+   discovery list, not as posture-vetted. (They are also logged to `suggestions.jsonl` with
+   `posture:'overnight'` despite no overnight filtering, so a posture-conditioned `/analyze` retro over
+   amplitude is contaminated — noted, not yet fixed.)
+   For band/churn the posture does the
    structural filtering for you: it keeps only flat/rising regimes with a confident (reliable)
    band, drops the thin gp-flow fast-lane and any 2h breakdown, ranks by net edge over velocity,
    and EXCLUDES items whose yesterday-overnight window printed materially below the current
    optimistic bid (`overnightStaleRisk` — the built-in stale/underwater-by-morning test). The
-   250k gp/day floor is applied too. So you no longer hand-apply those exclusions.
+   250k gp/day floor is applied too. So you no longer hand-apply those exclusions on those lanes.
 5. **What the posture does NOT decide — your remaining judgment layer:**
    - **Big-ticket / mildly-rising items survive the posture** (they're flat/rising, non-thin) —
      that's intended: an optimistic big-ticket buy is a good overnight option. **Size them**

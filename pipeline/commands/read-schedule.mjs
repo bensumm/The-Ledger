@@ -140,6 +140,10 @@ export function reverseFlipRows(state, { profileByItem = {}, now = new Date() } 
     const w = prof ? (sell ? (prof.peak || (prof.peaks && prof.peaks[0])) : (prof.dip || (prof.dips && prof.dips[0]))) : null;
     const action = sell ? 'SELL peak (RF)' : (e.state === 'rebuy-armed' ? 'REBUY armed (RF)' : 'REBUY dip (RF)');
     const level = sell ? (e.soldEach ?? null) : (e.rebuyBidPrice ?? e.beRebuy ?? null);
+    // `prof.row` is an OPTIONAL caller-supplied quote row (guide/volDay) that enables the thin big-ticket
+    // liquidity caution. This function is pure and generic, so it stays — but see buildAgenda below: the
+    // PRODUCTION profileByItem is built from `hourProfile`, which has NO `row` key, so on the real
+    // `/schedule` surface this is always null and the caution NEVER fires.
     const notes = reverseFlipCycleNotes(e, { row: (prof && prof.row) || null, now: nowMs, fmt });
     rows.push({
       inH: (w && w.startH != null && w.endH != null) ? windowInH(w.startH, w.endH, nowClock) : null,
@@ -277,6 +281,14 @@ export async function buildAgenda({ scope = ['c'], now = new Date(), repoRoot = 
     // had one — it passed no `ask` at all — so there is nothing here for the surviving read to say. The
     // `driftNote` slot on reverseFlipCycleNotes stays (a generic pre-rendered note slot); it is simply
     // unfed. See hourly-lmh.mjs's tombstone for why the slope went.
+    // KNOWN GAP (recorded 2026-08-09): these profiles come from `hourProfile`, whose return has NO `row`
+    // key. `reverseFlipRows` reads `prof.row` to enable the thin big-ticket LIQUIDITY CAUTION, so on this
+    // surface that caution can never fire — `isThinBigTicket(null)` short-circuits false at its first line.
+    // It went unnoticed because the acceptance test hands `reverseFlipRows` a SYNTHETIC profile carrying a
+    // `row`, so the library capability is genuinely covered while the production path is dead: a fixture
+    // that pins a shape nothing produces. Supplying it would need a per-item quote fetch (guide + volDay),
+    // which this deliberately-cheap banner does not do — so the docs now say the caution is NOT emitted
+    // here rather than the code pretending. Don't "fix" the null without adding that fetch.
     const profileByItem = {};
     for (const e of rfState) {
       if (!e || e.id == null) continue;

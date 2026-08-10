@@ -1232,7 +1232,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     RF4 (2026-07-25) adds the PURE `reverseFlipRows(state, {profileByItem,now})` builder,
     unioned into the agenda when `reverse-flip-state.json` is non-empty: one `RF`-tagged row per declared
     in-flight cycle (`SELL peak`/`REBUY dip`/`REBUY armed`), windowed on the ALREADY-fetched `hourProfile`
-    (a null-window RF row sorts last), carrying the shared cycle notes (thin strand + the
+    (a null-window RF row sorts last), carrying the shared cycle notes (the REBUY_STALE_DAYS nudge; the thin-strand caution is NOT emitted here — see the explicit `row: null` in read-schedule.mjs +
     `REBUY_STALE_DAYS` nudge) below the table. (DT3, 2026-08-09: the `driftByItem` param and its
     hourly-drift note are GONE — this surface never had an ask level, so the surviving ask-reach decay read
     has nothing to score here.) Zero new fetch; an empty store adds ZERO rows — the

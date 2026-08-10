@@ -89,11 +89,22 @@ ok('FAILURE 6 — a REGEX inside `${…}` does not unbalance the scan', () => {
   }
 });
 
+ok('FAILURE 7 — a KEYWORD-preceded regex inside `${…}` does not unbalance the scan', () => {
+  // Failure 3 recurring inside the nested scanner, exactly as failure 2 did (that was failure 6).
+  // Testing only the single-char prev made `return /{/…` read as division.
+  const src = 'export const a = (s) => `x ${ (() => { return /\\{/.test(s); })() } y`;\nexport const z = MISSING_KW_RE + 1;';
+  assert.ok(un(src).includes('MISSING_KW_RE'), 'a return-preceded regex inside an interpolation must not blind the file');
+});
+
 ok('an object KEY does not bind its name file-wide', () => {
   // The label rule used to accept `{ MAX_X:` as a label, binding MAX_X everywhere and masking a real
   // unbound use — the same per-file masking class as `if (X) {`.
   const src = 'export const o = { MASKED_BY_KEY: 1 };\nexport const z = MASKED_BY_KEY + 1;';
   assert.ok(un(src).includes('MASKED_BY_KEY'), 'an object key must not bind the name for the whole file');
+  // …including an OBJECT-VALUED key, which the first version of the discriminator still accepted as a
+  // label because an object value also starts with `{` (8 real names in tracked code were bound this way).
+  const objVal = 'export const o = { MASKED_OBJ: { a: 1 } };\nexport const z = MASKED_OBJ + 1;';
+  assert.ok(un(objVal).includes('MASKED_OBJ'), 'an object-VALUED key must not bind either');
   // …while a REAL label still binds.
   assert.deepEqual(un('export function f(){ REAL_LABEL: for(;;){ continue REAL_LABEL; } }'), []);
 });

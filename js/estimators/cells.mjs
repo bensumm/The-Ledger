@@ -75,10 +75,17 @@ export function estPairCells(est) {
   // (askReachFactor), while the Rank cell's `P~` is the TWO-LEG product (entry × ask). The same row was
   // printing `P~57%` here beside `P~0.00` in the rank cell with no marker — the label names which leg
   // each number is, and the rank cell now labels a collapsed leg (screen-flip-niches.mjs consoleRankCell).
-  // RB-3 (PLAN-RECENCY-BASIS) — THE BASIS: this ask-leg factor is on the DISPLAY (recent-3) basis, the same
-  // basis as the `Est. sell` fold price in the cell to its left. The Rank cell's `P~` is still full-window
-  // (families.mjs:332, deliberately deferred), so on a recency-divergent item these two are NOT the same
-  // number and are not meant to be — see the pFill comment in pair.mjs for why. Never claim they match.
+  // THE BASIS — CORRECTED 2026-08-09. This block used to say the ask-leg factor is on the DISPLAY
+  // (recent-3) basis while the rank stays full-window, "so these two are NOT the same number and are not
+  // meant to be… Never claim they match." Both halves are FALSE since the 2026-08-09 flip: `pair.mjs`
+  // computes this factor with `{prefer:'full'}` (`:128`, `:266`) — the SAME basis as the rank — so the
+  // display-vs-rank divergence is retired and the numbers DO agree in basis.
+  // This mattered more than a stale comment: `pair.mjs:113-116` pins the invariant that its `frac` and
+  // `pFill` must ALWAYS declare the same basis, and this file documented the OPPOSITE, pointing readers
+  // at pair.mjs for a rationale pair.mjs no longer holds. An editor following it would have flipped
+  // `pFill` back to `recent` and reintroduced the exact bug RB-3 existed to remove.
+  // (Still true, and unrelated: `P(ask)~` is the ASK LEG ONLY; the Rank cell's `P~` is the two-leg
+  // product, which is why the same row can show two different percentages.)
   const pTok = (est.estNet != null && est.pFill != null && c.ask && !c.foldExempt)
     ? ` · P(ask)~${Math.round(est.pFill * 100)}%` : '';
   const netTxt = est.estNet == null ? '—'

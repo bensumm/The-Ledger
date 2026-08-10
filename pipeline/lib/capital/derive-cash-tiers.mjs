@@ -53,6 +53,21 @@
  * coin-stack anchor — a small straddle error. Mitigated by stating the anchor between trades, the
  * injection detector, and the manual re-anchor. Documented, not yet modelled.
  *
+ * SECOND known v1 gap, found 2026-08-09 and NOT covered by the paragraph above (which is only about the
+ * fill-after-anchor straddle): a bid ALREADY RESTING at anchor time has its escrow subtracted TWICE.
+ * `reserved` (the resting-escrow sum) has no time filter, while `netFlow` counts only fills closing after
+ * `anchorSec` — but a coin-stack anchor ALREADY excludes gp sitting in a pre-anchor bid, because it is
+ * the literal in-game stack (`cash-anchor.mjs`). So anchor 100m + one pre-anchor 50m bid still resting
+ * reports liquid 100m / available 50m / deployable 50m against a truth of 150m / 100m / 100m — all three
+ * tiers understated by the full escrow. Downstream that can make `run-loop.mjs` skip discovery on a
+ * phantom-low `deployablePool` and `read-book.mjs` under-size a tranche, and the injection detector can
+ * misread the correction as "capital was added the anchor missed".
+ * CURRENTLY INERT — no `.capital-state.json` anchor exists and `offers.json` is empty, so nothing today
+ * exercises it; no fixture covers a pre-anchor resting bid. Left UNFIXED deliberately: the arithmetic
+ * change would move every capital number Ben sizes against, and per the standing doctrine the deployable
+ * figure is SHOWN and corrected at the SOURCE rather than modelled (memory
+ * `deployable-shown-correct-at-source`). Fix it with a fixture and Ben's sign-off, not in passing.
+ *
  * PURE (deriveCash) + a thin fs loader (loadDerivedCash). Never a verdict/alert input — output-only,
  * like the cashstate figure it derives from. Node-only consumer → no APP_VERSION concern. */
 import fs from 'node:fs';

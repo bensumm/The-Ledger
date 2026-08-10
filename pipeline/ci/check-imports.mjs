@@ -181,7 +181,11 @@ function codeOnly(src) {
             while (i < n && noComments[i] !== q) { if (noComments[i] === '\\') i++; i++; }
             i++; dPrev = ')'; continue;
           }
-          if (d === '/' && REGEX_PREV_OK.has(dPrev)) {
+          // The keyword check is as load-bearing here as at the top level: testing only the single-char
+          // `dPrev` made `${ (() => { return /\{/.test(s); })() }` read the regex as DIVISION — failure 3
+          // recurring inside the nested scanner, exactly as failure 2 did (that was the sixth shape; this
+          // is the seventh). Both scanners now apply BOTH rules.
+          if (d === '/' && (REGEX_PREV_OK.has(dPrev) || KEYWORD_BEFORE_REGEX.has((noComments.slice(Math.max(0, i - 12), i).match(/([A-Za-z$_][\w$]*)\s*$/) || ['', ''])[1]))) {
             i++; let inClass = false;
             while (i < n) {
               const e = noComments[i]; i++;
@@ -264,7 +268,11 @@ function boundConstants(src) {
   // `{ MAX_X: 1 }` as a label bound MAX_X everywhere and masked a genuine unbound use of it — the same
   // masking class as the `if (X)` bug. (Latent when found: disabling the rule entirely still left the
   // guard at 0 unbound across every entrypoint.)
-  for (const d of clean.matchAll(/([A-Z][A-Z0-9_]*)\s*:\s*(?=(?:for|while|do|switch|if)\b|\{)/g)) bound.add(d[1]);
+  // `{` is NOT in the lookahead: an object-literal VALUE is also `{`, so accepting it re-opened the very
+  // masking this rule was narrowed to close — `{ CONFIG_X: { a: 1 } }` bound CONFIG_X file-wide (8 such
+  // names in tracked code: VALUE_HOLD, THIN_BIG_TICKET_VOLATILE, …). A label followed by a BARE block is
+  // legal but has no instance in this repo, and losing it only costs a false positive, never a miss.
+  for (const d of clean.matchAll(/([A-Z][A-Z0-9_]*)\s*:\s*(?=(?:for|while|do|switch)\b)/g)) bound.add(d[1]);
   for (const d of clean.matchAll(/\bstatic\s+([A-Za-z_$][\w$]*)/g)) bound.add(d[1]);               // class fields
   // Parameter lists: `(…) =>`, `method(…) {`. The lookbehind is LOAD-BEARING — without it this also
   // matched `if (X) {`, `while (X) {`, `switch (X) {`, `for (…) {`, none of which BINDS anything. Because
