@@ -336,10 +336,16 @@ function renderDiurnal(profSeries, qrow, it, showAnalysis){
       // not to predict anything. hourConcentration remains canonical for what it IS (PLAN-DIURNAL-TIMING
       // §3/§6); it just isn't evidence for THIS badge. The ROI floor stays a separate economic gate — a
       // real cycle that doesn't clear tax still isn't tradeable.
-      //   MEASURED over a 636-item archive sample at this default window: the old gate fired on 2.1% of
-      // items, `reliable && pays` fires on 0.5%, and AND-ing concentration back on top would cut it to
-      // 0.2% by dropping 4 of the 5 reliable items. HONEST LIMIT (rule 4): reliability's own lift evidence
-      // is n=8, and the badge is now RARE BY CONSTRUCTION — only ~0.8% of items pass the gate at all.
+      //   MEASURED over the FULL local archive at this default window (3,799 items with a readable
+      // profile): the old gate fired on 85 items (2.2%), this one fires on 19 (0.5%), and AND-ing
+      // concentration back on top would leave 2 (0.1%) — 29 of the 33 reliable items fail concentration,
+      // so keeping it would discard 17 of the 19 on a predicate measured not to predict anything.
+      //   HONEST LIMITS (rule 4), both worth knowing before trusting the badge: reliability's own lift
+      // evidence is n=8 AND it was measured on a study panel (≥21d history, held-out-scorable) that
+      // passed at ~2–4.5%, NOT on this 0.9% live population — so the +20.7pp figure is not claimable for
+      // the items that actually star here. The badge is RARE BY CONSTRUCTION. Separately, DT2 measured
+      // the diurnal window to carry ~zero information for a RESTING offer (71.2% vs 70.5% random), so
+      // this whole read only pays for ATTENDED buy-now-vs-wait decisions.
       let rel=null; try{ rel=windowReliability(profSeries||[]); }catch(_){ rel=null; }
       const hoursOk=!!(rel&&rel.reliable===true);
       const paysOk=net>0 && roi!=null && roi>=DIURNAL_MIN_ROI;

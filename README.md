@@ -779,6 +779,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `quote-items.mjs` default stdout view with `--raw` as the model-free escape hatch; console-only, no
   `screen.json`/app change). Folds into `PLAN.md` and is deleted when its last chunk ships (the
   plan-file rule).
+- `plans/PLAN-DAY-LOW-SURFACING.md` — **SCOPING ONLY (2026-08-10), nothing built.** Ben's ask for a
+  surfacing lane over "items resting on their 1/3/7/30 day lows". Records what already exists (the
+  per-horizon `low`/`high`/`pctInRange` for 1/3/7/14/28d is ALREADY computed by `js/termstructure.mjs`
+  `termStructure` — the missing piece is the cross-horizon read, not the data), why the horizons are
+  1/3/7/**28** rather than 30, and why the 1d bit is the weak one (daily mids off the 6h series, ~4
+  points — not an intraday low). Its **Chunk 0 is a BLOCKING walk-forward measurement** and a negative
+  result closes the plan, per the PLAN-BOTH-LEG-ENTRY / `hourlyDrift` precedent. Consumed by nobody yet;
+  produces no artifact. Folds into `PLAN.md` and is deleted when its last chunk ships.
 - `plans/PLAN-BOTH-LEG-ENTRY.md` — **CLOSED, NEGATIVE RESULT (2026-08-08). Nothing was built and
   nothing should be** — kept as a don't-rebuild record, NOT an in-flight plan. It proposed solving for an
   entry price that makes BOTH legs reach (chunks BL1–BL4). Its own BL4 validation gate was run FIRST, on

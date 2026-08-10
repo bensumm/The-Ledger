@@ -55,11 +55,25 @@ gap, and backwards on the peak side. Inside `clean=true`, reliability was doing 
   so the app's displayed fit *never* matched the gate's 14d window — every `★` it had ever shown carried a
   verdict measured on days it wasn't displaying. 14d was added and made the default; 7d/28d now disclose.
 
-**Honest limits (rule 4).** Reliability's own lift evidence is n=8, and the badge is now **rare by
-construction** — only ~0.8% of items pass the gate at all. Measured over a 636-item archive sample at the
-new default window: the old gate fired on 2.1% of items, `reliable && pays` fires on 0.5%, and AND-ing
-concentration back on top would cut it to 0.2% by dropping 4 of the 5 reliable items. Keeping concentration
-would have filtered on noise. Ben can revert to the old, more frequent badge if he prefers the rate.
+**Honest limits (rule 4) — read these before trusting the badge.** Measured over the **full local archive**
+(3,799 items with a readable profile) at the new default window: the old gate fired on **85 items (2.2%)**,
+this one fires on **19 (0.5%)**, and AND-ing concentration back on top would leave **2 (0.1%)** — 29 of the
+33 reliable items fail concentration, so keeping it would discard 17 of the 19 on a predicate measured not
+to predict anything.
+
+Three limits, and they bound this hard:
+1. Reliability's own lift evidence is **n=8**, and it was measured on a study panel requiring ≥21 days of
+   history and enough held-out days to score — a better-behaved subset that passed at ~2–4.5%. The live
+   board passes at **0.9%**. So the +20.7pp figure is **not claimable** for the items that actually star.
+2. The badge is **rare by construction**. That is a fact about the market (only ~1 item in 110 has a
+   reproducible daily clock), not a threshold choice — loosening it re-admits the population measured at
+   +2.6pp, i.e. nothing.
+3. DT2 measured the diurnal window to carry **~zero information for a RESTING offer** (71.2% touch-inside
+   vs 70.5% for a random window of the same width). This read only pays for ATTENDED buy-now-vs-wait.
+
+Consequently **the badge is not the valuable half of this change** — the always-rendered `Timing check:`
+line is, because it tells you on ~99% of items that the hours are noise and to use the levels instead.
+Flagged to Ben; dropping the `★` entirely and keeping only the line is a defensible two-line follow-up.
 
 **Verification.** `js/*.js` is outside `check-imports`' coverage and CI's smoke test clicks the Trends tab
 but never opens an item, so `renderDiurnal` never executes there — exactly the blind spot that shipped a
