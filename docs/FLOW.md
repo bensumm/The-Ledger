@@ -203,7 +203,7 @@ this table is the flow view, not a second inventory.
 | `watchlist.json` | app + phone (contents API) | app + `screen-flip-niches.mjs` watchlist section | B |
 | `suggestions.jsonl` | `lib/suggestlog.mjs` (every surface) | `join-outcomes` / `analyze-record` | E |
 | `outcomes.json` | `join-outcomes.mjs` | `analyze-record.mjs` | E |
-| `alerts.json` | `trigger-alerts.mjs` | trigger engine (N1) | — |
+| `alerts.json` | **hand-edited (no writer)** | `trigger-alerts.mjs` — the trigger engine (N1) | — |
 | `.market-archive.sqlite` | passive Tier-1 archive append (loadSnapshot) | replay / retro | D/E |
 
 ---

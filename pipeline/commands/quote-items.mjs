@@ -646,7 +646,23 @@ async function runPositions() {
 
   const { err, groups: allGroups, openLots, ageMin } = readOpenPositions(POSITIONS);
   if (err) { console.error('cannot read positions.json: ' + err); process.exit(1); }
-  if (!allGroups.length) { console.log('No open positions in positions.json.'); return; }
+  // TERMINAL-STATE EMISSION (2026-08-10, found by adversarial audit). Both early returns below used to
+  // report through bare `console.log`, which main() stubs to a no-op under the QUIET DEFAULT — so a book
+  // whose every lot is incidental printed ZERO BYTES and exited 0, indistinguishable from a crash or a
+  // hang. They also returned BEFORE writeLastReport, leaving `last-report/quote.json` holding an OLDER
+  // run that an agent following the AO1 read-the-dump contract would consume as current. Silent success
+  // plus silently-stale data is the worst pair on this surface.
+  //   This is the SAME bug class already documented and fixed at screen-flip-niches.mjs:530 ("a safety
+  // disclosure that a verbosity flag can suppress is not a disclosure") — it simply was never swept here.
+  // Every terminal path now emits like the successful one: render (verbose), dump ALWAYS, realLog a
+  // one-liner when quiet.
+  const finishEarly = (msg) => {
+    const report = buildQuoteReport({ mode: 'positions', header: msg + '\n', headers: [], rows: [], notes: [] });
+    console.log(renderReport(report));            // no-op unless --verbose, exactly like the main path
+    const rel = writeLastReport('quote', report); // AO1: refresh the dump so no agent reads a stale prior run
+    if (!VERBOSE) realLog(`${msg} → ${rel}`);
+  };
+  if (!allGroups.length) { finishEarly('No open positions in positions.json.'); return; }
   // P0: one loadSnapshot() per pass — the position surface's mapping/guide + the passive Tier-1
   // archive append (quote-items.mjs is, with watch-positions.mjs, loadSnapshot's first consumer). Robust fallback:
   // if the archive/snapshot can't open, degrade to the plain loaders so the read never breaks.
@@ -666,7 +682,7 @@ async function runPositions() {
     }
     return true;
   });
-  if (!groups.length) { console.log('Only incidental inventory in positions.json — ignored: ' + incidentalNames.join(', ')); return; }
+  if (!groups.length) { finishEarly('Only incidental inventory in positions.json — ignored: ' + incidentalNames.join(', ')); return; }
   const getInputs = async id => (snap ? (await snap.series(id)) : null) ?? await fetchItemInputs(id);
   // SF-3: the bulk /24h map for the logged liquidity `class` (converges with screen-flip-niches.mjs). On the normal
   // path loadSnapshot ALREADY fetched the whole-market /24h (snap.v24) — reusing it adds ZERO fetch and

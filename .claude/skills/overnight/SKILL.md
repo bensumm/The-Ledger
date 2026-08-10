@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.24
+version: 1.25
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -149,7 +149,10 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    ENCODED output of `screen-flip-niches.mjs --posture overnight`: an **Overnight accumulation & capital**
    table under each flip-niche, top-down by the overnight sort, with per line `Bid → Ask (sell) ·
    up-to units/8h · Capital · Cum capital · Net/u · Total if cycled`. The up-to-units figure is
-   the shared `expUnitsOvernight` (`= expUnits × 8/24 = min(buyLimit×2, 8/24×0.10×volDay)` —
+   the shared `expUnitsOvernight` (`= min(buyLimit×2, 8/24×0.10×volDay)`; this line also claimed
+   `= expUnits × 8/24` until 2026-08-10 — that identity is FALSE and `expunitsovernight.test.mjs`
+   asserts its negation, because `expUnits` now takes the haircut 2 windows/day while this keeps the
+   physical refill count, so scaling by 8/24 double-counts the haircut —
    `pipeline/lib/signal/gatecandidates.mjs`, so its constants can never drift from `expUnits`); the
    script prints its UPPER-BOUND caveat itself (assumes fills at your bid, prorates daily volume
    flat across the quiet hours, no fill probability). **Do not hand-compute or restate the

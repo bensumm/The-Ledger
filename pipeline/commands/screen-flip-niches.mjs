@@ -274,7 +274,8 @@ let AMP_CAPITAL = VALUE_CAPITAL_EXPLICIT ? parseGp(A.capital)
   : (VALUE_CAPITAL_DERIVED ? DERIVED_CASH.liquidCapital : 100_000_000);
 // --- S1 screening economics (gp-flow gate + 250k attention floor) ------------------------------
 // GP_FLOOR: the alternative liquidity path. The two-sided gate (hpv>0 && lpv>0 — the ghost-spread
-// lesson) is NON-NEGOTIABLE and untouched; but the UNIT floor (--floor 50/d) was the wrong UNIVERSAL
+// lesson) is NON-NEGOTIABLE and untouched; but the UNIT floor (--floor, 50/d when this was written,
+// 3500/d since PLAN-VOL24 step 2 recalibrated it against corrected volume) was the wrong UNIVERSAL
 // measure — it hides an Avernic-class big ticket (single-digit units/day yet hundreds of millions of
 // gp of real two-sided daily flow, a genuine ~six-figure-net/u edge). An item clears liquidity on
 // EITHER limitVol ≥ FLOOR OR limitVol×mid ≥ GP_FLOOR. 250m is picked to admit that profile with margin.

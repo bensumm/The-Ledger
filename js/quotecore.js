@@ -314,7 +314,7 @@ export const BAND_EDGE_LO_Q = 0.10;      // dense-side low edge quantile  (was t
 // or graduating the deferred clamp-widen. Do NOT treat them as validated.
 export const ASK_HEADROOM_MIN_PCT = 0.005;    // Class-1 materiality floor (0.5%) — a smaller gap isn't worth a ladder note
 export const RAWTOP_TRUST_BUCKET_VOL = 50;    // min raw-top 5m-bucket highPriceVolume to TRUST the top traded size (sharper than counting buckets)
-export const ASK_HEADROOM_VOL_FLOOR = 2000;   // item-level volDay fallback when bucket volumes are absent (churn scale, cf CHURN_MIN_VOL)
+export const ASK_HEADROOM_VOL_FLOOR = 2000;   // item-level volDay fallback when bucket volumes are absent. (The "cf CHURN_MIN_VOL" rationale this carried until 2026-08-10 is DEAD: PLAN-VOL24 moved CHURN_MIN_VOL to 65000 in corrected units while this stayed at 2000, so the two are no longer a matched pair and 2000 is NOT "churn scale". Left at 2000 deliberately — it is a display-note materiality floor, not a gate — but it is now an UNCALIBRATED standalone number, not one anchored to churn.)
 // quantileSorted is the shared type-7 impl defined at the top of this file (SF-1).
 export function robustBand(los, his){
   const edge=(vals, q, dir)=>{

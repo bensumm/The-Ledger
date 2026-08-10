@@ -45,7 +45,10 @@ the Python `http.server` for a node **`dev-server.mjs`** that serves the same st
 `screen.json` locally. Now a localhost Refresh click runs a REAL scan and the app re-reads the fresh
 file — and a Claude session at the same desk can read that same regenerated `screen.json` as context.
 It keeps the daemon's zero-git discipline (local file write only; publishing to Pages stays the
-attended `sync-fills.mjs`), is bound off-localhost-unreachable because it runs a shell command, and
+attended `sync-fills.mjs **--publish**` — this sentence named a bare `sync-fills.mjs` until 2026-08-10,
+which since the 2026-07-15 default flip reads as "running the sync publishes", the exact opposite of the
+truth: the default and `--local` are ZERO-git and `--publish` is the only path that touches git), is
+bound off-localhost-unreachable because it runs a shell command, and
 degrades on deployed Pages to the old re-fetch-the-published-snapshot behavior.
 
 ## The fills pipeline's evolution — the eliminated scheduler

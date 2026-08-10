@@ -908,15 +908,25 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
   (counterfactual report gates every promotion; anchor = n=5 laps on ONE item, rule 4). Starvation
   is deliberately left to PLAN-FETCH-POOL-SCALING + the capital-conditioned-reserves entry below;
   the band sell fold moves only via AC7's re-decision path (`reach-fold.mjs` header).
-- **~~Thin-reserve should scale with `--capital`~~ — CLOSED 2026-08-09. DO NOT BUILD.**
-  **The reasoning is stated in full here on purpose, because the investigation doc it came from
-  (`plans/PLAN-THIN-RESERVE.md`) is a LOCAL, UNCOMMITTED working file** — a pointer alone would dangle on
-  `origin/main` and leave the original build directive below as the only readable instruction. Verdict:
-  **DO NOT WIDEN `THIN_RESERVE`, DO NOT DEFAULT-ON `--scale-pool`, DO NOT BLEND TO MERIT.** The hypothesis
-  below is *mechanically correct and economically backwards*. Widening costs nothing in fetch budget, so
-  the question is never "can we afford it"; it is a pure **1-for-1 REALLOCATION** of slots out of the
-  cheap-churn velocity lane into big-ticket gear — and Ben's own **408 realised closed lots** say that
-  trade loses. Anyone re-opening this needs new outcome evidence, not a fresh scan anecdote. The text
+- **~~Thin-reserve should scale with `--capital`~~ — CLOSED **CAPITAL-CONDITIONALLY** 2026-08-09,
+  corrected 2026-08-10. DO NOT BUILD *at present capital*.**
+  `plans/PLAN-THIN-RESERVE.md` is now COMMITTED (it was a local uncommitted file, which is why this entry
+  restated its reasoning inline; read the doc for the full argument). Verdict: **DO NOT WIDEN
+  `THIN_RESERVE`, DO NOT DEFAULT-ON `--scale-pool`, DO NOT BLEND TO MERIT** — at Ben's capital. Widening
+  costs nothing in fetch budget, so the question is never "can we afford it"; it is a pure **1-for-1
+  REALLOCATION** of slots out of the cheap-churn velocity lane into big-ticket gear.
+  ⚠ **THE STATED REASON WAS WRONG AND IS RETRACTED.** This entry justified the closure with *"Ben's own
+  408 realised closed lots say that trade loses"* (the doc's §3c ">20m is the worst tier, 2.8:1"). That
+  doc's OWN red-team pass marks §3c **DOWNGRADED** (n=20; 47% of the capital denominator is zero-P/L
+  non-flips; bootstrap CI [0.26%, 7.04%]; **the 2.8× figure could not be reproduced**) and the
+  class-underperforms claim **NOT SUPPORTED** (the tier is 100% gear, so class effect and
+  update-sensitivity are inseparable). **Stop citing §3c.** The surviving reason is different and
+  narrower: *capital binds before slots, so gear cannot deploy here anyway* — widening buys ~0.5m/d of
+  harm on a constraint that is not even binding (`top-n-full`).
+  **It is therefore NOT a permanent rule.** Above ~400m deployable, excluding gear strands capital at
+  zero, so the closure **OVERTURNS at the top end**; the doc sets a **revisit trigger at ~150–200m
+  deployable**. Anyone re-opening this needs new outcome evidence, not a fresh scan anecdote — but it is
+  a question to revisit on capital growth, not a settled no. The text
   below is kept for its history and its CORRECTED anchor, but **it is no longer a directive: do not
   implement the "Fix" it describes.** (It also
   had a live self-contradiction — the ⚠ anchor correction two paragraphs down already showed the three

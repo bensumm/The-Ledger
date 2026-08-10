@@ -668,7 +668,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (`suggestlog.mjs reachableShadow`/`depthExitShadow`/`asymShadow`). _(The screen's lean `demandRegime`
   `◈ demand` shadow/note was REMOVED 2026-07-22, PLAN-REMOVE-DEPTH-PRESSURE-READS — git-revivable.)_ A screen row also carries
   the **`expGpDay`**/**`expGpDayLegacy`** shadow pair (PLAN-CAPITAL-THROUGHPUT, 2026-07-14): the ACTIVE
-  capital-aware attention-floor throughput (`min(limit, deployablePool/mid)×6 × net`) beside the legacy
+  capital-aware attention-floor throughput (`min(limit, deployablePool/mid)×2 × net`, where ×2 is
+  `ACTIONABLE_WINDOWS_PER_DAY` — **this line said ×6 until 2026-08-10**, the physical refill count, and was
+  missed by that day's own ×6→×2 sweep) beside the legacy
   capital-blind value, so `--stats`/F1 can diff old-vs-new surfacing (`--throughput legacy` restores the
   blind value). A churn/scalp screen row (and every `quote-items.mjs` per-item read) also carries a lean
   **`winClear`** object (PLAN-WINDOW-CLEAR B2): the within-window CLEAR read for the quoted ask over its
@@ -928,8 +930,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   estimator understates both legs against the daily distribution (the 2h-band basis + the
   clamp-to-bandTop blend make a verified daily-basis ask/dip structurally unquotable), the rank
   buries repriceable rows (dead-bid ⇒ P~0 instead of a repriced-entry alternative; churn's
-  symmetric fold exemption lacked a placement bound), and windows-per-day is assumed ×6 in four
-  homes while `diurnalTimedLap`'s measured cycle is discarded. Chunks: EF-0a (`via`+rank ledger
+  symmetric fold exemption lacked a placement bound), and windows-per-day was assumed ×6 in four
+  homes while `diurnalTimedLap`'s measured cycle is discarded. _(The ×6 half of that finding was FIXED
+  2026-08-10 — every home now takes `ACTIONABLE_WINDOWS_PER_DAY = 2`, including `expUnits`' own
+  definition site. The discarded-measured-cycle half stands.)_ Chunks: EF-0a (`via`+rank ledger
   logging — SHIPPED 2026-08-01) and **EF1 (rank-leg honesty: dead-bid `↻ repriced entry`
   alternative, the placement-bounded churn exemption, ONE labeled P per row, the screen-vs-quote
   bid-reach window divergence diagnosed — SHIPPED 2026-08-01)**; open: EF0 (counterfactual +
@@ -2175,9 +2179,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `report-branches.test.mjs` (PLAN-CLEANUP-SKILL C12 — the branch-report's pure parsers
     `parseWorktreePorcelain`/`parseBranchRefs` on canned git-output fixtures; classification is the
     caller's job so the impure `gather()` is exercised live by the skill, not unit-pinned),
-    `expunitsovernight.test.mjs` (COD-2 — pins `expUnitsOvernight` = `expUnits × 8/24`: the alignment
-    identity so the accumulation-sizing constants can't drift from the day figure, the documented
-    closed form `min(limit×2, 8/24×0.10×volDay)`, and the limit-bound/volume-bound/null-limit/zero-vol edges),
+    `expunitsovernight.test.mjs` (COD-2 — pins the documented closed form `min(limit×2, 8/24×0.10×volDay)`
+    plus the limit-bound/volume-bound/null-limit/zero-vol edges. **This entry claimed `expUnitsOvernight`
+    = `expUnits × 8/24` until 2026-08-10; that identity is FALSE and the test asserts its NEGATION** —
+    `assert.notEqual(expUnitsOvernight(10,5000), expUnits(10,5000)*K)`, measured 20 vs 6.67. It broke when
+    `expUnits` moved to the HAIRCUT `ACTIONABLE_WINDOWS_PER_DAY = 2` while `expUnitsOvernight` kept the
+    PHYSICAL refill count, so scaling the day figure by 8/24 now double-counts the haircut. The line 335
+    entry above always described this correctly — the two README statements contradicted each other),
     `rebid.test.mjs` (COD-3 — the cut-and-rebid helpers in `js/quotecore.js`: `rebidBar`'s friction
     arithmetic (tax + half-spread below the clear) + `rebidAdvice`'s trajectory-branch selection — knife→against,
     oscillating→rebid-at-trough/sell-peak with diurnal level carry-through, else→friction-bar governs),
