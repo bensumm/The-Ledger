@@ -1847,10 +1847,22 @@ export function windowReliability(series, { nights = WINDOW_RELIABLE_NIGHTS, now
  *   `js/trends.js`          — ROUTES BY DEFAULT (the third surface, found while closing the other two:
  *                             its lookback toggle offered only 7d/28d, so the displayed fit NEVER
  *                             matched the gate). 14d added and defaulted; 7d/28d now disclose.
- * The rule therefore has one home and two renderings — refit when you can, disclose when you cannot.
- * Still NOT machine-enforced: nothing stops a NEW surface from fitting its own window silently. If you
- * add one, pick a mechanism above; if you change WINDOW_RELIABLE_NIGHTS, the three callers follow it
- * automatically now, but grep for `hourProfile(` in any surface added since.
+ * The rule has one home and two renderings — refit when you can, disclose when you cannot.
+ *
+ * ⚠ "THREE SURFACES, ALL HANDLED" IS FALSE — corrected 2026-08-10 after review. Those three are the
+ * ones that render a GATED hour claim (hours shown alongside the gate's verdict). At least four OTHER
+ * live sites render diurnal HOUR SPANS off their own literal window, ungated and undisclosed:
+ *     js/trends.js `renderForecast`        — hourProfile(...,{nights:7}) → diurnalForecast → the
+ *                                            "(HH:00–HH:00)" in the Forward-forecast readout. Forty
+ *                                            lines below the block DT4c fixed, in the same file.
+ *     quote-items.mjs (window-clear note)  — "in the HH–HH peak window", nights:7
+ *     quote-items.mjs (big-ticket held lot)— "· peak window HH–HH", literal nights:14
+ *     screen-flip-niches.mjs (window-clear)— same note at DIURNAL_NIGHTS = 7
+ * None is wrong TODAY in the way DT4b was — they make no reliability claim — but they are the same
+ * shape, and a reader of this header would have been told they were covered. They are not. Nothing is
+ * machine-enforced either: no guard stops a new surface fitting its own window silently. If you add
+ * one, pick a mechanism above; if you change WINDOW_RELIABLE_NIGHTS, grep `hourProfile(` repo-wide
+ * rather than trusting any count written here.
  *
  * THE GAP IT CLOSES. The gate judges a 14-day shape (its window is pinned — a 7-day window is
  * uncomputable for ~100% of items). The surfaces rendered the window at nights=7. So a passing
@@ -1931,12 +1943,20 @@ export function displayFitNights(series, { nights = 7, now = new Date() } = {}) 
  *
  * PURE, zero fetch. @returns {string|null}
  */
+/* ⚠ CALLERS MUST PASS THE **ACTUAL** FIT, NOT THE REQUESTED ONE (corrected 2026-08-10 after review).
+   `hourProfile` silently CAPS `nights` to the days actually present: ask for 30 on a 365-point 1h
+   series and you get 16. The first version of this note took the caller's requested window, so
+   `--nights 30` printed "fitted over 30d" about a 16-day fit — a false window claim inside the very
+   note that exists to prevent false window claims. Pass `prof.nights`.
+   Same for `gateNights`: pass `reliability.daysUsed`, not the constant. The gate also windows to what
+   exists (13 on a handful of live items), and the line printed beside this one already quotes daysUsed,
+   so defaulting to the constant made two adjacent lines contradict each other. */
 export function fitWindowMismatchNote({ fitNights, gateNights = WINDOW_RELIABLE_NIGHTS, degraded = false,
                                         flag = '--nights', remedy = null } = {}) {
   if (degraded) return null;
   if (fitNights == null || gateNights == null || fitNights === gateNights) return null;
   const fix = remedy || `drop ${flag} to see the hours the gate actually judged`;
-  return `window mismatch — that verdict was measured over ${gateNights}d, but the hours shown are fitted over ${flag} ${fitNights}d. Two fits of the same item agree on the dip hour only ~34% of the time, so it does NOT transfer to these exact hours — ${fix}.`;
+  return `window mismatch — that verdict was measured over ${gateNights}d, but the hours shown are fitted over ${fitNights}d. Two fits of the same item agree on the dip hour only ~34% of the time, so it does NOT transfer to these exact hours — ${fix}.`;
 }
 
 // --- the timed-lap layer (PLAN-DIURNAL-TIMING §0/§1, DT1) ---------------------------------------

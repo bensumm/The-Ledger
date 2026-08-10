@@ -72,7 +72,7 @@ import { estimatePair, estConfLean, askReachFactor, REACH_RELIEF_MIN_VOL } from 
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // AC8: the per-niche spec the fold is computed against (--niche, default band)
 import { fmtHourRange } from '../../js/money-format.js';   // both-zone (local / UK) window labels — kills the GMT/Pacific narration mismatch
 import { hourlyLMH, askReachDecay } from '../lib/market/hourly-lmh.mjs';   // --hourly: the raw per-local-hour LOW/MID/HIGH diagnostic (reuses the 1h series already fetched; inform-only, n≈0); askReachDecay (DT3) — is the --ask level sliding out of reach? (replaced the deleted hourlyDrift slope + its Δ/d column)
-import { askReachDecayNote, liveAgeTag, windowReliability, WINDOW_RELIABLE_NIGHTS, fitWindowMismatchNote } from '../../js/windowread.mjs';   // DT3 — the shared compact decay-note renderer (one owner with quote-items.mjs/screen-flip-niches.mjs); liveAgeTag = the always-rendered /latest print-age suffix (pure, threshold passed in)
+import { askReachDecayNote, liveAgeTag, windowReliability, fitWindowMismatchNote } from '../../js/windowread.mjs';   // DT3 — the shared compact decay-note renderer (one owner with quote-items.mjs/screen-flip-niches.mjs); liveAgeTag = the always-rendered /latest print-age suffix (pure, threshold passed in)
 
 // #9: exit reached on < this fraction of the scored days ⇒ the exit OVER-states the reachable sell,
 // so the back-solved buy is optimistic (the days-reach ≠ lap-clear caveat). PLACEHOLDER (n≈0).
@@ -89,10 +89,16 @@ for (let i = 0; i < argv.length; i++) {
 }
 if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8|peak|dip] [--bid <gp>] [--ask <gp>] [--exit <ask> [--margin <gp>]] [--depth <qty>] [--pressure] [--profile] [--trajectory] [--hourly [--days 3]] [--niche band|churn|scalp] [--json] [--out <path>]'); process.exit(1); }
 
-// DEFAULT PINNED to the reliability gate's window (was a bare literal 14, equal by coincidence).
-// The --profile block prints a gate verdict beside these hours, so when the caller does not name a
-// window the two must move together; an explicit --nights still wins and is disclosed below.
-const NIGHTS = Math.max(1, parseInt(A.nights, 10) || WINDOW_RELIABLE_NIGHTS);
+// DELIBERATELY ITS OWN LITERAL, *not* WINDOW_RELIABLE_NIGHTS (pinned to the gate constant for one
+// commit on 2026-08-10; reverted after review). NIGHTS feeds ~15 call sites here — windowStats ×4,
+// hourProfile ×2, clearableAsk, and the quantile/reach/placement/depth/trajectory block — almost none
+// of which are the display gate. Pinning it to a DISPLAY-gate constant meant moving that gate would
+// silently move reach counts, placement percentiles and the trajectory basis across the whole command,
+// which is exactly what displayFitNights' own header warns against ("DO NOT simplify this into a
+// blanket nights=14 for the callers"). The gate-vs-fit divergence is handled by DISCLOSURE below, so
+// no pin is needed. Keep this equal to WINDOW_RELIABLE_NIGHTS by default anyway — a bare --profile run
+// should show the judged hours — but change it on its own merits, not the gate's.
+const NIGHTS = Math.max(1, parseInt(A.nights, 10) || 14);
 // PLAN-WINDOW-VERIFY T1 — --window also accepts the literals `peak` / `dip`, resolved PER ITEM to that
 // item's own diurnal peak/dip hours (hourProfile). This removes the hand-transcription step — read
 // "PEAK window 20:00–23:00" off the profile line, retype it as `--window 20-23` — that was the mechanical
@@ -261,7 +267,9 @@ for (const want of positionals) {
       // the gate window (`displayFitNights`); this one deliberately does NOT, because --nights is the
       // explicit question the caller asked and silently overriding it would make the flag a lie.
       // Guarded on a real verdict — a degraded read already says "unverified" and claims no transfer.
-      { const mm = fitWindowMismatchNote({ fitNights: NIGHTS, degraded: rel.degraded });
+      // prof.nights / rel.daysUsed = the ACTUAL windows, never the requested ones (see the helper's
+      // header: hourProfile caps to available days, so --nights 30 is really a 16-day fit here).
+      { const mm = fitWindowMismatchNote({ fitNights: prof.nights, gateNights: rel.daysUsed, degraded: rel.degraded });
         if (mm) log(`    ⚠ ${mm}`); }
       // PLAN-DIURNAL-RECENCY-GUARD — append a spike-top/stale clause when the emitted level fails the
       // level-reality read; byte-identical (no clause) when reality is absent/clean.

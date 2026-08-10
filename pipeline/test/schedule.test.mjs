@@ -19,6 +19,7 @@
  *     sorted by trade count desc.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   hoursUntil, isInsideWindow, agendaRowsForItem, sortRows,
   resolveWatchlist, buildAudit, loopHeaderLine,
@@ -259,6 +260,28 @@ ok('LEVEL GUARD: a healthy profile is untouched — the guard only bites when it
   assert.equal(buy.repriced, false);
   assert.equal(buy.degenerate, false);
   assert.equal(sell.level, 1200, 'and the ask passes through unchanged');
+});
+
+
+// --- ROUTING PIN (2026-08-10, adversarial review) -------------------------------------------------
+// DT4c routed this command's profile fit through displayFitNights so a gate-PASSING row is fitted over
+// the days the gate actually judged. The review's complaint was that the original coincidence had "no
+// test on it" — and after the fix that was STILL true: nothing failed if someone put a bare
+// hourProfile(ts,{nights:14}) back. The routing lives inside an async fetch worker, so a behavioural
+// test would need a live fetch; this is a SOURCE-STRUCTURAL pin instead, the same shape as
+// check-daemon-safety's denylist guard.
+ok('read-schedule ROUTES its displayed fit through displayFitNights, not a bare hourProfile literal', () => {
+  const src = readFileSync(new URL('../commands/read-schedule.mjs', import.meta.url), 'utf8');
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+  assert.ok(/displayFitNights\s*\(/.test(code),
+    'MUTATION GUARD: the fit must be resolved by displayFitNights — a bare hourProfile(ts,{nights:LITERAL}) ' +
+    'silently re-opens the fit-window transfer gap for every gate-passing row');
+  const profiled = [...code.matchAll(/hourProfile\s*\(([^)]*)\)/g)].map(m => m[1]);
+  assert.ok(profiled.length >= 1, 'precondition: the file still profiles at all (else this passes vacuously)');
+  for (const args of profiled) {
+    assert.ok(/fitNights/.test(args),
+      'every hourProfile call must take the RESOLVED fitNights, got: hourProfile(' + args + ')');
+  }
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

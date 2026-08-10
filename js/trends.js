@@ -347,7 +347,13 @@ function renderDiurnal(profSeries, qrow, it, showAnalysis){
       // the diurnal window to carry ~zero information for a RESTING offer (71.2% vs 70.5% random), so
       // this whole read only pays for ATTENDED buy-now-vs-wait decisions.
       let rel=null; try{ rel=windowReliability(profSeries||[]); }catch(_){ rel=null; }
-      const hoursOk=!!(rel&&rel.reliable===true);
+      // The ★ requires that the hours DRAWN are the hours JUDGED — not merely that the item passed.
+      // (Corrected 2026-08-10 after review: gating on `reliable` alone starred the 7d and 28d lookbacks
+      // too, so the caption rendered a gold star and "these hours are worth acting on" on the SAME LINE
+      // as "it does NOT transfer to these exact hours". Self-contradiction, and it re-opened exactly the
+      // console/app disagreement DT4c set out to close — the console withholds the hours in that state.)
+      // Compare ACTUAL windows: hourProfile caps `nights` to available days, so 28d is often a 16d fit.
+      const hoursOk=!!(rel&&rel.reliable===true&&prof.nights===rel.daysUsed);
       const paysOk=net>0 && roi!=null && roi>=DIURNAL_MIN_ROI;
       const clean=hoursOk && paysOk;
       let s='';
@@ -364,12 +370,20 @@ function renderDiurnal(profSeries, qrow, it, showAnalysis){
         : rel.reason==='flat-shape'
           ? 'Timing check: this item has no real hour-of-day shape, so the dip/peak hours are an arbitrary pick among near-equal hours — use the levels, not the timing.'
           : rel.reliable
-            ? 'Timing check: the shape repeated across a split-half test of the last '+rel.daysUsed+' days — these hours are worth acting on.'
+            // "these hours" is only sayable when the hours drawn ARE the judged ones — same predicate
+            // as the ★. Without this split the caption asserted "these hours are worth acting on"
+            // immediately before the mismatch note said the verdict "does NOT transfer to these exact
+            // hours", on one line (caught by review after the ★ half was already fixed).
+            ? (hoursOk
+                ? 'Timing check: the shape repeated across a split-half test of the last '+rel.daysUsed+' days — these hours are worth acting on.'
+                : 'Timing check: the shape repeated across a split-half test of the last '+rel.daysUsed+' days, but that is NOT the window drawn below — see the warning.')
             : 'Timing check: the shape did NOT repeat across a split-half test of the last '+rel.daysUsed+' days — treat the hours as noise and use the levels.';
       s+=' · <span class="mini">'+relTxt+'</span>';
       // and when the user has moved OFF the gate's window, the verdict above no longer describes the
       // hours drawn — say which window each one came from rather than letting them read as one fit.
-      const mm=fitWindowMismatchNote({fitNights:nights, degraded:!rel||rel.degraded, flag:'the lookback',
+      // ACTUAL windows on both sides — `nights` is only what the toggle REQUESTED (see helper header).
+      const mm=fitWindowMismatchNote({fitNights:prof.nights, gateNights:rel?rel.daysUsed:null,
+        degraded:!rel||rel.degraded, flag:'the lookback',
         remedy:'switch the lookback back to '+WINDOW_RELIABLE_NIGHTS+'d to see the hours the gate actually judged'});
       if(mm) s+=' <span class="mini loss">⚠ '+mm+'</span>';
       s+=' <span class="ccap">Guidance from the recent daily rhythm — timing support, not a price target; thresholds are placeholder (n≈0).</span>';

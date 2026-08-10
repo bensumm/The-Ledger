@@ -1749,3 +1749,27 @@ ok('fitWindowMismatchNote: names the caller\'s own control, not a hardcoded CLI 
   assert.ok(fitWindowMismatchNote({ fitNights: 28 }).includes('--nights'),
     'and the default is still the CLI wording (else the test above passes for the wrong reason)');
 });
+// REGRESSION (2026-08-10, adversarial review): the note reported the REQUESTED window, not the fitted
+// one. hourProfile silently CAPS nights to the days present, so `--nights 30` on a 365-point 1h series
+// is really a 16-day fit and the note said "30d" — a false window claim inside the note whose entire
+// job is to prevent false window claims. These two pin both halves of the corrected contract.
+ok('hourProfile CAPS nights to the days available — which is why callers must pass prof.nights', () => {
+  const now = Date.now();
+  const ts = [];
+  for (let i = 365; i >= 1; i--) ts.push({ timestamp: Math.floor(now / 1000) - i * 3600,
+    avgHighPrice: 100 + (i % 7), avgLowPrice: 90 + (i % 5), highPriceVolume: 10, lowPriceVolume: 10 });
+  const asked30 = hourProfile(ts, { nights: 30 });
+  assert.ok(asked30, 'fixture must profile');
+  assert.ok(asked30.nights < 30,
+    `MUTATION GUARD: if hourProfile ever stops capping, the reason this contract exists disappears — got ${asked30.nights}`);
+  assert.equal(hourProfile(ts, { nights: 7 }).nights, 7, 'and a window that DOES fit is returned unchanged');
+});
+ok('fitWindowMismatchNote: honours the gate window passed, never silently the constant', () => {
+  // the gate windows to what exists too — daysUsed is 13 on real items — and the line printed beside
+  // this one quotes daysUsed, so defaulting to the constant made two adjacent lines disagree.
+  const n = fitWindowMismatchNote({ fitNights: 7, gateNights: 13 });
+  assert.ok(n.includes('13d'), `must quote the gate's ACTUAL window: ${n}`);
+  assert.ok(!n.includes(`${WINDOW_RELIABLE_NIGHTS}d`), `and must NOT quote the constant instead: ${n}`);
+  assert.equal(fitWindowMismatchNote({ fitNights: 13, gateNights: 13 }), null,
+    'and equal actual windows are still silent, even when neither equals the constant');
+});

@@ -35,7 +35,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping, fetchTs, fetchLatest } from '../lib/market/marketfetch.mjs';   // fetchLatest (2026-08-10): the live leg the dip-not-below-live guard needs — without it deriveDiurnalRange's reprice cannot fire
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot } from '../lib/reconstruct/offers.mjs';
-import { hourProfile, displayFitNights, WINDOW_RELIABLE_R, WINDOW_RELIABLE_NIGHTS, deriveDiurnalRange } from '../../js/windowread.mjs';   // deriveDiurnalRange = the ONE home for the Ghrazi level guard; this file used to bypass it and shipped raw hourProfile levels
+import { hourProfile, displayFitNights, WINDOW_RELIABLE_R, deriveDiurnalRange } from '../../js/windowread.mjs';   // deriveDiurnalRange = the ONE home for the Ghrazi level guard; this file used to bypass it and shipped raw hourProfile levels
 import { fmt, fmtP, fmtHour, fmtHourRange, localTzAbbrev } from '../../js/money-format.js';   // fmtP for the Level column: it is a PRICE to place an offer at, and fmt()'s 1-decimal k-range collapsed 1,051 and 1,109 onto the same "1.1k" (Ben, 2026-08-05). fmtP keeps full gp under 100k and stays compact above it — the same convention the scan's Est. buy/sell price cells use.
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 surfaces the in-flight cycle into the agenda
 import { reverseFlipCycleNotes } from '../../js/reverseflip.mjs';   // RF4/RF6 shared inform-only cycle notes (thin strand + drift + REBUY_STALE_DAYS nudge)
@@ -43,11 +43,13 @@ import { reverseFlipCycleNotes } from '../../js/reverseflip.mjs';   // RF4/RF6 s
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.join(HERE, '..', '..');
 const FETCH_CONCURRENCY = 5;   // copy screen-flip-niches.mjs's constant — keep modest (wiki API ≤15 concurrent)
-// PINNED to the reliability gate's window (was a bare literal 14 — equal to it only by coincidence,
-// with no test on the coincidence, so changing the gate silently reopened DT4b's fit-window gap here).
-// This is the FALLBACK window for a row whose hours did NOT pass; a passing row refits to the gate's
-// own window via displayFitNights below, which is the whole point of routing through it.
-const PROFILE_NIGHTS = WINDOW_RELIABLE_NIGHTS;   // same window read-window-range.mjs --profile defaults to
+// DELIBERATELY ITS OWN LITERAL, *not* WINDOW_RELIABLE_NIGHTS (pinned to the gate constant for one commit
+// on 2026-08-10; reverted after review). This value is the display window for rows that did NOT pass the
+// gate — i.e. ~99% of them, the population displayFitNights' own header says must not be moved by a gate
+// change ("that would move the levels of the other ~99%, which no measurement here covers"). A PASSING
+// row already refits to the gate's window via displayFitNights below, which is what closes the gap; the
+// non-passers need no pin because their hours are marked `~` and assert nothing.
+const PROFILE_NIGHTS = 14;     // the agenda's own display window (same default read-window-range --profile uses)
 
 // ── PURE `In (h)` math (fixture-tested in read-schedule.test.mjs) ─────────────────────────────────
 // hoursUntil(startH, now) — hours from `now` to the NEXT occurrence of local hour-of-day `startH`,
@@ -324,7 +326,7 @@ export async function buildAgenda({ scope = ['c'], now = new Date(), repoRoot = 
     for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
       // DT4b routing (2026-08-10): the displayed window is fitted over displayFitNights' window, not a
       // local constant — so a row that PASSES the gate is fitted over the same days the gate judged.
-      // Byte-identical today (PROFILE_NIGHTS === WINDOW_RELIABLE_NIGHTS, so both branches pick 14); the
+      // Byte-identical today (PROFILE_NIGHTS happens to equal the gate window, so both branches pick 14); the
       // point is that it stays correct if the gate window ever moves. windowReliability runs ONCE here
       // and its verdict is reused below — it used to be recomputed per row from the retained series.
       try {

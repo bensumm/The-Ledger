@@ -151,9 +151,12 @@ export function heldNoteBlock({
  * clean=true (n=60) dip +5.0pp / peak +4.4pp versus clean=false (n=1919) dip +3.6pp / peak +4.7pp, no
  * gap and marginally backwards on the peak side — while the split-half gate separates strongly inside
  * both strata. So the levels were being withheld from ~97% of items on the strength of a statistic
- * that selects nothing. `clean` is still computed and shadow-logged (suggestlog) for calibration, and
- * still drives the app's Trends ★ badge (js/trends.js — NOT re-verdicted here, flagged as follow-up);
- * it no longer decides what this line shows. See DT4-WINDOW-GATE-FINDINGS.md.
+ * that selects nothing. `clean` is still computed and shadow-logged (suggestlog) for calibration, but it
+ * no longer decides what ANY surface shows. (This block said it "still drives the app's Trends ★ badge
+ * (js/trends.js — NOT re-verdicted here, flagged as follow-up)" until 2026-08-10; DT4c re-verdicted that
+ * badge onto `windowReliability` and REMOVED `hourConcentration` from js/trends.js entirely, which made
+ * this sentence false the moment it shipped — caught by adversarial review, not by the doc pass that
+ * should have swept it.) See DT4-WINDOW-GATE-FINDINGS.md.
  * A second liquidity/sizing segment (vol/d, dip/peak pool depth, tranche comfort/ceiling) appends
  * when the caller supplied `volDay`; the §4 caveat appends when `buyLimit` exceeds `trancheCeiling`.
  */
