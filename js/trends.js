@@ -336,10 +336,14 @@ function renderDiurnal(profSeries, qrow, it, showAnalysis){
       // not to predict anything. hourConcentration remains canonical for what it IS (PLAN-DIURNAL-TIMING
       // §3/§6); it just isn't evidence for THIS badge. The ROI floor stays a separate economic gate — a
       // real cycle that doesn't clear tax still isn't tradeable.
-      //   MEASURED over the FULL local archive at this default window (3,799 items with a readable
-      // profile): the old gate fired on 85 items (2.2%), this one fires on 19 (0.5%), and AND-ing
-      // concentration back on top would leave 2 (0.1%) — 29 of the 33 reliable items fail concentration,
-      // so keeping it would discard 17 of the 19 on a predicate measured not to predict anything.
+      //   MEASURED (corrected 2026-08-10 after review — the first version of this comment compared the
+      // old predicate AT 14d against the new one, holding constant the very thing this chunk changed:
+      // the default lookback also moved 7 → 14, and the old badge SHIPPED at 7d). Honest before/after,
+      // stratified 1,267-item archive sample: the badge as it actually shipped (clean@7d && pays@7d)
+      // fired on 6.31% of items; this one fires on 0.47% — a 13.3× reduction, NOT the ~4× the
+      // held-constant comparison implied. (For reference the old predicate re-measured at 14d is 2.45%,
+      // and AND-ing concentration onto the new gate would leave ~0.1%: 29 of 33 reliable items fail
+      // concentration, so keeping it would discard most of them on a predicate measured not to predict.)
       //   HONEST LIMITS (rule 4), both worth knowing before trusting the badge: reliability's own lift
       // evidence is n=8 AND it was measured on a study panel (≥21d history, held-out-scorable) that
       // passed at ~2–4.5%, NOT on this 0.9% live population — so the +20.7pp figure is not claimable for

@@ -55,11 +55,22 @@ gap, and backwards on the peak side. Inside `clean=true`, reliability was doing 
   so the app's displayed fit *never* matched the gate's 14d window — every `★` it had ever shown carried a
   verdict measured on days it wasn't displaying. 14d was added and made the default; 7d/28d now disclose.
 
-**Honest limits (rule 4) — read these before trusting the badge.** Measured over the **full local archive**
-(3,799 items with a readable profile) at the new default window: the old gate fired on **85 items (2.2%)**,
-this one fires on **19 (0.5%)**, and AND-ing concentration back on top would leave **2 (0.1%)** — 29 of the
-33 reliable items fail concentration, so keeping it would discard 17 of the 19 on a predicate measured not
-to predict anything.
+**Honest limits (rule 4) — read these before trusting the badge.**
+
+⚠ **The first version of this section compared the wrong thing** (corrected 2026-08-10 after review). It
+measured the old predicate *at the new 14d lookback* against the new gate — holding constant the very
+thing this change moved, since the default lookback also went 7 → 14 here and **the old badge shipped at
+7d**. The honest before/after, stratified 1,267-item archive sample:
+
+| gate | rate |
+|---|---:|
+| the badge **as it actually shipped** (`clean` && pays, @7d) | **6.31%** |
+| the old predicate re-measured @14d (the misleading figure) | 2.45% |
+| **this badge** (`reliable` && pays, @14d) | **0.47%** |
+
+So the reduction is **~13×, not the ~4×** the held-constant comparison implied. AND-ing concentration back
+onto the new gate would leave ~0.1% — 29 of 33 reliable items fail concentration, so keeping it would
+discard most of them on a predicate measured not to predict anything.
 
 Three limits, and they bound this hard:
 1. Reliability's own lift evidence is **n=8**, and it was measured on a study panel requiring ≥21 days of
