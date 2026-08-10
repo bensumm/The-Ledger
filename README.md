@@ -1693,7 +1693,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     rotation: `logSuggestions` rolls completed months into `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl`
     on append via `rotateLedger` — no-row-loss archive-then-truncate, idempotent — and `readSuggestionLines`
     reunites active+archives for full-history readers; YS2 `suggestionEntry` also lean-includes the
-    forward prediction fields — `posture` and the plumbing for `tripwire`/`fillWindowHrs`/`velocityClass`/`thesis` —
+    forward prediction fields — `posture` and the plumbing for `tripwire`/`fillWindowHrs`/`thesis` (a predicted
+    `velocityClass` was accepted until 2026-08-10 and removed as dead — no caller ever supplied it, so it was
+    absent on all 15,660 logged rows; the MEASURED `velocityClass` in `velocity.mjs` is unaffected) —
     written only when a caller honestly supplies them, so legacy rows stay byte-identical; P2 also
     lean-includes a `validators` flag list; SF-3's `classAndSource(row,id,warmBulkMap)` picks the logged
     liquidity `class` + the lean `volSrc` (`bulk`|`peritem`) tag, converging quote on screen's bulk

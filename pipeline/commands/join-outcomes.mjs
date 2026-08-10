@@ -108,7 +108,7 @@ function joinSuggestion(sugByItem, itemId, placementTs) {
     optSell: best.optSell ?? null, mom: best.mom ?? null, regime: best.regime ?? null, class: best.class ?? null,
     // YS2 forward-enrichment fields (null on legacy rows that predate the enrichment - never fabricated):
     posture: best.posture ?? null, tripwire: best.tripwire ?? null, fillWindowHrs: best.fillWindowHrs ?? null,
-    thesis: best.thesis ?? null, velocityClassPredicted: best.velocityClass ?? null,
+    thesis: best.thesis ?? null,
     // RC (PLAN-REACHABILITY-CONSOLIDATION): did this read carry the five-way exit co-log? `reachable`
     // (the pressure band) is logged on EVERY co-logged read (held + discovery), so it's the universal
     // marker the readiness dashboard counts. Boolean only — the scorer reads the raw values off the
@@ -249,7 +249,7 @@ async function build() {
       holdTimeSec, parkedSec, velocityClass: velocityClass(holdTimeSec),
       suggestion: sug,
       predicted: sug ? { posture: sug.posture, tripwire: sug.tripwire, fillWindowHrs: sug.fillWindowHrs,
-        thesis: sug.thesis, velocityClassPredicted: sug.velocityClassPredicted } : null,
+        thesis: sug.thesis } : null,
     };
   });
 

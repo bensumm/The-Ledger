@@ -8,7 +8,7 @@
  *    repo-root file, so a wrong path means suggestions are written but never published.
  * 2. suggestionEntry never fabricates a number — absent row fields become null.
  * 3. liqClassOf thresholds: <100 thin, <1000 mid, else liquid; null → 'unknown'.
- * 4. YS2 forward fields (posture/tripwire/fillWindowHrs/velocityClass/thesis) — and the SF-3 `volSrc`
+ * 4. YS2 forward fields (posture/tripwire/fillWindowHrs/thesis) — and the SF-3 `volSrc`
  *    tag — are LEAN-INCLUDED: written only when supplied, so a legacy call (no such fields) is
  *    byte-identical to before. (Full SF-3 class/source parity is pinned in sf3-volsrc.test.mjs.)
  * 5. SR1 rotation/compaction: completed months move OUT of the active ledger into monthly archive
@@ -43,7 +43,7 @@ ok('suggestionEntry nulls absent fields, never fabricates', () => {
 ok('YS2 forward fields are omitted when absent (legacy row stays byte-identical)', () => {
   const legacy = suggestionEntry({ quickBuy: 100 }, { itemId: 1, cls: 'mid', verdict: 'BUY' });
   assert.ok(!('posture' in legacy) && !('tripwire' in legacy) && !('fillWindowHrs' in legacy) &&
-    !('velocityClass' in legacy) && !('thesis' in legacy), 'no forward keys when none supplied');
+    !('thesis' in legacy), 'no forward keys when none supplied');
   assert.ok(!('path' in legacy), 'P4c: no path key when none supplied — clean row byte-identical');
   assert.ok(!('volSrc' in legacy), 'SF-3: no volSrc key when none supplied (watch-positions.mjs rows stay byte-identical)');
 });
@@ -139,12 +139,14 @@ ok('PLAN-LANE-ADMISSION Chunk E: `pathA` is lean-included (present only when sup
 
 ok('YS2 forward fields are included only when supplied (lean, non-null)', () => {
   const e = suggestionEntry({}, { itemId: 2, cls: 'liquid', verdict: null,
-    posture: 'overnight', tripwire: 'support 17.2m', fillWindowHrs: 8, velocityClass: 'slow-hold', thesis: 'guide re-anchor' });
+    posture: 'overnight', tripwire: 'support 17.2m', fillWindowHrs: 8, thesis: 'guide re-anchor' });
   assert.equal(e.posture, 'overnight');
   assert.equal(e.tripwire, 'support 17.2m');
   assert.equal(e.fillWindowHrs, 8);
-  assert.equal(e.velocityClass, 'slow-hold');
   assert.equal(e.thesis, 'guide re-anchor');
+  // a predicted velocityClass was accepted here until 2026-08-10; removed as dead (no caller ever
+  // supplied it, so it was absent on all 15,660 logged rows). The MEASURED class is unaffected.
+  assert.ok(!('velocityClass' in e), 'the dead predicted velocityClass is no longer accepted');
   // a partial supply includes ONLY the supplied one
   const p = suggestionEntry({}, { itemId: 3, posture: 'active' });
   assert.equal(p.posture, 'active');

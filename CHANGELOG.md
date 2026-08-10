@@ -10,6 +10,35 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### pipeline — drop the dead predicted `velocityClass` (2026-08-10, no APP_VERSION bump: pipeline-only)
+
+Found by a ctx-shape sweep generalising `check-forecast-guards`' `dead-phase-value` rule from the
+one `phase` key to every property read. `suggestionEntry()` accepted a `velocityClass` prediction and
+lean-wrote it, but **no caller anywhere supplied it** — so across all 15,660 logged suggestions the
+field was never present, and `join-outcomes.mjs`'s `predicted.velocityClassPredicted` was `null` on
+every campaign. The predicted-vs-realized fill-velocity comparison that the `predicted` block exists
+to enable has never had data in it. Same family as the `row.phase` defect (0.71.8): a field read from
+a producer that never supplies it, failing silently instead of loudly.
+
+Removed rather than wired up, for two reasons. It is **redundant** — the "prediction" would just be the
+item's dominant class from `buildVelocityIndex(outcomes.json)`, which the join already reads and can
+recompute at join time as-of the suggestion's timestamp, needing no logging at all. And logging it at
+suggestion time is **mostly noise**: 15,458 of 15,660 rows are `screen` rows (market-wide scan
+candidates that overwhelmingly never became a bid), so a per-suggestion prediction buys ~15k rows of
+padding for a handful of real trades. (Ben's call, 2026-08-10 — "logging at suggestion time seems
+noisy, should probably only be logged for placed bids"; there is no placed-bid flag in
+`suggestions.jsonl` today, and the `watch` surface that sees resting offers logs 11 rows total.)
+
+The **MEASURED** side is untouched and still live: `velocity.mjs`'s `velocityClass(holdTimeSec)` off a
+real round-trip, `velocitytag.mjs`'s per-item scan footnote, and `capital-utilization.mjs`'s mix tally.
+
+Honesty note recorded while measuring it: `slow-hold` (≥48h) has **never fired once** in 719 campaigns
+(n/a 63%, fast-cycler 28%, mid 9%), and that empty bucket is likely a **censoring artifact** rather
+than a fact about the trading — a class needs a CLOSED round trip, and the lots most likely to exceed
+48h are exactly the ones most likely to still be open, landing in the `n/a` pile instead. So the mix
+describes closed trades, not trades; don't read it as a capital-velocity summary. Only 14 items clear
+`minN=5` to be tagged at all.
+
 ### 0.71.8 — the fail-open guard was itself fail-open (2026-08-10)
 
 **The guard shipped two commits earlier to close a fail-open hole had the same hole.** `check-forecast-guards.mjs`

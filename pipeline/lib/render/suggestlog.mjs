@@ -18,7 +18,7 @@
  *                 field makes both depth-vs-guide and depth-vs-live computable. Lean-included.)
  *     volSrc?,   (SF-3 — 'bulk' | 'peritem': which /24h endpoint the volume behind `class` came from;
  *                 lean-included, quote/screen always supply it, watch-positions.mjs omits it)
- *     posture?, tripwire?, fillWindowHrs?, velocityClass?, thesis?, validators?, path?,
+ *     posture?, tripwire?, fillWindowHrs?, thesis?, validators?, path?,
  *     bid?, ask?, pFill?, ttfSec?, rank?, estBasis?, estN?,   (P6b rank estimate — the quoted pair +
  *     net×P÷TTF components; lean-included, absent on older rows)
  *     via?, preRank?, prePool?,   (EF-0a 2026-08-01, the PLAN.md Discovered `via`+rank logging — the
@@ -446,15 +446,20 @@ export function timedLapShadow(lap) {
 //
 // YS2 forward-enrichment (PLAN-YIELD): the caller may ALSO pass prediction fields the backfill can
 // never invent — posture (active/overnight, the posture the read was made under), tripwire (the
-// named structural level being watched), fillWindowHrs (predicted time-to-fill), velocityClass
-// (predicted fast/slow), thesis (one-line intent — NO PII). They are LEAN-INCLUDED: a field is
+// named structural level being watched), fillWindowHrs (predicted time-to-fill), thesis (one-line
+// intent — NO PII). They are LEAN-INCLUDED: a field is
 // written ONLY when the caller supplies a non-null value, so a row with no forward context stays
 // byte-for-byte the shape it had before (keeps suggestions.jsonl from ballooning — SR1). Honesty:
 // a script logs only what it can HONESTLY compute (e.g. posture from the clock/flag); it never
-// fabricates a thesis or a pre-F1 predicted velocity. join-outcomes.mjs joinSuggestion reads each `?? null`.
+// fabricates a thesis. join-outcomes.mjs joinSuggestion reads each `?? null`.
+// A predicted `velocityClass` was accepted here until 2026-08-10 and REMOVED as dead: no caller ever
+// supplied it, so all 15,660 logged rows lacked it and join-outcomes' `predicted.velocityClassPredicted`
+// was null on every campaign. It was also redundant — the "prediction" is just the item's dominant
+// class from buildVelocityIndex(outcomes.json), which the join can recompute without logging anything.
+// The MEASURED velocityClass (velocity.mjs, off a real round-trip) is untouched and still live.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap, pathA, via, preRank, prePool, askPlacement, repriced, exemptionBounded, rankPre } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap, pathA, via, preRank, prePool, askPlacement, repriced, exemptionBounded, rankPre } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -491,7 +496,6 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   if (posture != null)       e.posture = posture;
   if (tripwire != null)      e.tripwire = tripwire;
   if (fillWindowHrs != null) e.fillWindowHrs = fillWindowHrs;
-  if (velocityClass != null) e.velocityClass = velocityClass;
   if (thesis != null)        e.thesis = thesis;
   if (validators != null)    e.validators = validators;
   // P4c: `path` is the INFERRED default entry-path key from the surfacing strategy spec
