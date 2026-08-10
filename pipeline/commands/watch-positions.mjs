@@ -1109,8 +1109,8 @@ async function main() {
     // live tick (below the 90-min reliableReason floor — the 64-min godsword anchor, 2026-07-21).
     const qs = row.quickStale;
     const staleLive = (qs && (qs.buy || qs.sell))
-      ? [qs.sell ? `instabuy ${Math.round(row.quoteAgeMin?.sell ?? 0)}m old` : null,
-         qs.buy ? `instasell ${Math.round(row.quoteAgeMin?.buy ?? 0)}m old` : null].filter(Boolean).join(', ') + ' — not a live tick, re-quote'
+      ? [qs.sell ? `instabuy ${Math.ceil(row.quoteAgeMin?.sell ?? 0)}m old` : null,
+         qs.buy ? `instasell ${Math.ceil(row.quoteAgeMin?.buy ?? 0)}m old` : null].filter(Boolean).join(', ') + ' — not a live tick, re-quote'
       : null;
     notes.push(...heldNoteBlock({
       name, verdict: verdictText, window: wl,

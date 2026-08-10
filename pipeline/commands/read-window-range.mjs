@@ -455,7 +455,7 @@ for (const want of positionals) {
       : `cushion (thin — <${MARGIN_MIN_DAYS} recent days)`;
     log(`    reach-margin: ${t} · now ${sgm(rm.cushionNow)} · reached ${rm.reachedRecent}/${rm.nRecent} recent`);
     if (rm.perDay && rm.perDay.length) log(`      per-day cushion: ${rm.perDay.map(d => `${d.key.slice(5)} ${sgm(d.cushion)}${d.reached ? '✓' : '✗'}`).join(' · ')}`);
-    if (rm.pace && rm.pace.stale) log(`      pace: n/a — live print ${rm.pace.ageMin != null ? Math.round(rm.pace.ageMin) + 'm' : ''} stale (not a live tick; no pace read off an old print)`);
+    if (rm.pace && rm.pace.stale) log(`      pace: n/a — live print ${rm.pace.ageMin != null ? Math.ceil(rm.pace.ageMin) + 'm' : ''} stale (not a live tick; no pace read off an old print)`);
     else if (rm.pace) log(`      pace: live ${fmt(rm.pace.liveNow)} vs ${pad2(rm.pace.hour)}:00 median ${fmt(rm.pace.medianAtHour)} → ${sgm(rm.pace.gap)}${rm.pace.onPace ? ' on pace' : ' ⚠ lagging'} (n ${rm.pace.n})`);
   };
 

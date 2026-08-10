@@ -81,14 +81,16 @@ validators (js/validate.mjs: reach · floor · trajectory · limit · dip-postur
 rank + grade (js/estimators.mjs P(fill)/TTF  ·  js/rating.mjs letter)   ── subFloorFallback if empty (P6c)
       │
       ├──►  STDOUT table  (Est. buy/sell reconciliation pair by default; --raw = Quick/Optimistic)
-      ├──►  screen.json   (only on --publish → app Scan tab; also dev-server POST /api/scan)
+      ├──►  screen.json   (written by DEFAULT every run → app Scan tab; --no-publish opts out.
+      │                    "publish" = a LOCAL FILE WRITE, never a git commit; also dev-server POST /api/scan)
       ├──►  suggestions.jsonl  (every surfaced row logged with shadow fields — see Flow E)
       └──►  dip-watchlist.json (DL4 nominateDip appends flush-suitable items — "B feeds A")
 ```
 
 The flip-niche is a **data spec**, not a code branch: adding a niche registers a
 `{key,pool,edge,rank,confirm,falling,gate,validators,defaultPath}` object. The `--mode` flag
-selects which specs run (`all` = band+churn+value). Doctrine home: `js/flip-niches.mjs` header
+selects which specs run (`all` = band+churn+**amplitude** — THE SWAP, 2026-07-19: amplitude took
+value's slot, and value is now explicit-only via `--mode value`/`--mode invest`). Doctrine home: `js/flip-niches.mjs` header
 + the `/scan` skill.
 
 ---
@@ -187,7 +189,7 @@ this table is the flow view, not a second inventory.
 | Entity | Written by | Read by | Flow |
 | --- | --- | --- | --- |
 | `latest/all24h/all24h-rolling/guide/mapping.cache.json` | `marketfetch` (pipeline `.cache`-style) | every read surface | A |
-| `screen.json` | `screen-flip-niches.mjs --publish` / dev-server `/api/scan` | app Scan tab | B |
+| `screen.json` | `screen-flip-niches.mjs` (writes by DEFAULT; `--no-publish` opts out) / dev-server `/api/scan` | app Scan tab | B |
 | `dip-watchlist.json` | `screen-flip-niches.mjs` DL4 + manual | `watch-positions.mjs --dip` | B→C |
 | `positions.json` · `fills.json` · `offers.json` | `sync-fills.mjs` (ROOT-LOCKED) | app + all node surfaces | D |
 | `hold-thesis.json` | `declare-thesis.mjs` | quote/watch verdict frame | C |

@@ -16,8 +16,11 @@
  * calls loadDerivedCash + book-model.mjs's buildBook, and renders. ALL aggregation math lives in the
  * PURE pipeline/lib/book-model.mjs (fixture-tested). NEVER writes / places / cancels anything.
  *
- * Honesty (inform-only, never a gate): a live mark is age-labelled — a stale P&L number is never
- * rendered as live (decision 3). The free-slot count is a log-derived LOWER bound — a just-completed,
+ * Honesty (inform-only, never a gate): on the per-lot P&L BOARD a live mark is age-labelled via the
+ * shared `liveAgeTag`, so a stale number is never rendered as live (decision 3). SCOPED deliberately —
+ * this file's own SIZER line (`net if cycled once (sell …)`, below) renders its mark UNLABELLED, as does
+ * `book-model.mjs`'s reverse-flip `liveTxt`. Both are inform-only and off the board; don't read this
+ * sentence as tool-wide coverage (it used to be worded that way, and was false at two sites). The free-slot count is a log-derived LOWER bound — a just-completed,
  * not-yet-collected slot reads as free (decision 4, stated once). Times rendered LOCAL (repo rule).
  * Auto-runs the LOCAL zero-git sync first (SY1) so it reads a fresh book. Pipeline-only: no APP_VERSION.
  */
@@ -109,7 +112,11 @@ async function main() {
     marks.set(id, {
       mark: row.quickSell ?? null,
       stale: !!(row.quickStale && row.quickStale.sell),
-      ageMin: row.quoteAgeMin && row.quoteAgeMin.sell != null ? Math.round(row.quoteAgeMin.sell) : null,
+      // RAW, deliberately un-rounded (2026-08-09). Pre-rounding here defeated `liveAgeTag`'s raw-age
+      // comparison: a true 15.4m age stored as 15 rendered ' (15m ago)' (fresh) while the `stale` flag
+      // above — computed from the RAW age via row.quickStale — said stale, on the same line. The tag owns
+      // its own rounding (and ceilings the stale side); callers must hand it the unrounded age.
+      ageMin: row.quoteAgeMin && row.quoteAgeMin.sell != null ? row.quoteAgeMin.sell : null,
       name: map.byId[id]?.name || ('#' + id),
     });
   }

@@ -782,8 +782,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   product-of-marginals defect it named was separately made moot by DT1/DT1b (`pFill2leg` deleted; the
   ranked P(fill) is now the walk-forward `ampWalkForward`). Read the plan before proposing anything in
   this space. Being CLOSED, it does NOT fold into `PLAN.md` and is not deleted on a ship.
-- `plans/PLAN-DIGEST-SIGNAL-AND-SCAN-PERF.md` — in-flight per-topic plan (2026-08-07, PLANNING ONLY,
-  no code changed): two workstreams that share one file (`pipeline/commands/screen-flip-niches.mjs`)
+- `plans/PLAN-DIGEST-SIGNAL-AND-SCAN-PERF.md` — in-flight per-topic plan (2026-08-07, **PARTLY SHIPPED —
+  SP1 landed**; corrected 2026-08-09, this entry said PLANNING ONLY / no code changed): two workstreams that share one file (`pipeline/commands/screen-flip-niches.mjs`)
   and therefore one parallel-safety contract. **A — digest SIGNAL:** `buildDigestBlock`'s comparator
   ranks on `capEff × deployable` and never reads the `reach` column it prints, so its top slots go to
   rows its own `digestVerdict` calls `sell unreliable` (live anchor 2026-08-07: 9 of 11 rendered rows,
@@ -841,8 +841,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (which covers the inverse: stale/mispriced false POSITIVES). Not a plan file in the execution
   sense — no chunks to ship — so it stays at the root as a standing reference until superseded or
   folded.
-- `PLAN-FETCH-POOL-SCALING.md` — in-flight per-topic plan (2026-07-24, PLANNING ONLY, no code
-  changed yet): scopes blindspot-audit findings #1/#7 — the scan's fetch-pool slot counts
+- `plans/PLAN-FETCH-POOL-SCALING.md` — **ALL FOUR CHUNKS SHIPPED `5e7e9d9` (2026-07-24)**; corrected
+  2026-08-09 (this entry said PLANNING ONLY / no code changed, and omitted the `plans/` prefix): scopes blindspot-audit findings #1/#7 — the scan's fetch-pool slot counts
   (`TOP_DEFAULT`/`THIN_RESERVE_DEFAULT`/`VALUE_TOP_DEFAULT`/`AMP_TOP_DEFAULT` in
   `pipeline/lib/signal/gatecandidates.mjs`) are fixed constants independent of `--capital`, so a real
   winner can rank outside the slice and never get fetched, and the value flip-niche has no reserve
@@ -1186,9 +1186,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `FETCH_TTL.latest` is declared but inert.) THREE render call sites, all converted: `read-window-range.mjs`
     (also now its ONE age helper — it carried a second byte-identical copy), `quote-items.mjs` (the
     windowExit live-instabuy clause) and `read-book.mjs` (`ageLabel` on every P&L mark). Deliberately NOT
-    converted, and why: `watch-positions.mjs`'s held-lot `staleLive` clause hand-rolls the same age render
-    but lives in a STALE-ONLY branch (`quickStale.sell` implies a non-null age), so it is never
-    silently-fresh — not this defect class — and converting it would change its wording. Genuinely
+    converted, and why: `watch-positions.mjs`'s held-lot `staleLive` clause AND `quote-items.mjs`'s
+    `staleLiveNote` both hand-roll the same `Math.round(age)m old` render, but each lives in a STALE-ONLY
+    branch (`quickStale.sell` implies a non-null age), so neither is ever silently-fresh — not this defect
+    class — and converting them would change their wording. (An earlier version of this entry named only
+    the first of the two while claiming to enumerate them.) Genuinely
     unlabelled, and named here rather than implied: `read-book.mjs`'s SIZER `net if cycled once (sell …)`
     mark and `book-model.mjs`'s reverse-flip `liveTxt` — both inform-only, both off the P&L board.
     Pinned by `windowread.test.mjs`,
@@ -1908,10 +1910,23 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     verbatim: it catches recurrence of NAMED drift + novel COPY, NOT novel contradiction; the wave-start
     semantic drift scan stays necessary). Exports `DENYLIST`/`runDenylist`/`normalizeWords`/
     `findDuplicateShingles`/`runDuplicatePhrase` for the test),
-  - `check-imports.mjs` (PLAN-VOL24 follow-up — the CI import-RESOLUTION guard run in the cheap `checks`
-    job: STATICALLY parses each pipeline entrypoint's relative `import { … } from './x.mjs'` and verifies
+  - `check-imports.mjs` (PLAN-VOL24 follow-up — TWO static binding guards run in the cheap `checks` job.
+    **Part 1, import RESOLUTION:** STATICALLY parses each pipeline entrypoint's relative
+    `import { … } from './x.mjs'` and verifies
     every named/default import exists in the target module's exports, dynamic-importing ONLY the pure lib
-    targets (never the entrypoints — so no main()/fetch/git/argv side effect fires). Closes the gap that let
+    targets (never the entrypoints — so no main()/fetch/git/argv side effect fires).
+    **Part 2, UNBOUND CONSTANTS (2026-08-09):** the REVERSE direction — every SCREAMING_SNAKE name an
+    entrypoint USES must be imported or declared. Part 1 is blind to this, and so are `node --check`
+    (syntax-only) and the suite (no test executes the command bodies), which is how a `ReferenceError`
+    shipped CI-green in `quote-items.mjs`. Narrow by design: that casing is the repo's constant
+    convention, and requiring an underscore keeps verdict/prose tokens out. It delegates comment-stripping
+    to `check-dead-exports.mjs`'s regex-aware `stripComments` and imports its `REGEX_PREV_OK` — ONE home
+    for the division-vs-regex rule, because a second hand-rolled copy is exactly how this guard first
+    shipped broken (no regex state ⇒ a single `.replace(/"/g, …)` opened a phantom string and silently
+    blinded the scan to the rest of the file). Deliberately OVER-binds parameters, catch params, labels
+    and class fields: a false positive is a mysterious CI failure on correct code, which is worse than a
+    missed detection. **Scope is `pipeline/commands/*.mjs` only** — `js/*.js` and `pipeline/lib/**` are
+    NOT scanned (verified clean today, so the gap is latent rather than live). Closes the gap that let
     screen-flip-niches.mjs's missing `dayHighFrom5m` import ride onto main undetected — `node --check` is syntax-only, no
     test imports the entrypoints, smoke loads only the browser app. Fast/offline/deterministic; exits non-zero
     naming the offending entrypoint→module→symbol. **Entrypoints = every `pipeline/commands/*.mjs`, read from
@@ -2245,7 +2260,7 @@ run `pipeline/test/quotecore.test.mjs` + `pipeline/test/reconstruct.test.mjs`.
 | `js/quotecore.js` | 13 files: `quote-items.mjs`, `screen-flip-niches.mjs`, `watch-positions.mjs`, `monitor-offers.mjs`, `trigger-alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `lib/retrojoin.mjs` (P6a — `tax` for suggested-net; SF-1 — `quantileOf` for the p25/p75 latency spread), `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab), `dipposture.test.mjs` (DP1 — `recentDirection`); plus the js/ side-imports `js/termstructure.mjs` (SF-1 — re-exports `quantileSorted` as `quantile`) + `js/validate.mjs` (DP1 — `recentDirection` for `dipPostureValidator`) |
 | `js/money-math.js` | the tax/margin/bond MATH (split from `format.js`, R2): `quote-items.mjs`/`screen-flip-niches.mjs` (`tax`) + js-side node imports `js/flip-niches.mjs` (`tax`), `js/estimators.mjs` (`netMargin`/`clamp`), `js/validate.mjs`/`js/trendcore.js` (`tax`/`netMargin`), `js/valuescreen.mjs`/`js/market.js`. Edit ⇒ re-run `quotecore.test`+`reconstruct.test` (byte-identical tax). |
 | `js/money-format.js` | gp/number DISPLAY (split from `format.js`, R2): `quote-items.mjs`, `screen-flip-niches.mjs`, `watch-positions.mjs`, `trigger-alerts.mjs`, `join-outcomes.mjs`, `retrojoin.mjs`, `derive-cash.mjs` + `lib/analyze.mjs`/`item-context.mjs`/`emit.mjs` (`fmt`/`fmtP`/`fmtTurn` for the reports) |
-| `js/windowread.mjs` | `pipeline/commands/read-window-range.mjs`, `pipeline/commands/quote-items.mjs`, `pipeline/commands/watch-positions.mjs`, `pipeline/commands/read-book.mjs` (`liveAgeTag` on P&L marks, 2026-08-09), `pipeline/commands/screen-flip-niches.mjs` (diurnal profile), `js/validate.mjs`, `js/quotecore.js` (`windowStats`/`floorCeilingTrack` — this is the edge that makes windowread a PURE LEAF: it can never import quotecore back, so a shared constant is passed as a parameter, not imported), `js/forecast.mjs` (PF1 — consumes `hourProfile`), `pipeline/test/windowread.test.mjs` (P2 — moved from `pipeline/lib/`), `pipeline/test/dt4-timedlap-coverage.test.mjs` (DT4 — the §7 data-guarantee structural pin, direct `diurnalTimedLap` import); **APP-IMPORTED by `js/trends.js`** (TV — the Trends Diurnal timing section, same `hourProfile`/`deriveDiurnalRange` the console prints; DT5 also imports `hourConcentration` directly — the ★ clean-candidate badge is now gated on its canonical cycle-cleanliness verdict instead of a locally-reinvented predicate) |
+| `js/windowread.mjs` | **Re-enumerated 2026-08-09 — this row listed 9 dependents when there were 20 non-test ones; it is a widely-shared leaf, so treat any edit as broad-blast-radius.** Commands: `read-window-range.mjs`, `quote-items.mjs`, `watch-positions.mjs`, `read-book.mjs` (`liveAgeTag` on P&L marks), `read-schedule.mjs`, `join-window-clears.mjs`, `screen-flip-niches.mjs` (diurnal profile). js/: `js/quotecore.js` (`windowStats`/`floorCeilingTrack` — the edge that makes windowread a PURE LEAF: it can never import quotecore back, so a shared constant is passed as a PARAMETER, not imported), `js/validate.mjs`, `js/forecast.mjs` (PF1 — `hourProfile`), `js/amplitudescreen.mjs`, `js/termstructure.mjs`, `js/estimators/cells.mjs`, `js/estimators/pair.mjs`. pipeline/lib: `render/emit.mjs`, `timing/staleexit.mjs`, `reconstruct/fill-placement.mjs`, `market/warm-term-structure.mjs`. Tests: 11 files incl. `windowread.test.mjs`, `askexitread.test.mjs`, `projecttrajectory.test.mjs`, `dt4-timedlap-coverage.test.mjs` (DT4 — the §7 data-guarantee structural pin) and the six `oscillation-*.test.mjs`, `pipeline/test/windowread.test.mjs` (P2 — moved from `pipeline/lib/`), `pipeline/test/dt4-timedlap-coverage.test.mjs` (DT4 — the §7 data-guarantee structural pin, direct `diurnalTimedLap` import); **APP-IMPORTED by `js/trends.js`** (TV — the Trends Diurnal timing section, same `hourProfile`/`deriveDiurnalRange` the console prints; DT5 also imports `hourConcentration` directly — the ★ clean-candidate badge is now gated on its canonical cycle-cleanliness verdict instead of a locally-reinvented predicate) |
 | `js/forecast.mjs` | `pipeline/test/forecast.test.mjs`, `pipeline/commands/read-window-range.mjs` + `pipeline/commands/quote-items.mjs` (`driftExitFrom` Chunk 5), `js/amplitudescreen.mjs`, and **`js/estimators/pair.mjs`** (PLAN-ESTIMATOR-HONEST-SELL E1 — `driftExitFrom` for the `estSellForward` "list at X" forward projection); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Trends "Forward forecast" section: `diurnalForecast`/`fmtEta`, provisional PF n≈0). Console-side consumers still pending — PF7 validate. An app-behavior change to it bumps APP_VERSION. |
 | `js/validate.mjs` | `pipeline/commands/screen-flip-niches.mjs`, `pipeline/commands/quote-items.mjs`, `pipeline/test/validate.test.mjs`, `pipeline/test/termstructure.test.mjs`, `pipeline/test/dipposture.test.mjs` (DP1 — `dipPostureValidator`) (P2/P3 — the validator registry: reach + floor + dip-posture); imports `js/quotecore.js` (DP1 — `recentDirection`); **APP-IMPORTED by `js/trends.js`** (TV — `reachValidator` beside the Diurnal timing chart; `floorValidator`+`trajectoryValidator` beside the 0.60.0 term-structure overlay — all inform-only) |
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/commands/screen-flip-niches.mjs`, `pipeline/commands/quote-items.mjs`, `pipeline/test/termstructure.test.mjs` (P3 — term structure / durable floor); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Price-history floor/ceiling overlay). Imports `js/quotecore.js` for the shared `quantileSorted` (SF-1) and re-exports it as `quantile`. |

@@ -142,7 +142,7 @@ function hhmm(tsSec) { return tsSec == null ? '—' : new Date(tsSec * 1000).toL
 // as the truer current level, so no surface can quote a stale number without the age attached.
 function staleLiveNote(name, itemId, row) {
   const qs = row.quickStale; if (!qs || (!qs.buy && !qs.sell)) return null;
-  const age = s => Math.round(s ?? 0);
+  const age = s => Math.ceil(s ?? 0);   // CEILING, matching liveAgeTag stale branch — same age never prints two numbers
   const bits = [];
   if (qs.sell) bits.push(`instabuy ${fmt(row.quickSell)} is ${age(row.quoteAgeMin?.sell)}m old`);
   if (qs.buy)  bits.push(`instasell ${fmt(row.quickBuy)} is ${age(row.quoteAgeMin?.buy)}m old`);
@@ -846,7 +846,7 @@ async function runPositions() {
             const sg = v => v == null ? '—' : (v >= 0 ? '+' : '') + fmt(v);
             let c = `margin ${sg(rm.cushionNow)} today`;
             if (rm.trend) c += ` · cushion ${rm.trend === 'fading' ? '⚠ ' : ''}${rm.trend} ${sg(rm.cushionFrom)}→${sg(rm.cushionTo)} (${rm.nRecent}d)`;
-            if (rm.pace && rm.pace.stale) c += ` · pace n/a (live ${rm.pace.ageMin != null ? Math.round(rm.pace.ageMin) + 'm' : ''} stale)`;
+            if (rm.pace && rm.pace.stale) c += ` · pace n/a (live ${rm.pace.ageMin != null ? Math.ceil(rm.pace.ageMin) + 'm' : ''} stale)`;
             else if (rm.pace) c += ` · pace ${sg(rm.pace.gap)} vs ${fmtHour(rm.pace.hour)} median${rm.pace.onPace ? '' : ' ⚠ lagging'}`;
             parts.push(c);
           }

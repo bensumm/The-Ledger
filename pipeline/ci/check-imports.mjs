@@ -23,6 +23,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stripComments, REGEX_PREV_OK } from './check-dead-exports.mjs';   // ONE home for comment-stripping + the division-vs-regex rule
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -130,46 +131,71 @@ for (const entry of ENTRYPOINTS) {
  * -------------------------------------------------------------------------------------------- */
 const CONST_RE = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g;
 
-// Strip comments and string literals, PRESERVING template `${…}` interiors (they hold real code).
-// This is a character scanner, not a regex sweep, because `${…}` interiors NEST braces — the very first
-// version used /\$\{[^{}]*\}/ and silently dropped `${liveAgeTag(x, { freshMin: QUICK_FRESH_MIN })}`,
-// i.e. it failed to see the exact expression whose crash prompted this guard. A nested-brace template
-// call is the single most common shape in this repo's render code; it must be scanned, not matched.
+/* Reduce a module to the text where a BARE identifier reference can legitimately appear: comments gone,
+ * string literals and template STATIC text blanked, regex literals blanked, template `${…}` interiors
+ * KEPT (they hold real code) — and recursively cleaned, so a string inside an interpolation is blanked too.
+ *
+ * THREE DRAFTS, THREE DISTINCT FAILURES — all pinned, because each was invisible without a targeted test:
+ *   1. A regex sweep for `${…}` used [^{}]* and could not match NESTED braces, silently dropping
+ *      `${liveAgeTag(x, { freshMin: QUICK_FRESH_MIN })}` — the exact expression whose crash motivated
+ *      this guard. It passed the defect it was written for.
+ *   2. Hand-rolled scanning with NO regex-literal state. A `/` beginning a regex was walked char by char,
+ *      so a quote or backtick inside it (`.replace(/"/g, …)`, `/['"]/`, `/https?:\/\//`) opened a phantom
+ *      string/template and everything to EOF went unscanned — with no warning, since the reference count
+ *      just silently dropped. Shapes that trigger it already exist in tracked code.
+ *   3. Template interiors were kept VERBATIM, so a string inside one (`${c ? 'NOT_LISTED' : ''}`) was
+ *      read as code and reported as an unbound constant.
+ * Failure 2 is why this delegates comment-stripping to check-dead-exports.mjs's regex-aware
+ * `stripComments` and imports its `REGEX_PREV_OK` rather than re-deriving the division-vs-regex rule.
+ * That module's own header documents the same lesson from its own earlier bug; a second copy of this
+ * knowledge is what produced failure 2 in the first place. */
 function codeOnly(src) {
-  let out = '', i = 0;
-  const n = src.length;
-  const scanTemplate = () => {                 // at src[i] === '`'
+  const noComments = stripComments(src);       // comments gone; strings/templates/regexes intact & verbatim
+  const n = noComments.length;
+  let out = '', i = 0, prevSig = '';
+  const scanTemplate = () => {                 // at noComments[i] === '`'
     i++;
     while (i < n) {
-      const c = src[i];
+      const c = noComments[i];
       if (c === '\\') { i += 2; continue; }
       if (c === '`') { i++; return; }
-      if (c === '$' && src[i + 1] === '{') {    // keep the interior verbatim, brace-depth aware
-        i += 2; let depth = 1;
-        while (i < n && depth > 0) {
-          const d = src[i];
+      if (c === '$' && noComments[i + 1] === '{') {
+        i += 2; let depth = 1; const start = i;
+        while (i < n && depth > 0) {           // find the interior's extent, brace-depth aware
+          const d = noComments[i];
+          if (d === '`') { scanTemplate(); continue; }          // nested template — skip past it wholesale
           if (d === '{') depth++;
-          else if (d === '}') { depth--; if (depth === 0) { i++; break; } }
-          else if (d === '`') { const s = i; scanTemplate(); out += src.slice(s, i); continue; }
-          out += d; i++;
+          else if (d === '}') { depth--; if (depth === 0) break; }
+          i++;
         }
-        out += ' ';
+        out += ' ' + codeOnly(noComments.slice(start, i)) + ' ';  // RECURSE: clean the interior's own literals
+        i++;                                                       // consume the closing '}'
         continue;
       }
-      i++;                                      // static text — dropped
+      i++;                                     // static text — dropped
     }
   };
   while (i < n) {
-    const c = src[i], d = src[i + 1];
-    if (c === '/' && d === '*') { const e = src.indexOf('*/', i + 2); i = e < 0 ? n : e + 2; out += ' '; continue; }
-    if (c === '/' && d === '/') { const e = src.indexOf('\n', i); i = e < 0 ? n : e; out += ' '; continue; }
-    if (c === "'" || c === '"') {               // string literal — dropped entirely
+    const c = noComments[i];
+    if (c === "'" || c === '"') {              // string literal — dropped entirely
       const q = c; i++;
-      while (i < n && src[i] !== q) { if (src[i] === '\\') i++; i++; }
-      i++; out += ' '; continue;
+      while (i < n && noComments[i] !== q) { if (noComments[i] === '\\') i++; i++; }
+      i++; out += ' '; prevSig = ')'; continue;
     }
-    if (c === '`') { scanTemplate(); continue; }
-    out += c; i++;
+    if (c === '`') { scanTemplate(); prevSig = ')'; continue; }
+    if (c === '/' && REGEX_PREV_OK.has(prevSig)) {   // regex literal — dropped (never holds a real reference)
+      i++; let inClass = false;
+      while (i < n) {
+        const e = noComments[i]; i++;
+        if (e === '\\') { i++; continue; }
+        if (e === '[') inClass = true; else if (e === ']') inClass = false;
+        else if (e === '/' && !inClass) break;
+      }
+      out += ' '; prevSig = ')'; continue;
+    }
+    out += c;
+    if (!/\s/.test(c)) prevSig = c;
+    i++;
   }
   return out;
 }
@@ -190,6 +216,20 @@ function boundConstants(src) {
     }
   }
   for (const d of clean.matchAll(/\b(?:function|class)\s+([A-Za-z_$][\w$]*)/g)) bound.add(d[1]);
+  // PARAMETER LISTS, catch params, labels and class fields. None of these existed in the first version,
+  // whose header nevertheless CLAIMED to bind parameters — so `function f(MAX_X)`, `catch (SOME_ERR)`,
+  // `OUTER: … continue OUTER`, and `static MAX_FIELD = 3` were all reported as unbound. Every one is a
+  // FALSE POSITIVE, i.e. a mysterious CI failure on correct code, which is a worse outcome than a missed
+  // detection: it trains people to distrust the guard. Deliberately OVER-binding here — a slightly weaker
+  // check that never cries wolf beats a sharper one that does.
+  for (const d of clean.matchAll(/\bcatch\s*\(\s*([A-Za-z_$][\w$]*)/g)) bound.add(d[1]);
+  for (const d of clean.matchAll(/(?:^|[;{}])\s*([A-Z][A-Z0-9_]*)\s*:(?!:)/gm)) bound.add(d[1]);   // labels
+  for (const d of clean.matchAll(/\bstatic\s+([A-Za-z_$][\w$]*)/g)) bound.add(d[1]);               // class fields
+  // any parenthesised list that is a parameter list: `(…) =>`, `function name(…)`, `catch(…)`, `method(…) {`
+  for (const d of clean.matchAll(/\(([^()]*)\)\s*(?:=>|\{)/g))
+    for (const id of d[1].matchAll(/[A-Za-z_$][\w$]*/g)) bound.add(id[0]);
+  for (const d of clean.matchAll(/\bfunction\b[^(]*\(([^()]*)\)/g))
+    for (const id of d[1].matchAll(/[A-Za-z_$][\w$]*/g)) bound.add(id[0]);
   // const/let/var declarations. A declaration is a COMMA-SEPARATED LIST (`const A = 1, B = 2;`) and the
   // list may destructure (`const { a, b } = x`), so walk to the terminating depth-0 `;`, split on depth-0
   // commas, and bind every identifier on each declarator's LEFT of `=`. (Reading only the first declarator
@@ -238,10 +278,13 @@ for (const entry of ENTRYPOINTS) {
   for (const hit of code.matchAll(CONST_RE)) {
     const name = hit[0];
     if (seen.has(name)) continue;
-    // skip member accesses (`x.MAX_Y`, `x?.MAX_Y`) and object-literal keys (`MAX_Y:`)
-    const before = code.slice(Math.max(0, hit.index - 2), hit.index);
-    if (/\.$/.test(before)) continue;
-    if (code[hit.index + name.length] === ':') continue;
+    // Skip member accesses (`x.MAX_Y`, `x?.MAX_Y`, and the spaced `x . MAX_Y`) and object-literal keys
+    // (`MAX_Y:`, `MAX_Y :`). `case MAX_Y:` looks identical to a key but IS a real reference — it was the
+    // one false NEGATIVE in this heuristic, so it is excluded from the key skip explicitly.
+    const before = code.slice(Math.max(0, hit.index - 8), hit.index);
+    if (/\.\s*$/.test(before)) continue;
+    const after = code.slice(hit.index + name.length);
+    if (/^\s*:(?!:)/.test(after) && !/\bcase\s+$/.test(before)) continue;
     seen.add(name);
     checkedConsts++;
     if (!bound.has(name)) { console.error(`✗ ${rel}: uses '${name}' but never imports or declares it (ReferenceError at runtime)`); unbound++; }

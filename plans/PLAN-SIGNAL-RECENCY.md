@@ -1,6 +1,10 @@
 # PLAN-SIGNAL-RECENCY — one shared trajectory-projection primitive + the stale-read rewiring
 
-Status: **DRAFT — no code shipped yet.** Per-topic working doc (PLANNING.md lifecycle step 1–2);
+Status: **MOSTLY SHIPPED (corrected 2026-08-09 — this line read "DRAFT — no code shipped yet" while NINE
+chunks had landed, incl. a live GATE at APP_VERSION 0.66.0).** LANDED: R1 (`projectTrajectory`,
+`js/windowread.mjs:417`, sha 5dfc202), R2, R3, R4, R4b, R5, R6, R7, R8 — see each row's Status cell below.
+**OPEN: R3b only** (the relaxing direction, deliberately deferred). Do NOT rebuild any landed chunk off
+the old status line. Per-topic working doc (PLANNING.md lifecycle step 1–2);
 folds into `PLAN.md` and is deleted the moment its last chunk ships. Full inventory, stale-read
 census, redundancy map, and earns-its-keep verdicts live in **`docs/SIGNAL-AUDIT.md`** (read-only
 audit, 2026-07-22) — this doc does not repeat that analysis, only sequences the fix.

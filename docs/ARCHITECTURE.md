@@ -51,7 +51,8 @@ structurally prevented.
 
 | # | Invariant | Guard (source of truth) | What fails CI |
 | --- | --- | --- | --- |
-| E1 | Every pipeline entrypoint's imports resolve against real module exports | `pipeline/ci/check-imports.mjs` | an `import { x }` of a name a module doesn't export |
+| E1 | Every pipeline entrypoint's imports resolve against real module exports | `pipeline/ci/check-imports.mjs` (Part 1) | an `import { x }` of a name a module doesn't export |
+| E1b | Every SCREAMING_SNAKE constant a pipeline entrypoint USES is imported or declared | `pipeline/ci/check-imports.mjs` (Part 2) | a `ReferenceError` at runtime — the reverse of E1, and invisible to it, to `node --check`, and to the suite when no test executes the function. Scope: `pipeline/commands/*.mjs` only |
 | E2 | No export is kept alive only by its own test (no vestigial "kept-for-future" code) | `pipeline/ci/check-dead-exports.mjs` (+ `.test.mjs`) | an export with no non-test consumer and no `@test-only`/`@provisional-api` marker |
 | E3 | Docs carry no superseded terms; no single-source phrase is duplicated across the CLAUDE.md⇆README axis | `pipeline/ci/lint-docs.mjs` (+ `.test.mjs`) | a denylisted term (e.g. a deleted flip-niche as "live") or a duplicated invariant |
 | E4 | Every SKILL.md rule-block is tagged (encoded-vs-judgment disposition) | `pipeline/ci/lint-skills.mjs` | an untagged rule block |
@@ -74,7 +75,7 @@ important structural rule — it's what prevents the app and pipeline from diver
 | --- | --- | --- |
 | Tax / break-even / bond math | `js/quotecore.js` (`breakEven`, `maxBuyForExit`) + `js/money-math.js` (`netMargin`, `bondFee`, `tax`) | the ONE tax home (quotecore = derived, money-math = primitives; `js/money-format.js` is display-only). *(E8 proposed)* |
 | Quote computation | `js/quotecore.js` (`computeQuote`) | the app + `quote-items.mjs`/`screen-flip-niches.mjs` all call it |
-| Band/window/diurnal math | `js/windowread.mjs` (`windowStats`, `robustBand` via re-export, `hourProfile`, `windowClear`, `asymPair`) | the pure window-range math; `robustBand` itself lives in `quotecore.js` |
+| Band/window/diurnal math | `js/windowread.mjs` (`windowStats`, `hourProfile`, `windowClear`, `asymPair`, `liveAgeTag`) | the pure window-range math. `robustBand` lives in `quotecore.js` and is **NOT** re-exported here — the former "via re-export" wording was self-contradicting in its own cell AND unbuildable: `js/quotecore.js:37` imports windowread, so re-exporting back would be an import CYCLE. windowread is a PURE LEAF (imports only `money-math`), which is exactly why shared constants reach it as PARAMETERS (`liveAgeTag`'s `freshMin`) instead of imports |
 | Verdict rendering (held lots) | `pipeline/lib/market/item-context.mjs` (`renderHeldVerdict`) | ended the quote↔watch verdict fork |
 | Flip-niches (screen strategies) | `js/flip-niches.mjs` (`FLIP_NICHE_LIST`) | declarative specs; consumers look up `FLIP_NICHES[mode]` |
 | Held-item strategies | `js/held-item-strategy.mjs` (`enumeratePaths`/`weighPaths`) | "compare strategies" for a held lot (a `path` = a held-item strategy) |

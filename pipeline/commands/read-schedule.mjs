@@ -228,7 +228,8 @@ function currentIds(repoRoot) {
 // buildAgenda({ scope, now, repoRoot }) -> { rows, warnings, itemCount }
 //   scope: array subset of ['c','w'] (default ['c']). rows are the sorted agenda; warnings are the
 //   per-name resolve failures (skip-not-abort). Fetches ts1h + hourProfile per selected id, pooled at
-//   FETCH_CONCURRENCY, each fetch served by marketfetch's 15-min disk cache.
+//   FETCH_CONCURRENCY. NOT cached: `fetchTs` routes through `cachedJget`, a passthrough unless
+//   COFFER_FETCH_CACHE=1 (nothing sets it), so each id costs a real /timeseries fetch per run.
 export async function buildAgenda({ scope = ['c'], now = new Date(), repoRoot = REPO } = {}) {
   const mapping = await loadMapping();
   const selected = new Map();   // id -> { name, tags:Set<'C'|'W'> }

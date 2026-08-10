@@ -52,7 +52,11 @@ const isTest = f => /\.test\.(mjs|js)$/.test(f);
 // CONTENTS must survive so an identifier used in code or inside a `${…}` interpolation still counts
 // (the STAGES-in-`${STAGES.join('|')}` false-positive that motivated this). Char state machine: strips
 // only real comments; passes string/template/regex literals through UNCHANGED.
-const REGEX_PREV_OK = new Set(['', '(', ',', '=', ':', '[', '!', '&', '|', '?', '{', ';', '+', '-', '*', '%', '<', '>', '~', '^', 'return']);
+// EXPORTED (2026-08-09): check-imports.mjs's unbound-constant scanner needs the same "is this `/` the
+// start of a regex or a division?" rule. It is exported rather than copied because a SECOND copy is
+// precisely how that guard first shipped broken — its hand-rolled scanner had no regex state at all, so
+// one `.replace(/"/g, …)` opened a phantom string and silently blinded the check to the rest of the file.
+export const REGEX_PREV_OK = new Set(['', '(', ',', '=', ':', '[', '!', '&', '|', '?', '{', ';', '+', '-', '*', '%', '<', '>', '~', '^', 'return']);
 export function stripComments(src) {
   let out = '', i = 0, prevSig = ''; const n = src.length;
   while (i < n) {

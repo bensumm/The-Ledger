@@ -143,11 +143,16 @@ console.log(`# this tick: ${plan.length ? plan.join(', ') : 'nothing due'}${idle
 
 // ⏭ next-window banner (PLAN-SCHEDULE Chunk 2) — the single soonest buy/sell window across CURRENT
 // positions (-c scope: open lots ∪ open offers), the actionable set mid-loop. Gated on a watch-due tick.
-// FRAGILE CHAIN — the "cheap" claim: read-schedule.mjs's per-item fetchTs('1h') is served by
-// marketfetch's 15-min disk cache (FETCH_TTL.tsSlow), which watch-positions.mjs KEEPS WARM by fetching
-// ts1h for every held item on every tick (fetchItemInputs(id,{ts1h:true})). If a future watch-positions
-// fast-path ever stops fetching ts1h per held item, this banner silently starts paying full fetch cost
-// again — no assertion catches it. Keep the two in sync. Best-effort: a failure never breaks the tick.
+// COST — the "cheap" claim was FALSE and is corrected here (2026-08-09). It used to read: read-schedule's
+// per-item fetchTs('1h') is served by marketfetch's 15-min disk cache, kept warm by watch-positions —
+// "keep the two in sync". There is no such cache to keep warm. `fetchTs` (marketfetch.mjs:169) routes
+// through `cachedJget`, which is a straight PASSTHROUGH unless COFFER_FETCH_CACHE=1, and nothing in the
+// repo sets it; `FETCH_TTL.tsSlow` is declared but inert. (The genuinely-unconditional memo is
+// `fetchTsCached`, whose own docstring says it is used ONLY by the screen — read-schedule doesn't import
+// it.) So this banner pays a REAL 1h fetch per held item on every watch-due tick. That is affordable at a
+// handful of held lots and is why it stays gated on the watch tick rather than every loop pass — but it
+// is a real cost, not a free ride, and the old note told a future agent to preserve a coupling that
+// never existed. Best-effort: a failure never breaks the tick.
 if (watchDue) {
   try {
     const { rows } = await buildAgenda({ scope: ['c'], repoRoot: REPO });

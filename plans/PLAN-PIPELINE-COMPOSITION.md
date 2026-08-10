@@ -209,7 +209,10 @@ validator plans (exist, in the spec). One registry object per directory; a scrip
 the resolver, the resolver reads flag-then-config-then-default, the registry hands back
 the named function. That is the whole layer.
 
-## Chunks (not yet scheduled — proposed breakdown)
+## Chunks — PC1 and PC3 are **DONE (2026-07-17)**; the rest are a proposed breakdown
+<!-- Heading corrected 2026-08-09: it read "not yet scheduled" directly above two chunks whose own
+     sub-headings say DONE (2026-07-17). Read each chunk's own marker, not this heading. -->
+
 
 ### PC1 — `compose.mjs` resolver + optional config file (~half day) — **DONE (2026-07-17)**
 Shipped `pipeline/lib/compose.mjs` (`resolve()` → `{active, shadow:[]}`, `loadPipelineConfig()`,

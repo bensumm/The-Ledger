@@ -649,7 +649,10 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   `— big-ticket lane —` append. Tonight that append correctly did nothing, because the digest top-8 was
   already all big tickets. **Candidate fix:** a price-keyed reserve (`BIG_TICKET_GP`-based, capital-
   scaled off `deployablePool`) rather than raising `TOP` or the cap, both of which just reshuffle a
-  fixed pool. Worth pairing with the deferred `GEAR_RESERVE`/`THIN_RESERVE` capital-scaling.
+  fixed pool. ~~Worth pairing with the deferred `GEAR_RESERVE`/`THIN_RESERVE` capital-scaling.~~
+  **`THIN_RESERVE` capital-scaling is CLOSED — DO NOT BUILD** (`plans/PLAN-THIN-RESERVE.md`, 2026-08-09:
+  measured economically backwards against 408 closed lots). Any price-keyed reserve here must stand on
+  its own evidence, not on that pairing.
 
 - **THE REGIME CLASSIFIERS ARE KNIFE-EDGE ON ±1gp, INDEPENDENT OF DATA SOURCE (2026-08-08, found by
   the AF5b adversarial pass — generalises well beyond AF5b).** The discrete floor-slope and
@@ -904,7 +907,17 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
   (counterfactual report gates every promotion; anchor = n=5 laps on ONE item, rule 4). Starvation
   is deliberately left to PLAN-FETCH-POOL-SCALING + the capital-conditioned-reserves entry below;
   the band sell fold moves only via AC7's re-decision path (`reach-fold.mjs` header).
-- **Thin-reserve should scale with `--capital` (screen fetch-admission, `pipeline/lib/signal/admission.mjs`
+- **~~Thin-reserve should scale with `--capital`~~ — CLOSED 2026-08-09, DO NOT BUILD. Superseded by
+  `plans/PLAN-THIN-RESERVE.md`**, which investigated exactly this and returned **DO NOT WIDEN, DO NOT
+  DEFAULT-ON `--scale-pool`, DO NOT BLEND TO MERIT**: the hypothesis below is "mechanically correct and
+  **economically backwards**". Widening is free in fetch cost, so it is never an affordability question —
+  it is a pure 1-for-1 REALLOCATION out of the cheap-churn velocity lane into big-ticket gear, and Ben's
+  own 408 realised closed lots say that trade loses. The entry is kept below for its history and its
+  CORRECTED anchor, but it is no longer a directive: **do not implement the "Fix" it describes.** (It also
+  had a live self-contradiction — the ⚠ anchor correction two paragraphs down already showed the three
+  named items do not reproduce and that the starved population is mostly CHURN, not thin big-tickets, so
+  tuning `THIN_RESERVE` off it would tune the wrong reserve.) Original text follows:
+  **Thin-reserve should scale with `--capital` (screen fetch-admission, `pipeline/lib/signal/admission.mjs`
   `pickFetchPool`) — surfaced 2026-07-23, Ben-flagged.** `THIN_RESERVE` is a fixed 6-slot guarantee for
   thin gp-flow big-tickets regardless of bankroll. At high capital (162m trial) the fixed 6 starves the
   thin big-ticket band lane: a default `--top 40` scan buried Sanguinesti staff (uncharged, A-, +607k/u

@@ -219,7 +219,7 @@ metadata, not a leak; the concern is content, not commit authorship.
 10. **Adversarial review is the DEFAULT, not an escalation (Ben, 2026-08-09).** Any substantive
     change — a shipped chunk, a doc-reconciliation pass, a new estimator — gets a review pass by a
     SEPARATE agent before it's called done, briefed to find you wrong rather than to confirm you.
-    This is measured, not a nicety: on 2026-08-09 six review passes over one wave found — every one on
+    This is measured, not a nicety: on 2026-08-09 seven review passes over one wave found — every one on
     CI-GREEN code — a self-contradicting doc pair inside files already declared consistent; a
     "regression check" that never called the function it guarded; a corrected constant left wrong at
     its own definition site; a closed negative-result plan advertised as live work; a tool-wide floor
@@ -263,9 +263,12 @@ metadata, not a leak; the concern is content, not commit authorship.
   local/zero-git (the default in-session book read) and pushes nothing. No unattended writer / machine
   bypass identity exists — the schedule was eliminated (`pipeline/FILLS-PIPELINE.md` §12).
 - **CI: `.github/workflows/checks.yml`** — a cheap `checks` job (JS syntax sweep, quotecore
-  + reconstruct acceptance fixtures, **`check-dead-exports.mjs`**, **`lint-arch.mjs`**, **`check-imports.mjs`** — the import-RESOLUTION guard that statically
-  verifies every pipeline entrypoint's imports resolve against module exports (catches a missing-export that
-  `node --check`'s syntax-only pass lets through), `fills.json`/`positions.json` parse, `lint-skills.mjs`, and
+  + reconstruct acceptance fixtures, **`check-dead-exports.mjs`**, **`lint-arch.mjs`**, **`check-imports.mjs`** — TWO static binding guards over every
+  `pipeline/commands/*.mjs` entrypoint: (1) import RESOLUTION — every name imported exists in the target
+  module's exports (catches a missing-export that `node --check`'s syntax-only pass lets through); and
+  (2) UNBOUND CONSTANTS — every SCREAMING_SNAKE name USED is imported or declared, which is the reverse
+  direction and the one that caught a shipped `ReferenceError`. Coverage is entrypoints ONLY; `js/*.js`
+  and `pipeline/lib/**` are not scanned (clean today, so the gap is latent, not live), `fills.json`/`positions.json` parse, `lint-skills.mjs`, and
   `lint-docs.mjs` — DL1's structural doc-drift lint: a denylist of superseded terms/commands +
   a single-source duplicate-phrase check on the CLAUDE.md ⇆ README axis; **must stay a denylist +
   structural checker, never a semantic/LLM one**, and `check-daemon-safety.mjs` — the daemon zero-git

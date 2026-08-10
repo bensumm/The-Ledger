@@ -318,15 +318,20 @@ hours, so a sub-minute loop just burns API calls. **Operating default cadence is
 looser 15m for a book of only patient standing offers, tighter 3m only for actively managing a
 live situation (a real breakdown/cut candidate you're watching resolve).
 
-**`--sync` each pass (attended /loop, Ben 2026-07-10).** `node pipeline/commands/watch-positions.mjs --sync` runs
-`sync-fills.mjs` before the pass so the booked view (positions.json + realised P&L) and any
-mobile trades are current every tick — offers already read live off the log, so this refreshes
-the *held* basis and kills the stale-book banner mid-session. It NEVER blocks the pass on a
-sync failure (network/git hiccup → `sync · ⚠ skipped`, watch still runs off the current book).
-**ATTENDED-ONLY by contract:** the sync pushes to `main` on every filled pass, so a `--sync`
-loop must not be left running unattended — that would recreate the deliberately-eliminated
-auto-writer (FILLS-PIPELINE §12). Stop the loop when you step away (which you should do anyway —
-never leave near-live offers unwatched).
+**Sync each pass — UNCONDITIONAL and ZERO-GIT since 2026-07-16 (supersedes the `--sync` flag).**
+`watch-positions.mjs` runs `sync-fills.mjs` before every pass on its own, so the booked view
+(positions.json + realised P&L) is current every tick — offers already read live off the log, so this
+refreshes the *held* basis and kills the stale-book banner mid-session. It NEVER blocks the pass on a
+sync failure (`sync · ⚠ skipped`, watch still runs off the current book). **`--sync` still parses but is
+a harmless NO-OP** (`watch-positions.mjs:55`), kept only for external callers that still pass it.
+
+**The old "ATTENDED-ONLY by contract" warning here was WRONG and has been deleted.** It stated that the
+sync "pushes to `main` on every filled pass" and that such a loop "must not be left running unattended".
+Neither is true: the local sync is zero-git and pushes nothing — publishing is exclusively the once-a-day
+`/overnight` `sync-fills.mjs --publish`, and `check-daemon-safety.mjs` fails CI if any auto-runnable
+daemon so much as imports that path. The stale warning was actively harmful: it would make an agent
+refuse a perfectly safe unattended `/loop` in order to prevent `main` churn that cannot occur. (The
+separate, still-valid reason not to leave near-live offers unwatched is a TRADING judgment, not a git one.)
 
 ### DL2 — the FLUSH carve-out (reactive liquid-flush → bid-into-the-fall)
 
@@ -435,7 +440,7 @@ line, and the exit-discipline reminder). Since VZ2b (PLAN-VIZ-LAYER) the Quick/O
 cells are LITERALLY the canonical `js/quotecore.js` composite cells (`buy → sell · +net
 (roi)`) — the same cell `quote-items`/`screen` ship — so "canonical table-v2 basis" is now
 exact, not just close. Since VZ1 the whole output pass is a plain **report object** built by
-`buildWatchReport` and rendered ONCE by `pipeline/lib/render.mjs` `renderReport` (the ONE
+`buildWatchReport` and rendered ONCE by `pipeline/lib/render/render.mjs` `renderReport` (the ONE
 render layer between data and reader); the section format lives in render.mjs's header, not
 inline console.log loops.
 

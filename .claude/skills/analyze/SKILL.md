@@ -35,7 +35,7 @@ Before interpreting, know what WE did this session so the retro is grounded, not
 
 - **The ledger is the mechanical session record** — `judgment:` every quote/scan/watch you ran is
   already a row in `suggestions.jsonl` (written by `pipeline/lib/render/suggestlog.mjs`) with its `ts`; skim
-  the recent tail (or `analyze.mjs --since`) for what was surfaced and under which niche/posture. No
+  the recent tail (or `analyze-record.mjs --since`) for what was surfaced and under which niche/posture. No
   extra logging is needed for v1.
 - **The realized side is `fills.json` / `positions.json`** — what actually filled + the FIFO view;
   the engine's un-attributed count already tells you how much trading happened off-book (mobile/manual).

@@ -1,6 +1,9 @@
 # PLAN-ESTIMATOR-FIDELITY — the discovery estimator understates both legs; the rank buries repriceable rows; throughput is assumed, not measured
 
-**Status: PLANNING ONLY. No code changed.** Per-topic working doc (2026-08-01, hardened from a
+**Status: PARTIALLY SHIPPED (corrected 2026-08-09 — this line read "PLANNING ONLY. No code changed."
+while EF-0a and EF1 were both marked ✅ 2026-08-01 in its own Status table, and `MIRAGE_PLACEMENT` had
+shipped as a real export at `js/estimators/families.mjs:93`).** Read the per-chunk Status column, not
+this line, before assuming a chunk is unbuilt. Per-topic working doc (2026-08-01, hardened from a
 live-session finding set); folds into `PLAN.md` and is deleted when its last chunk ships
 (`docs/PLANNING.md` lifecycle). Executor rules = PLAN.md "Executor rules", verbatim.
 
