@@ -590,6 +590,28 @@ export function formatFloorCeiling(fc, fmt, { label = '', live = null, drift = n
 // null clause. INFORM-ONLY, n≈0, HEURISTIC — never gates, prices, or ranks. Note the measurement is a
 // FILL PROXY (reach-of-high on hourly aggregates, not executed fills), so it bounds a real offer's
 // experience from above.
+/* liveAgeTag(ageMin, { freshMin }) → the suffix for a rendered /latest print, ALWAYS naming its age.
+   `ageMin` = minutes since that side's print (null when unknown); `freshMin` = the staleness bar the
+   caller owns (QUICK_FRESH_MIN at every current call site — passed in, NOT imported, so this stays a
+   pure leaf with no new module edge).
+
+   WHY IT ALWAYS RENDERS (2026-08-09). The predecessor emitted an EMPTY string for anything at or under
+   the bar, so a fresh print and a 14-minute-old one looked identical — and, worse, two consecutive reads
+   returning the SAME number were indistinguishable between "nothing traded in between" (the normal case
+   on a thin book: a 449/day item prints roughly once every three minutes, and each side only updates on
+   its own transactions) and "we served a stale tick". That ambiguity cost a real misdiagnosis: two reads
+   minutes apart returned byte-identical live prices and were reported as a caching bug, when
+   `FETCH_TTL.latest` is 60s and the second fetch was genuinely fresh — no new trade had printed.
+   Showing the age unconditionally makes an unchanged-but-current price self-evident.
+
+   The ⚠ escalation past `freshMin` is UNCHANGED — same bar, same wording, so the existing stale-print
+   doctrine (don't quote a price off a flagged tick; re-read the fresher side) reads exactly as before. */
+export function liveAgeTag(ageMin, { freshMin = 15 } = {}) {
+  if (ageMin == null || !Number.isFinite(ageMin)) return ' (age n/a)';
+  if (ageMin > freshMin) return ` ⚠ ${Math.round(ageMin)}m old`;
+  return ageMin < 1 ? ' (<1m ago)' : ` (${Math.round(ageMin)}m ago)`;
+}
+
 export function askReachDecayNote(decay, { ask = null, fmt = String } = {}) {
   if (!decay || !decay.decaying || ask == null) return null;
   // percentage form: the SHARE of each day's traded hours whose high reached the ask (reached/logged).

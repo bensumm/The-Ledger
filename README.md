@@ -1151,6 +1151,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     sibling `askReachDecay(series1h,{days,ask})` export (PLAN-DIURNAL-TRIAGE DT3) — for a candidate ask,
     the per-day RATE of hours whose HIGH reached it and whether that rate is sliding (the Ghrazi rapier
     catch: graded fill-now while the ask had stopped clearing intraday). Rendered via the shared
+    `js/windowread.mjs` `liveAgeTag(ageMin,{freshMin})` — the /latest print-age suffix on the
+    `live instasell/instabuy now` line, rendered ALWAYS: `(<1m ago)` / `(Nm ago)` when fresh, escalating
+    to the unchanged `⚠ Nm old` past the caller-supplied bar (`QUICK_FRESH_MIN` at every call site — the
+    threshold is a parameter, not an import, so the helper stays a pure leaf). Added 2026-08-09 after the
+    silent-when-fresh predecessor made an unchanged-but-current price indistinguishable from a stale tick
+    and produced a wrong caching-bug diagnosis (`FETCH_TTL.latest` is 60s; the fetch was genuinely fresh,
+    no new trade had printed). Pinned by `windowread.test.mjs`. Also the ONE age helper in
+    `read-window-range.mjs`, which carried a second byte-identical copy until then.
     `js/windowread.mjs` `askReachDecayNote(decay,{ask,fmt})` (one owner with
     quote-items.mjs/screen-flip-niches.mjs), and ONLY when it fires. Consumers: `read-window-range.mjs
     --hourly` (the summary line; rides `--json` as `result.hourly.askDecay`), `quote-items.mjs` (an

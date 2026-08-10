@@ -72,7 +72,7 @@ import { estimatePair, estConfLean, askReachFactor, REACH_RELIEF_MIN_VOL } from 
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // AC8: the per-niche spec the fold is computed against (--niche, default band)
 import { fmtHourRange } from '../../js/money-format.js';   // both-zone (local / UK) window labels — kills the GMT/Pacific narration mismatch
 import { hourlyLMH, askReachDecay } from '../lib/market/hourly-lmh.mjs';   // --hourly: the raw per-local-hour LOW/MID/HIGH diagnostic (reuses the 1h series already fetched; inform-only, n≈0); askReachDecay (DT3) — is the --ask level sliding out of reach? (replaced the deleted hourlyDrift slope + its Δ/d column)
-import { askReachDecayNote } from '../../js/windowread.mjs';   // DT3 — the shared compact decay-note renderer (one owner with quote-items.mjs/screen-flip-niches.mjs)
+import { askReachDecayNote, liveAgeTag } from '../../js/windowread.mjs';   // DT3 — the shared compact decay-note renderer (one owner with quote-items.mjs/screen-flip-niches.mjs); liveAgeTag = the always-rendered /latest print-age suffix (pure, threshold passed in)
 
 // #9: exit reached on < this fraction of the scored days ⇒ the exit OVER-states the reachable sell,
 // so the back-solved buy is optimistic (the days-reach ≠ lap-clear caveat). PLACEHOLDER (n≈0).
@@ -207,10 +207,14 @@ for (const want of positionals) {
   }
   const result = { item: r.name, id: r.id, window: { start: W_START, end: W_END, mode: W_MODE, resolvedFrom: wResolvedFrom } };
   results.push(result);
-  // live-now line WITH each side's /latest print age flagged past QUICK_FRESH_MIN — a stale print is an
-  // old tick, not the current price (the 64-min godsword anchor). Shared by both render spots below.
+  // live-now line: each side's /latest print carries its AGE, always — `(Nm ago)` when fresh, escalating
+  // to `⚠ Nm old` past QUICK_FRESH_MIN (a stale print is an old tick, not the current price — the 64-min
+  // godsword anchor). Rendering the age unconditionally is what lets a reader tell an unchanged-but-
+  // current price from a stale one; see liveAgeTag's header for the misdiagnosis that motivated it.
+  // ONE age helper for the whole file — the pace/stale threading below reuses `_liveAge`, which was a
+  // second byte-identical copy until 2026-08-09.
   const _liveAge = t => (t != null && Number.isFinite(t)) ? (Date.now() / 1000 - t) / 60 : null;
-  const _liveTag = age => (age != null && age > QUICK_FRESH_MIN) ? ` ⚠ ${Math.round(age)}m old` : '';
+  const _liveTag = age => liveAgeTag(age, { freshMin: QUICK_FRESH_MIN });
   const liveNowLine = () => (latest && latest.low != null)
     ? `  live instasell now: ${fmt(latest.low)}${_liveTag(_liveAge(latest.lowTime))}${latest.high != null ? ` · live instabuy now: ${fmt(latest.high)}${_liveTag(_liveAge(latest.highTime))}` : ''}`
     : null;
@@ -426,8 +430,8 @@ for (const want of positionals) {
   const profMargin = prof;   // the ONE per-item hourProfile hoisted above (was a second identical call)
   // thread /latest print ages + staleness so the reachMargin pace read refuses a stale tick (the
   // 64-min godsword anchor, 2026-07-21) — same QUICK_FRESH_MIN bar quote-items.mjs uses.
-  const _ageOf = t => (t != null && Number.isFinite(t)) ? (Date.now() / 1000 - t) / 60 : null;
-  const _loAge = latest ? _ageOf(latest.lowTime) : null, _hiAge = latest ? _ageOf(latest.highTime) : null;
+  // reuses the ONE `_liveAge` hoisted with the live-now line above (was a second identical copy).
+  const _loAge = latest ? _liveAge(latest.lowTime) : null, _hiAge = latest ? _liveAge(latest.highTime) : null;
   const liveNow = latest ? { lo: latest.low ?? null, hi: latest.high ?? null,
     staleLo: _loAge != null && _loAge > QUICK_FRESH_MIN, staleHi: _hiAge != null && _hiAge > QUICK_FRESH_MIN,
     loAgeMin: _loAge, hiAgeMin: _hiAge } : null;

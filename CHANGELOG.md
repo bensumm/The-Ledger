@@ -10,6 +10,37 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.71.7 — the /latest print age is always shown (2026-08-09)
+
+**A wrong diagnosis is what motivated this, and the fix is aimed at the ambiguity that caused it.** Two
+`read-window-range` reads minutes apart returned byte-identical live prices, and I reported that as a
+caching bug. It was not: `FETCH_TTL.latest` is **60 seconds**, so the second fetch was genuinely fresh —
+no new trade had printed on either side, which is ordinary on a 449/day book (roughly one trade every
+three minutes, and each side only updates on its own transactions). The claim was asserted from a
+plausible symptom without checking, and caught only because the premise was verified before building.
+
+**What was actually wrong is smaller and real.** `_liveTag` returned an EMPTY string for any age at or
+under `QUICK_FRESH_MIN`, so a fresh print and a 14-minute-old one rendered identically — and two
+identical consecutive reads were indistinguishable between "nothing traded in between" and "we served a
+stale tick". That is precisely the ambiguity that produced the misdiagnosis. `liveAgeTag`
+(`js/windowread.mjs`) now renders the age **unconditionally**: `(<1m ago)` / `(Nm ago)` when fresh,
+escalating to the **unchanged** `⚠ Nm old` past the bar, so the existing stale-print doctrine reads
+exactly as before. Verified live: `68,848,377 (3m ago) · 70,465,000 (<1m ago)` — both sides fresh, and
+both different from the earlier read, demonstrating the point directly.
+
+**Pure leaf, one home.** The freshness threshold is a PARAMETER, not an import, so the helper adds no
+module edge (`js/windowread.mjs` still imports only `money-math`); every call site passes
+`QUICK_FRESH_MIN`. `read-window-range.mjs` carried TWO byte-identical age helpers (`_liveAge` for the
+render line, `_ageOf` for the pace/stale threading) — consolidated to one.
+
+**Not built, deliberately:** folding a live-price fetch into the sync path. `sync-fills` is the trade-log
+rebuild; prices are a separate concern with a working 60s-TTL fetch and an escalating staleness flag, and
+there is no consumer that a sync-time price read would serve. Building it would have been churn plus a
+false record that a bug existed.
+
+Four format pins in `windowread.test.mjs`, including that the tag is NEVER empty and that an unknown age
+states itself rather than rendering as fresh.
+
 ### 0.71.6 — DT1b: the amplitude lane gets a measured P(fill) (2026-08-09)
 
 **The third estimator in this slot, and the first that isn't refuted.** DT1 deleted `pFill2leg` (a

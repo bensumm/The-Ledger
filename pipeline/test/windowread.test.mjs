@@ -25,7 +25,7 @@ import { trajectoryRead } from '../../js/windowread.mjs';   // the fang under-re
 import { floorCeilingTrack, formatFloorCeiling, FC_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — the phase-aligned floor+ceiling slope-asymmetry classifier
 import { fmtHoldHorizon } from '../../js/windowread.mjs';   // PLAN-ESTIMATOR-HONEST-SELL follow-up — the shared "~Nh/Nd hold" renderer
 import { hourConcentration, HOURCONC_MIN_DAYS, HOURCONC_MIN_R, diurnalTimedLap, DT_TRANCHE_COMFORT_VOL_PCT, DT_TRANCHE_CEILING_VOL_PCT } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT1 — the timed-lap layer
-import { askReachDecayNote } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TRIAGE DT3 — the compact render of an askReachDecay() result
+import { askReachDecayNote, liveAgeTag } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TRIAGE DT3 — the compact render of an askReachDecay() result
 import * as WR from '../../js/windowread.mjs';   // DT3 — namespace import for the stays-deleted pin
 import { computeReality, realityClause, SPIKE_REACH_FRAC, SPIKE_PLACEMENT_PCTILE, SPIKE_MIN_GAP_FRAC, REALITY_TYPICAL_QUANT, REALITY_TYPICAL_RECENTN } from '../../js/windowread.mjs';   // PLAN-DIURNAL-RECENCY-GUARD — the level-reality guard + its renderer
 import { formatTimedLap } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the end-to-end quote-items/watch-positions wiring pin (real series → diurnalTimedLap → formatTimedLap)
@@ -1231,6 +1231,32 @@ ok('askReachDecayNote: a NON-decaying read renders nothing (silence, not a padde
 ok('askReachDecayNote: null decay (the <2-dates degrade) or a missing ask → null, never a fake read', () => {
   assert.equal(askReachDecayNote(null, { ask: 100 }), null);
   assert.equal(askReachDecayNote({ perDay: [], decaying: true }, {}), null, 'no ask level ⇒ nothing to name');
+});
+
+// --- liveAgeTag: the /latest print age, ALWAYS rendered (2026-08-09) ------------------------------
+// The predecessor returned an EMPTY string at or under the freshness bar, which made a fresh print and a
+// 14-minute-old one look identical — and made two identical consecutive reads ambiguous between "nothing
+// traded" and "stale tick". That ambiguity produced a real misdiagnosis (a caching bug reported against a
+// 60s-TTL fetch that was genuinely fresh). These pin that the age is NEVER silent.
+ok('liveAgeTag: a FRESH print still names its age — never an empty string', () => {
+  assert.equal(liveAgeTag(0.4, { freshMin: 15 }), ' (<1m ago)', 'sub-minute reads as <1m, not 0m');
+  assert.equal(liveAgeTag(5, { freshMin: 15 }), ' (5m ago)');
+  assert.equal(liveAgeTag(15, { freshMin: 15 }), ' (15m ago)', 'AT the bar is still fresh (strict >)');
+  for (const a of [0, 0.4, 5, 15]) assert.notEqual(liveAgeTag(a, { freshMin: 15 }), '', 'never silent');
+});
+
+ok('liveAgeTag: past the bar it ESCALATES to the unchanged stale wording', () => {
+  assert.equal(liveAgeTag(16, { freshMin: 15 }), ' ⚠ 16m old');
+  assert.equal(liveAgeTag(64, { freshMin: 15 }), ' ⚠ 64m old', 'the godsword anchor still reads as before');
+});
+
+ok('liveAgeTag: an unknown age is stated, never silently rendered as fresh', () => {
+  for (const bad of [null, undefined, NaN, Infinity]) assert.equal(liveAgeTag(bad, { freshMin: 15 }), ' (age n/a)');
+});
+
+ok('liveAgeTag: the freshness bar is the CALLER\x27s — no imported threshold', () => {
+  assert.equal(liveAgeTag(20, { freshMin: 30 }), ' (20m ago)', 'fresh under a wider bar');
+  assert.equal(liveAgeTag(20, { freshMin: 10 }), ' ⚠ 20m old', 'stale under a tighter one');
 });
 
 // --- STAYS-DELETED pin (PLAN-DIURNAL-TRIAGE DT3) -------------------------------------------------
