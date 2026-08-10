@@ -621,14 +621,20 @@ export function liveAgeTag(ageMin, { freshMin = LIVE_FRESH_MIN_FALLBACK } = {}) 
   // fresh — the earlier version returned ' (<1m ago)' for -45, which is the exact "silently rendered as
   // fresh" failure this helper exists to prevent.
   if (ageMin == null || !Number.isFinite(ageMin) || ageMin < 0) return ' (age n/a)';
-  // Compare on the ROUNDED value so the number shown always agrees with the verdict shown. Comparing the
-  // raw age let 14.6 render ' (15m ago)' and 15.4 render ' ⚠ 15m old' — the same displayed "15m" carrying
-  // opposite meanings, on a line whose entire job is display truth. This shifts the stale bar by at most
-  // 30s and is DISPLAY-ONLY: the staleLo/staleHi flags that gate askExitRead's pace refusal are computed
-  // separately from the RAW age at the call site, and are untouched by this.
-  const shown = Math.round(ageMin);
-  if (shown > freshMin) return ` ⚠ ${shown}m old`;
-  return ageMin < 1 ? ' (<1m ago)' : ` (${shown}m ago)`;
+  // TWO separate requirements, and an intermediate version satisfied one by breaking the other:
+  //   (a) the tag's fresh/stale word must match the RAW-age gate used elsewhere. `staleLo`/`staleHi`
+  //       (read-window-range.mjs) are computed as `rawAge > QUICK_FRESH_MIN` and drive askExitRead's pace
+  //       REFUSAL. Comparing the tag on a rounded age broke this: at a raw 15.4 the tag said ' (15m ago)'
+  //       while the pace line on the SAME read said 'live print 15m stale' — opposite verdicts, one line
+  //       apart. That was a regression introduced by the previous fix, not an inherited flaw.
+  //   (b) a given displayed minute must not appear on both sides of the bar across reads. Comparing raw
+  //       while rounding the display let 14.6 print '(15m ago)' and 15.4 print '⚠ 15m old'.
+  // Both hold if the COMPARISON is raw (matching the gate) and the stale branch CEILINGS its number:
+  // 14.6 → '(15m ago)' fresh · 15.0 → '(15m ago)' fresh · 15.4 → '⚠ 16m old' stale. "15m" is now only
+  // ever fresh and any ⚠ number is ≥ freshMin+1. Ceiling (not round) on the stale side deliberately
+  // overstates by <1m, which errs toward caution on a staleness warning.
+  if (ageMin > freshMin) return ` ⚠ ${Math.ceil(ageMin)}m old`;
+  return ageMin < 1 ? ' (<1m ago)' : ` (${Math.round(ageMin)}m ago)`;
 }
 
 export function askReachDecayNote(decay, { ask = null, fmt = String } = {}) {

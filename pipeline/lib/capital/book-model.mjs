@@ -12,7 +12,13 @@
  * not silently hidden:
  *   - a just-completed-but-uncollected GE slot reads as FREE (decision 4) — slots.caveat states this;
  *   - a live mark is age-labelled from computeQuote's row.quickStale.sell / row.quoteAgeMin.sell
- *     (decision 3) — a stale P&L number is NEVER rendered unlabelled (the caller builds `marks`).
+ *     (decision 3) — on the per-lot P&L BOARD, a stale number is never rendered unlabelled (the caller
+ *     builds `marks`, and since 2026-08-09 labels them via the shared `liveAgeTag`).
+ *     SCOPE, precisely (the claim above used to be stated tool-wide and was false as written): TWO live
+ *     prices on other surfaces are still rendered UNLABELLED — `liveTxt` on reverse-flip pending rows
+ *     (below), and `read-book.mjs`'s SIZER `net if cycled once (sell …)` mark. Both are inform-only and
+ *     neither feeds the P&L board, but neither carries an age either. Don't cite this header as
+ *     tool-wide coverage; label those two if they ever inform a placement.
  *
  * CAPITAL MATH IS NOT RE-DERIVED HERE (decision 5): the working/parked/idle split delegates to
  * capital-utilization.mjs's bookUtilization/totalCapital, and the three-tier deployable pool comes

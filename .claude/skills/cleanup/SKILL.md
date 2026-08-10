@@ -1,6 +1,6 @@
 ---
 name: cleanup
-version: 1.1
+version: 1.2
 description: A repeatable post-wave hygiene + architectural-integrity pass — run the CI guards, then a SESSION/WAVE-scoped judgment sweep for drift, duplication, dead code, doc-honesty, and worktree/branch staleness, and produce a proposed-fix list. Triggers — "clean up after this session/wave", "check the architecture", "did we leave a mess", "run a cleanup", "post-wave cleanup", "cleanup".
 ---
 
@@ -70,6 +70,12 @@ node pipeline/ci/report-branches.mjs --pretty
   `PLAN.md` Status-table sha for this wave). A `/cleanup` over a 5-file wave reads 5 files of
   context, not the whole `pipeline/` tree. Fall back to a repo-wide sweep ONLY on an explicit ask
   ("audit the whole repo"), and SAY SO before doing it — it is expensive and should be rare.
+
+- **This pass does NOT substitute for the per-change adversarial review (CLAUDE.md rule 10)** —
+  `judgment:` that review runs at LANDING time on each substantive change (`/ship` §1), by a separate
+  agent briefed to attack your own last pass first. `/cleanup` is the later, wave-scoped hygiene sweep.
+  If a wave reaches here with no review pass behind it, say so in the writeup (§7) and treat the wave's
+  own claims — "consistent", "one home", "covered" — as UNVERIFIED rather than inherited.
 
 ## 5. Judgment checks, scoped to that diff (cheapest/most-likely first)
 

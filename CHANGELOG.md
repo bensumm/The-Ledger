@@ -36,12 +36,66 @@ module edge (`js/windowread.mjs` still imports only `money-math`); every call si
 render line, `_ageOf` for the pace/stale threading) — consolidated to one.
 
 **Not built, deliberately:** folding a live-price fetch into the sync path. `sync-fills` is the trade-log
-rebuild; prices are a separate concern with a working 60s-TTL fetch and an escalating staleness flag, and
+rebuild; prices are a separate concern with an uncached-by-default `/latest` read (`FETCH_TTL.latest` is
+declared but inert — `cachedJget` passes through unless `COFFER_FETCH_CACHE=1`, which nothing sets) whose
+per-side `lowTime`/`highTime` are TRADE timestamps, plus an escalating staleness flag, and
 there is no consumer that a sync-time price read would serve. Building it would have been churn plus a
 false record that a bug existed.
 
-Four format pins in `windowread.test.mjs`, including that the tag is NEVER empty and that an unknown age
-states itself rather than rendering as fresh.
+**Two review rounds followed, and both found the shipped state wrong — recorded here because the
+corrections are the substance of this entry, not footnotes to it.**
+
+Round one: the "one home / every call site" claim above was true of exactly ONE call site. `quote-items.mjs`
+and `read-book.mjs` kept their own hand-rolled constructs, so all three now route through the helper.
+Negative ages rendered as `(<1m ago)` — the silent-fresh failure the helper exists to prevent, in the
+helper itself; an unknown age (null, non-finite, or negative) now renders `(age n/a)`. And the tag compared
+the RAW age against the bar while printing a ROUNDED minute, so 14.6 read `(15m ago)` and 15.4 read
+`⚠ 15m old` — the same displayed number carrying opposite verdicts.
+
+That last one took two attempts, and the first attempt was worse than the bug. Moving the COMPARISON onto
+the rounded value made the displayed number self-consistent but desynced it from the gate: `staleLo`/
+`staleHi` are computed as `rawAge > QUICK_FRESH_MIN` and drive `askExitRead`'s pace refusal, so a raw 15.4m
+print rendered ` (15m ago)` while the pace line on the SAME read said `live print 15m stale`. Trading a
+cross-read ambiguity for a within-read contradiction is a bad trade, and it was caught by review, not by
+the suite. The shipped form compares the RAW age (so the word always matches the gate) and CEILINGS the
+stale branch: 14.6 → `(15m ago)`, 15.0 → `(15m ago)`, 15.4 → `⚠ 16m old`. "15m" is now only ever fresh,
+every ⚠ number is at least `freshMin`+1, and the gate never moved. The ceiling overstates by under a
+minute, which is the right direction to err on a staleness warning. A test sweeps 0–40m at 0.1m steps and
+asserts no displayed minute ever appears on both sides of the bar.
+`LIVE_FRESH_MIN_FALLBACK` is exported with a test pinning it equal to `QUICK_FRESH_MIN`; it cannot simply
+import the constant, because `js/quotecore.js` imports `windowread`, and closing that cycle is what keeps
+windowread a pure leaf.
+
+Round two found a **runtime `ReferenceError`**: `quote-items.mjs` used `QUICK_FRESH_MIN` without importing
+it. Every CI guard was green — `node --check` is syntax-only, `check-imports` verifies that imported names
+RESOLVE and is blind to a name used but never imported, and no test executes `runPositions`. Worse, the
+block's own `catch` swallowed the throw and rendered it as `window read unavailable (QUICK_FRESH_MIN is not
+defined)`, destroying the entire big-ticket ask-exit read — typical-exit quantiles, 5m-grain reach, the WC1
+forward record, and the reach-margin FADE clause that carries the price-to-sell-EARLY trigger — while
+presenting it as missing data. It fires on any held lot that is big-ticket **or watchlisted**. The commit
+had claimed this line was "covered by tests + import resolution, not a live run", which names precisely the
+two mechanisms blind to it. Fixed, then verified by RUNNING the path (temporarily watchlisting the held lot
+to force the gate): `live instabuy 15.1k ⚠ 22m old`, full note intact.
+
+`pipeline/ci/check-imports.mjs` gained a second part to close the class: an **unbound-constant check** that
+fails on any SCREAMING_SNAKE identifier an entrypoint uses without importing or declaring it. Narrow by
+design — that casing is the repo's constant convention, and requiring the underscore keeps verdict/prose
+tokens (`NOT LISTED`, `CUT`) out. It is a character scanner rather than a regex sweep for a reason its own
+first drafts proved: version one reported six false positives, every one a multi-declarator `const A = 1,
+B = 2;` list whose later names it never read; version two passed the real defect because `${…}` interiors
+NEST braces, and a `[^{}]*` match silently dropped `${liveAgeTag(x, { freshMin: QUICK_FRESH_MIN })}` — the
+exact expression that crashed. Both are fixed and both are pinned in the file's header, since a guard that
+cannot see its own motivating bug is worse than no guard. Confirmed by reintroducing the defect (fails,
+exit 1) and reverting (passes, 673 imports + 291 constant references across 33 entrypoints).
+
+**No `APP_VERSION` bump, deliberately.** `js/windowread.mjs` is app-imported and this change is
+behavioural, not comment-only — but `liveAgeTag` has NO browser consumer (`js/trends.js` imports
+`hourProfile`/`deriveDiurnalRange`/`hourConcentration`), so the deployed app is functionally unchanged.
+Stating the exemption is the requirement; rule 5's bar is a change to the deployed app's behaviour.
+
+Seven format pins in `windowread.test.mjs`: the tag is NEVER empty, an unknown age states itself rather
+than rendering as fresh, negative ages are unknown, the displayed minute never contradicts the fresh/stale
+word it carries, and `LIVE_FRESH_MIN_FALLBACK` cannot drift from `QUICK_FRESH_MIN`.
 
 ### 0.71.6 — DT1b: the amplitude lane gets a measured P(fill) (2026-08-09)
 

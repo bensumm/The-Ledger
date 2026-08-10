@@ -1261,12 +1261,27 @@ ok('liveAgeTag: a NEGATIVE age is unknown, never rendered as fresh', () => {
   for (const bad of [-0.001, -0.5, -45]) assert.equal(liveAgeTag(bad, { freshMin: 15 }), ' (age n/a)');
 });
 
-ok('liveAgeTag: the DISPLAYED number never contradicts the verdict it carries', () => {
-  // Comparing the raw age let 14.6 -> " (15m ago)" and 15.4 -> " ⚠ 15m old": one printed "15m" meaning
-  // fresh, another meaning stale. Rounding BEFORE the comparison makes the shown number authoritative.
-  for (const a of [14.5, 14.6, 15.0, 15.4]) assert.equal(liveAgeTag(a, { freshMin: 15 }), ' (15m ago)', `${a} rounds to 15m ⇒ must read fresh`);
-  for (const a of [15.5, 16.0, 16.4]) assert.equal(liveAgeTag(a, { freshMin: 15 }), ' ⚠ 16m old', `${a} rounds to 16m ⇒ must read stale`);
+ok('liveAgeTag: the fresh/stale WORD tracks the raw-age gate, and no minute reads both ways', () => {
+  // Two requirements, and the first fix satisfied one by breaking the other.
+  // (a) AGREE WITH THE GATE. staleLo/staleHi (read-window-range.mjs) are `rawAge > QUICK_FRESH_MIN` and
+  //     drive askExitRead's pace REFUSAL. A rounded comparison made a raw 15.4 print ' (15m ago)' while
+  //     the pace line on the same read said 'live print 15m stale'. So compare RAW.
+  for (const a of [14.4, 14.6, 15.0]) assert.ok(!liveAgeTag(a, { freshMin: 15 }).includes('⚠'), `${a} is at/under the bar ⇒ fresh, matching the gate`);
+  for (const a of [15.001, 15.4, 15.5, 16.0]) assert.ok(liveAgeTag(a, { freshMin: 15 }).includes('⚠'), `${a} is past the bar ⇒ stale, matching the gate`);
+  // (b) NO MINUTE ON BOTH SIDES. The stale branch ceilings, so "15m" is only ever fresh and every ⚠
+  //     number is >= freshMin+1.
+  assert.equal(liveAgeTag(14.6, { freshMin: 15 }), ' (15m ago)');
+  assert.equal(liveAgeTag(15.0, { freshMin: 15 }), ' (15m ago)');
+  assert.equal(liveAgeTag(15.4, { freshMin: 15 }), ' ⚠ 16m old', 'ceilinged — never a second "15m" meaning stale');
   assert.equal(liveAgeTag(14.4, { freshMin: 15 }), ' (14m ago)', 'and 14.4 rounds DOWN to 14, not 15');
+  const freshNums = new Set(), staleNums = new Set();
+  for (let a = 0; a <= 40; a += 0.1) {
+    const t = liveAgeTag(a, { freshMin: 15 });
+    const n = (t.match(/(\d+)m/) || [])[1];
+    if (n == null) continue;
+    (t.includes('⚠') ? staleNums : freshNums).add(n);
+  }
+  for (const n of staleNums) assert.ok(!freshNums.has(n), `"${n}m" must never appear as both fresh and stale`);
 });
 
 ok('liveAgeTag: the fallback bar cannot drift from QUICK_FRESH_MIN', () => {

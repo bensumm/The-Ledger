@@ -1,6 +1,6 @@
 ---
 name: ship
-version: 2.3
+version: 2.4
 description: Land a change on main (attended direct-push under the admin bypass today; PR + checks once the gh token is refreshed) and verify it — confirm the CI checks run and the Pages deploy are green; also holds the CI/workflow-editing and gh guardrails. Triggers — "ship it", "push this", "open a PR", "commit and push", "is it live", "check the deploy", "check CI", any change landing on main.
 ---
 
@@ -17,6 +17,18 @@ Skills-versioning note: `version` here bumps on material behavior change; skills
 - Version bump correct (rule 5): app change → `APP_VERSION` in `js/state.js`; skills-only →
   the SKILL.md `version:`; pipeline-stdout-only → no bump, note it in the commit message.
 - No PII in any tracked file — the repo is public.
+- **Adversarial review pass done (rule 10) — the DEFAULT for any substantive change, not an
+  escalation.** _(judgment: process guardrail)_ A SEPARATE agent, briefed to find you wrong rather than confirm you, and told to
+  **attack your own last pass first** (the highest-yield instruction: successive rounds keep finding
+  that the previous round's *fixes* introduced or left a false claim). Scope at least one pass AWAY
+  from the region you just worked. A clean verdict is a valid outcome — say so in the brief so the
+  reviewer doesn't manufacture findings. Skip only for a trivial mechanical edit.
+- **Every changed line has actually RUN — "covered by tests + import resolution" is not coverage
+  (rule 10 corollary).** `node --check` is syntax-only; `pipeline/ci/check-imports.mjs` proves imported
+  names resolve and now also fails on unbound SCREAMING_SNAKE constants, but neither executes your code. A
+  `ReferenceError` shipped CI-green exactly this way, its `catch` disguising the crash as missing
+  data. If a gate blocks the path (big-ticket lot, watchlist membership, a mode flag), FORCE it —
+  temporarily, then revert — rather than reasoning that it would work.
 
 ## 2. Land the change
 

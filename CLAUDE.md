@@ -219,16 +219,26 @@ metadata, not a leak; the concern is content, not commit authorship.
 10. **Adversarial review is the DEFAULT, not an escalation (Ben, 2026-08-09).** Any substantive
     change — a shipped chunk, a doc-reconciliation pass, a new estimator — gets a review pass by a
     SEPARATE agent before it's called done, briefed to find you wrong rather than to confirm you.
-    This is measured, not a nicety: on 2026-08-09 five review passes over one wave found, in order, a
-    self-contradicting doc pair inside files already declared consistent; a "regression check" that
-    never called the function it guarded; a corrected constant left wrong at its own definition site;
-    a closed negative-result plan advertised as live work; a shipped default lane whose plan still
-    said "not yet scheduled"; and a tool-wide floor stale at 2× its value in eleven places. Every one
-    passed CI green. **Brief the reviewer to attack YOUR OWN last pass first** — rounds 2, 3 and 5
-    each found the previous round's fixes had introduced or left a false claim, which is the single
-    highest-yield instruction. And **scope at least one pass AWAY from the region you just worked**:
-    four consecutive passes re-audited their predecessor's territory and converged on their own tail;
-    the widest finding only surfaced when a reviewer was told to look elsewhere.
+    This is measured, not a nicety: on 2026-08-09 six review passes over one wave found — every one on
+    CI-GREEN code — a self-contradicting doc pair inside files already declared consistent; a
+    "regression check" that never called the function it guarded; a corrected constant left wrong at
+    its own definition site; a closed negative-result plan advertised as live work; a tool-wide floor
+    stale at 2× its value in eleven places (a twelfth turned up the pass after); a shipped default lane
+    whose plan still said "not yet scheduled"; and a **runtime `ReferenceError`** on a big-ticket
+    held-lot surface, whose `catch` disguised the crash as `window read unavailable` and silently
+    deleted the price-to-sell-EARLY trigger. **Brief the reviewer to attack YOUR OWN last pass first**
+    — rounds 2, 3, 5 and 6 each found the previous round's fixes had introduced or left a false claim,
+    which is the single highest-yield instruction. And **scope at least one pass AWAY from the region
+    you just worked**: the first three passes each re-audited the region the previous pass named and
+    converged on their own tail; the pass that broke the pattern found three clusters every prior pass
+    had missed, two of them outside the region under work.
+    **Corollary — "covered by tests + import resolution" is not coverage.** The `ReferenceError` above
+    was reported as verified on exactly that basis. `node --check` is syntax-only and `check-imports`
+    only proves imported names *resolve*; neither sees a name that is USED but never imported, and no
+    test executed the function. If a changed line has not actually RUN, say so plainly and go run it —
+    forcing the gate (e.g. temporarily watchlisting a held lot) usually costs a minute.
+    `pipeline/ci/check-imports.mjs` now also fails on unbound SCREAMING_SNAKE constants, closing that
+    one class — but the class it cannot see is why the rule is to run the path.
 11. **Name the refuting test before stating a cause; if it costs under a minute, run it.** Three
     times on 2026-08-09 a plausible mechanism was reported as an established finding and was wrong
     (a grain explanation for what was circularity; a caching bug against an uncached path; a TTL

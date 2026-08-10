@@ -1162,18 +1162,24 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     items. INFORM-ONLY, n≈0; fixture-tested in `pipeline/test/hourly-lmh.test.mjs` (incl. a stays-deleted
     pin on the slope)),
     `js/windowread.mjs` `liveAgeTag(ageMin,{freshMin})` (2026-08-09) — the age suffix on the
-    ALWAYS-printed `live instasell/instabuy now` line: `(age n/a)` / `(<1m ago)` / `(Nm ago)` when fresh,
-    escalating to the UNCHANGED `⚠ Nm old` past the caller-supplied bar. The threshold is a PARAMETER,
+    ALWAYS-printed `live instasell/instabuy now` line: `(<1m ago)` / `(Nm ago)` when fresh, escalating to
+    the UNCHANGED `⚠ Nm old` past the caller-supplied bar, with `(age n/a)` for an UNKNOWN age (null,
+    non-finite, or negative — never silently rendered as fresh). The threshold is a PARAMETER,
     not an import, so the helper stays a pure leaf (`js/windowread.mjs` imports only `money-math`) — a
     test pins the default against `QUICK_FRESH_MIN` so the two cannot drift. `lowTime`/`highTime` are
     TRADE timestamps from `/latest`, so a price that stays the same while its age grows PROVES no trade
     printed rather than a stale read — which is the ambiguity the silent-when-fresh predecessor created
     and that produced a wrong bug diagnosis. (For the record: `/latest` on this path is UNCACHED —
     `cachedJget` passes straight through unless `COFFER_FETCH_CACHE=1`, which nothing sets, so
-    `FETCH_TTL.latest` is declared but inert.) Sole render call site today is `read-window-range.mjs`
-    (also now its ONE age helper — it carried a second byte-identical copy), and since the review pass
-    ALSO `quote-items.mjs` (the windowExit live-instabuy clause) and `read-book.mjs` (`ageLabel` on every
-    P&L mark), so all three inline live-age surfaces share one renderer. Pinned by `windowread.test.mjs`,
+    `FETCH_TTL.latest` is declared but inert.) THREE render call sites, all converted: `read-window-range.mjs`
+    (also now its ONE age helper — it carried a second byte-identical copy), `quote-items.mjs` (the
+    windowExit live-instabuy clause) and `read-book.mjs` (`ageLabel` on every P&L mark). Deliberately NOT
+    converted, and why: `watch-positions.mjs`'s held-lot `staleLive` clause hand-rolls the same age render
+    but lives in a STALE-ONLY branch (`quickStale.sell` implies a non-null age), so it is never
+    silently-fresh — not this defect class — and converting it would change its wording. Genuinely
+    unlabelled, and named here rather than implied: `read-book.mjs`'s SIZER `net if cycled once (sell …)`
+    mark and `book-model.mjs`'s reverse-flip `liveTxt` — both inform-only, both off the P&L board.
+    Pinned by `windowread.test.mjs`,
     including a negative-age case, a guard that the DISPLAYED minute never contradicts the fresh/stale
     verdict it carries, and a drift guard tying `LIVE_FRESH_MIN_FALLBACK` to `QUICK_FRESH_MIN`.
     `read-trajectory.mjs` (R1 — a thin one-word PRESET that re-execs `read-window-range.mjs --trajectory`
@@ -2227,7 +2233,7 @@ run `pipeline/test/quotecore.test.mjs` + `pipeline/test/reconstruct.test.mjs`.
 | `js/quotecore.js` | 13 files: `quote-items.mjs`, `screen-flip-niches.mjs`, `watch-positions.mjs`, `monitor-offers.mjs`, `trigger-alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `lib/retrojoin.mjs` (P6a — `tax` for suggested-net; SF-1 — `quantileOf` for the p25/p75 latency spread), `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab), `dipposture.test.mjs` (DP1 — `recentDirection`); plus the js/ side-imports `js/termstructure.mjs` (SF-1 — re-exports `quantileSorted` as `quantile`) + `js/validate.mjs` (DP1 — `recentDirection` for `dipPostureValidator`) |
 | `js/money-math.js` | the tax/margin/bond MATH (split from `format.js`, R2): `quote-items.mjs`/`screen-flip-niches.mjs` (`tax`) + js-side node imports `js/flip-niches.mjs` (`tax`), `js/estimators.mjs` (`netMargin`/`clamp`), `js/validate.mjs`/`js/trendcore.js` (`tax`/`netMargin`), `js/valuescreen.mjs`/`js/market.js`. Edit ⇒ re-run `quotecore.test`+`reconstruct.test` (byte-identical tax). |
 | `js/money-format.js` | gp/number DISPLAY (split from `format.js`, R2): `quote-items.mjs`, `screen-flip-niches.mjs`, `watch-positions.mjs`, `trigger-alerts.mjs`, `join-outcomes.mjs`, `retrojoin.mjs`, `derive-cash.mjs` + `lib/analyze.mjs`/`item-context.mjs`/`emit.mjs` (`fmt`/`fmtP`/`fmtTurn` for the reports) |
-| `js/windowread.mjs` | `pipeline/commands/read-window-range.mjs`, `pipeline/commands/watch-positions.mjs`, `pipeline/commands/screen-flip-niches.mjs` (diurnal profile), `js/validate.mjs`, `js/forecast.mjs` (PF1 — consumes `hourProfile`), `pipeline/test/windowread.test.mjs` (P2 — moved from `pipeline/lib/`), `pipeline/test/dt4-timedlap-coverage.test.mjs` (DT4 — the §7 data-guarantee structural pin, direct `diurnalTimedLap` import); **APP-IMPORTED by `js/trends.js`** (TV — the Trends Diurnal timing section, same `hourProfile`/`deriveDiurnalRange` the console prints; DT5 also imports `hourConcentration` directly — the ★ clean-candidate badge is now gated on its canonical cycle-cleanliness verdict instead of a locally-reinvented predicate) |
+| `js/windowread.mjs` | `pipeline/commands/read-window-range.mjs`, `pipeline/commands/quote-items.mjs`, `pipeline/commands/watch-positions.mjs`, `pipeline/commands/read-book.mjs` (`liveAgeTag` on P&L marks, 2026-08-09), `pipeline/commands/screen-flip-niches.mjs` (diurnal profile), `js/validate.mjs`, `js/quotecore.js` (`windowStats`/`floorCeilingTrack` — this is the edge that makes windowread a PURE LEAF: it can never import quotecore back, so a shared constant is passed as a parameter, not imported), `js/forecast.mjs` (PF1 — consumes `hourProfile`), `pipeline/test/windowread.test.mjs` (P2 — moved from `pipeline/lib/`), `pipeline/test/dt4-timedlap-coverage.test.mjs` (DT4 — the §7 data-guarantee structural pin, direct `diurnalTimedLap` import); **APP-IMPORTED by `js/trends.js`** (TV — the Trends Diurnal timing section, same `hourProfile`/`deriveDiurnalRange` the console prints; DT5 also imports `hourConcentration` directly — the ★ clean-candidate badge is now gated on its canonical cycle-cleanliness verdict instead of a locally-reinvented predicate) |
 | `js/forecast.mjs` | `pipeline/test/forecast.test.mjs`, `pipeline/commands/read-window-range.mjs` + `pipeline/commands/quote-items.mjs` (`driftExitFrom` Chunk 5), `js/amplitudescreen.mjs`, and **`js/estimators/pair.mjs`** (PLAN-ESTIMATOR-HONEST-SELL E1 — `driftExitFrom` for the `estSellForward` "list at X" forward projection); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Trends "Forward forecast" section: `diurnalForecast`/`fmtEta`, provisional PF n≈0). Console-side consumers still pending — PF7 validate. An app-behavior change to it bumps APP_VERSION. |
 | `js/validate.mjs` | `pipeline/commands/screen-flip-niches.mjs`, `pipeline/commands/quote-items.mjs`, `pipeline/test/validate.test.mjs`, `pipeline/test/termstructure.test.mjs`, `pipeline/test/dipposture.test.mjs` (DP1 — `dipPostureValidator`) (P2/P3 — the validator registry: reach + floor + dip-posture); imports `js/quotecore.js` (DP1 — `recentDirection`); **APP-IMPORTED by `js/trends.js`** (TV — `reachValidator` beside the Diurnal timing chart; `floorValidator`+`trajectoryValidator` beside the 0.60.0 term-structure overlay — all inform-only) |
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/commands/screen-flip-niches.mjs`, `pipeline/commands/quote-items.mjs`, `pipeline/test/termstructure.test.mjs` (P3 — term structure / durable floor); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Price-history floor/ceiling overlay). Imports `js/quotecore.js` for the shared `quantileSorted` (SF-1) and re-exports it as `quantile`. |
