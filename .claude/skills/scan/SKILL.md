@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 2.2
+version: 2.3
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -484,10 +484,13 @@ This is the tribal layer the script can't do — apply ALL of these:
     can DIVERGE hard on a big ticket (same-hour spread thinner than tax while the trough→peak clears it
     easily; a live fang row showed `timed +964.5k/u` beside `same-hour -21k/u` on the SAME row) — both
     always render, never averaged away.
-  - **Range-churn** (scattered per-day trough/peak hour — no reliable timing edge): leads with
-    `range-churn — no timing edge`, omits the specific hours (the whole point of the flag), still shows
-    both nets + the base trend.
-  - Both shapes append a liquidity/tranche segment (`vol/d · dip-pool · peak-pool · tranche comfortable
+  - **Unreliable / unverified hours** (DT4, 2026-08-10 — SUPERSEDES the old `range-churn` shape): the
+    LEVELS and both nets ALWAYS render; only the dip/peak HOUR spans + the hold horizon are withheld
+    when the item fails the split-half reliability gate (`windowReliability`, `min(rLow,rHi) ≥ 0.6`).
+    The line closes with `hours repeat most days` / `levels only — no reliable hours` / `levels only —
+    hours unverified`. Only ~0.8% of items pass, so an absent window is the NORMAL case now — read the
+    LEVEL and treat the hours as a bonus when they appear. `range-churn — no timing edge` is gone.
+  - All shapes append a liquidity/tranche segment (`vol/d · dip-pool · peak-pool · tranche comfortable
     ~X / ceiling ~Y`) and a `⚠ buy limit … exceeds tranche ceiling` caveat when the item's buy limit sits
     past the (n≈6, borrowed-not-validated) tranche ceiling — expect a worse realized net at that size.
   - **A SECOND window may also flag** (PLAN-MULTI-PEAK-WINDOWS) — a trailing `also ASK …/also BID … —
@@ -498,8 +501,9 @@ This is the tribal layer the script can't do — apply ALL of these:
   `⚠ trend-dominates → bid to live` still fires when a multi-day trend erases the intraday dip (the
   Ghrazi lesson). This is the ENCODED form of the manual per-item windowrange dance below — read it
   FIRST; then `windowrange --profile "<item>"` for the full hour-by-hour table on the handful you
-  actually pitch. Honesty: the clean/range-churn split doesn't know froth (a spike item's amplitude
-  flatters the roi — cross-check the phase tag), every tranche/knee constant is a labeled PLACEHOLDER,
+  actually pitch. Honesty: the reliability gate doesn't know froth (a spike item's amplitude
+  flatters the roi — cross-check the phase tag), and what it measures is within-day HOUR RANKING, not
+  that a resting offer fills better in the window (measured separately as ~nothing — DT2), every tranche/knee constant is a labeled PLACEHOLDER,
   and the funnel-widening pass (running this on gate-EXCLUDED items to test "are we hiding winners?") is
   a planned fast-follow, not yet built — so this reorders SURVIVORS, it doesn't yet surface the excluded
   universe.

@@ -1,6 +1,6 @@
 ---
 name: schedule
-version: 1.4.0
+version: 1.5.0
 description: Consolidated buy/sell WINDOW AGENDA — a time-sorted "what to buy/sell and when" across current positions (default) or the watchlist, plus a flipped-but-not-watchlisted audit. Triggers — "what's my agenda", "what should I buy/sell and when", "when's the next window", "what's coming up", "schedule".
 ---
 
@@ -45,7 +45,7 @@ Column legend (the render columns of `read-schedule.mjs`):
 | Column | Meaning |
 | --- | --- |
 | `In (h)` | hours to the window's next start, nearest 0.5h; `now` when currently inside it. |
-| Window | the dip/peak hour range in BOTH zones (local / UK). |
+| Window | the dip/peak hour range in BOTH zones (local / UK). A leading **`~`** (DT4, 2026-08-10) means these hours did NOT clear the split-half reliability gate, or could not be measured — the LEVEL still stands, the TIME is not a commitment. Only ~0.8% of items clear it, so **most rows are marked**: read the agenda as a level plan with timing hints, and treat an unmarked row as the rare item whose clock actually repeats. A legend prints under the table whenever any row is marked. |
 | Action | `BUY dip` / `SELL peak`, plus `BUY dip·2` / `SELL peak·2` for a SECOND elevated/depressed window. Each item contributes up to **4** rows (`dips.slice(0,2)` × `peaks.slice(0,2)`) — this said 2 until 2026-08-09, which would make a real second window read as a typo (memory `surface-secondary-local-peaks`). |
 | Level | the recent dip/peak price guide (the bid/ask candidate). Rendered with `fmtP` — FULL gp resolution under 100k (`1,081`, not `1.1k`), compact above it (`26.30m`) — because it is a price to place an offer at. Ben, 2026-08-05: the old `fmt` render collapsed all four Snape-grass rows (1,081 / 1,093 / 1,122 / 1,123) onto one `1.1k`, hiding a 42gp spread on a trade whose whole margin was ~36/u. |
 | List | C / W tag(s). |

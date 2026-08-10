@@ -378,7 +378,10 @@ ok('renderReport throws on an unknown section type (fail loud, never silently dr
 // (both shown — the plan's "compute both" row) — plus a liquidity segment (volDay merged onto the lap
 // per formatTimedLap's doc comment) and buyLimit UNDER the ceiling (no caveat).
 const boltsLap = {
-  degraded: false, clean: true,
+  // DT4 (2026-08-10): `reliable` — NOT `clean` — is what now decides whether the HOURS render.
+  // `clean` is retained on the fixture because it is still computed and shadow-logged; it simply no
+  // longer drives this renderer (it was measured not to discriminate — see formatTimedLap's header).
+  degraded: false, clean: true, reliable: true,
   bid: 2816, ask: 3030, bidBasis: 'patient-dip',
   dipWindow: { startH: 21, endH: 23 }, peakWindow: { startH: 4, endH: 6 },
   net: 154, roi: 5.5, instantNet: 40, instantRoi: 1.4,
@@ -390,10 +393,10 @@ const boltsLap = {
                                      // is ABOVE it per the plan's §4 anchor table — used in the next test).
 };
 
-// chin-shaped: range-churn (scattered per-day trough/peak hour ⇒ clean:false), small positive net,
-// falling base — the specific hours are OMITTED (the whole point of the clean flag).
+// chin-shaped: a scattered per-day trough/peak hour, so the split-half gate FAILS (reliable:false),
+// small positive net, falling base — the HOURS are omitted and the LEVELS are kept (DT4 option B).
 const chinLap = {
-  degraded: false, clean: false,
+  degraded: false, clean: false, reliable: false,
   bid: 400, ask: 440, bidBasis: 'patient-dip',
   dipWindow: { startH: 0, endH: 0 }, peakWindow: { startH: 12, endH: 12 },
   net: 32, roi: 8, instantNet: 6, instantRoi: 1.5,
@@ -430,11 +433,15 @@ ok('formatTimedLap: §4 caveat fires when the caller-relevant size (buyLimit) ex
   assert.ok(!formatTimedLap(boltsLap).includes('⚠ buy limit'), 'the base fixture (buyLimit 5,000) stays under the ceiling — no caveat');
 });
 
-ok('formatTimedLap: range-churn (clean:false) — leads with the no-timing-edge line, OMITS the specific dip/peak hours, still shows BOTH nets + base', () => {
+ok('formatTimedLap: an UNRELIABLE cycle (reliable:false) omits the dip/peak HOURS but keeps the levels + both nets + base', () => {
   const text = formatTimedLap(chinLap);
-  assert.ok(text.startsWith('range-churn — no timing edge'), `must lead with the range-churn frame (got: ${text})`);
-  assert.ok(!text.includes('BID '), 'the specific dip HOUR is unreliable on a scattered cycle — omit it');
+  // SUPERSEDES the old range-churn assertion (DT4, 2026-08-10). That frame keyed on `clean`, which was
+  // measured not to discriminate, and it withheld the BID/ASK LEVELS along with the hours — on ~97% of
+  // items. Option B: levels always render, only the hours are gated, and the line says which it did.
+  assert.ok(text.includes('levels only — no reliable hours'), `must name the suppression (got: ${text})`);
+  assert.ok(text.includes('BID 400') && text.includes('ASK 440'), 'the LEVELS survive — they were never what the gate measured');
   assert.ok(!text.includes('dip 0'), 'no dip-window hour text');
+  assert.ok(!text.includes('hold ~'), 'the hold horizon is an hours claim and goes with them');
   assert.ok(text.includes('range 40'));
   assert.ok(text.includes('timed +32/u'), 'timed net still renders (just not the hours)');
   assert.ok(text.includes('same-hour +6/u'), 'same-hour instant net still renders');
@@ -450,9 +457,10 @@ ok('formatTimedLap: degrades to null — a degraded lap, a null lap, and a price
   assert.equal(formatTimedLap({ degraded: false, clean: false, bid: 100, ask: null }), null, 'no ask ⇒ nothing priceable to say');
 });
 
-ok('formatTimedLap: coverage is NOT gated on the clean flag — both a clean AND a range-churn survivor render a line (DT2 extends coverage past the old ★-candidate-only gate)', () => {
+ok('formatTimedLap: coverage is NOT gated on the reliability flag — both a reliable AND an unreliable survivor render a line (DT2 extended coverage past the old ★-candidate-only gate; DT4 keeps that)', () => {
   assert.ok(formatTimedLap(boltsLap) != null);
-  assert.ok(formatTimedLap(chinLap) != null, 'a range-churn (non-clean, non-star) row still gets a rendered line, not silence');
+  assert.ok(formatTimedLap(chinLap) != null, 'an unreliable row still gets a rendered line, not silence');
+  assert.ok(formatTimedLap({ ...chinLap, reliable: null }) != null, 'nor does an UNMEASURABLE one vanish');
 });
 
 /* --- PLAN-MULTI-PEAK-WINDOWS: a SECOND elevated / depressed window renders as a trailing clause on the

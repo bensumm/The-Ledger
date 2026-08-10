@@ -86,6 +86,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   also the ONE type-7 quantile/median home (SF-1):
   `quantileSorted` (pre-sorted input) + `quantileOf`/`median` (sort a copy) — `termstructure.mjs`
   re-exports it as `quantile`, `retrojoin.mjs` aliases `quantileOf`), `windowread.mjs` (P2 — pure window-range/reach math:
+  **`windowReliability`** (DT4, 2026-08-10 — the split-half hours gate: parity-split the last
+  `WINDOW_RELIABLE_NIGHTS` (14) days, `hourProfile` each half, Pearson-correlate the de-trended devLow/devHi
+  24h vectors, gate on `min(rLow,rHi) ≥ WINDOW_RELIABLE_R` (0.6, PLACEHOLDER). Returns a TRI-state
+  `reliable` true/false/null — null = not measurable, deliberately distinct from a measured fail. Pins its
+  OWN 14-day window off the RAW series, never the caller's `nights`. Consumed by `diurnalTimedLap`
+  (`lap.reliable`), `formatTimedLap`, `softBuyRead`/`softBuyHoursClause`, the `/scan` digest soft-buy cell,
+  `read-schedule.mjs` and `read-window-range --profile`; shadow-logged by `suggestlog.mjs`. DISPLAY-ONLY —
+  it gates no price, grade, rank, verdict or `screen.json` field) + `softBuyHoursClause` (the ONE wording
+  for the three hours states, `full` + `compact` styles) +
   `windowStats`/`quantLow`/`quantHigh`/`touchedDays`/`reachedDays` + the RC1
   `recencySplit`/`recentQuant` reach-contamination guard + **`askExitRead`** (PLAN-POSITIONS-WINDOW-READ
   2026-07-18 — the ONE ask-side "typical exit" assembly: daily-HIGH q50/q75/every-day levels + the scored
@@ -1738,9 +1747,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     DT2 adds `formatTimedLap(lap, {fmt})` here too — the ONE shared renderer for a `js/windowread.mjs`
     `diurnalTimedLap` result, SUPERSEDING the old per-call-site diurnal text so `screen-flip-niches.mjs`
     (DT2, every flip-niche survivor) and `quote-items.mjs`'s bare-quote path (DT3) render byte-identical
-    diurnal notes off one definition — same `diurnal` NOTE_KIND/sigil, richer text: a clean-cycle
-    BID/ASK+windows/timed+same-hour nets/range/reach/hold/base line, or a range-churn line that omits
-    the unreliable specific hours; both append a liquidity/tranche segment + the §4 tranche-ceiling
+    diurnal notes off one definition — same `diurnal` NOTE_KIND/sigil, richer text. **DT4
+    (2026-08-10) changed what varies:** every row now renders BID/ASK LEVELS + timed/same-hour nets +
+    range + reach + base; only the HOURS are gated, on `windowReliability`'s split-half r (`lap.reliable`
+    — true ⇒ the dip/peak window spans, the hold horizon, any secondary window and a closing "hours
+    repeat most days"; false ⇒ "levels only — no reliable hours"; null ⇒ "levels only — hours
+    unverified"). This REPLACED a `lap.clean` branch whose `false` arm printed `range-churn — no timing
+    edge` and dropped the LEVELS too, on ~97% of items — `clean` was measured not to discriminate
+    (CHANGELOG 0.72.0). All shapes append a liquidity/tranche segment + the §4 tranche-ceiling
     caveat. PLAN-MULTI-PEAK-WINDOWS (2026-07-23) extends it to also append a trailing `also ASK …/also BID …
     — second elevated/depressed window (n≈0, inform)` clause per side when the lap carries an
     `askReaches[1]`/`bidReaches[1]` (a SECOND prominent diurnal window) — both ride the SAME joined line

@@ -10,6 +10,72 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### DT4 — the diurnal HOURS are gated on measured reliability; the LEVELS always render (0.72.0, 2026-08-10)
+
+PLAN-DIURNAL-TRIAGE **DT4**, shipped as Ben's **option B**: keep the levels, suppress the hours on items
+whose daily shape doesn't reproduce, and MARK the ones that pass. New `windowReliability()`
+(`js/windowread.mjs`) splits an item's days by parity, runs `hourProfile` on each half and Pearson-
+correlates the two de-trended 24h shape vectors; the gate is `min(rLow, rHi) ≥ 0.6`. Display-only — it
+never moves a level, grade, rank, verdict or `screen.json` field.
+
+**The plan's implementation spec was wrong, and the correction is the load-bearing part.** DT4's row said
+to compute r "on the in-hand series (~4ms, 2 extra `hourProfile` calls)". The surfaces that render hours
+profile at `nights=7`, and a 7-day window splits into parity halves of 4 and 3 — a 3-day half is below
+`HOURPROFILE_MIN_DAYS`, so `hourProfile` returns null. Measured over the local 1h archive: **at a 7-day
+window the gate is uncomputable for 4,156 of 4,156 items.** Following the spec would have shipped a gate
+that passes nothing and silently suppresses every window on the board. `windowReliability` therefore pins
+its OWN 14-day window off the raw series regardless of the caller's `nights`. **Two** regression tests pin
+this, and the second was added only after review showed the first was insufficient: one pins the helper's
+default constant, the other pins the CALL SITE (`diurnalTimedLap` fitted at `nights: 7` must still report
+`reliable: true` on a gate-passing series). The original claim that "a regression test fails if that is
+ever simplified back" was FALSE as written — forwarding the caller's `nights` into the gate, which is
+exactly what the plan's spec said to do, passed the entire suite green.
+
+**Known gap, unresolved and flagged rather than papered over:** the gate judges a 14-day shape and the
+lift was measured on a ~30-day fit, but the two highest-traffic surfaces render a **7-day-fitted** window.
+Measured over the archive (gate-passers, n=32) the 7d and 14d fits agree on the dip hour 34.4% of the
+time and on the dip window SPAN 18.8% (median |Δ| 1h). Usually adjacent, so the marker isn't fabricated —
+but it is a looser warrant than "these exact hours were verified", and it is the same transfer problem
+that justified re-measuring the gate, left unapplied to the fit. Closing it is a tuning decision beyond
+DT4's scope.
+
+**The 14-day gate is a different selection from the study's 30-day one** (only 25% of 30d-passers also
+pass at 14d), so the study's +14.8pp could not be inherited and was re-measured directly — study TEST arm
+unchanged, gate window varied, 1,979 items scored by both: PASS n=40 dip **+17.3pp** / peak **+17.4pp**
+versus FAIL +3.3 / +4.4, gap +14.0pp ± 2.9 (t≈4.9), monotone across all five r buckets — with the
+caveat that the decisive top 14d bucket is **n=4**, so that end of the monotonicity is anecdote (rule 4).
+
+**It displaced a gate that measures nothing.** Until now `formatTimedLap` decided whether to print hours
+from `hourConcentration`'s `clean` flag, and `clean===false` dropped the **BID/ASK levels** along with
+them — on ~97% of items. Scored against held-out days, `clean` does not discriminate: clean=true (n=60)
+dip +5.0pp / peak +4.4pp versus clean=false (n=1919) dip +3.6pp / peak **+4.7pp** — no gap, and marginally
+backwards on the peak side. The split-half gate separates inside both strata (clean=true items that fail
+it run +2.6pp dip; ones that pass run +20.7pp). So the levels were being withheld from nearly the whole
+board on the strength of a statistic that selects nothing. `clean` is still computed and shadow-logged;
+it no longer decides what the line shows. It **still gates the app's Trends ★ badge** (`js/trends.js`)
+and was deliberately NOT re-verdicted there — flagged, not silently changed.
+
+**Tri-state, not a boolean.** `true` → hours + "hours repeat most days"; `false` → "levels only — no
+reliable hours"; `null` → "levels only — hours unverified" (needs ~14 days to judge). Not-measured and
+measured-and-failed are different claims and collapsing them would assert one of them falsely. A
+zero-variance "flat" shape is classified `false` rather than `null` — that branch is **judgment, not
+measurement** (the study excluded flat items from its panel, so no lift number covers them) and is
+labelled as such in the source.
+
+**Live effect:** 0.8% of the board shows hours (34 of 4,454 items), 77.0% reads "no reliable hours",
+22.2% "unverified". Roughly 1 item in 125 keeps a diurnal clock. Verified end-to-end on real items —
+Mahogany logs (r 0.83) renders hours + hold horizon + its secondary window; Death rune (r 0.37) keeps
+`BID 189 · ASK 195` and drops the timing.
+
+Surfaces: `formatTimedLap` (the `↳ diurnal:` note), `softBuyRead`/`formatSoftBuy` + the `/scan` digest
+soft-buy cell, `read-schedule.mjs` (unreliable rows keep their window but are marked `~` with a legend),
+and `read-window-range --profile` (prints the raw r's — the diagnostic surface for why something was
+suppressed). Full measurement record: `pipeline/experiments/DT4-WINDOW-GATE-FINDINGS.md` addendum.
+INFORM-ONLY, n≈0 for any gp claim: what is measured is within-day HOUR RANKING, not that a resting bid
+fills more often — the triage measured that directly and found ~nothing, so hours stay ATTENDED-taking
+context (DT2).
+
+
 ### pipeline — round-12 review backlog: two real capital-math fixes, three doc corrections, one deliberate non-fix (2026-08-10, no APP_VERSION bump: pipeline-only)
 
 **1. `watch-positions.mjs` double-counted the filled leg of a partially-filled bid.** `committed` summed

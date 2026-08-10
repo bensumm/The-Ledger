@@ -35,7 +35,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping, fetchTs } from '../lib/market/marketfetch.mjs';
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot } from '../lib/reconstruct/offers.mjs';
-import { hourProfile } from '../../js/windowread.mjs';
+import { hourProfile, windowReliability, WINDOW_RELIABLE_R } from '../../js/windowread.mjs';
 import { fmt, fmtP, fmtHour, fmtHourRange, localTzAbbrev } from '../../js/money-format.js';   // fmtP for the Level column: it is a PRICE to place an offer at, and fmt()'s 1-decimal k-range collapsed 1,051 and 1,109 onto the same "1.1k" (Ben, 2026-08-05). fmtP keeps full gp under 100k and stays compact above it — the same convention the scan's Est. buy/sell price cells use.
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 surfaces the in-flight cycle into the agenda
 import { reverseFlipCycleNotes } from '../../js/reverseflip.mjs';   // RF4/RF6 shared inform-only cycle notes (thin strand + drift + REBUY_STALE_DAYS nudge)
@@ -84,7 +84,11 @@ function windowInH(startH, endH, now) {
 // Action `·2`, leaving the primary row's appearance UNCHANGED. Falls back to the singular dip/peak when
 // the arrays aren't present (older profile shape / a hand-built fixture), so a length-1 case never
 // manufactures a row.
-export function agendaRowsForItem({ name, tags = [], profile, now = new Date() }) {
+// DT4 (2026-08-10): `reliable` is windowReliability's tri-state for this item. The agenda KEEPS every
+// row — an item still has a plan even when its clock doesn't repeat — but a row whose hours failed (or
+// could not be) verified is MARKED, because this table's whole content is times and an unmarked one
+// reads as a commitment. The row's Level is unaffected: levels were never what the gate measured.
+export function agendaRowsForItem({ name, tags = [], profile, now = new Date(), reliable = null }) {
   if (!profile) return [];
   const rows = [];
   const mk = (side, w, idx) => {
@@ -97,6 +101,7 @@ export function agendaRowsForItem({ name, tags = [], profile, now = new Date() }
       action: idx >= 1 ? `${base}·2` : base,   // ·2 = the secondary (prominence-ranked) window
       secondary: idx >= 1,
       level: w.level ?? null,
+      reliable,
       tags: [...tags],
     });
   };
@@ -128,7 +133,13 @@ export function sortRows(rows) {
 // yields ZERO rows → byte-identical agenda (the zero-ripple guard).
 // DT3 (2026-08-09): the `driftByItem` param is gone with the hourlyDrift slope note it carried — this
 // surface never had an ask level, so the surviving askReachDecay read has nothing to score here.
-export function reverseFlipRows(state, { profileByItem = {}, now = new Date() } = {}) {
+// DT4 (2026-08-10, corrected after review): `reliableByItem` carries windowReliability's tri-state per
+// id. An id ABSENT from the map means the gate was never RUN on it (this surface only fetches series for
+// selected ids), which is a THIRD case — the row is still marked unverified, but it must not be counted
+// into the legend's "could not be measured (needs ~14 days)" tally, because that states a reason we did
+// not establish. The first version omitted this map entirely, so every reverse-flip row was assigned that
+// false reason — the exact null-vs-false conflation the tri-state exists to prevent.
+export function reverseFlipRows(state, { profileByItem = {}, reliableByItem = {}, now = new Date() } = {}) {
   const rows = [];
   const nowMs = (now instanceof Date) ? now.getTime() : (typeof now === 'number' ? now : Date.now());
   // windowInH needs a Date-like with getHours/getMinutes; a numeric `now` (a test/injected ms) → a Date.
@@ -154,6 +165,7 @@ export function reverseFlipRows(state, { profileByItem = {}, now = new Date() } 
       secondary: false,
       level,
       tags: ['RF'],
+      reliable: Object.prototype.hasOwnProperty.call(reliableByItem, e.id) ? reliableByItem[e.id] : undefined,
       rf: true,
       cycleState: e.state,
       notes,
@@ -268,7 +280,7 @@ export async function buildAgenda({ scope = ['c'], now = new Date(), repoRoot = 
   const rows = [];
   for (const [id, e] of selected) {
     const tags = [...e.tags].sort();   // 'C' before 'W'
-    rows.push(...agendaRowsForItem({ name: e.name, tags, profile: profiles.get(id), now }));
+    rows.push(...agendaRowsForItem({ name: e.name, tags, profile: profiles.get(id), now, reliable: series.has(id) ? windowReliability(series.get(id) || []).reliable : null }));
   }
   // RF4: union the in-flight reverse-flip cycles into the agenda. Guarded on a NON-EMPTY store so the
   // common (empty) case adds zero rows AND zero compute → the agenda is byte-identical to pre-RF4. Windows
@@ -295,7 +307,9 @@ export async function buildAgenda({ scope = ['c'], now = new Date(), repoRoot = 
       const prof = profiles.get(e.id) || null;
       if (prof) profileByItem[e.id] = prof;
     }
-    rows.push(...reverseFlipRows(rfState, { profileByItem, now }));
+    const rfReliable = {};
+    for (const e of rfState) { if (e && e.id != null && series.has(e.id)) rfReliable[e.id] = windowReliability(series.get(e.id) || []).reliable; }
+    rows.push(...reverseFlipRows(rfState, { profileByItem, reliableByItem: rfReliable, now }));
   }
   return { rows: sortRows(rows), warnings, itemCount: ids.length, reverseFlipCount: rfState.length };
 }
@@ -336,8 +350,17 @@ async function main() {
   console.log('| ---: | --- | --- | --- | ---: | --- |');
   for (const r of rows) {
     const inTxt = r.inH == null ? '—' : (r.inH === 0 ? 'now' : r.inH.toFixed(1));
-    const winTxt = (r.startH == null || r.endH == null) ? '—' : fmtHourRange(r.startH, r.endH);
+    // DT4: '~' = these hours did not clear the split-half reliability gate (or could not be measured).
+    // The window still prints — Ben's option B keeps the plan visible — but it is not asserted as a clock.
+    const winTxt = (r.startH == null || r.endH == null) ? '—'
+      : (r.reliable === true ? fmtHourRange(r.startH, r.endH) : '~' + fmtHourRange(r.startH, r.endH));
     console.log(`| ${inTxt} | ${winTxt} | ${r.item} | ${r.action} | ${fmtP(r.level)} | ${r.tags.join('/')} |`);
+  }
+  // DT4 legend — printed only when at least one row is marked, so a fully-reliable agenda is unchanged.
+  if (rows.some(r => r.startH != null && r.reliable !== true)) {
+    const unver = rows.filter(r => r.reliable === null && r.startH != null).length;   // STRICT: `undefined` = gate never run on this row, which is not the same as measured-unmeasurable
+    console.log(`
+~ = the item's dip/peak hours did not clear the split-half reliability gate (r ≥ ${WINDOW_RELIABLE_R}), or the gate was not run on that row — the LEVEL still stands, the TIME is not a commitment, and the In (h) countdown for a marked row inherits that uncertainty (it is computed FROM the marked window).${unver ? ` ${unver} row(s) were measured and could not be judged (needs ~14 days of history).` : ''}`);
   }
   // RF4: reverse-flip cycle notes (inform-only, n≈0) — printed ONLY for RF rows that surfaced a note. On an
   // empty store there are no RF rows → this block is skipped → byte-identical to the pre-RF4 agenda.

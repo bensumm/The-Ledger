@@ -132,14 +132,28 @@ export function heldNoteBlock({
  * that want those segments merge them onto the lap object before calling — e.g.
  * `{ ...diurnalTimedLap(series, { buyLimit, volDay, ... }), volDay, buyLimit }`.
  *
- * Renders TWO shapes off `lap.clean` (hourConcentration's verdict, §3):
- *   clean===true  → the full timed-lap line: BID/ASK + windows, timed net/roi, same-hour instant
- *                   net (both ALWAYS shown — the blowpipe divergence is the point, never averaged
- *                   away), the ask−bid range, bid/ask window-reach, hold horizon, and the base
- *                   floor trend direction.
- *   clean===false → "range-churn — no timing edge": the specific dip/peak HOURS are omitted (the
- *                   whole reason `clean` exists — a scattered per-day trough/peak means those hours
- *                   aren't reliable), but net/instantNet/base still render.
+ * LEVELS ALWAYS RENDER; the HOURS are gated (DT4, PLAN-DIURNAL-TRIAGE, 2026-08-10 — Ben's option B).
+ * Every row prints BID/ASK levels, timed net/roi, same-hour instant net (both ALWAYS shown — the
+ * blowpipe divergence is the point, never averaged away), the ask−bid range, bid/ask level-reach and
+ * the base floor trend. What varies is the HOURS, off `lap.reliable` (js/windowread.mjs
+ * windowReliability — split-half r ≥ 0.6 on the de-trended 24h shape):
+ *   reliable===true  → the dip/peak window spans, the hold horizon, any secondary window, and a
+ *                      closing "hours repeat most days".
+ *   reliable===false → no hour spans, closing "levels only — no reliable hours".
+ *   reliable==null   → could not be measured (needs ~14 days); "levels only — hours unverified".
+ *                      Deliberately distinct from `false`: not-checked is not the same claim as
+ *                      checked-and-failed, and collapsing them would assert one of them falsely.
+ *
+ * THIS REPLACED A `lap.clean` BRANCH, and the replacement is the point rather than a refactor.
+ * Until 2026-08-10 the render keyed on `hourConcentration`'s `clean` verdict: clean===false printed
+ * "range-churn — no timing edge" and dropped the dip/peak hours AND the BID/ASK levels with them.
+ * `clean` was then measured against held-out days over the 1h archive and does not discriminate —
+ * clean=true (n=60) dip +5.0pp / peak +4.4pp versus clean=false (n=1919) dip +3.6pp / peak +4.7pp, no
+ * gap and marginally backwards on the peak side — while the split-half gate separates strongly inside
+ * both strata. So the levels were being withheld from ~97% of items on the strength of a statistic
+ * that selects nothing. `clean` is still computed and shadow-logged (suggestlog) for calibration, and
+ * still drives the app's Trends ★ badge (js/trends.js — NOT re-verdicted here, flagged as follow-up);
+ * it no longer decides what this line shows. See DT4-WINDOW-GATE-FINDINGS.md.
  * A second liquidity/sizing segment (vol/d, dip/peak pool depth, tranche comfort/ceiling) appends
  * when the caller supplied `volDay`; the §4 caveat appends when `buyLimit` exceeds `trancheCeiling`.
  */
@@ -154,34 +168,35 @@ export function formatTimedLap(lap, { fmt: fmtFn = fmt } = {}) {
   const range = fmtFn(lap.ask - lap.bid);
 
   const bits = [];
-  if (lap.clean === true) {
-    // PLAN-DIURNAL-RECENCY-GUARD — append the compact spike-top/stale clause (empty string ⇒
-    // byte-identical) so a recent-spike-inflated peak/dip level shows its typical alongside.
-    const bidRC = realityClause(lap.dipReality, { side: 'bid', fmt: fmtFn, style: 'short' });
-    const askRC = realityClause(lap.peakReality, { side: 'ask', fmt: fmtFn, style: 'short' });
-    bits.push(`BID ${fmtFn(lap.bid)} (${lap.bidBasis}, dip ${win(lap.dipWindow)})${bidRC ? ' ' + bidRC : ''}`);
-    bits.push(`ASK ${fmtFn(lap.ask)} (peak ${win(lap.peakWindow)})${askRC ? ' ' + askRC : ''}`);
-    bits.push(`timed ${netTxt(lap.net)}${roiTxt(lap.roi)}`);
-    bits.push(`same-hour ${netTxt(lap.instantNet)}`);
-    bits.push(`range ${range}`);
-    bits.push(`reach bid ${reachTxt(lap.bidReach)}·ask ${reachTxt(lap.askReach)}`);
-    bits.push(`hold ~${fmtHoldHorizon((lap.holdHrs ?? 0) / 24)}`);
-    bits.push(`base ${trendTxt(lap.lowTrend)}`);
-  } else {
-    bits.push('range-churn — no timing edge');
-    bits.push(`range ${range}`);
-    bits.push(`timed ${netTxt(lap.net)}`);
-    bits.push(`same-hour ${netTxt(lap.instantNet)}`);
-    bits.push(`base ${trendTxt(lap.lowTrend)}`);
-  }
+  // DT4 (PLAN-DIURNAL-TRIAGE, 2026-08-10) — the HOURS are gated, the LEVELS are not. `hoursOk` is the
+  // windowReliability tri-state; everything derived from a dip/peak HOUR (the two window spans, the
+  // hold horizon, the secondary-window clauses) renders only when it's true, and every LEVEL-derived
+  // figure renders unconditionally.
+  const reliable = lap.reliable ?? null;
+  const hoursOk = reliable === true;
+  // PLAN-DIURNAL-RECENCY-GUARD — append the compact spike-top/stale clause (empty string ⇒
+  // byte-identical) so a recent-spike-inflated peak/dip level shows its typical alongside.
+  const bidRC = realityClause(lap.dipReality, { side: 'bid', fmt: fmtFn, style: 'short' });
+  const askRC = realityClause(lap.peakReality, { side: 'ask', fmt: fmtFn, style: 'short' });
+  bits.push(`BID ${fmtFn(lap.bid)} (${lap.bidBasis}${hoursOk ? `, dip ${win(lap.dipWindow)}` : ''})${bidRC ? ' ' + bidRC : ''}`);
+  bits.push(`ASK ${fmtFn(lap.ask)}${hoursOk ? ` (peak ${win(lap.peakWindow)})` : ''}${askRC ? ' ' + askRC : ''}`);
+  bits.push(`timed ${netTxt(lap.net)}${roiTxt(lap.roi)}`);
+  bits.push(`same-hour ${netTxt(lap.instantNet)}`);
+  bits.push(`range ${range}`);
+  bits.push(`reach bid ${reachTxt(lap.bidReach)}·ask ${reachTxt(lap.askReach)}`);
+  // hold horizon = peak.atHour − dip.atHour, i.e. an HOURS claim — it goes with the windows.
+  if (hoursOk) bits.push(`hold ~${fmtHoldHorizon((lap.holdHrs ?? 0) / 24)}`);
+  bits.push(`base ${trendTxt(lap.lowTrend)}`);
 
   // PLAN-MULTI-PEAK-WINDOWS — a SECOND genuinely-prominent window per side (askReaches[1]/bidReaches[1],
   // present only when it cleared the prominence gate) rides as a trailing clause on the SAME joined line —
   // NEVER a second note line (the one-line-per-item house rule). 0/1/2 clauses: bits.join doesn't care how
   // many, so this is just "push one bit per side present." INFORM-only, n≈0 — extends the diurnal note, no
   // new NOTE_KIND / render tier.
-  const ar2 = lap.askReaches && lap.askReaches[1];
-  const br2 = lap.bidReaches && lap.bidReaches[1];
+  // DT4: a SECOND window is a pure hours claim — if the primary window didn't earn its hours, a
+  // secondary one certainly hasn't, so these ride the same gate rather than sneaking hours back in.
+  const ar2 = hoursOk && lap.askReaches && lap.askReaches[1];
+  const br2 = hoursOk && lap.bidReaches && lap.bidReaches[1];
   if (ar2) bits.push(`also ASK ${fmtFn(ar2.level)} (peak ${win(ar2.window)}, reach ${reachTxt(ar2.reach)}) — second elevated window (n≈0, inform)`);
   if (br2) bits.push(`also BID ${fmtFn(br2.level)} (dip ${win(br2.window)}, reach ${reachTxt(br2.reach)}) — second depressed window (n≈0, inform)`);
 
@@ -200,6 +215,12 @@ export function formatTimedLap(lap, { fmt: fmtFn = fmt } = {}) {
   if (lap.buyLimit != null && lap.trancheCeiling != null && lap.buyLimit > lap.trancheCeiling) {
     bits.push(`⚠ buy limit ${fmtFn(lap.buyLimit)} exceeds tranche ceiling — expect a worse realized net than quoted at this size (n≈6 reach-relief, not validated for diurnal)`);
   }
+  // DT4 — the verdict on the hours, LAST so it qualifies the whole timing read rather than reading as
+  // one more datum. Three states because "measured unreliable" and "not measurable" are different
+  // claims (windowReliability): a 14-day history is needed to judge, and ~22% of items can't supply it.
+  bits.push(hoursOk ? 'hours repeat most days'
+    : reliable === false ? 'levels only — no reliable hours'
+    : 'levels only — hours unverified');
 
   return bits.join(' · ');
 }

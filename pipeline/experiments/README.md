@@ -66,11 +66,19 @@ trusting any derived constant.
 
 ## The 2026-08-04 archive studies
 
-Three read-only research studies over the `/1h` SQLite market archive (`pipeline/lib/market/archive.mjs`),
+Read-only research studies over the `/1h` SQLite market archive (`pipeline/lib/market/archive.mjs`),
 run in one session to answer questions that came out of the Spider cave teleport lane closing. Each is a
 `*-study.mjs` script plus a `*-FINDINGS.md` written report. None of them gates, scores, or writes anything
 the pipeline reads — they exist to settle a question, and their conclusions live in prose, not in code.
 
+- **`dt4-window-gate-study.mjs` → `DT4-WINDOW-GATE-FINDINGS.md`** — does a per-item split-half
+  reliability gate select the items whose diurnal dip/peak window actually holds out of sample? **Yes, and
+  this one SHIPPED** (unlike the studies below it, which are pure null results): it became DT4 /
+  `windowReliability` on 2026-08-10 — CHANGELOG 0.72.0. Gate = parity split-half Pearson r on the
+  de-trended 24h shape, `min(rLow,rHi) ≥ 0.6`. The findings doc carries TWO rounds of self-correction (an
+  estimator bug and an asymmetric denominator found in review), plus a build-time addendum recording that
+  the plan's implementation spec was not implementable and that the gate this replaced —
+  `hourConcentration.clean` — measures nothing. Read the addendum before touching the gate.
 - **`flow-crossover-study.mjs` → `FLOW-CROSSOVER-FINDINGS.md`** — does a net-order-flow crossover
   (`lowPriceVolume` dominance flipping to `highPriceVolume` dominance) mark a price bottom? **Clean null.**
   65 days, 1,968 items, 2,314 events: 60.2% hit vs a 52.9% base rate = lift 1.14, against a wrong-direction

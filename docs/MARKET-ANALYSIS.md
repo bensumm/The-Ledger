@@ -911,10 +911,15 @@ simultaneous independent rungs on one item.
     big-ticket item: a live fang row printed `timed +964.5k/u` beside `same-hour -21k/u` on the same
     row), the ask−bid range, bid/ask window-reach (`N/M` days), the hold horizon, and the base
     floor/ceiling trend direction.
-  - **Range-churn** (a scattered per-day trough/peak hour — no reliable timing edge) — leads with
-    `range-churn — no timing edge`, omits the specific hours (the point of the flag), still shows both
-    nets + the base trend.
-  Both append a liquidity/tranche segment (`vol/d · dip-pool · peak-pool · tranche comfortable/ceiling`,
+  - **Unreliable / unverified hours** (DT4, 2026-08-10 — SUPERSEDES the old `range-churn` shape): the
+    LEVELS, both nets, range, reach and base ALWAYS render; only the dip/peak HOUR spans (and the
+    hold horizon, which is an hours delta) are withheld when the item's daily shape fails the
+    split-half reliability gate. The line closes with `hours repeat most days` (passed), `levels only —
+    no reliable hours` (measured fail) or `levels only — hours unverified` (too little history to
+    judge). ~0.8% of the board passes. The old `range-churn — no timing edge` frame is GONE: it keyed
+    on `hourConcentration.clean`, which was measured NOT to discriminate (clean=true dip +5.0pp vs
+    clean=false +3.6pp), and it hid the levels along with the hours. See CHANGELOG 0.72.0.
+  All shapes append a liquidity/tranche segment (`vol/d · dip-pool · peak-pool · tranche comfortable/ceiling`,
   retuned to 0.5%/1% of `volDay` off the n≈6 reach-relief knee, borrowed not validated for diurnal) and a
   `⚠ buy limit … exceeds tranche ceiling` caveat when sized past it. **Up to one ADDITIONAL elevated AND one
   additional depressed window may render** (PLAN-MULTI-PEAK-WINDOWS, 2026-07-23) as trailing `also ASK …/also
@@ -974,8 +979,10 @@ simultaneous independent rungs on one item.
   is `unknown`. STDOUT-only, never a gate/price/rank/`screen.json` input.
 - **Soft-buy (ADD-while-holding) timing, inform-only, n≈0.** `quote-items.mjs` prints a `⏳ soft-buy`
   line beside each held lot (and on bare quotes) off the SAME `hourProfile` — `js/windowread.mjs`
-  `softBuyRead`/`formatSoftBuy`: `soft-buy: floor ~X · live @floor | +X% · <cue> (attended dip hours
-  HH:00–HH:00)`. The **floor** is the dip-cluster level — the number you place at, and since DT2 it LEADS
+  `softBuyRead`/`formatSoftBuy`: `soft-buy: floor ~X · live @floor | +X% · <cue> (<hours clause>)`.
+  The hours clause is DT4-GATED (2026-08-10): `attended dip hours HH:00–HH:00 · repeats most days` when
+  `windowReliability`'s split-half `min(rLow,rHi) ≥ 0.6` (~0.8% of items), else `no reliable dip hours`
+  (measured fail) or `dip hours unverified` (too little history to judge). The floor + cue never change. The **floor** is the dip-cluster level — the number you place at, and since DT2 it LEADS
   the line; the marker is `@floor` when live sits ≤ `SOFT_BUY_AT_FLOOR_PCT` (0.5%) over that floor (or
   below → **buy now**) vs `+X%` above it. It fills the gap the decision-digest soft-buy COLUMN leaves —
   the digest excludes held items, so it was blind to mistiming an ADD to a lot we already hold (Dragon

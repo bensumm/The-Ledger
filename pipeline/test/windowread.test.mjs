@@ -16,7 +16,7 @@
  *     and returns null when the history has no traded window-hours.
  */
 import assert from 'node:assert/strict';
-import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, placement, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, softBuyRead, formatSoftBuy, SOFT_BUY_AT_FLOOR_PCT, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS, reachMargin, MARGIN_MIN_DAYS } from '../../js/windowread.mjs';
+import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, placement, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, softBuyRead, formatSoftBuy, windowReliability, softBuyHoursClause, WINDOW_RELIABLE_R, SOFT_BUY_AT_FLOOR_PCT, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS, reachMargin, MARGIN_MIN_DAYS } from '../../js/windowread.mjs';
 import { SECOND_PROMINENCE_FRAC } from '../../js/windowread.mjs';   // PLAN-MULTI-PEAK-WINDOWS — the secondary-window prominence gate
 import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-WINDOW-CLEAR B1
 import { clearableAsk } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1 (depthDays/clearableBid removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
@@ -481,11 +481,11 @@ ok('deriveDiurnalRange: a clean dip below live with no trend is an unflagged pat
 // Reuses the deriveDiurnalRange `prof` helper (dip level + a 21:00–00:00 dip window). The floor is the
 // dip level; live is the buy-side price; the @floor↔+X% marker flips at SOFT_BUY_AT_FLOOR_PCT (0.5%).
 ok('softBuyRead: live at/below the dip floor ⇒ @floor · buy now', () => {
-  const sb = softBuyRead(prof(1000, 1080, false), { live: 1000 });
+  const sb = softBuyRead(prof(1000, 1080, false), { live: 1000, reliable: true });
   assert.equal(sb.floor, 1000);
   assert.deepEqual(sb.dipWindow, { startH: 21, endH: 0 }, 'the diurnal dip window is the cheapest add hours');
   assert.equal(sb.marker, '@floor'); assert.equal(sb.buyNow, true);
-  assert.equal(formatSoftBuy(sb), 'soft-buy: floor ~1000 · live @floor · buy now (attended dip hours 21:00–00:00)');
+  assert.equal(formatSoftBuy(sb), 'soft-buy: floor ~1000 · live @floor · buy now (attended dip hours 21:00–00:00 · repeats most days)');
 });
 
 ok('softBuyRead: live within the 0.5% threshold over the floor still reads @floor (buy now)', () => {
@@ -498,7 +498,7 @@ ok('softBuyRead: live within the 0.5% threshold over the floor still reads @floo
 // delay placing a resting bid — the window doesn't time fills (71.2% vs 70.5% random; waiting forfeits
 // ~29% of fill-days at the same price). Level-first render, window scoped to attended taking.
 ok('softBuyRead: live above the dip ⇒ +X%, and the render leads with the LEVEL not a wait instruction', () => {
-  const sb = softBuyRead(prof(1000, 1080, false), { live: 1027 });   // +2.7%
+  const sb = softBuyRead(prof(1000, 1080, false), { live: 1027, reliable: true });   // +2.7%
   assert.equal(sb.marker, '+2.7%'); assert.equal(sb.buyNow, false);
   assert.equal(sb.cue, 'wait', 'the KEY is unchanged — callers/tests key on it');
   const txt = formatSoftBuy(sb);
@@ -509,9 +509,9 @@ ok('softBuyRead: live above the dip ⇒ +X%, and the render leads with the LEVEL
 });
 
 ok('softBuyRead: no live reference ⇒ window-only note, no buy/wait cue', () => {
-  const sb = softBuyRead(prof(1000, 1080, false), {});
+  const sb = softBuyRead(prof(1000, 1080, false), { reliable: true });
   assert.equal(sb.marker, null); assert.equal(sb.buyNow, null);
-  assert.equal(formatSoftBuy(sb), 'soft-buy: floor ~1000 (attended dip hours 21:00–00:00, no live ref)');
+  assert.equal(formatSoftBuy(sb), 'soft-buy: floor ~1000 (attended dip hours 21:00–00:00 · repeats most days, no live ref)');
 });
 
 ok('softBuyRead: a null / dip-less profile ⇒ null ⇒ the note never renders', () => {
@@ -526,9 +526,9 @@ ok('softBuyRead: a null / dip-less profile ⇒ null ⇒ the note never renders',
 // floorCeilingTrack `fc`, and a breaking/crash floor turns @floor into 'caution' (a dump artifact, not a
 // discount), a dip-in-uptrend into 'favorable'. Missing fc / no classification degrades to plain 'buy now'.
 ok('softBuyRead @floor + no fc ⇒ cue degrades to buy now (unchanged behavior)', () => {
-  const sb = softBuyRead(prof(1000, 1080, false), { live: 1000 });
+  const sb = softBuyRead(prof(1000, 1080, false), { live: 1000, reliable: true });
   assert.equal(sb.cue, 'buy now');
-  assert.equal(formatSoftBuy(sb), 'soft-buy: floor ~1000 · live @floor · buy now (attended dip hours 21:00–00:00)');
+  assert.equal(formatSoftBuy(sb), 'soft-buy: floor ~1000 · live @floor · buy now (attended dip hours 21:00–00:00 · repeats most days)');
 });
 
 ok('softBuyRead @floor + a BREAKING floor (floorBreak.broke) ⇒ caution', () => {
@@ -1189,7 +1189,7 @@ ok('DT3 end-to-end: a clean (bolts-shaped) fixture renders BOTH timed + same-hou
   assert.ok(text.includes('858k/d'), 'liquidity segment rides the merged volDay');
 });
 
-ok('DT3 end-to-end: a scattered (chin-shaped) fixture renders the range-churn frame, not specific hours', () => {
+ok('DT4 end-to-end: a scattered (chin-shaped) fixture KEEPS its levels and drops only the hours', () => {
   const troughRot = [0, 17, 3], peakRot = [12, 5, 20];
   const s = [];
   for (let di = 0; di < 9; di++) {
@@ -1204,8 +1204,15 @@ ok('DT3 end-to-end: a scattered (chin-shaped) fixture renders the range-churn fr
   const lap = { ...diurnalTimedLap(s, { nights: 9, now: dtNow, volDay: 420000 }), volDay: 420000 };
   const text = formatTimedLap(lap);
   assert.ok(text != null);
-  assert.ok(text.startsWith('range-churn — no timing edge'), `must lead with the range-churn frame (got: ${text})`);
-  assert.ok(!text.includes('BID '), 'scattered per-day hours are unreliable — omitted');
+  // DT4 (2026-08-10) SUPERSEDES the old range-churn assertion. That frame keyed on hourConcentration's
+  // `clean`, which was measured NOT to discriminate (clean=true dip +5.0pp vs clean=false +3.6pp), and it
+  // dropped the BID/ASK LEVELS along with the hours. Ben's option B: levels always, hours only when the
+  // split-half gate passes. A rotating trough/peak has no reproducible shape, so the hours go.
+  assert.ok(text.includes('BID '), 'the LEVEL survives — it was never what the gate measured');
+  assert.ok(text.includes('ASK '), 'both levels survive');
+  assert.ok(!/dip dd:00/.test(text), 'scattered per-day hours are unreliable — the hour SPANS are omitted');
+  assert.ok(!/hold ~/.test(text), 'the hold horizon is a dip→peak HOUR delta, so it goes with the hours');
+  assert.ok(/levels only —/.test(text), 'and the line says so explicitly rather than silently omitting');
 });
 
 ok('DT3 end-to-end: a degraded (too-thin) fixture renders no note at all — the §7 softened contract holds on the real wiring, not just literal lap fixtures', () => {
@@ -1372,3 +1379,196 @@ ok('formatAvgBound: null read renders nothing; the bid clause carries the placem
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);
+
+// --- 12. windowReliability — the DT4 split-half gate on whether the dip/peak HOURS mean anything ----
+// These fixtures exist because every other softBuy/timedLap test in this file builds a bare profile
+// object with no series, so `reliable` defaults to null and the gate's PASS path never actually runs.
+// "Covered by tests + import resolution" is not coverage (CLAUDE.md rule 10) — these drive the real
+// function over real series through all four branches.
+const RELDAYS = 16;   // > WINDOW_RELIABLE_NIGHTS (14) so the helper's own windowing does the slicing
+// a fixed intraday shape repeated every day: cheap at 03:00, dear at 15:00. Both parity halves see the
+// same shape ⇒ split-half r ≈ 1 ⇒ the gate PASSES.
+const reliableSeries = (days = RELDAYS) => {
+  const out = [];
+  for (let d = 0; d < days; d++) for (let h = 0; h < 24; h++) {
+    const shape = Math.cos(2 * Math.PI * (h - 15) / 24) * 50;   // peak at 15:00, trough at 03:00
+    out.push(dpt(dts(2026, 0, 1 + d, h), 1000 + shape - 10, 1000 + shape + 10));
+  }
+  return out;
+};
+// a shape that is REDRAWN every day from a deterministic hash — real variance, but nothing an even/odd
+// split can agree on ⇒ low r ⇒ the gate FAILS (and is NOT the flat-shape branch).
+const noisySeries = (days = RELDAYS) => {
+  const out = [];
+  const hash = (d, h) => { const x = Math.sin(d * 7919 + h * 104729) * 10000; return (x - Math.floor(x)) - 0.5; };
+  for (let d = 0; d < days; d++) for (let h = 0; h < 24; h++) {
+    const shape = hash(d, h) * 200;
+    out.push(dpt(dts(2026, 0, 1 + d, h), 1000 + shape - 10, 1000 + shape + 10));
+  }
+  return out;
+};
+
+ok('windowReliability: a shape that repeats every day PASSES the gate (r ≈ 1)', () => {
+  const rel = windowReliability(reliableSeries());
+  assert.equal(rel.degraded, false, 'a 16-day series is measurable');
+  assert.equal(rel.reliable, true, `a perfectly repeating shape must pass (got r=${rel.r})`);
+  assert.ok(rel.r >= WINDOW_RELIABLE_R, 'and its r clears the threshold');
+  assert.ok(rel.rLow != null && rel.rHi != null, 'both sides are scored');
+  assert.equal(rel.r, Math.min(rel.rLow, rel.rHi), 'the gate statistic is min(both sides) — a window is only as good as its weaker side');
+  assert.ok(rel.daysUsed <= 14, 'the helper pins its OWN 14-day window regardless of how long the series is');
+});
+
+ok('windowReliability: a shape redrawn daily FAILS the gate — and via the r branch, not the flat branch', () => {
+  const rel = windowReliability(noisySeries());
+  assert.equal(rel.degraded, false);
+  assert.equal(rel.reliable, false);
+  assert.equal(rel.reason, null, 'this is a measured low r, NOT the flat-shape finding');
+  assert.ok(rel.r < WINDOW_RELIABLE_R, `noise must not clear the bar (got r=${rel.r})`);
+});
+
+ok('windowReliability: a FLAT item is a definite FAIL (no shape to time), never an unverified degrade', () => {
+  const flat = [];
+  for (let d = 0; d < RELDAYS; d++) for (let h = 0; h < 24; h++) flat.push(dpt(dts(2026, 0, 1 + d, h), 1000, 1010));
+  const rel = windowReliability(flat);
+  assert.equal(rel.reliable, false, 'a shapeless item has no hours worth printing');
+  assert.equal(rel.reason, 'flat-shape');
+  assert.equal(rel.degraded, false, 'zero variance is a FINDING, not missing information');
+  assert.equal(rel.r, null, 'and there is no r to report — nothing to correlate');
+});
+
+ok('windowReliability: too little history ⇒ reliable=null (unverified), distinct from a measured fail', () => {
+  const rel = windowReliability(reliableSeries(7));
+  assert.equal(rel.reliable, null, 'we did not measure it — that is not the same claim as measuring a failure');
+  assert.equal(rel.degraded, true);
+  assert.equal(rel.reason, 'half-too-thin', 'a 7-day window splits into halves of 4 and 3; a 3-day half is under HOURPROFILE_MIN_DAYS');
+});
+
+ok('windowReliability: degrades to reliable=null on junk input rather than throwing', () => {
+  for (const junk of [null, undefined, [], [{}], [{ timestamp: 1 }]]) {
+    const rel = windowReliability(junk);
+    assert.equal(rel.reliable, null, `${JSON.stringify(junk)} ⇒ null, never a throw`);
+    assert.equal(rel.degraded, true);
+  }
+});
+
+// THE REGRESSION THIS PINS: the gate must read the RAW series, never the nights=7 window the soft-buy
+// and diurnal surfaces profile at. Measured 2026-08-10 over the 1h archive: at a 7-day window the gate
+// is uncomputable for 4,156 of 4,156 items, so wiring it to the caller's `nights` would silently ship a
+// gate that passes NOTHING and suppresses every window on the board.
+ok('windowReliability: the 14-day window is load-bearing — the same series judged at nights=7 cannot be measured at all', () => {
+  const s = reliableSeries();
+  assert.equal(windowReliability(s).reliable, true, 'measurable at the pinned 14-day window');
+  assert.equal(windowReliability(s, { nights: 7 }).reliable, null, 'and NOT measurable at 7 — this is why the window is pinned, not inherited');
+});
+
+ok('softBuyHoursClause: three distinct states, and the compact digest variant says the same thing', () => {
+  const w = { startH: 21, endH: 0 };
+  const fh = h => String(h).padStart(2, '0') + ':00';
+  assert.ok(/repeats most days/.test(softBuyHoursClause(true, w, fh)), 'a pass is MARKED, not just shown');
+  assert.equal(softBuyHoursClause(false, w, fh), 'no reliable dip hours');
+  assert.equal(softBuyHoursClause(null, w, fh), 'dip hours unverified');
+  assert.ok(/21:00–00:00/.test(softBuyHoursClause(true, w, fh, { style: 'compact' })));
+  assert.equal(softBuyHoursClause(false, w, fh, { style: 'compact' }), 'no reliable hours');
+  assert.equal(softBuyHoursClause(null, w, fh, { style: 'compact' }), 'hours unverified');
+  for (const st of ['full', 'compact']) {
+    assert.ok(!/21:00|00:00/.test(softBuyHoursClause(false, w, fh, { style: st })), `${st}: a failed gate must not leak the hours it suppressed`);
+    assert.ok(!/21:00|00:00/.test(softBuyHoursClause(null, w, fh, { style: st })), `${st}: nor an unverified one`);
+  }
+});
+
+ok('DT4 end-to-end: the SAME renderer shows hours on a repeating item and withholds them on a noisy one', () => {
+  const mk = s => formatTimedLap({ ...diurnalTimedLap(s, { nights: 14, now: new Date(2026, 0, 17, 12, 0, 0), liveLo: 900, liveHi: 1100 }) });
+  const good = mk(reliableSeries()), bad = mk(noisySeries());
+  assert.ok(good != null && bad != null, 'both render a line — suppression is never silence');
+  assert.ok(/hours repeat most days/.test(good), `the passing item is marked (got: ${good})`);
+  assert.ok(/dip \d\d:00/.test(good), 'and shows its hour spans');
+  assert.ok(/levels only — no reliable hours/.test(bad), `the failing item says so (got: ${bad})`);
+  assert.ok(!/dip \d\d:00/.test(bad) && !/peak \d\d:00/.test(bad), 'and shows no hour spans');
+  for (const t of [good, bad]) assert.ok(/BID /.test(t) && /ASK /.test(t), 'BOTH keep their levels — that is the whole of option B');
+});
+
+// --- 12b. MUTATION-HARDENING (added 2026-08-10 after adversarial review) ---------------------------
+// The first pass of §12 let SIX source mutations through: min→max, forwarding the caller's `nights`
+// into the gate, parity→sequential split, `reliable === true` → `!== false`, collapsing the tri-state,
+// and dropping the MIN_HOURS guard. Each test below fails under exactly one of those. The lesson is
+// the one CLAUDE.md rule 10 already states: a suite that passes under mutation is not testing anything.
+
+// lows carry a REPEATING daily shape while highs are redrawn each day ⇒ rLow high, rHi low. This is the
+// only fixture shape that can tell min from max — the §12 fixtures build high = low ± const, and Pearson
+// is shift-invariant, so they produce rLow === rHi exactly and CANNOT distinguish the two.
+const asymSeries = (days = RELDAYS) => {
+  const out = [];
+  const hash = (d, h) => { const x = Math.sin(d * 7919 + h * 104729) * 10000; return (x - Math.floor(x)) - 0.5; };
+  for (let d = 0; d < days; d++) for (let h = 0; h < 24; h++) {
+    const lowShape = Math.cos(2 * Math.PI * (h - 15) / 24) * 50;   // reproducible
+    const hiShape = hash(d, h) * 200;                              // noise, redrawn daily
+    out.push(dpt(dts(2026, 0, 1 + d, h), 1000 + lowShape, 1000 + 60 + hiShape));
+  }
+  return out;
+};
+
+ok('windowReliability: the gate is min(rLow,rHi) — one reliable side does NOT carry an unreliable one', () => {
+  const rel = windowReliability(asymSeries());
+  assert.equal(rel.degraded, false);
+  assert.ok(rel.rLow > WINDOW_RELIABLE_R, `the LOW side reproduces (got ${rel.rLow})`);
+  assert.ok(rel.rHi < WINDOW_RELIABLE_R, `the HIGH side does not (got ${rel.rHi})`);
+  assert.ok(rel.rLow !== rel.rHi, 'the two sides must be genuinely distinguishable, or this pins nothing');
+  assert.equal(rel.r, rel.rHi, 'the statistic takes the WEAKER side');
+  assert.equal(rel.reliable, false, 'MUTATION GUARD: max() would pass this item on the strength of one side');
+});
+
+ok('windowReliability: the split is by PARITY, not first-half/second-half', () => {
+  // phase MOVES halfway through: peak at 15:00 for the first 8 days, 09:00 for the last 8. A parity
+  // split hands both halves the same blend of the two regimes ⇒ they agree. A sequential split hands
+  // one regime to each ⇒ they disagree. Only the parity reading calls this reliable.
+  const out = [];
+  for (let d = 0; d < 16; d++) for (let h = 0; h < 24; h++) {
+    const peakH = d < 8 ? 15 : 9;
+    const shape = Math.cos(2 * Math.PI * (h - peakH) / 24) * 50;
+    out.push(dpt(dts(2026, 0, 1 + d, h), 1000 + shape - 10, 1000 + shape + 10));
+  }
+  const rel = windowReliability(out);
+  assert.equal(rel.reliable, true, `MUTATION GUARD: a sequential split would read this regime shift as unreliable (got r=${rel.r})`);
+});
+
+ok('windowReliability: the MIN_HOURS guard holds — a handful of scored hours cannot manufacture an r', () => {
+  const out = [];
+  for (let d = 0; d < RELDAYS; d++) for (const h of [0, 6, 12]) {   // 3 hours-of-day < WINDOW_RELIABLE_MIN_HOURS
+    out.push(dpt(dts(2026, 0, 1 + d, h), 1000 + h, 1010 + h));
+  }
+  const rel = windowReliability(out);
+  assert.equal(rel.reliable, null, 'MUTATION GUARD: without the guard, 3 shared hours would yield a confident r');
+  assert.equal(rel.degraded, true);
+});
+
+// THE CALL SITE, not just the constant. The §12 window test pins windowReliability's DEFAULT; it does
+// NOT stop diurnalTimedLap from forwarding its caller's `nights` into the gate — which is exactly what
+// the plan's original spec said to do, and it passed the whole suite green. This pins the composition.
+ok('diurnalTimedLap: the gate keeps its OWN 14-day window even when the lap is fitted at nights=7', () => {
+  const lap = diurnalTimedLap(reliableSeries(), { nights: 7, now: new Date(2026, 0, 17, 12, 0, 0), liveLo: 900, liveHi: 1100 });
+  assert.equal(lap.degraded, false);
+  assert.equal(lap.reliable, true,
+    'MUTATION GUARD: forwarding `nights` into windowReliability makes the halves 4+3, which is under HOURPROFILE_MIN_DAYS ⇒ null for ~100% of items');
+  assert.ok(lap.reliability && lap.reliability.daysUsed > 7, `the gate read more days than the lap fitted on (got ${lap.reliability?.daysUsed})`);
+});
+
+// The tri-state must survive INTO THE RENDER. render.test.mjs only asserted the null case renders
+// non-null; nothing asserted it withholds hours or words itself differently from a measured failure.
+ok('formatTimedLap: an UNVERIFIED item is worded as unverified and still withholds its hours', () => {
+  const base = { degraded: false, bid: 100, ask: 120, bidBasis: 'patient-dip',
+    dipWindow: { startH: 1, endH: 3 }, peakWindow: { startH: 14, endH: 16 },
+    net: 18, roi: 18, instantNet: 4, holdHrs: 13, lowTrend: 1,
+    bidReach: { fullN: 7, fullHit: 5 }, askReach: { fullN: 7, fullHit: 4 } };
+  const unver = formatTimedLap({ ...base, reliable: null });
+  const failed = formatTimedLap({ ...base, reliable: false });
+  const passed = formatTimedLap({ ...base, reliable: true });
+  assert.ok(/levels only — hours unverified/.test(unver), `MUTATION GUARD (tri-state collapse): got ${unver}`);
+  assert.ok(/levels only — no reliable hours/.test(failed), `a MEASURED failure must not borrow the unverified wording: ${failed}`);
+  assert.ok(unver !== failed, 'not-checked and checked-and-failed are different claims and must not render identically');
+  for (const [label, t] of [['unverified', unver], ['failed', failed]]) {
+    assert.ok(!/dip \d\d:00/.test(t) && !/peak \d\d:00/.test(t), `${label}: MUTATION GUARD (reliable !== false) — hours must be withheld`);
+    assert.ok(!/repeats most days/.test(t), `${label}: and it must never claim the hours repeat`);
+    assert.ok(!/hold ~/.test(t), `${label}: the hold horizon is an hours claim`);
+  }
+  assert.ok(/hours repeat most days/.test(passed) && /dip 01:00/.test(passed), 'and the passing case still renders both');
+});

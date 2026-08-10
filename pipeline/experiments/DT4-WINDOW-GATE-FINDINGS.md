@@ -131,3 +131,140 @@ What survives, and it is now a judgment call rather than a measurement verdict:
 
 Threshold choice is a judgment call, not a measured optimum — the curve is smooth, so `0.6` is a
 reasonable place to change wording, not a cliff. **INFORM-ONLY, n≈0 for any trading claim.**
+
+---
+
+# Addendum — what happened when DT4 was actually built (2026-08-10)
+
+DT4 shipped as Ben's **option B** (keep the levels, gate only the HOURS, mark the items that pass).
+Building it required two measurements the study above had not made, and one of them refuted the
+plan's implementation spec. Scripts: `dt4-window-length.mjs`, `dt4-shippable-gate.mjs`,
+`dt4-vs-clean.mjs` (session scratch, not committed — each re-derives from the local 1h archive
+read-only). Same AS-OF caveat as above: the archive grows, so re-runs shift.
+
+## 1. The plan's spec was not implementable — the gate window is load-bearing
+
+PLAN-DIURNAL-TRIAGE's DT4 row said: *"Compute split-half r live (~4ms, 2 extra `hourProfile` calls on
+the in-hand series)"*. The surfaces that render hours profile at `nights=7` (`softBuyRead`, the
+quote/screen diurnal note) or `nights=14` (watch-positions held lots), and the raw in-hand 1h series
+is ~15 days (the wiki `/timeseries` cap). Measured over 4,156 items with ≥21 days:
+
+| gate window | computable | half-too-thin | no-corr | median r | PASS r≥0.6 |
+|---|---|---|---|---|---|
+| 30d | 3469 | 46 | 641 | 0.058 | 192 (4.6%) |
+| 14d | 3251 | 130 | 775 | 0.018 | 112 (2.7%) |
+| **7d** | **0** | **4156** | 0 | — | **0 (0.0%)** |
+
+**At 7 days the gate is uncomputable for every single item** — seven days splits into parity halves of
+4 and 3, and a 3-day half is below `HOURPROFILE_MIN_DAYS`, so `hourProfile` returns null. Wiring the
+gate to the caller's `nights` would have shipped a gate that passes nothing and suppresses every
+window on the board. `windowReliability` therefore **pins its own 14-day window** and takes the RAW
+series, independent of whatever `nights` the rendered profile used. Pinned by a regression test.
+
+The 30d run reproduces this study's headline (4.6% vs its 4.5% pass rate), which is the harness
+agreeing with the study where it should.
+
+## 2. The 14d gate is a DIFFERENT gate, so its lift was measured directly
+
+The two windows select largely different items — **of the items passing at 30d, only 25% also pass at
+14d** (and 41% the other way). So the +14.8pp above could not be inherited. Re-running the study's
+TEST arm UNCHANGED and varying only the gate window (1,979 items scored by both, paired):
+
+| gate window | PASS n | pass dip | pass peak | FAIL n | fail dip | fail peak | gap (dip) |
+|---|---|---|---|---|---|---|---|
+| 30d (control) | 100 | +14.0pp | +16.3pp | 1879 | +3.1pp | +4.0pp | +10.9pp ± 2.1 (t≈5.2) |
+| **14d (shipped)** | **40** | **+17.3pp** | **+17.4pp** | **1939** | **+3.3pp** | **+4.4pp** | **+14.0pp ± 2.9 (t≈4.9)** |
+
+The shippable gate holds up.
+
+> **CORRECTION (2026-08-10, found by adversarial review — two errors in the paragraphs that follow).**
+> Both are recorded rather than quietly fixed, because the first was used to justify a design choice.
+
+**Error 1 — the per-side comparison was stated BACKWARDS.** The original text read: *"gating each side by
+its own r rather than `min(both)` scored higher on the peak side (+17.0pp via `rLow` vs +13.4pp via
+`rHi`)"*. That sentence contradicts itself: `rLow` is not the peak side's own statistic, `rHi` is. The
+actual measured run:
+
+| peak side gated by | PASS n | peak lift |
+|---|---|---|
+| its OWN `rHi` | 83 | +13.4pp |
+| the LOW-side `rLow` | 101 | **+17.0pp** |
+| `min(rLow, rHi)` (shipped) | 40 | +17.4pp |
+
+So the own-r variant scored **lowest**, not higher, and the shipped statistic was never actually
+challenged by it. The real finding is the opposite of what was written, and is more interesting: **the
+PEAK side appears to be better selected by the LOW-side r than by its own.** It is unexplained, on
+overlapping subsets of n≈83–101, found by inspection after the fact — so it stays unpinned and
+un-acted-on. `min(rLow, rHi)` remains the pre-registered statistic and stands on its own merits without
+needing this comparison to support it.
+
+**Error 2 — "strictly monotone … on both sides at both windows" was asserted for the SHIPPED statistic
+without ever being measured on it.** The scratch script buckets on `rLow` only (its own header even
+mislabels `rLow` as the "study headline stat"; the original `dt4-window-gate-study.mjs` correctly uses
+`rMin`). Re-checked on `min(rLow,rHi)`: **monotonicity does hold** at both windows — but the decisive
+top 14d bucket is **n=4** (+30.0pp dip / +36.7pp peak), and no n accompanied the original claim. The
+conclusion survives; the evidence for it did not exist when it was written. Treat the top bucket as
+anecdote (rule 4).
+
+## 3. The gate this REPLACED measures nothing — `hourConcentration.clean`
+
+Until 2026-08-10, whether `formatTimedLap` printed hours was decided by `hourConcentration`'s `clean`
+flag (circular concentration of per-day trough/peak hours ≥ 0.6). Scored against the same held-out
+days, same 14d window:
+
+| gate | n | dip lift | peak lift |
+|---|---|---|---|
+| clean = true | 60 | +5.0pp | +4.4pp |
+| clean = false | 1919 | +3.6pp | **+4.7pp** |
+| rMin ≥ 0.6 | 40 | +17.3pp | +17.4pp |
+| rMin < 0.6 | 1939 | +3.3pp | +4.4pp |
+
+**`clean` does not discriminate at all** — no gap on the dip side and marginally *backwards* on the
+peak side. The split-half gate separates strongly *inside* both `clean` strata:
+
+| stratum | n | dip lift | peak lift |
+|---|---|---|---|
+| clean=T, rMin≥0.6 | 8 | +20.7pp | +21.5pp |
+| clean=T, rMin<0.6 | 52 | +2.6pp | +1.8pp |
+| clean=F, rMin≥0.6 | 32 | +16.5pp | +16.4pp |
+| clean=F, rMin<0.6 | 1887 | +3.4pp | +4.5pp |
+
+This mattered beyond wording: the `clean===false` branch withheld the **BID/ASK levels** along with
+the hours, on ~97% of items, on the strength of a statistic that selects nothing. That is why option
+B ("keep the levels") could not be implemented without displacing it. `clean` is still computed and
+shadow-logged for calibration; it no longer decides what the diurnal line shows.
+
+**`clean` still gates the app's Trends ★ badge** (`js/trends.js`) and was NOT re-verdicted there —
+flagged as follow-up, not silently changed. The measurement above is about hour-ranking skill; whether
+it also fails as a ★ criterion is a separate question nobody has asked yet.
+
+## 4. One branch is judgment, not measurement — the flat-shape case
+
+`pearsonR` cannot return an r when a half has zero variance across the 24h de-trended shape. The study
+EXCLUDED those items from its panel (they are the `no-corr` column in §1) so **no lift number covers
+them**. The shipped code classifies them `reliable: false` rather than "unverified", on the argument
+that a shapeless item's "dip hour" is an arbitrary tiebreak among equal hours — there is nothing to
+time. That is a reading of what the statistic means, not a result, and it only ever suppresses a
+display. It is labelled as judgment in the source.
+
+## 5. What the board actually looks like now
+
+Running the shipped `windowReliability` over all 4,454 archived items (production code path, 14d
+window) — i.e. what an operator will see, not a study panel:
+
+| state | items | share | rendered as |
+|---|---|---|---|
+| `reliable: true` | 34 | **0.8%** | hours + "repeats most days" |
+| `reliable: false` (low r) | 3224 | 72.4% | "levels only — no reliable hours" |
+| `reliable: false` (flat) | 205 | 4.6% | same |
+| `reliable: null` | 991 | 22.2% | "levels only — hours unverified" |
+
+**0.8%, not the study panel's ~2–4.5%** — the panel required ≥21 days of history and enough held-out
+days to score, which is a better-behaved subset than the live board. Roughly 1 item in 125 will show
+diurnal hours. That is the intended effect (the triage measured ungated capture at ~7–11bp against a
+200bp tax) but it is a large visible change, and the 22.2% unverified share is history-thin items
+rather than measured failures.
+
+Live spot-check, two real items through the unmodified CLI:
+- Mahogany logs (r 0.83): `BID 154 (live, dip 06:00–16:00) · ASK 172 (peak 00:00–04:00) · … · hold ~18h · … · hours repeat most days`
+- Death rune (r 0.37): `BID 189 (live) · ASK 195 · … · levels only — no reliable hours`

@@ -72,7 +72,7 @@ import { estimatePair, estConfLean, askReachFactor, REACH_RELIEF_MIN_VOL } from 
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // AC8: the per-niche spec the fold is computed against (--niche, default band)
 import { fmtHourRange } from '../../js/money-format.js';   // both-zone (local / UK) window labels — kills the GMT/Pacific narration mismatch
 import { hourlyLMH, askReachDecay } from '../lib/market/hourly-lmh.mjs';   // --hourly: the raw per-local-hour LOW/MID/HIGH diagnostic (reuses the 1h series already fetched; inform-only, n≈0); askReachDecay (DT3) — is the --ask level sliding out of reach? (replaced the deleted hourlyDrift slope + its Δ/d column)
-import { askReachDecayNote, liveAgeTag } from '../../js/windowread.mjs';   // DT3 — the shared compact decay-note renderer (one owner with quote-items.mjs/screen-flip-niches.mjs); liveAgeTag = the always-rendered /latest print-age suffix (pure, threshold passed in)
+import { askReachDecayNote, liveAgeTag, windowReliability } from '../../js/windowread.mjs';   // DT3 — the shared compact decay-note renderer (one owner with quote-items.mjs/screen-flip-niches.mjs); liveAgeTag = the always-rendered /latest print-age suffix (pure, threshold passed in)
 
 // #9: exit reached on < this fraction of the scored days ⇒ the exit OVER-states the reachable sell,
 // so the back-solved buy is optimistic (the days-reach ≠ lap-clear caveat). PLACEHOLDER (n≈0).
@@ -235,6 +235,21 @@ for (const want of positionals) {
       }
       const win = (w) => `${pad2(w.startH)}:00–${pad2(w.endH)}:00`;
       log(`  ---`);
+      // DT4 (PLAN-DIURNAL-TRIAGE, 2026-08-10) — the split-half RELIABILITY read on these hours. This is
+      // the diagnostic surface, so it prints the raw r's rather than just the verdict: the other surfaces
+      // (soft-buy, the diurnal note, /schedule) only show the tri-state, and this is where you come to see
+      // WHY one of them suppressed a window. Computed off the RAW series at windowReliability's own pinned
+      // 14-day window, NOT this command's --nights, so the number matches what those surfaces gated on.
+      const rel = windowReliability(series);
+      result.reliability = rel;
+      // three branches, because `reliable:false` has TWO shapes: a measured r below the bar, and the
+      // flat-shape finding where r is null by construction (no variance to correlate). Printing
+      // `rel.r.toFixed(2)` unguarded would throw on the latter.
+      log(rel.degraded
+        ? `  reliability: NOT MEASURABLE (${rel.reason}) — needs ~14 days of hourly history; hours below are unverified`
+        : rel.reason === 'flat-shape'
+          ? `  reliability: FLAT — the de-trended 24h shape has no variance over ${rel.daysUsed}d, so the dip/peak hours below are an arbitrary tiebreak among equal hours. Use the LEVELS.`
+          : `  reliability: r ${rel.r.toFixed(2)} (low ${rel.rLow.toFixed(2)} · high ${rel.rHi.toFixed(2)}) over ${rel.daysUsed}d ⇒ ${rel.reliable ? 'RELIABLE — the shape reproduces across a parity split; hours are worth acting on' : 'UNRELIABLE — the shape does not reproduce; treat the hours below as noise and use the LEVELS'}`);
       // PLAN-DIURNAL-RECENCY-GUARD — append a spike-top/stale clause when the emitted level fails the
       // level-reality read; byte-identical (no clause) when reality is absent/clean.
       const dipRC = realityClause(prof.dip.reality, { side: 'bid', fmt, style: 'full' });
@@ -273,7 +288,14 @@ for (const want of positionals) {
       { const l = liveNowLine(); if (l) log(l); }
       const dr = deriveDiurnalRange(prof, { liveLo: latest && latest.low != null ? latest.low : null, liveHi: latest && latest.high != null ? latest.high : null });
       if (dr) {
-        log(`  → BID ${fmt(dr.bid)} (${dr.bidBasis}, ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (${win(dr.peakWindow)})`);
+        // DT4 (2026-08-10, after review): this actionable line quotes the dip/peak HOURS, so it must
+        // carry the same verdict the reliability line above just printed. Without the suffix the block
+        // contradicted itself — "treat the hours below as noise" followed by an unqualified hour-stamped
+        // BID/ASK recommendation. The LEVELS are unconditional; only the hours claim is qualified.
+        const relSuffix = rel.reliable === true ? ''
+          : rel.reliable === false ? '  ⚠ hours not reliable — take the LEVELS, not the timing'
+          : '  ⚠ hours unverified — take the LEVELS, not the timing';
+        log(`  → BID ${fmt(dr.bid)} (${dr.bidBasis}, ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (${win(dr.peakWindow)})${relSuffix}`);
         for (const n of dr.notes) log(`    ⓘ ${n}`);
       }
       log(`  (hour-of-day medians, small sample — a guide, not a guarantee)`);

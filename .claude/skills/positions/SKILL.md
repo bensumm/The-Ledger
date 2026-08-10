@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.56
+version: 1.57
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -55,10 +55,15 @@ sections plus your own prose:
 - **Read the `⏳ soft-buy:` line before deciding whether to ADD to a lot (2026-07-22, the
   buy-soft-while-holding rule; **re-scoped 2026-08-09 by DT2 — see the resting-bid rule below**).**
   _(judgment: entry-timing discipline)_ Format: `⏳ soft-buy: floor ~X · live @floor | +X% · <cue>
-  (attended dip hours HH:00–HH:00)`. It puts the ADD-side timing right next to the
+  (<hours clause>)`. It puts the ADD-side timing right next to the
   held lot: the **floor** = the dip-cluster level, the number you actually place at; the
   **marker** = `@floor` (live sits ≤0.5% over the dip floor, or below) vs `+X%` (live sits X% above
-  the dip); the **attended dip hours** = when an attended TAKE is cheapest. The **cue** is
+  the dip). **The hours clause is GATED as of DT4 (2026-08-10)** and has three forms: `attended dip
+  hours HH:00–HH:00 · repeats most days` (the item's daily shape reproduces across a parity split,
+  `min(rLow,rHi) ≥ 0.6` — only ~0.8% of items), `no reliable dip hours` (measured fail), or `dip
+  hours unverified` (under ~14 days of history — we did not check, which is not the same claim).
+  **An absent window is now the normal case: the FLOOR and the CUE are unaffected by the gate and are
+  what you act on.** When the hours DO appear they mark an item worth timing an attended TAKE on. The **cue** is
   **FLOOR-AWARE** (2026-07-22, the fang under-read fix) — when the marker
   is `@floor` it consults the SAME multi-day floor read the adjacent `⇅ floor/ceiling` (`fcTrack`) note
   already prints, so a post-update dump sitting at its diurnal floor EVERY day no longer misreads as a

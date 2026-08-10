@@ -103,6 +103,21 @@ export const DENYLIST = [
     reason: 'the amplitude P(fill) is `ampWalkForward` (DT1b, 2026-08-09) — the two-leg daily-reach PRODUCT and the in-sample cycle-completion rate were both MEASURED WRONG and retired; do not describe either as the live estimator',
   },
   {
+    id: 'range-churn-timing-edge',
+    // The DELETED rendered literal. Until DT4 (2026-08-10) formatTimedLap printed "range-churn — no
+    // timing edge" on any item hourConcentration called unclean, and that branch withheld the BID/ASK
+    // LEVELS too. `clean` was then measured NOT to discriminate (clean=true dip +5.0pp vs clean=false
+    // +3.6pp) and the branch was replaced by windowReliability's hours gate. Same precedent as
+    // softbuy-wait-for-window below: guard the deleted literal so a doc can't quietly re-describe the
+    // old render as live. Per the SELF-REFERENCE CAVEAT the guarded docs narrate the change by concept;
+    // the allow-list below is for the two that quote the literal precisely to record its deletion.
+    pattern: /range-churn — no timing edge/i,
+    files: ['CLAUDE.md', 'README.md', 'index.html',
+            '.claude/skills/positions/SKILL.md', '.claude/skills/schedule/SKILL.md',
+            '.claude/skills/overnight/SKILL.md', '.claude/skills/morning/SKILL.md'],
+    reason: 'the diurnal HOURS are gated by windowReliability (DT4, 2026-08-10) rather than by the hourConcentration clean flag, and the LEVELS now always render — do not describe the range-churn frame as live output',
+  },
+  {
     id: 'softbuy-wait-for-window',
     // The superseded resting-offer advice: "wait for the (dip) window". Measured harmful 2026-08-09
     // (PLAN-DIURNAL-TRIAGE DT2) — the window does not time a resting offer's fill (71.2% in-window touch

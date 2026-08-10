@@ -433,7 +433,21 @@ export function timedLapShadow(lap) {
     peakWindow: lap.peakWindow ? [lap.peakWindow.startH, lap.peakWindow.endH] : null,
     net: lap.net == null ? null : Math.round(lap.net), roi: r2(lap.roi),
     instantNet: lap.instantNet == null ? null : Math.round(lap.instantNet), instantRoi: r2(lap.instantRoi),
-    holdHrs: lap.holdHrs ?? null, clean: lap.clean ?? null,
+    holdHrs: lap.holdHrs ?? null,
+    // `clean` (hourConcentration) is kept for continuity of the existing record, but it was MEASURED
+    // not to discriminate and no longer decides anything (DT4, 2026-08-10 — CHANGELOG 0.72.0).
+    clean: lap.clean ?? null,
+    // DT4: the gate that REPLACED it. Logged because WINDOW_RELIABLE_R is a self-labelled PLACEHOLDER
+    // and, without this, there is no path from the record back to the threshold — the deposed statistic
+    // was being shadow-logged "for calibration" while its live replacement was not logged at all.
+    // `reliable` is the tri-state; rLow/rHi/r are rounded; `relReason` separates flat-shape from the
+    // degrade reasons so the two fail modes stay distinguishable in the record.
+    reliable: lap.reliable ?? null,
+    r: r2(lap.reliability ? lap.reliability.r : null),
+    rLow: r2(lap.reliability ? lap.reliability.rLow : null),
+    rHi: r2(lap.reliability ? lap.reliability.rHi : null),
+    relReason: lap.reliability ? (lap.reliability.reason ?? null) : null,
+    relDays: lap.reliability ? (lap.reliability.daysUsed ?? null) : null,
     lowTrend: lap.lowTrend ? lap.lowTrend.dir : null, hiTrend: lap.hiTrend ? lap.hiTrend.dir : null,
     bidReach: reach(lap.bidReach), askReach: reach(lap.askReach),
     dipPool: lap.dipPool ?? null, peakPool: lap.peakPool ?? null,

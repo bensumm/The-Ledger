@@ -1407,8 +1407,11 @@ export function deriveDiurnalRange(profile, { liveLo = null, liveHi = null } = {
 // real offer from above), item-day clustering ⇒ effective n well below nominal.
 // The cue KEY 'wait' is retained (callers and tests key on it) — its MEANING and wording changed, not its
 // identity. See SOFT_BUY_CUE_TEXT below.
-// SYMMETRIC with screen-flip-niches.mjs's digest soft-buy column (same HH:00–HH:00 · @floor / +X% cell
-// format + the same SOFT_BUY_AT_FLOOR_PCT boundary) so both surfaces read consistently — the digest's
+// SYMMETRIC with screen-flip-niches.mjs's digest soft-buy column — since DT4 (2026-08-10) the HOURS half
+// of that cell is GATED, so on ~99% of items it reads `no reliable hours`/`hours unverified` rather than
+// an HH:00–HH:00 span; both surfaces get their wording from the ONE softBuyHoursClause helper. The
+// @floor / +X% marker half is ungated and unchanged. (Old text: "same HH:00–HH:00 · @floor / +X% cell
+// format + the same SOFT_BUY_AT_FLOOR_PCT boundary" — accurate before the gate.) Both surfaces read consistently — the digest's
 // digestSoftBuy reconciles onto THIS helper (ONE implementation, not two). INFORM-ONLY (tier: context) —
 // n≈0, a HEURISTIC, never gates, never a verdict, never a screen.json/rank input (rule 4). A null/absent
 // profile (or no dip level) ⇒ null ⇒ the note simply doesn't render (degrade like trajectoryRead).
@@ -1468,7 +1471,12 @@ function softBuyFloorCue(fc, durable = null) {
   return 'buy now';
 }
 
-export function softBuyRead(profile, { live = null, fc = null, durable = null } = {}) {
+// `reliable` (DT4, additive + optional) is the windowReliability tri-state for this item, handed DOWN
+// by the caller exactly like `fc`/`durable` — windowReliability needs the RAW 1h series and softBuyRead
+// only ever receives a computed profile, so it cannot derive it here (and re-deriving it would be a
+// second home for the same number). Omitted ⇒ null ⇒ the render says the hours are unverified, which is
+// the honest degrade: the LEVEL and the cue are byte-unchanged either way, only the hours clause moves.
+export function softBuyRead(profile, { live = null, fc = null, durable = null, reliable = null } = {}) {
   if (!profile || !profile.dip || profile.dip.level == null) return null;
   const floor = profile.dip.level;
   const dipWindow = { startH: profile.dip.startH, endH: profile.dip.endH };
@@ -1479,7 +1487,24 @@ export function softBuyRead(profile, { live = null, fc = null, durable = null } 
     marker = buyNow ? '@floor' : `+${overPct.toFixed(1)}%`;
     cue = buyNow ? softBuyFloorCue(fc, durable) : 'wait';             // @floor → floor-aware cue; above the dip → wait
   }
-  return { dipWindow, floor, live, marker, overPct, buyNow, cue, durable };
+  return { dipWindow, floor, live, marker, overPct, buyNow, cue, durable, reliable };
+}
+
+// DT4 — the ONE wording for the dip-hours clause, shared so every surface says the same thing about the
+// same tri-state. Three states, deliberately NOT two: a measured failure and an unmeasurable one are
+// different claims, and collapsing them would assert one of them falsely.
+// `style: 'compact'` is the width-constrained digest CELL variant of the same three states — same
+// wording source so the digest and the positions note can't drift apart (the ONE-implementation rule
+// that already binds softBuyRead itself).
+export function softBuyHoursClause(reliable, dipWindow, fmtHour, { style = 'full' } = {}) {
+  const hrs = () => `${fmtHour(dipWindow.startH)}–${fmtHour(dipWindow.endH)}`;
+  if (style === 'compact') {
+    if (reliable === true) return `${hrs()} (repeats)`;
+    return reliable === false ? 'no reliable hours' : 'hours unverified';
+  }
+  if (reliable === true) return `attended dip hours ${hrs()} · repeats most days`;
+  if (reliable === false) return 'no reliable dip hours';
+  return 'dip hours unverified';
 }
 
 // cue → rendered wording. ONE map so both surfaces (positions note + screen digest) word the four states
@@ -1512,7 +1537,10 @@ export const SOFT_BUY_CUE_TEXT = {
 // windowread stays dependency-free; it formats the floor LEVEL, which is the number the operator acts on.
 export function formatSoftBuy(read, { fmtHour = h => String(h).padStart(2, '0') + ':00', fmt = String } = {}) {
   if (!read) return null;
-  const win = `attended dip hours ${fmtHour(read.dipWindow.startH)}–${fmtHour(read.dipWindow.endH)}`;
+  // DT4: the HOURS are gated, the LEVEL is not. The floor still leads the line and the cue is untouched
+  // on every path — only this clause changes, so a suppressed window never costs the operator the
+  // number they act on (Ben's option B: keep the levels, mark the ones that earned their hours).
+  const win = softBuyHoursClause(read.reliable, read.dipWindow, fmtHour);
   const floorTxt = read.floor != null ? `floor ~${fmt(read.floor)}` : null;
   // no live reference ⇒ the level (when known) + the attended window, and no cue claim either way
   if (read.marker == null) return floorTxt ? `soft-buy: ${floorTxt} (${win}, no live ref)` : `soft-buy: ${win}`;
@@ -1573,6 +1601,15 @@ export function diurnalPhase(profile, { now = new Date() } = {}) {
 export const HOURCONC_MIN_DAYS = 5;   // PLACEHOLDER, n≈0 — fewer scored days than this ⇒ can't judge concentration
 export const HOURCONC_MIN_R = 0.6;    // PLACEHOLDER, n≈0 — circular concentration floor for "clean"
 
+// DEMOTED 2026-08-10 (DT4). This function's `clean` verdict USED to decide whether formatTimedLap
+// printed the dip/peak hours — and its `false` arm withheld the BID/ASK LEVELS too, on ~97% of items.
+// It was then scored against held-out days and does NOT discriminate: clean=true (n=60) dip +5.0pp /
+// peak +4.4pp versus clean=false (n=1919) dip +3.6pp / peak +4.7pp — no gap, marginally BACKWARDS on
+// the peak side. windowReliability replaced it for that decision. `clean` is still computed, still
+// shadow-logged (suggestlog) and STILL GATES THE APP'S TRENDS ★ BADGE (js/trends.js) — that consumer
+// was deliberately not re-verdicted, because the measurement above is about hour-RANKING skill and
+// whether it also fails as a ★ criterion is a separate question nobody has asked. Do not read this
+// function's survival as evidence the flag works. See DT4-WINDOW-GATE-FINDINGS.md §3.
 export function hourConcentration(series, { nights = 14, now = new Date() } = {}) {
   const pad2 = n => String(n).padStart(2, '0');
   const localDay = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -1609,10 +1646,155 @@ export function hourConcentration(series, { nights = 14, now = new Date() } = {}
   return { troughHours, peakHours, rTrough, rPeak, daysScored, clean };
 }
 
+// --- window RELIABILITY: the split-half gate on whether the dip/peak HOURS mean anything ---------
+// PLAN-DIURNAL-TRIAGE DT4. The triage measured that the diurnal window carries ~zero information for
+// the MEDIAN item (ungated capture ≈ 7–11bp against a 200bp tax), while a small identifiable minority
+// is genuinely cyclical. This is the statistic that tells the two apart, so a surface can print hours
+// only when they've earned it.
+//
+// THE STATISTIC. Split the kept days by PARITY (even/odd day index), run hourProfile on each half, and
+// Pearson-correlate the two 24-hour de-trended shape vectors — devLow against devLow, devHi against
+// devHi. Interleaving in TIME (not first-half/second-half) means both halves see the same regime, so
+// this measures RELIABILITY (does the shape reproduce?) and not stability (did the regime hold?). The
+// gate is min(rLow, rHi): a window is only as trustworthy as its weaker side, and that is the statistic
+// the DT4 study's headline was measured on. Must be recomputed LIVE, never whitelisted — half-to-half
+// persistence for borderline items is only ~59%.
+//
+// WHY nights=14 AND NOT THE PROFILE'S OWN WINDOW — this is load-bearing, do not "simplify" it away.
+// The DT4 study computed the gate over a ~30-day fit period. The surfaces that render hours profile at
+// nights=7 (softBuyRead, the quote/screen diurnal note) or nights=14 (watch-positions held lots), and
+// the plan's spec said to take "2 extra hourProfile calls on the in-hand series". MEASURED 2026-08-10
+// over the 1h archive (4,156 items, 45d): at a 7-day window the gate is uncomputable for 4,156 of
+// 4,156 — seven days splits into halves of 4 and 3, and a 3-day half is below HOURPROFILE_MIN_DAYS, so
+// hourProfile returns null. The spec as written yields no gate at all. At 14 days it computes for ~78%
+// of items, which is why the window is pinned HERE rather than inherited from the caller's `nights`.
+// Callers pass the RAW in-hand 1h series (~15 days from the wiki /timeseries cap); this slices its own
+// window off it, independent of whatever `nights` the rendered profile used.
+//
+// THE THRESHOLD IS MEASURED AT THIS WINDOW, not transferred from the study. The 14-day gate selects a
+// LARGELY DIFFERENT item set than the 30-day one (only 25% of 30d-passers also pass at 14d), so the
+// study's +14.8pp could not simply be inherited. Re-running the study's TEST arm unchanged and varying
+// ONLY the gate window (1,979 items scored by both, paired):
+//     gate window | PASS n | pass dip | pass peak | FAIL n | fail dip | fail peak | gap(dip)
+//         30d     |   100  |  +14.0pp |  +16.3pp  |  1879  |  +3.1pp  |  +4.0pp   | +10.9pp ± 2.1 (t≈5.2)
+//         14d     |    40  |  +17.3pp |  +17.4pp  |  1939  |  +3.3pp  |  +4.4pp   | +14.0pp ± 2.9 (t≈4.9)
+// Monotone across all five r buckets on both sides at both windows — but note the top 14d bucket is
+// n=4 (+30.0pp dip / +36.7pp peak), so the monotonicity is carried at its decisive end by anecdote
+// (rule 4). ~2% of items pass on that panel; ~0.8% on the live board, which is less selective.
+//
+// WHAT THIS GATE DOES **NOT** AUTHORISE — the fit-window transfer gap (found by review 2026-08-10).
+// The gate judges a 14-day shape; the lift was measured on a ~30-day FIT; but the surfaces that render
+// the window fit it at nights=7 (screen's DIURNAL_NIGHTS, quote's diurnal note). So a passing item is
+// showing a 7-day-fitted window carrying a 14-day-measured warrant. Measured over the archive
+// (gate-passers only, n=32): the 7d and 14d fits agree on the dip hour 34.4% of the time, the peak hour
+// 31.3%, and on the dip window SPAN only 18.8% — median |Δ| 1h, max 10h. Usually adjacent, so the
+// marker is not fabricated, but it is looser than "these exact hours were verified". The same
+// reasoning that rejected inheriting the 30d lift for a 14d GATE applies here to the FIT and was not
+// applied. UNRESOLVED, deliberately: closing it means either raising the render fit to 14d (a tuning
+// change with effects well beyond DT4) or rendering the gate's own 14d window beside 7d-derived LEVELS
+// (a new inconsistency). Ben's call — do not paper over it by softening the wording alone.
+// (PER-SIDE VARIANT, corrected 2026-08-10 after review — an earlier version of this comment stated
+// this BACKWARDS and used the error to justify the choice. The measured run: gating the peak side by
+// its OWN rHi scored +13.4pp; gating it by the LOW-side rLow scored +17.0pp; min(both) scored +17.4pp.
+// So the own-r variant scored LOWEST, and the genuinely interesting finding is the opposite of what was
+// written: the PEAK side is better selected by the LOW-side r than by its own. min(both) still wins or
+// ties on this panel, so the pre-registered statistic stands on its own merits and does NOT need the
+// per-side comparison to justify it. Treat the rLow-selects-peaks observation as unexplained and
+// unpinned — n≈83–101, overlapping subsets, found by inspection after the fact.)
+//
+// NOT REDUNDANT WITH hourConcentration's `clean` (measured, same run, same window). `clean` is what
+// currently decides whether formatTimedLap prints hours, and it does not discriminate: clean=true
+// (n=60) dip +5.0pp / peak +4.4pp versus clean=false (n=1919) dip +3.6pp / peak +4.7pp — no gap, and
+// marginally BACKWARDS on the peak side. This gate separates inside it: among clean=true items, the
+// ones failing here run dip +2.6pp / peak +1.8pp (n=52) while the ones passing run +20.7pp / +21.5pp
+// (n=8). See DT4-WINDOW-GATE-FINDINGS.md.
+//
+// INFORM-ONLY, n≈0 for any gp claim. This gates DISPLAY of the hours and nothing else — it never
+// moves a level, a grade, a rank, a verdict or screen.json. What it buys is measured as within-day
+// HOUR RANKING ("the dip hour printed below the day's median"), which is NOT "a resting bid there
+// fills more often" — the triage measured the resting-offer question directly and found ~nothing, so
+// the hours remain ATTENDED-taking context either way (DT2).
+export const WINDOW_RELIABLE_R = 0.6;          // min(rLow,rHi) at/above this ⇒ the hours are worth printing (PLACEHOLDER — the curve is smooth, this is a wording boundary not a cliff)
+export const WINDOW_RELIABLE_NIGHTS = 14;      // the gate window, PINNED — see "WHY nights=14" above; a 7-day window is uncomputable for ~100% of items
+export const WINDOW_RELIABLE_MIN_HOURS = 6;    // shared hours-of-day both halves scored, below which a correlation means nothing
+
+// Pearson r over two index-aligned vectors, skipping index pairs where either side is missing.
+// Module-internal: windowReliability is the tested surface.
+// Returns { r } on success, or { fail } — and the TWO failure modes are deliberately distinguished
+// because they warrant opposite verdicts:
+//   'insufficient' — fewer than minPairs shared hours. We genuinely do not know ⇒ degrade to null.
+//   'flat'         — a half has ZERO variance across the 24h de-trended shape. That is not missing
+//                    information, it is the positive finding that the item HAS no intraday shape, so
+//                    its "dip hour" is an arbitrary tiebreak among equals. Verdict: unreliable.
+// (JUDGMENT, not a measured result: the DT4 study EXCLUDED zero-variance items from its panel rather
+// than scoring them, so no lift number covers this branch. Calling a shapeless item unreliable is an
+// argument from what the statistic means, and it only ever suppresses a display.)
+function pearsonR(xs, ys, minPairs = WINDOW_RELIABLE_MIN_HOURS) {
+  const pairs = [];
+  for (let i = 0; i < xs.length; i++) {
+    const x = xs[i], y = ys[i];
+    if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) continue;
+    pairs.push([x, y]);
+  }
+  if (pairs.length < minPairs) return { fail: 'insufficient' };
+  const n = pairs.length;
+  const mx = pairs.reduce((s, p) => s + p[0], 0) / n;
+  const my = pairs.reduce((s, p) => s + p[1], 0) / n;
+  let sxy = 0, sxx = 0, syy = 0;
+  for (const [x, y] of pairs) { const dx = x - mx, dy = y - my; sxy += dx * dy; sxx += dx * dx; syy += dy * dy; }
+  if (sxx <= 0 || syy <= 0) return { fail: 'flat' };
+  return { r: sxy / Math.sqrt(sxx * syy) };
+}
+
+/**
+ * windowReliability(series, opts) — is this item's diurnal shape reproducible enough to print HOURS?
+ * @param {Array} series raw 1h /timeseries points (the caller's in-hand series — NOT a pre-sliced profile window)
+ * @param {object} opts { nights=WINDOW_RELIABLE_NIGHTS, now=new Date(), minR=WINDOW_RELIABLE_R }
+ * @returns {{ rLow, rHi, r, reliable, daysUsed, degraded, reason }}
+ *   reliable — true (print the hours + the repeats-most-days marker) / false (measured unreliable ⇒
+ *              suppress the hours, keep the levels) / null (COULD NOT be measured ⇒ also suppress,
+ *              but worded as unverified, because "we didn't check" and "we checked and it failed" are
+ *              different claims and collapsing them would overstate one of them).
+ * PURE, zero fetch. Never throws: a thin/absent series degrades to { degraded:true, reliable:null }.
+ */
+export function windowReliability(series, { nights = WINDOW_RELIABLE_NIGHTS, now = new Date(), minR = WINDOW_RELIABLE_R } = {}) {
+  const out = (o) => ({ rLow: null, rHi: null, r: null, reliable: null, daysUsed: 0, degraded: true, ...o });
+  if (!Array.isArray(series) || !series.length) return out({ reason: 'no-series' });
+  // local-midnight day index — the same day partition hourProfile buckets on, and the one the study
+  // split parity over. Integer so parity is well-defined across a month/year boundary.
+  const dayIdx = ts => Math.floor(new Date(ts * 1000).setHours(0, 0, 0, 0) / 86400000);
+  const pts = series.filter(p => p && (p.avgLowPrice != null || p.avgHighPrice != null));
+  if (!pts.length) return out({ reason: 'no-priced-points' });
+  const days = [...new Set(pts.map(p => dayIdx(p.timestamp)))].sort((a, b) => a - b);
+  const keep = new Set(days.slice(-nights));
+  const win = pts.filter(p => keep.has(dayIdx(p.timestamp)));
+  // parity split — interleaved in time, so both halves see the same regime (reliability, not stability)
+  const even = win.filter(p => dayIdx(p.timestamp) % 2 === 0);
+  const odd = win.filter(p => dayIdx(p.timestamp) % 2 !== 0);
+  // nights:999 — the halves are ALREADY windowed above; re-windowing here would silently shorten them
+  const pe = hourProfile(even, { nights: 999, now });
+  const po = hourProfile(odd, { nights: 999, now });
+  if (!pe || !po) return out({ daysUsed: keep.size, reason: 'half-too-thin' });
+  const byH = p => { const m = new Map(p.hours.map(x => [x.h, x])); return h => m.get(h) || null; };
+  const ge = byH(pe), go = byH(po);
+  const hs = [...Array(24).keys()];
+  const cLow = pearsonR(hs.map(h => ge(h)?.devLow ?? null), hs.map(h => go(h)?.devLow ?? null));
+  const cHi = pearsonR(hs.map(h => ge(h)?.devHi ?? null), hs.map(h => go(h)?.devHi ?? null));
+  // a FLAT half is a finding (no shape to time) ⇒ a definite fail, not a degrade. Checked before
+  // 'insufficient' so a flat-and-thin item reports the more specific of the two.
+  if (cLow.fail === 'flat' || cHi.fail === 'flat') {
+    return { rLow: cLow.r ?? null, rHi: cHi.r ?? null, r: null, reliable: false, daysUsed: keep.size, degraded: false, reason: 'flat-shape' };
+  }
+  if (cLow.fail || cHi.fail) return out({ rLow: cLow.r ?? null, rHi: cHi.r ?? null, daysUsed: keep.size, reason: 'too-few-shared-hours' });
+  const r = Math.min(cLow.r, cHi.r);
+  return { rLow: cLow.r, rHi: cHi.r, r, reliable: r >= minR, daysUsed: keep.size, degraded: false, reason: null };
+}
+
 // --- the timed-lap layer (PLAN-DIURNAL-TIMING §0/§1, DT1) ---------------------------------------
 // diurnalTimedLap is NOT a parallel computation — it is deriveDiurnalRange's output, EXTENDED with the
 // genuinely new fields (recent-N trend, reach, liquidity pools, tranche sizing, the concentration
-// classifier), composing ONLY existing primitives (hourProfile, deriveDiurnalRange, recencySplit over
+// classifier, and DT4's windowReliability hours gate), composing ONLY existing primitives (hourProfile,
+// deriveDiurnalRange, windowReliability, recencySplit over
 // window-scoped windowStats slices, projectTrajectory, netMargin, hourConcentration) — zero forked
 // math, zero new fetch (every caller already has the 1h series in hand). See PLAN-DIURNAL-TIMING §2 for
 // why this calls recencySplit directly against hourProfile's chosen dip/peak LEVELS rather than
@@ -1676,6 +1858,11 @@ export function diurnalTimedLap(series, {
 
   const holdHrs = ((profile.peak.atHour - profile.dip.atHour) % 24 + 24) % 24;
   const clean = hourConcentration(series, { nights, now }).clean;
+  // DT4 — the split-half reliability gate on whether the dip/peak HOURS are worth printing. Computed
+  // off the RAW `series` at its OWN pinned 14-day window, deliberately NOT the caller's `nights`: at
+  // nights=7 (what quote/screen pass) the parity halves fall under HOURPROFILE_MIN_DAYS and the gate is
+  // uncomputable for ~100% of items. See windowReliability's header for the measurement.
+  const reliability = windowReliability(series, { now });
 
   const dipPool = dipStats ? dipStats.medVolLo : null;
   const peakPool = peakStats ? peakStats.medVolHi : null;
@@ -1715,7 +1902,10 @@ export function diurnalTimedLap(series, {
     // PLAN-DIURNAL-RECENCY-GUARD — carry the primary peak/dip level-reality read so formatTimedLap can
     // append the spike-top/stale clause without re-computing the profile. INFORM-only; nothing gates.
     peakReality: profile.peak.reality, dipReality: profile.dip.reality,
-    dipPool, peakPool, trancheComfort, trancheCeiling, clean, degraded: false,
+    dipPool, peakPool, trancheComfort, trancheCeiling, clean,
+    // DT4: `reliability` is the whole read (r + the reason it degraded); `reliable` is the tri-state
+    // the renderer keys on (true/false/null — see windowReliability). Levels are UNAFFECTED by both.
+    reliability, reliable: reliability.reliable, degraded: false,
   };
 }
 
