@@ -588,8 +588,8 @@ reaches `js/trends.js` rendering. Pinned by `pipeline/test/oscillation-render.te
   - *Ask-headroom signal (inform-only):* when the robust p90 shaved a TRADED in-band top off the
     quoted ask (`rawBandHi > optSell`, dense side, not a breakup), a `⤴ ask headroom` note says
     "ladder the ask up, don't relist down." Never moves a number, gates, or grades.
-- **500k attention floor (S1).** `--min-gpd` (500k) drops sub-floor `expGpDay` pre-rating (Ben's
-  "never surface sub-500k"); thin gp-flow qualifiers and held/asked items exempt. `expGpDay` is
+- **250k attention floor (S1).** `--min-gpd` (250k since 2026-08-08 — lowered from 500k with the expUnits 6→2 refill haircut, which had let gpDay flatter cheap churn) drops sub-floor `expGpDay` pre-rating (Ben's
+  "never surface sub-500k" — his original directive, at the then-500k floor); thin gp-flow qualifiers and held/asked items exempt. `expGpDay` is
   **capital-aware** — `expUnits` caps the per-window buy by what the derived `deployablePool` affords
   one tranche of, so the floor measures real capital throughput, not capital-blind market capacity
   (byte-identical when one buy-limit tranche is affordable; binds only on expensive/big positions).
@@ -637,7 +637,7 @@ bumps `APP_VERSION`.
 ### Rank + grade
 The per-thesis column is `Rank net·P/ttf` (P6b): **rank = net after tax × P(fill at the quoted pair)
 ÷ (TTF + K)** (`estimateRank`/`rankScore` in `js/estimators/families.mjs`), at the ONE pair the thesis posts. `expGpDay` survives only
-as the cheap pre-fetch pool orderer + the 500k pre-filter. Grade letters (`rating.mjs`) are
+as the cheap pre-fetch pool orderer + the 250k pre-filter. Grade letters (`rating.mjs`) are
 placeholder cutoffs.
 - **TTF SATURATES (G5, PLAN-GRADE-REWORK):** the fill-speed term is `1/(days + TTF_SAT_DAYS)`, not a raw
   `1/days` floored at a minimum. TTF is the most-leveraged, least-measured input (always a prior in
@@ -719,7 +719,7 @@ placeholder cutoffs.
   reusing the ONE `tax()`/`expUnits`). `rateItem`'s grade is still computed EVERY run and shown in its own
   `Path-A gp/d*` column BESIDE the Grade column, so a divergence between the two is visible on every pass
   and a revert to grade-primary is a one-line comparator swap (`comparePathARows` → `b.score − a.score`).
-  The existing **500k `MIN_GPD` attention floor is a post-rank SURFACING partition, NOT a new gate** — rows
+  The existing **250k `MIN_GPD` attention floor is a post-rank SURFACING partition, NOT a new gate** — rows
   whose Path-A gp/day clears it sort on top by Path-A; rows below it (or with no intraday range → `no-pathA`)
   sink beneath, keeping their grade order, surfaced not dropped. captureFrac (0.45 gear / 0.62 churn) is an
   **unproven PLACEHOLDER** (n=13/12, own-book-biased — the `*` in the header flags it) under validate-in-real-use;

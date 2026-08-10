@@ -1151,7 +1151,7 @@ export function flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) {
 
    SUITABILITY GATES (all must hold, else null): TWO-SIDED (ghost-spread guard) + WIDE-ENOUGH amplitude
    (band % or 24h-range % fallback) + a VALUE FLOOR (gp-flow = mid × limitVol ≥ DL4_MIN_GP_FLOW, the tool-
-   wide 500k gp/day attention scale) so a huge-% swing on a penny item (Sweetcorn seed) can't nominate.
+   wide gp/day attention scale — 250k since 2026-08-08) so a huge-% swing on a penny item (Sweetcorn seed) can't nominate.
    The value floor is a gp-SCALE gate, NOT a unit-price one — cheap high-throughput churn keeps a huge
    gp-flow and passes; both tracks gate on it.
 
@@ -1162,13 +1162,13 @@ export function flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) {
      are polymorphic over legacy plain-string/number existing entries. See their definitions below. */
 export const DL4_WIDE_BAND_PCT = 0.03;          // PLACEHOLDER (n=2): min 2h-band amplitude (bandHi-bandLo)/bandLo to be flush-suitable
 export const DL4_WIDE_DAY_PCT  = 0.05;          // PLACEHOLDER (n=2): min 24h-range amplitude fallback when no band present (coarser → wider bar)
-// VALUE FLOOR (2026-07-11): reuses the tool-wide 500k gp/day ATTENTION floor (screen-flip-niches.mjs MIN_GPD) as a
+// VALUE FLOOR (2026-07-11): reuses the tool-wide gp/day ATTENTION floor (screen-flip-niches.mjs MIN_GPD — 250k since 2026-08-08) as a
 // gp-SCALE gate, applied as gp-flow = mid × limitVol (the SAME construction as the main gate's gp-flow
 // path). It fixes the penny-item leak: a huge-% band on a sub-gp item (e.g. Sweetcorn seed — guide 3gp,
 // ~7→14gp band, ~3.9k/d → ~39k/d gp-flow) is three orders below anything worth watching for a flush, yet
 // cleared the %-only amplitude bar. This is about gp SCALE, NOT unit price — cheap-but-high-throughput
 // churn (a ~200gp rune moving millions/day) has huge gp-flow and still passes. Both tracks gate on it.
-export const DL4_MIN_GP_FLOW = 9_000_000;       // PLAN-VOL24 step 2: 500k → 9m (~18×), count-matched to CORRECTED rolling-24h gp-flow (mid×limitVol turnover, ~18× higher; the directive's "~4.5b" was GP_FLOOR-specific — DL4's 500k scaled by the same ~18× factor = 9m; NOT tied to MIN_GPD's kept-500k NET-throughput floor, a different dimension). Node-only (dip nomination) → no APP_VERSION bump. Min mid×limitVol gp-flow/day to be worth watching
+export const DL4_MIN_GP_FLOW = 9_000_000;       // PLAN-VOL24 step 2: 500k → 9m (~18×), count-matched to CORRECTED rolling-24h gp-flow (mid×limitVol turnover, ~18× higher; the directive's "~4.5b" was GP_FLOOR-specific — DL4's 500k scaled by the same ~18× factor = 9m; NOT tied to MIN_GPD's NET-throughput floor (250k since 2026-08-08), a different dimension). Node-only (dip nomination) → no APP_VERSION bump. Min mid×limitVol gp-flow/day to be worth watching
 // PER-UNIT SWING FLOOR (2026-07-12, Ben — the penny-junk-still-leaked fix). The gp-flow floor above is a
 // gp-SCALE gate (is the MARKET big enough), but it admits cheap high-throughput commodities — Feather (2gp),
 // Water/Mind rune, Iron bolts, seeds — because their volume clears the flow bar despite a trivial per-unit
@@ -1220,7 +1220,7 @@ export function nominateDip(v24Entry, bandEntry, { now } = {}) {   // `now` unus
   const mid = haveBand ? (bandEntry.bandLo + bandEntry.bandHi) / 2
                        : (v24Entry.avgLowPrice + v24Entry.avgHighPrice) / 2;
   const gpFlow = mid * limitVol;
-  if (!(gpFlow >= DL4_MIN_GP_FLOW)) return null;   // below the 500k gp/day attention scale → not worth watching
+  if (!(gpFlow >= DL4_MIN_GP_FLOW)) return null;   // below the gp/day attention scale (250k since 2026-08-08) → not worth watching
   // PER-UNIT SWING FLOOR — orthogonal to the gp-SCALE floor above: reject items whose per-unit dip is too
   // small to be worth a bid-into-the-fall (kills the Feather/rune/seed churn the flow floor let through).
   const swingGp = haveBand ? (bandEntry.bandHi - bandEntry.bandLo)

@@ -106,7 +106,7 @@
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, reachedDays, RECENCY_DIVERGE, RECENT_NIGHTS, askReachDecayNote, softBuyRead, SOFT_BUY_CUE_TEXT, floorCeilingTrack } from '../../js/windowread.mjs';   // reachedDays (RF6) — daily-HIGH reach count for the thin big-ticket ask-spread flag   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment (DC3 demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS); PLAN-DIURNAL-TIMING DT2 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal note computation; PLAN-HOURLY-3DAY-TREND HT3 — hourlyDriftNote, the shared compact note renderer used to enrich the top-X digest picks
+import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, reachedDays, RECENCY_DIVERGE, RECENT_NIGHTS, askReachDecayNote, softBuyRead, SOFT_BUY_CUE_TEXT, floorCeilingTrack } from '../../js/windowread.mjs';   // reachedDays (RF6) — daily-HIGH reach count for the thin big-ticket ask-spread flag   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment (DC3 demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS); PLAN-DIURNAL-TIMING DT2 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal note computation; PLAN-HOURLY-3DAY-TREND HT3 → DT3 — askReachDecayNote, the shared compact note renderer used to enrich the top-X digest picks (the per-hour drift-slope renderer it replaced was DELETED as a measured non-signal)
 import { askReachDecay } from '../lib/market/hourly-lmh.mjs';   // DT3 — the ask-reach decay read, run on the top-X digest picks ONLY (bounded enrichment, not the full candidate universe). Replaced the deleted hourlyDrift slope read — see hourly-lmh.mjs's tombstone.
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
@@ -1636,7 +1636,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // skips null-pathA rows). Logged with the pathA field (Chunk E) so the forward join can segment picks by their
   // in-lane standing.
   assignRankInLane(rows);
-  // PRIMARY console sort (comparePathARows): Path-A gp/day desc. The existing MIN_GPD 500k attention floor is a
+  // PRIMARY console sort (comparePathARows): Path-A gp/day desc. The existing MIN_GPD 250k attention floor is a
   // post-rank SURFACING partition (NOT a new gate — nothing is dropped): rows whose Path-A gp/day clears the
   // floor sort to the TOP by Path-A; rows below the floor OR with no Path-A number sink beneath them, keeping
   // their prior score (grade) order among themselves so a null/sub-floor row still surfaces via its grade.
@@ -2031,7 +2031,8 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
     const vStats = vt1h ? windowStats(vt1h, { nights: 14, wStart: 0, wEnd: 0 }) : null;
     const vProf = vt1h ? hourProfile(vt1h, { nights: DIURNAL_NIGHTS }) : null;
     // F-C (2026-07-22): value's own driftInform.holdDays (DRIFT_VALUE_HOLD_DAYS=14, multi-week — was
-    // silently defaulting to the amplitude lane's 1.5-day horizon, wildly UNDERSTATING the drift a
+    // silently defaulting to the 1.5-day OSC_HOLD_HORIZON_DAYS shell default (NOT the amplitude hold,
+    // which is 4d since DT1), wildly UNDERSTATING the drift a
     // multi-week hold actually rides).
     const vDae = (vProf && vStats && vStats.days) ? driftExitFrom(vProf, vStats.days, {
       liveLo: row.quickBuy, liveHi: row.quickSell, phase: ph && ph.phase, mom: row.mom, reliable: row.reliable,
@@ -2131,7 +2132,7 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
   return [...buyNow, ...watch].map(r => ({ id: r.id, cells: r.cells }));
 }
 
-// --- A2 (PLAN-AMPLITUDE-SCAN): the AMPLITUDE niche's own daily-cycle table -----------------------
+// --- A2 (PLAN-AMPLITUDE-SCAN): the AMPLITUDE niche's own MULTI-DAY-cycle table (re-horizoned 1d → 4d at DT1) -----------------------
 // A dedicated console-only table (like the value niche): the amplitude lane does NOT use the fast-flip
 // grade/verdict stack the same way — it prints the DAILY trough→peak swing, the both-leg daily reach
 // (DESCRIPTIVE only — at default quantiles it reduces to a staleness check, see AMP_MIN_FULL_FRAC), the
@@ -2313,7 +2314,8 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
     // softBuyFc off the in-hand amplitude windowStats days (zero new fetch) → digestSoftBuy's floor-aware @floor cue.
     const softBuyFc = (stats && stats.days) ? floorCeilingTrack(stats.days) : null;
     collectDigestRow({ id: s.id, name, spec: FLIP_NICHES.amplitude, row, er: ampEr, grade, reachFrac: null, askPlacement: null, prof, fc: softBuyFc, subFloor: null });
-    // A3: the 1.5-day experiment's day-of-week seasonality read (net-new — no day-of-week tooling existed).
+    // A3: the day-crossing day-of-week seasonality read (fires whenever holdDays > 1 — i.e. always at
+    // the 4-day default since DT1; it originated with the 1.5-day experiment) (net-new — no day-of-week tooling existed).
     // Only surfaced when the hold crosses a day boundary (holdDays > 1) so leg-2 lands on a different weekday.
     if (AMP_HOLD_DAYS > 1) {
       const wp = weekdayProfile(ts1h, { nights: 28 });

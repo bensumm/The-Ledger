@@ -106,7 +106,7 @@ These are different things at different levels — kept as two words on purpose.
   realized-fill study. On a recency-divergent item the two legitimately differ — the `fold:` line prints
   both when they do.
 - **TTF** — time-to-fill (kept abbreviated; standard).
-- **expected gp/day** (`expGpDay`) — the cheap pre-fetch pool orderer + the 500k attention-floor
+- **expected gp/day** (`expGpDay`) — the cheap pre-fetch pool orderer + the 250k attention-floor (250k since 2026-08-08 — lowered from 500k with the expUnits 6→2 refill haircut)
   input. Capital-aware (caps by what the deployable pool affords).
 - **cash tiers** — `available` ≤ `deployable` ≤ `liquid`: the free coin stack, + reclaimable deep-bid
   escrow, + all resting-bid escrow. The scan-gate uses `deployable`.

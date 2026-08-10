@@ -178,7 +178,9 @@ export function amplitudeProxy(points, { recentDays = 5, minDays = 3 } = {}) {
 }
 
 /* cycleCompletion(days, { bid, ask, horizonDays }) → { entries, judged, completed, pending, frac }
-   DT1 (PLAN-DIURNAL-TRIAGE, 2026-08-09) — the MEASURED, ORDERED replacement for the deleted `pFill2leg`.
+   DT1 (PLAN-DIURNAL-TRIAGE, 2026-08-09) — built as the ordered replacement for the deleted `pFill2leg`,
+   then REJECTED the same day as CIRCULAR and superseded by `ampWalkForward` (DT1b). It is neither shown
+   nor ranked on; read the ⚠ block below before using it for anything.
 
    The question this answers is the lane's make-or-break one and the old estimator could not represent it:
    once the trough bid actually fills, does the peak ask get reached WITHIN the hold horizon? `pFill2leg`

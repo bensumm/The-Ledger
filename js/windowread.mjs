@@ -600,7 +600,7 @@ export function askReachDecayNote(decay, { ask = null, fmt = String } = {}) {
 }
 
 // --- day-of-week seasonality (A3, PLAN-AMPLITUDE-SCAN §2.4 — GENUINELY NEW) ---------------------
-// The 1.5-day amplitude hold crosses a day boundary (fill day-1's trough, sell into day-2's peak), so
+// A hold that crosses a day boundary (the `--hold-days 1.5` experiment; the DEFAULT amplitude hold is 4d since DT1), so
 // the leg-2 sell lands on a DIFFERENT weekday — and weekday rhythm (the UK weekly cycle, weekend→weekday
 // transitions) can matter. §1's honesty correction: NO day-of-week tooling existed anywhere in the repo
 // (hourProfile is hour-of-day only) — this is the net-new weekday sibling. It buckets the per-day daily

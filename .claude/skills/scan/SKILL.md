@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 2.0
+version: 2.1
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -872,7 +872,7 @@ recurring scan (esp. inside a watch loop) drifts narrow: one salient sub-task �
 — quietly becomes the *only* thing evaluated, and the broader mandate (candidates for the
 dry/committed capital) silently collapses to "nothing." The fix is structural, not
 willpower: the report must give an **explicit one-line read on EACH flip-niche every pass** —
-`Dips · Band big-tickets · Churn · Amplitude (daily-cycle big tickets)` — even when the answer is "nothing, because X".
+`Dips · Band big-tickets · Churn · Amplitude (MULTI-DAY-cycle big tickets)` — even when the answer is "nothing, because X".
 A slot you must fill can't be silently dropped (same principle as the ONE-LINE-PER-ITEM and
 recent-reach rules — make the output enforce the coverage). "No dips" ends the *dip* line,
 never the scan. Anchor (2026-07-07): several watch-loop passes reported only "no new dips"

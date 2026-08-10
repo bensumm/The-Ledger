@@ -20,7 +20,7 @@
  *     admission sets `thin`.
  *   - the per-mode step-3 edge (band/scalp = traded band, %-ROI ≥ MIN_ROI OR thin&abs-gp; churn swaps in
  *     a volume+limit gate).
- *   - the 500k/day attention floor (expGpDay ≥ MIN_GPD), from which THIN gp-flow qualifiers AND a HELD
+ *   - the attention floor (expGpDay ≥ MIN_GPD; 250k since 2026-08-08, was 500k), from which THIN gp-flow qualifiers AND a HELD
  *     item (heldIds param, 2026-07-16) are both EXEMPT — the held exemption was prose-only before this
  *     date (a comment claiming it right next to the floor check, with no code behind it); confirmed
  *     missing by grep and fixed here + in rankAndSlice's held reserve (unbounded, mirrors thin/rising).
@@ -85,7 +85,7 @@ ok('gp-flow path admits a big-ticket thin item (limitVol<FLOOR but limitVol×mid
   assert.equal(cand2.length, 0, 'below both the unit floor and the raised gp-flow floor → dropped');
 });
 
-/* --- the 500k/day attention floor + the thin exemption ------------------------------------ */
+/* --- the attention floor (MIN_GPD) + the thin exemption ------------------------------------ */
 ok('attention floor drops a sub-floor LIQUID row; thin gp-flow qualifiers are EXEMPT', () => {
   // liquid low-net item: expGpDay ≈ 1560 (net 78 × ~20 exp units/day).
   const liquid = { 300: rec(1000, 1100, 200) };

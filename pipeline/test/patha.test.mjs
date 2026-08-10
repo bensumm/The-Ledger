@@ -155,7 +155,7 @@ ok('Chunk D: within the qualified tier, ties on Path-A fall back to the backup s
 });
 
 ok('Chunk D: MIN_GPD is a SURFACING partition — a sub-floor row sinks below every qualified row (not dropped)', () => {
-  const sub = { id: 'sub', pathA: pa(200_000), score: 999 };   // huge grade but Path-A below the 500k floor
+  const sub = { id: 'sub', pathA: pa(200_000), score: 999 };   // huge grade but Path-A below the MIN_GPD attention floor
   const qual = { id: 'qual', pathA: pa(600_000), score: 1 };   // just clears the floor, tiny grade
   assert.equal(pathASurfaceTier(sub.pathA, MIN_GPD), 1);
   assert.equal(pathASurfaceTier(qual.pathA, MIN_GPD), 0);

@@ -8,7 +8,7 @@
  * THE NICHE (PLAN-VALUE, Ben 2026-07-08). Our fast niches turn things over NOW; value surfaces items
  * to BUY near a multi-week low and HOLD for the range to cycle back up. The edge is ONE tax-paid sell
  * of a big move — structurally tax-efficient (2% paid once per cycle, not per lap). Because a great
- * slow-hold item has LOW daily throughput, the 500k gp/day attention floor would throw it out — so
+ * slow-hold item has LOW daily throughput, the gp/day attention floor (250k since 2026-08-08) would throw it out — so
  * value is a NICHE with its OWN gate (this module), not a probe.
  *
  * WHAT THIS COMPUTES (all off the 1/3/7/14/28d term structure — §C):

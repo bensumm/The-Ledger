@@ -756,25 +756,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `quote-items.mjs` default stdout view with `--raw` as the model-free escape hatch; console-only, no
   `screen.json`/app change). Folds into `PLAN.md` and is deleted when its last chunk ships (the
   plan-file rule).
-- `plans/PLAN-BOTH-LEG-ENTRY.md` — in-flight per-topic plan (2026-08-08, PROPOSED, nothing built):
-  solve for the entry price that makes BOTH legs reach, instead of quoting one and hoping. Motivated by
-  a live miss — `--mode amplitude` quotes the MEDIAN daily low (12.25m on Dinh's bulwark, recent reach
-  1/3) and `quote-items` a reach-folded bid (12.80m, break-even above mid), so the item was called dead;
-  a hand-picked **12,501,000** reads **14/16 · recent 3/3** on the 5m archive against a 13.30m ask at
-  recent 3/3, i.e. +533k/u (4.26%). Records three verified defects in `js/amplitudescreen.mjs`:
-  `pFill2leg = bidFrac × askFrac` was a PRODUCT OF MARGINALS not a measured joint — **FIXED 2026-08-09:
-  DT1 deleted it, its first replacement (an in-sample, circular day-grain completion rate) was rejected the
-  same day, and DT1b landed the WALK-FORWARD `ampWalkForward` as the ranked P(fill)**, so this defect is
-  closed and BL-anything addressing it is superseded; `legOk`
-  never checks that the low printed BEFORE the high, though the playbook is explicitly
-  same-day trough→peak; and the levels are quantile-pinned (`AMP_BID_Q`/`AMP_ASK_Q` = 0.5), so nothing
-  is optimised. Chunks BL1 (pure `lib/signal/bothleg.mjs` — day bars carrying `tLo`/`tHi`, measured
-  same-day joint with ordering, EV frontier) · BL2 (`read-both-leg.mjs`, READ-ONLY, prefers 5m —
-  measured: 1h understates the daily low ~0.3% typical / 2.2% worst, worth 2 days in 16 at the level
-  that mattered) · BL3 (fold the measured joint into `amplitudeRead` behind `--both-leg`, DEFAULT OFF,
-  additive beside the quantile pair) · BL4 (validation sweep). Explicitly NOT a forecast, NOT a fill
-  model (upper bound, queue/size unmodelled), NOT a sizing tool — Dinh's is 350/d and clearability still
-  says 1 unit. Folds into `PLAN.md` and is deleted when its last chunk ships (the plan-file rule).
+- `plans/PLAN-BOTH-LEG-ENTRY.md` — **CLOSED, NEGATIVE RESULT (2026-08-08). Nothing was built and
+  nothing should be** — kept as a don't-rebuild record, NOT an in-flight plan. It proposed solving for an
+  entry price that makes BOTH legs reach (chunks BL1–BL4). Its own BL4 validation gate was run FIRST, on
+  the real archive, and **failed**: the EV frontier loses to the plain median pin out-of-sample, `joint`
+  shrinks 0.394 → 0.079 under holdout, and split-half on the motivating item gives test-EV = 0 in 7 of 8
+  splits. That is structural, not tuning — the argmax always lands exactly ON an order statistic with zero
+  out-of-sample margin, so **the median it set out to replace IS the robust estimator**. The plan also
+  retracted its own framing: the proposed same-day extremes-ordering was the wrong event AND contradicts
+  `AMP_HOLD_DAYS_DEFAULT` being a parameter (a 2.8× undercount, worse than the ~1.6× overcount it claimed
+  to fix), it mischaracterised `legOk` (which never counts both-leg days at all), and the motivating
+  "+533k/u" Dinh's anchor collapses to a 3/16 ordered joint worth ~14–56k gp/day held out. The
+  product-of-marginals defect it named was separately made moot by DT1/DT1b (`pFill2leg` deleted; the
+  ranked P(fill) is now the walk-forward `ampWalkForward`). Read the plan before proposing anything in
+  this space. Being CLOSED, it does NOT fold into `PLAN.md` and is not deleted on a ship.
 - `plans/PLAN-DIGEST-SIGNAL-AND-SCAN-PERF.md` — in-flight per-topic plan (2026-08-07, PLANNING ONLY,
   no code changed): two workstreams that share one file (`pipeline/commands/screen-flip-niches.mjs`)
   and therefore one parallel-safety contract. **A — digest SIGNAL:** `buildDigestBlock`'s comparator
@@ -893,7 +888,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   the DEFAULT `screen-flip-niches.mjs` volume (`--vol-source legacy` = escape hatch), and every volume-denominated floor
   was count-matched to the corrected distribution (`FLOOR`/`VALUE_LIQ_FLOOR` 50→3500, `CHURN_MIN_VOL`
   2000→65000, `DIP_LOOP_LIQUID_FLOOR` 1000→40000, `GP_FLOOR` 250m→4.5b, `DL4_MIN_GP_FLOW` 500k→9m; `MIN_GPD`
-  KEPT at 500k — Ben, real NET-throughput floor; `DL4_MIN_ABS_SWING` unchanged). `volDayRolling` logged on
+  was KEPT at 500k through that recal — Ben, real NET-throughput floor — then LOWERED to 250k on
+  2026-08-08, paired with the expUnits 6→2 refill haircut (gpDay had no attention axis and flattered
+  cheap churn); `DL4_MIN_ABS_SWING` unchanged). `volDayRolling` logged on
   `suggestions.jsonl`. Step 3 REMAINING = the browser app fix (`js/marketfetch.js` Finder/Watch/Trends still
   read the broken `/24h`; APP_VERSION-bumping). Folds into `PLAN.md` and is deleted when step 3 ships.
 - `PLAN-ESTIMATOR-FIDELITY.md` — per-topic plan (2026-08-01): the discovery

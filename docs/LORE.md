@@ -120,7 +120,7 @@ change, mapped in README "Map of the repo". Reconstruction detail: `FILLS-PIPELI
   a handful of events invisible at n=1,780 knife cells and need an event study, not a shape gate.
 - **`expGpDay` as the ranking metric → demoted (P6b, Ben 2026-07-09: "I despise gp/d").** Rank is now
   `net after tax × P(fill at the quoted pair) ÷ TTF` per thesis (`pipeline/lib/signal/estimators.mjs`);
-  `expGpDay` survives only as the cheap pre-fetch pool orderer + the 500k `--min-gpd` pre-filter.
+  `expGpDay` survives only as the cheap pre-fetch pool orderer + the `--min-gpd` pre-filter (500k at the time; 250k since 2026-08-08).
 - **Cancel-to-EMPTY fill inference → deleted (LH1).** An EMPTY slot snapshot is NOT evidence of a
   fill; the inference that tried to read fills from cancel-to-EMPTY transitions was removed and must
   not be resurrected (`pipeline/lib/reconstruct/reconstruct.mjs` / LH1 header; the false-EMPTY-snapshot restart

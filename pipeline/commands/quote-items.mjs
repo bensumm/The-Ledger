@@ -494,7 +494,7 @@ async function runItems() {
       }
       if (wc) winClear = { windowReach: wc.windowReach, reachedDays: wc.reachedDays, nDays: wc.nDays, pool: wc.pool, clearRatio: wc.clearRatio, wStart: wc.wStart, wEnd: wc.wEnd, diverges: div.diverges };
     }
-    // PLAN-HOURLY-3DAY-TREND HT2: the 3-day per-hour drift read — surfaced on a bare "how's X" quote
+    // PLAN-HOURLY-3DAY-TREND HT2 → DT3: the ask-reach decay read (the per-hour drift slope it replaced was DELETED as a measured non-signal) — surfaced on a bare "how's X" quote
     // whenever a price recommendation is actually being emitted (an ask or bid side present), zero new
     // fetch (reuses inp.ts1h, already in hand). Scores the ask-reachability-decay sub-signal against the
     // patient ask (row.optSell) when present. INFORM-ONLY, n≈0 — never gates/prices; a null/degraded read
@@ -529,7 +529,7 @@ async function runItems() {
       // + daily windowStats series (ast.days) this file already computes for its trajectory/diurnal notes
       // (ZERO new fetch). The shell computes driftExitFrom off these; absent them → forward fields null (degrade).
       // Follow-up (2026-07-22): this file quotes every row against FLIP_NICHES.band (line below), so the
-      // forward horizon is band's own driftInform.holdDays (~2h), NOT the shell's 1.5d amplitude default —
+      // forward horizon is band's own driftInform.holdDays (~2h), NOT the shell's 1.5d OSC_HOLD_HORIZON_DAYS default (which is NOT the amplitude hold — that is 4d since DT1) —
       // matching the screen's F-C niche-conditioning so "list at X (~Nd hold)" isn't a mis-scaled 1.5d.
       forward: (prof && ast && ast.days && ast.days.length)
         ? { profile: prof, days: ast.days, holdHorizonDays: FLIP_NICHES.band.driftInform?.holdDays }

@@ -6,7 +6,7 @@
  * assumptions about fill speed and fill price… let's get something that's more accurate per thesis
  * and less hand wavey." `expGpDay` (min(limit×6, 10%×volDay) × modeNet — three compounding
  * unmeasured assumptions) is DEMOTED: it survives ONLY as the cheap pre-fetch pool orderer inside
- * gatecandidates.rankAndSlice (no fetch-semantics change) and as the 500k `--min-gpd` attention
+ * gatecandidates.rankAndSlice (no fetch-semantics change) and as the 250k `--min-gpd` attention
  * pre-filter. It is NEVER again the displayed "best" number or the grade basis. The replacement,
  * ruled by Ben: **rank = net after tax × P(fill at the quoted prices) ÷ TTF**, evaluated PER THESIS.
  *

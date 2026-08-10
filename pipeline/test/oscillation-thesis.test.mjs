@@ -139,7 +139,7 @@ ok('the near-high flag is a pure magnitude read (|level − entry| ≤ frac × l
   assert.equal(driftInformNote(FLIP_NICHES.churn, dae, { entry: farEntry }).near, false, 'entry beyond frac×level → not near');
 });
 
-// ── 6. F-C (2026-07-22): each thesis carries its OWN real hold horizon, not the amplitude default ──
+// ── 6. F-C (2026-07-22): each thesis carries its OWN real hold horizon, not the OSC_HOLD_HORIZON_DAYS shell default ──
 ok('F-C: band/churn/scalp declare DRIFT_INTRADAY_HOLD_DAYS; value declares DRIFT_VALUE_HOLD_DAYS', () => {
   for (const k of ['band', 'churn', 'scalp']) assert.equal(FLIP_NICHES[k].driftInform.holdDays, DRIFT_INTRADAY_HOLD_DAYS, `${k} uses the intraday hold horizon`);
   assert.equal(FLIP_NICHES.value.driftInform.holdDays, DRIFT_VALUE_HOLD_DAYS, 'value uses the multi-week hold horizon');

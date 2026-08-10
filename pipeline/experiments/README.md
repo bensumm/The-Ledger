@@ -128,7 +128,9 @@ A REPRODUCTION harness, not a study. Runs THREE columns on the same items and th
 archive: (a) the day-grain `cycleCompletion` shipped in DT1, whose levels come from the same 14-day
 window it then scores, and (b) the DT1 study's own design — `amplitudeRanges` levels fitted strictly
 before each origin day (`p.timestamp < midnight(T)`, 15-day warmup), entry = the first day-T hour at or
-below `ampBid`, completion = any later hour reaching `ampAsk` within 24h/96h.
+below `ampBid`, completion = any later hour reaching `ampAsk` within 24h/96h; and (c) the SHIPPED
+`ampWalkForward` itself, so a regression inside the production function moves a number here rather than
+only in the reimplementation.
 
 Written because the two disagreed by ~4× and it was not clear which was wrong. **The study reproduces
 exactly** — Saturated heart 0.0% @96h (n=41) and Masori chaps 12.9% @24h (n=31) against its published
