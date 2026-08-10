@@ -111,7 +111,7 @@ ok('P6b per-thesis estimator family + price-basis fields are registered as desig
   for (const k of ['band', 'scalp']) assert.equal(FLIP_NICHES[k].estimator, 'intraday', `${k} → intraday estimator`);
   assert.equal(FLIP_NICHES.churn.estimator, 'churn', 'churn → churn estimator (per-lap rank, Step 6)');
   assert.equal(FLIP_NICHES.value.estimator, 'value', 'value → value estimator');
-  assert.equal(FLIP_NICHES.amplitude.estimator, 'amplitude', 'amplitude → amplitude estimator (two-leg daily reach)');
+  assert.equal(FLIP_NICHES.amplitude.estimator, 'amplitude', 'amplitude → amplitude estimator (walk-forward round trip, DT1b)');
   // price basis: band/churn/scalp post the 2h band edges; value/amplitude compute their own surface pair.
   for (const k of ['band', 'churn', 'scalp']) assert.equal(FLIP_NICHES[k].priceBasis, 'opt', `${k} = patient 2h band edges`);
   assert.equal(FLIP_NICHES.value.priceBasis, 'term', 'value = term-structure pair');

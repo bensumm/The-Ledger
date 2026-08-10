@@ -1331,7 +1331,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // states the drift-adjusted after-tax margin. driftInformNote returns null (no note) when the spec has no
     // driftInform or the projection degraded. F-C (2026-07-22): pass THIS spec's own driftInform.holdDays
     // (band/churn/scalp → DRIFT_INTRADAY_HOLD_DAYS, the ~2h Bar-E hold — was silently defaulting to the
-    // amplitude lane's 1.5-DAY horizon, wildly overstating the residual-horizon drift shift on an
+    // oscillation-forecast 1.5-DAY horizon (NOT the amplitude hold, 4d since DT1), wildly overstating the residual-horizon drift shift on an
     // hours-long flip) — undefined ⇒ driftExitFrom's own generic fallback (unaffected for any future spec
     // that doesn't set it).
     const driftExit = (prof && rbStats && rbStats.days) ? driftExitFrom(prof, rbStats.days, {
@@ -2132,12 +2132,13 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
 
 // --- A2 (PLAN-AMPLITUDE-SCAN): the AMPLITUDE niche's own daily-cycle table -----------------------
 // A dedicated console-only table (like the value niche): the amplitude lane does NOT use the fast-flip
-// grade/verdict stack the same way — it prints the DAILY trough→peak swing, the both-leg recent-3 daily
-// reach (the make-or-break viability read, §4), the hold horizon, net-per-cycle, and the deployable
+// grade/verdict stack the same way — it prints the DAILY trough→peak swing, the both-leg daily reach
+// (DESCRIPTIVE only — at default quantiles it reduces to a staleness check, see AMP_MIN_FULL_FRAC), the
+// MEASURED round-trip rate (DT1b — this is the make-or-break read, §4), the hold horizon, net-per-cycle, and the deployable
 // units, ranked by the EXISTING rank spine (net × P(fill) ÷ TTF via the 'amplitude' estimator family —
 // NOT a bespoke composite). Every row is flagged PROVISIONAL (n≈0). Picks accrue via the O1 suggestions
 // ledger (mode 'amplitude') with the §A5 shadow both-leg-replay block. OFF the app (excluded from
-// screen.json); surfaces under deploy/accumulate, never as act-now rows (patient multi-hour plays).
+// screen.json); surfaces under deploy/accumulate, never as act-now rows (patient multi-DAY plays).
 const AMP_HEADERS = ['Item', 'Guide', 'Live', 'Daily swing (trough→peak)', 'Both-leg reach + ROUND-TRIP (measured) + phase', 'Net/cycle (after-tax)', 'Hold horizon', 'Deploy units', 'Grade'];
 const AMP_NIGHTS = 14;   // the per-item daily windowStats lookback (full-day wStart:0,wEnd:0)
 
@@ -2255,7 +2256,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
     const pFill = ESTIMATORS.amplitude.pFill({ amplitudeRanges: ar, walkForward: wf });
     const ttf = ESTIMATORS.amplitude.ttf({ holdDays: AMP_HOLD_DAYS });
     const rank = rankScore({ net: ar.netPerCycle * lapUnits, pFill: pFill.value, ttfSec: ttf.value });
-    const r = rateItem({ row, rank, thin: s.thin, pFillN: pFill.n, ttfN: ttf.n });   // thin-class by construction → THIN_GRADE_CAP applies (§2.1); G6: (thin) confidence marker off the daily-reach sample
+    const r = rateItem({ row, rank, thin: s.thin, pFillN: pFill.n, ttfN: ttf.n });   // thin-class by construction → THIN_GRADE_CAP applies (§2.1); G6: (thin) confidence marker off the walk-forward judged-entry sample
     const grade = r.grade;
     const ampPct = (ar.ampPct != null) ? (ar.ampPct * 100) : null;
     // F-F: surface the FULL-window reach alongside recent-3 (recencySplit already returns fullHit/fullN —

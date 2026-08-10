@@ -141,8 +141,9 @@ the standing regression check on that decision: if the two columns ever converge
 been broken somewhere.
 
 Reads the archive READ-ONLY and `js/` production code; writes nothing. Re-run:
-`node pipeline/experiments/amp-cycle-reproduction.mjs`. Depends on `hp-lib.mjs` in the 2026-08-09
-session tmp dir — if that is gone, the loader helpers must be re-pointed at `pipeline/lib/market/archive.mjs`.
+`node pipeline/experiments/amp-cycle-reproduction.mjs`. SELF-CONTAINED as of 2026-08-09 — it loads
+`pipeline/lib/market/archive.mjs` + `archive-series.mjs` directly and runs on a clean checkout (it briefly
+depended on a session-scratch `hp-lib.mjs`, which is why two production headers cite it).
 
 To retire these experiments: delete `pipeline/experiments/` — with ONE exception. `amp-cycle-reproduction.mjs`
 IS referenced: `js/amplitudescreen.mjs` and `js/estimators/families.mjs` both name it as the validation

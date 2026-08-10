@@ -208,7 +208,10 @@ ok('an affordable big-ticket sizes UNDIVIDED (no ÷slots) and honors the min()',
 
 
 // --- cycleCompletion (PLAN-DIURNAL-TRIAGE DT1) acceptance ----------------------------------------
-// BUSINESS REQUIREMENTS pinned here — this is the estimator the whole lane now ranks on:
+// BUSINESS REQUIREMENTS pinned here. ⚠ this estimator is NOT what the lane ranks on — it was built as
+// pFillAmplitude's replacement at DT1, measured CIRCULAR, and rejected the same day; DT1b's
+// ampWalkForward took the slot. The pins below cover its ordering contract AND (further down) the two
+// pins that keep it OUT of the rank. Do not read this block as describing the live estimator:
 //   - completion is ORDERED: an entry day's ask must be reached on a STRICTLY LATER day.
 //   - SAME-DAY completion never counts (day buckets can't prove low-preceded-high within a day).
 //   - an entry whose horizon runs past the window edge is PENDING, never a scored miss.

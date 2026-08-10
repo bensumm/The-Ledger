@@ -73,6 +73,32 @@ export const DENYLIST = [
     reason: 'the per-hour drift slope read was DELETED (PLAN-DIURNAL-TRIAGE DT3, 2026-08-09) as a measured non-signal — do not describe it as live; the surviving read is askReachDecay',
   },
   {
+    id: 'amplitude-retired-estimators',
+    // The amplitude lane burned through THREE P(fill) estimators in two days (DT1/DT1b, 2026-08-09) and
+    // the retired names kept resurfacing in prose long after the code moved: an adversarial audit found
+    // them still live in a spec-registry comment, a test assertion message, GLOSSARY, README and two
+    // module comments. This entry is the mechanical catch for that recurrence.
+    //   `daily-reach-2leg`        — pFill2leg's basis label; the product-of-marginals was measured
+    //                               independence-FALSE and deleted. Survives only in plans/ (historical).
+    //   `two-leg daily-reach family` — the same estimator described as the live amplitude family.
+    //   `measured-cycle-completion`  — cycleCompletion as the rank input; it is CIRCULAR (in-sample
+    //                               levels) and was rejected the day it was built.
+    // The live estimator is `ampWalkForward` (walk-forward, levels fitted strictly pre-origin).
+    // NOT banned: `ask-reprints` / `cycleCompletion` / `pFill2leg` as bare nouns — several live docs
+    // legitimately name them to say they were WITHDRAWN, and banning the noun would punish the honest
+    // "in place of the withdrawn X" phrasing. Only the LIVE-FORM descriptions above are denied.
+    // EXCLUDED from `files` by design: CHANGELOG.md + plans/* (dated records — restating the superseded
+    // state is their job) and this file (the SELF-REFERENCE CAVEAT above).
+    pattern: /daily-reach-2leg|two-leg daily[- ]reach family|measured-cycle-completion/,
+    files: ['CLAUDE.md', 'README.md', 'index.html',
+            'docs/GLOSSARY.md', 'docs/MARKET-ANALYSIS.md', 'docs/SIGNAL-AUDIT.md',
+            'js/amplitudescreen.mjs', 'js/estimators/families.mjs', 'js/flip-niches.mjs',
+            'pipeline/commands/screen-flip-niches.mjs', 'pipeline/lib/render/suggestlog.mjs',
+            'pipeline/test/amplitudescreen.test.mjs', 'pipeline/test/flip-niches.test.mjs',
+            '.claude/skills/scan/SKILL.md'],
+    reason: 'the amplitude P(fill) is `ampWalkForward` (DT1b, 2026-08-09) — the two-leg daily-reach PRODUCT and the in-sample cycle-completion rate were both MEASURED WRONG and retired; do not describe either as the live estimator',
+  },
+  {
     id: 'softbuy-wait-for-window',
     // The superseded resting-offer advice: "wait for the (dip) window". Measured harmful 2026-08-09
     // (PLAN-DIURNAL-TRIAGE DT2) — the window does not time a resting offer's fill (71.2% in-window touch

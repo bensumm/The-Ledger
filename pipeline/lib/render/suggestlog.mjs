@@ -304,7 +304,9 @@ export function depthExitShadow(ca, { qty, volDay } = {}) {
   return o;
 }
 // A5 (PLAN-AMPLITUDE-SCAN §4/§A5) — the amplitude lane shadow block: the printed daily trough-bid /
-// peak-ask levels, the both-leg RECENT-3 daily reach (the make-or-break viability read), the hold
+// peak-ask levels, the both-leg RECENT-3 daily reach (DESCRIPTIVE — NOT the viability read it was once
+// called; at default quantiles that test reduces to a staleness check), the walkForward round-trip (the
+// number that actually drives P(fill) since DT1b), the hold
 // horizon, and the diurnal dip/peak windows. join-amplitude-outcomes.mjs replays each pick against the
 // NEXT holdDays of the 1h archive to measure the would-have-fill rate as an UPPER BOUND (a printed level
 // ≠ your fill). Null when the amplitude read degraded. Takes a js/amplitudescreen.mjs amplitudeRanges

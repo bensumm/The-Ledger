@@ -101,8 +101,9 @@ export const AMP_ASK_Q         = 0.5;      // peak-ask  = median daily high
 // min = p10 = median = p90 = 0.500 (sd 0.000), 100% of legs cleared the floor, and legOk returned an
 // IDENTICAL verdict to `!staleOptimistic` on 670/670. This is the same in-sample-level defect that sank
 // `cycleCompletion` (see pFillAmplitude's header) — a level scored against its own fitting window.
-// They DO bind at non-default quantiles (`--amp-ask-q 0.25` ⇒ fullFrac ≈ 0.25), which is the only reason
-// they are still here. The honest repair is to make the legs walk-forward like `ampWalkForward`; that is
+// They bind only BELOW 0.5 (`--amp-ask-q 0.25` ⇒ fullFrac ≈ 0.25). At q ABOVE 0.5 the level is even more
+// often touched, so fullFrac only rises and they stay inert — "non-default" is NOT the condition, `q < 0.5`
+// is. That narrow case is the only reason they are still here. The honest repair is to make the legs walk-forward like `ampWalkForward`; that is
 // a GATE-BEHAVIOUR change (it moves which rows appear) and is deliberately NOT done unilaterally.
 // PLACEHOLDERS either way.
 export const AMP_RECENT_N        = RECENT_NIGHTS;   // 3 — the recency window recencySplit compares against
@@ -137,7 +138,7 @@ export const AMP_WINDOWS_PER_DAY = ACTIONABLE_WINDOWS_PER_DAY;
 // 4 rather than 7 is a sample trade-off, not a measured period: at AMP_NIGHTS = 14 a 4-day horizon leaves
 // ~9–10 judgeable entry days per row for cycleCompletion, where 7 leaves ~6 and halves an already thin n.
 // `--hold-days 7` remains available. STILL A PLACEHOLDER (n≈0 per item) — now a measured-DIRECTION one.
-// Honesty limits: one 74-day era, one update cycle; completion measured from hourly avgLow/avgHigh
+// Honesty limits: one ~73-day archive era, one update cycle; completion measured from hourly avgLow/avgHigh
 // aggregates, NOT executed fills, so every rate here is an UPPER BOUND on a real round trip; item-day
 // clustering ⇒ effective n well below nominal.
 export const AMP_HOLD_DAYS_DEFAULT = 4;
@@ -356,9 +357,12 @@ export function ampWalkForward(series1h, {
            { askQ, bidQ } (PLAN-OSCILLATION-CYCLE F-E) are the reach-vs-margin DIAL — the daily
            high/low quantiles the peak-ask / trough-bid quote from. They DEFAULT to the module
            constants AMP_ASK_Q / AMP_BID_Q (0.5 / 0.5 = the median peak/trough, Ben's KEPT default
-           board — an absent caller is byte-identical to pre-F-E). A HIGHER askQ (e.g. 0.75) quotes
-           a better-but-less-reachable sell: a strictly HIGHER ampAsk, a LOWER two-leg reach and a
-           LOWER ampPct — the reach-vs-margin trade-off the dial exists to let F-G's retro compare.
+           board — an absent caller is byte-identical to pre-F-E). ⚠ DIRECTION: askQ/bidQ are REACH
+           FRACTIONS, not price percentiles — `quantHigh(his, p) = his[n − ceil(p·n)]`, so a HIGHER askQ
+           quotes a LOWER, MORE-reachable ask. To quote a better-but-less-reachable sell you want a
+           LOWER askQ (e.g. 0.25): a strictly HIGHER ampAsk, a LOWER reach and a HIGHER ampPct. (The
+           F-E plan row illustrated this backwards as "0.75 → higher ampAsk"; the test at
+           amplitudescreen.test.mjs pins `easy.ampAsk < base.ampAsk` against exactly that inversion.)
    Returns the amplitude SHAPE features (incl. the effective askQ/bidQ, so a shadow-log can record
    WHICH quantiles a row was quoted at — an experiment run is then ledger-distinguishable), or
    { hasData:false }. */

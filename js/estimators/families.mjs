@@ -280,7 +280,8 @@ export const ESTIMATORS = Object.freeze({
   value:     { pFill: pFillValue,     ttf: ttfValue },
   rising:    { pFill: pFillRising,    ttf: ttfRising },
   churn:     { pFill: pFillIntraday,  ttf: ttfIntraday,  lapUnits: churnLapUnits },
-  // amplitude family (DT1-re-horizoned): measured-cycle-completion pFill, hold-horizon ttf,
+  // amplitude family (DT1b): measured WALK-FORWARD round-trip pFill (NOT the rejected circular
+  // cycle-completion rate — see pFillAmplitude's header), hold-horizon ttf,
   // deployable-units lapUnits. Rank/grade/suggestions machinery carries amplitude unchanged.
   amplitude: { pFill: pFillAmplitude, ttf: ttfAmplitude, lapUnits: amplitudeLapUnits },
 });

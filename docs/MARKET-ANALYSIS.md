@@ -312,7 +312,7 @@ hi↔lo range), the both-leg daily reach (the quoted trough-bid TOUCHED and peak
 recent-3 days OR ≥ half the full window, `staleOptimistic`-guarded — ⚠ but at the DEFAULT 0.5/0.5 quantiles
 this is NOT a reachability read at all: the level is the median of the very days it is scored against, so
 the full-window disjunct holds by construction and the test reduces to `!staleOptimistic` (measured
-identical on 670/670 legs, 2026-08-09). It bites only at non-default `--amp-bid-q`/`--amp-ask-q`),
+identical on 670/670 legs, 2026-08-09). It bites only BELOW 0.5 (`--amp-bid-q`/`--amp-ask-q` < 0.5 — above 0.5 the level is touched even more often, so it stays inert)),
 and a trend/knife guard (`hourProfile().trendDominates` + the warm 1h trajectory — a trending item's
 "amplitude" is drift). **The margin-below-floor gate (PLAN-OSCILLATION-CYCLE Chunk 3 — THE ONLY GATE
 in that program, sequenced LAST after trend/knife):** reject when the drift-adjusted margin
@@ -453,7 +453,7 @@ grain, and **re-running that design reproduces its published numbers exactly** �
 @96h (n=41), Masori chaps 12.9% @24h (n=31) — so the refutation is confirmed and the study is sound.
 
 **DT1b then rebuilt the estimator on that design** (`ampWalkForward`, `js/amplitudescreen.mjs`): for each
-origin day the trough/peak levels are fitted STRICTLY PRE-ORIGIN over the preceding 20 days, entry is the
+origin day the trough/peak levels are fitted STRICTLY PRE-ORIGIN over the preceding `AMP_WF_FIT_DAYS`, entry is the
 first hour of that day whose 1h avgLow touches the bid, and completion is any LATER hour within the
 horizon whose avgHigh reaches the ask; unresolved end-of-series entries stay PENDING. It reads the local
 1h archive (the live `/timeseries` fetch is ~15 days — far too short) at ~20ms/item, and **it is what
@@ -465,7 +465,7 @@ its grade. The in-sample figure had rated all five rows near 100%. The lane was 
 survivors are the repeatable multi-DAY oscillator class (Masori chaps 12.9%/24h but 71%/7d; fang ~6–8d).
 Reconciles with PLAN-BOTH-LEG-ENTRY's "approximately calibrated" finding (mean 0.102 vs realized 0.116):
 that measured the UNORDERED hold-≤1d joint, this measures the ORDERED entry-conditional round trip — both
-true, and the product overstates only the ordered one. *Honesty limits: one 74-day era, one update cycle;
+true, and the product overstates only the ordered one. *Honesty limits: one ~73-day archive era, one update cycle;
 completion measured on hourly `avgLow`/`avgHigh` aggregates, NOT executed fills, so every rate is an UPPER
 BOUND; item-day clustering ⇒ effective n well below nominal; a MEASURED row carries ~30–50 judged entries
 (below `AMP_WF_MIN_JUDGED` the row falls back to the prior instead) — never calibrated.* Note deploy units scale with the horizon, so the re-horizon raised them ~4×.

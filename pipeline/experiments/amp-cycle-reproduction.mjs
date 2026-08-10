@@ -17,8 +17,10 @@
  * days by definition, and a multi-day horizon compounds that to ~94%.
  *
  * WHY IT STAYS. `js/amplitudescreen.mjs` and `js/estimators/families.mjs` both cite this harness as the
- * validation source for ranking on the walk-forward. If the two columns ever CONVERGE, the pre-origin
- * fit has been broken somewhere upstream — that is the regression this file exists to catch.
+ * validation source for ranking on the walk-forward. It runs THREE columns — the rejected in-sample
+ * figure, an independent reimplementation of the study, and the SHIPPED `ampWalkForward` itself — so it
+ * catches both a break in the shared helpers (col 1 converging on col 3) and a regression inside the
+ * production function (col 3 diverging from col 2). That is the regression this file exists to catch.
  *
  * Reads the archive READ-ONLY and `js/` production code; writes nothing. Self-contained (2026-08-09 —
  * it briefly depended on a session-scratch `hp-lib.mjs` and could not run on a clean checkout).
@@ -33,7 +35,7 @@ const imp = rel => import(pathToFileURL(path.join(ROOT, rel)).href);
 const { open } = await imp('pipeline/lib/market/archive.mjs');
 const { archiveSeries } = await imp('pipeline/lib/market/archive-series.mjs');
 const { windowStats } = await imp('js/windowread.mjs');
-const { amplitudeRanges, cycleCompletion } = await imp('js/amplitudescreen.mjs');
+const { amplitudeRanges, cycleCompletion, ampWalkForward, AMP_WF_WARMUP_DAYS, AMP_WF_FIT_DAYS, AMP_WF_MIN_HOURS } = await imp('js/amplitudescreen.mjs');
 
 const ITEMS = [
   { id: 27641, name: 'Saturated heart' },
@@ -62,8 +64,8 @@ function indexDays(series) {
 const h = open(undefined, { readonly: true });
 const pct = v => v == null ? '—' : (100 * v).toFixed(1) + '%';
 
-console.log('item                | MINE (in-sample, day grain) | STUDY (out-of-sample, hour grain)');
-console.log('                    | completion ≤4d              | entry%   done|entry ≤24h  ≤96h   n');
+console.log('item                | IN-SAMPLE (day grain) | STUDY (reimplemented)    | SHIPPED ampWalkForward');
+console.log('                    | completion ≤4d        | ≤24h    ≤96h    n        | ≤96h (completed/judged)');
 for (const it of ITEMS) {
   const series = archiveSeries(h, it.id, '1h', { days: 90 });
   if (series.length < 24 * 20) { console.log(`${it.name}: too little archive (${series.length} pts)`); continue; }
@@ -104,9 +106,21 @@ for (const it of ITEMS) {
     if (reach(24)) d24++;
     if (reach(96)) d96++;
   }
+  // ---- SHIPPED: the PRODUCTION estimator itself. Without this column the harness would validate the
+  // study's DESIGN but never touch `ampWalkForward`, so a regression INSIDE it — dropping the
+  // `p.timestamp < cut` pre-origin filter, say — would not move a single number here. Now it does.
+  const wf = ampWalkForward(series, { horizonDays: 4 });
   const mineTxt = mine && mine.frac != null ? `${mine.completed}/${mine.judged} = ${pct(mine.frac)}` : '—';
-  console.log(`${it.name.padEnd(19)} | ${mineTxt.padEnd(27)} | ${pct(entries / (origins || 1)).padEnd(8)} ${pct(entries ? d24 / entries : null).padEnd(11)} ${pct(entries ? d96 / entries : null).padEnd(6)} ${entries}`);
+  const wfTxt = wf && wf.frac != null ? `${pct(wf.frac)} (${wf.completed}/${wf.judged})` : '—';
+  console.log(`${it.name.padEnd(19)} | ${mineTxt.padEnd(21)} | ${pct(entries ? d24 / entries : null).padEnd(7)} ${pct(entries ? d96 / entries : null).padEnd(7)} ${String(entries).padEnd(8)} | ${wfTxt}`);
 }
-console.log('\nEXPECT the two columns to DIVERGE sharply (in-sample ~100%, out-of-sample far lower).');
-console.log('Convergence ⇒ the pre-origin fit has been broken — see ampWalkForward in js/amplitudescreen.mjs.');
+console.log(`\nwalk-forward params: warmup ${AMP_WF_WARMUP_DAYS}d · fit ${AMP_WF_FIT_DAYS}d · min ${AMP_WF_MIN_HOURS} logged hrs/day`);
+console.log('EXPECT column 1 (in-sample) ~100% and columns 2-3 far lower.');
+console.log('Columns 2 and 3 are INDEPENDENT implementations of the same design and should broadly agree');
+console.log('(they differ by construction: col 2 has no PENDING exclusion and a fixed 90d read).');
+console.log('NOTE both columns read 90d here; a live scan reads a wider window at the row\'s own quantiles, so');
+console.log('its `judged` counts differ from these. Compare RATES, not sample sizes, against the board.');
+console.log('  col 1 converging on col 3  ⇒ the pre-origin fit has broken somewhere shared (amplitudeRanges/windowStats).');
+console.log('  col 3 diverging from col 2 ⇒ a regression INSIDE ampWalkForward itself.');
+console.log('The unit-level guard on the same property is the downtrend fixture in pipeline/test/amplitudescreen.test.mjs.');
 h.close?.();

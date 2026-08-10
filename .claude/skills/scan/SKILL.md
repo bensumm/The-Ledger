@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.99
+version: 2.0
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 

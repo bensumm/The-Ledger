@@ -610,7 +610,7 @@ for (const want of positionals) {
     // driftExitFrom returns a labeled trend-only level (never a crash) — no new detector call site here.
     // PLAN-ESTIMATOR-HONEST-SELL follow-up (2026-07-22): pass THIS niche's own driftInform.holdDays
     // (band/churn/scalp → DRIFT_INTRADAY_HOLD_DAYS ~2h) rather than inheriting the shell's bare
-    // OSC_HOLD_HORIZON_DAYS=1.5d amplitude default — mirrors the screen's F-C wiring so the forward
+    // OSC_HOLD_HORIZON_DAYS=1.5d oscillation-forecast default (NOT the amplitude hold — that is 4d since DT1) — mirrors the screen's F-C wiring so the forward
     // "list at X (~Nd hold)" scales to the niche the fold is computed against, not a 1.5d amplitude cycle.
     extra.forward = (profMargin && scored && scored.length)
       ? { profile: profMargin, days: scored, holdHorizonDays: FLIP_NICHES[NICHE]?.driftInform?.holdDays }

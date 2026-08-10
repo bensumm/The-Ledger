@@ -488,6 +488,23 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 
 ## Discovered
 
+- **PROXIMITY-TO-EXTREMES AS A PRIMARY SCREEN — Ben's idea, 2026-08-09, FLAGGED FOR INVESTIGATION,
+  not scheduled.** "I wonder if we're just looking too deep — what if we just look for items based on
+  their proximity to 1/3/7/14/30-day lows and highs?" A deliberately SHALLOW screen: rank/gate on
+  where live sits inside each of the 1d/3d/7d/14d/30d low→high ranges, and nothing else. The context
+  it came out of: the per-hour drift column was measured and found anti-predictive (two independent
+  harnesses, ~43–46% directional, loses to predict-no-change on ~99% of items), which raises the
+  general worry that the deeper time-structure machinery is fitting noise. Worth testing precisely
+  BECAUSE it is dumb — it has almost no free parameters, so it can't overfit the way a per-hour slope
+  can. Existing pieces to reuse/compare against rather than rebuild: `basePosition`/term-structure
+  (already computes 14d/multi-week range position, and per memory `base-position-caution-not-credit`
+  is to be read asymmetrically as a risk flag, never as an entry credit), the value flip-niche's
+  RC1 recency-anchored cycle range, and the reach/placement percentiles (p-of-the-14-day-daily-LOW/HIGH
+  distribution) which are already a proximity-to-extreme measure in all but name. **The open question
+  is whether multi-horizon proximity carries decision value the existing single-horizon reads don't,
+  and whether it beats them as a primary rank rather than as context.** Test forward, out of sample,
+  against realized outcomes — the same discipline the validator sweep used. UNSCHEDULED, n=0.
+
 - **THE VALIDATOR STACK HAD NEVER BEEN SCORED AGAINST OUTCOMES — TWO OF THE FIRST THREE MEASURED
   FAILED (2026-08-08).** Forward-scored every level-based validator against the 5m archive over the
   35-day ledger, arms = fired vs not-fired within the same band/churn population. Findings, in
@@ -823,8 +840,15 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
   `7/14`** — the column carried zero item-specific information. The recent-3 half is then a 3-sample draw
   around that same 50% design point (P(3/3)=12.5%, P(≤1/3)=50%), so `1/3` is the single most likely
   outcome and `3/3` is a one-in-eight run, neither of which is evidence about the item. This matters
-  because the column is *presented as the make-or-break read* ("the make-or-break read is the Both-leg
-  reach column" — `/scan` SKILL.md) and it is what an operator ranks on. **Contrast with the reach numbers
+  because the column WAS *presented as the make-or-break read* in `/scan` and five other places. **CONFIRMED
+  AND PARTLY ADDRESSED 2026-08-09 (DT1b + the audit rounds):** the tautology was measured — `fullFrac` min =
+  p10 = median = p90 = 0.500 (sd 0.000) across 335 items, 100% of legs clear `AMP_MIN_FULL_FRAC`, and
+  `amplitudeGate`'s `legOk` returns a verdict IDENTICAL to bare `!staleOptimistic` on 670/670 legs. It is
+  inert at any quantile ≥ 0.5, binding only below it. Every doc calling it decisive has been corrected, and
+  the make-or-break role passed to the MEASURED walk-forward `round-trip` cell (`ampWalkForward`). **The GATE
+  ITSELF IS UNCHANGED and this entry stays open** — the honest repair is walk-forward legs, which moves which
+  rows appear and was not taken unilaterally. Note the reject reasons `bid-unreachable`/`ask-unreachable` are
+  misnamed on a default run: every such drop is a stale-optimistic drop. **Contrast with the reach numbers
   that ARE real:** `read-window-range --ask/--bid` tests an OPERATOR-CHOSEN level against the daily
   distribution, so a `0/14` there genuinely means the level has not traded — those stay trustworthy. Fix
   direction (not scoped): either print the reach of a level that is NOT the median (so the number can
