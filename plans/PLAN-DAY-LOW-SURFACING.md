@@ -1,19 +1,19 @@
 # PLAN-DAY-LOW-SURFACING — surfacing items resting on their 1/3/7/28-day lows
 
-Status: **SCOPING (2026-08-10)**. Requested by Ben, sequenced after the DT4c work. **Nothing is built.**
-Chunk 0 (the measurement) is BLOCKING, and **0a/0b/0c have all RUN**:
+Status: **CLOSED — MEASURED NEGATIVE (2026-08-10)**. Requested by Ben, sequenced after DT4c.
+**Nothing was built, and nothing should be.** Chunk 0 was BLOCKING and 0a/0b/0c/0d have all RUN:
 - **0a/0b** — the plan's own central hypothesis (that "at every low at once" is a falling knife) was
   measured and **REFUTED**. The effect is monotone in depth-of-low and survives de-marketing, per-item
   equal weighting, a price floor and a one-day entry lag (~40% attenuation).
-- **0c** — the transactable round trip (buy the ask, sell the bid, pay tax) is **NET NEGATIVE IN EVERY
-  BUCKET**. The ~7% cost of crossing the spread twice swallows the ~2.8% mid edge. The best bucket loses
-  ~2.5%.
+- **0c** — the transactable round trip under the WORST execution (cross the spread twice) is **NET
+  NEGATIVE IN EVERY BUCKET**; the best bucket loses ~2.5%.
+- **0d** — the round trip under the BEST execution (both legs fill patiently) on the LIQUID population
+  is **still not tradeable**. Best bucket: **+0.26% median over 7 days**. See below.
 
-**Current verdict: a real signal, not a trade.** ONE test can still rescue it — **0d**, which re-runs 0c
-on the liquid gate-surviving population with LIMIT-ORDER fills instead of crossing the spread twice
-(0c assumes the worst possible execution and includes items the scan would never admit). **Nothing may be
-built until 0d reports**; if 0d does not clear costs, this plan CLOSES as a measured negative. Do not
-delete this file until 0d resolves.
+**Verdict: a real relative signal that is not a trade.** The cross-horizon position genuinely predicts
+relative mid drift — that survived four controls and both execution bounds. It does not convert into
+absolute profit at a size worth attention. This file is KEPT (not deleted) as the record of a
+well-supported idea that lost, in the same spirit as `hourlyDrift` in PLAN-DIURNAL-TRIAGE.
 
 ## The ask
 
@@ -174,7 +174,61 @@ a profitable one.
 relative MID drift, robustly (three controls + an entry lag). What is refuted is that this pays as a
 naive market-taking round trip.
 
-**Chunk 0d — the one test that can still rescue it, NOT run.** 0c makes the most pessimistic possible
+**Chunk 0d — RUN 2026-08-10. The rescue FAILED; this plan closes.** Buy at *t+1*'s daily median
+**bid** (`avgLowPrice` — a resting bid that filled), sell at *t+8*'s daily median **ask**
+(`avgHighPrice` — a resting ask), GE tax on the sale, restricted to the liquid population
+(median `min(hv,lv)` ≥ 3,500/day, two-sided on >90% of days). **417 items screened → 112 passed the
+liquidity gate → 42 actually generated origins** (the 1,000gp floor and `termStructure` coverage drop
+the rest); 1,434 origins over 37 origin-days:
+
+| bucket | n | net med | de-mkt | P(net>0) | per-ITEM med | items |
+|---|---:|---:|---:|---:|---:|---:|
+| `1110` | 139 | **+0.26%** | +1.15% | 54% | +0.69% | 23 |
+| `0111` | 27 | +0.28% | +1.83% | 59% | +1.05% | 4 |
+| `1111` | 233 | −0.47% | +0.83% | 48% | −0.39% | 29 |
+| `1000` | 182 | −1.42% | −0.18% | 38% | −0.46% | 35 |
+| `1100` | 137 | −1.81% | −0.32% | 31% | −1.66% | 30 |
+| `0000` | 511 | −1.75% | −0.56% | 34% | −1.85% | 40 |
+| BASELINE | 1434 | −1.32% | — | 41% | — | 42 |
+
+**The ordering holds a fourth time — and it still doesn't pay.** The de-market column is genuinely
+positive for the low buckets (+0.83 to +1.83pp over the day's cross-section), so the signal is real.
+But de-market is a RESIDUAL and OSRS has no short: what you can actually collect is the absolute
+column, and the best bucket is **+0.26% over a 7-day hold** — under the most generous execution
+assumption available, since 0d assumes BOTH legs fill patiently. True execution sits between this and
+0c, i.e. below +0.26%.
+
+**Why it fails on magnitude, independent of everything above.** Take `1110` at face value and even add
+back a full ~1.2% of assumed market drag: ~1.4%/7d on a 40m position is ~80k gp/day against the scan's
+**250k gp/day** attention floor. Clearing that floor would need a ~125m single-item position — a size
+the Invest and amplitude lanes already serve better.
+
+**Two honesty bounds that both cut against the strategy.** (1) Origins are daily but the hold is 7 days,
+so consecutive origins overlap ~6/7 — `1110`'s n=139 is roughly **20 independent windows**. The two
+positive buckets are the least trustworthy on the board, and `0111` (4 items) must not be quoted at all.
+(2) The population is 42 items, not the 112 that passed the gate.
+
+**Why the −1.32% baseline is negative (three tests, two of my own hypotheses refuted en route).**
+The obvious answers were checked and killed before the real one was accepted:
+- *"Liquid spreads are narrower than the 2% tax."* Measured across all 112 gate-passers: median daily
+  spread **2.80%**, above tax, 69/112 exceeding it. **Refuted as stated.**
+- *"The sample window was a market-wide downtrend."* Median 7d mid→mid move **0.00%**, 48% of origins
+  negative, 12/37 origin-days negative. The market was **flat**. **Refuted.**
+- *Per-origin decomposition on the exact population:* entry-day spread **1.82%** (mean 2.69%), ask-side
+  drift **−0.05%**, giving a predicted `0.98·(1+A)·(1+B)−1 = −0.27%` against the observed −1.32%.
+  **The first hypothesis was right and mis-tested**: the origin population's spread (1.82%) sits BELOW
+  the tax, while the all-items figure (2.80%) does not — the 70 items that never generate origins are
+  the wide-spread ones. ~1pp of residual is unexplained; a median of a product is not the product of
+  medians when the terms are correlated per-origin, but that was not measured and should not be quoted
+  as the cause.
+
+**The lesson worth keeping** (CLAUDE.md rule 11): the spread hypothesis was stated, "refuted" by a test
+run on the WRONG population, and only survived because the decomposition was run on the origin set
+itself. A refuting test measured against a different population than the claim is not a refuting test.
+
+### Original framing of 0d (pre-measurement)
+
+0c makes the most pessimistic possible
 execution assumption: it CROSSES THE SPREAD TWICE (instabuy now, instasell later). That is not how this
 desk trades — Ben places limit orders, buying at/below the dip and selling at/above the band, which is
 the entire premise of flipping. 0c also runs on the UNFILTERED archive, including illiquid wide-spread
@@ -201,7 +255,10 @@ Honesty bounds (rule 4): one archive window, in-sample over the same market regi
 MIDS not on transactable bid/ask, and no tax applied. It is a **feasibility screen, not a calibration**
 — it can kill the idea or license a prototype; it cannot size a position or justify a gate.
 
-## Chunks — only if Chunk 0 separates
+## Chunks — NOT BUILT, and not to be built
+
+> **DEAD.** Chunk 0 gated these on the signal being tradeable. It separates but does not pay (0d),
+> so DL-1/DL-2/DL-3 were never started and should not be. Retained to show what was scoped.
 
 | # | Chunk | What | Surfaces |
 |---|---|---|---|

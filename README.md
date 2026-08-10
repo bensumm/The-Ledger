@@ -781,14 +781,22 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `quote-items.mjs` default stdout view with `--raw` as the model-free escape hatch; console-only, no
   `screen.json`/app change). Folds into `PLAN.md` and is deleted when its last chunk ships (the
   plan-file rule).
-- `plans/PLAN-DAY-LOW-SURFACING.md` — **SCOPING ONLY (2026-08-10), nothing built.** Ben's ask for a
-  surfacing lane over "items resting on their 1/3/7/30 day lows". Records what already exists (the
-  per-horizon `low`/`high`/`pctInRange` for 1/3/7/14/28d is ALREADY computed by `js/termstructure.mjs`
-  `termStructure` — the missing piece is the cross-horizon read, not the data), why the horizons are
+- `plans/PLAN-DAY-LOW-SURFACING.md` — **CLOSED, NEGATIVE RESULT (2026-08-10). Nothing was built and
+  nothing should be** — kept as a don't-rebuild record, NOT an in-flight plan. Ben's ask for a surfacing
+  lane over "items resting on their 1/3/7/30 day lows". Records what already exists (the per-horizon
+  `low`/`high`/`pctInRange` for 1/3/7/14/28d is ALREADY computed by `js/termstructure.mjs`
+  `termStructure` — the missing piece was the cross-horizon read, not the data), why the horizons are
   1/3/7/**28** rather than 30, and why the 1d bit is the weak one (daily mids off the 6h series, ~4
-  points — not an intraday low). Its **Chunk 0 is a BLOCKING walk-forward measurement** and a negative
-  result closes the plan, per the PLAN-BOTH-LEG-ENTRY / `hourlyDrift` precedent. Consumed by nobody yet;
-  produces no artifact. Folds into `PLAN.md` and is deleted when its last chunk ships.
+  points — not an intraday low). Its **BLOCKING Chunk 0 ran in four passes** and the result is unusually
+  clean: the cross-horizon position DOES predict relative mid drift (monotone in depth-of-low, surviving
+  de-marketing, per-item equal weighting, a price floor and a one-day entry lag), and it does NOT pay as
+  a trade under EITHER execution bound — 0c (cross the spread twice) loses in every bucket, 0d (both legs
+  fill patiently, liquid population only) tops out at **+0.26% median over a 7-day hold**, ~80k gp/day on
+  a 40m position against the 250k gp/d floor. Also records that the plan's OWN central hypothesis
+  ("at every low at once" is a falling knife) was refuted, and that the −1.32% baseline traces to an
+  origin-population spread (1.82%) below the 2% tax — a mechanism that was itself "refuted" once by a
+  test run on the wrong population. Consumed by nobody; produces no artifact. Precedent: PLAN-BOTH-LEG-ENTRY
+  / `hourlyDrift`.
 - `plans/PLAN-BOTH-LEG-ENTRY.md` — **CLOSED, NEGATIVE RESULT (2026-08-08). Nothing was built and
   nothing should be** — kept as a don't-rebuild record, NOT an in-flight plan. It proposed solving for an
   entry price that makes BOTH legs reach (chunks BL1–BL4). Its own BL4 validation gate was run FIRST, on

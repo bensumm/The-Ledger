@@ -10,6 +10,54 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### PLAN-DAY-LOW-SURFACING CLOSED as a measured negative + the `/24h` doctrine reconciled (2026-08-10)
+
+Two findings, both of which correct something the repo previously asserted. No code shipped; no
+`APP_VERSION` bump (nothing in the deployed app changed).
+
+**1. The day-low lane separates but does not pay — closed after four measurement passes.** Ben asked for
+a surfacing lane over items resting on their 1/3/7/30-day lows. The blocking Chunk 0 measured it instead
+of building it, and the result is unusually clean in both directions. The signal is REAL: bucketing each
+origin by a 4-bit `[1d][3d][7d][28d]` at-the-low vector gives a forward return that is monotone in
+depth-of-low and survives de-marketing, per-item equal weighting, a 1,000gp floor, and a one-day entry
+lag (~40% attenuation). The plan's OWN central hypothesis — that "at every low at once" is a falling
+knife that must never rank first — was refuted by its own measurement and is retained in the file rather
+than deleted, because a well-supported prior losing IS the finding.
+
+It still is not a trade. Both execution bounds were run: **0c** (cross the spread twice — the worst case)
+loses in every bucket; **0d** (both legs fill patiently, restricted to the liquid gate-surviving
+population) tops out at **+0.26% median over a 7-day hold**. That is the CEILING, not an estimate — real
+fills sit between the two. And it fails on magnitude independently: even adding back a full ~1.2% of
+assumed market drag, ~1.4%/7d on a 40m position is ~80k gp/day against the scan's 250k gp/d attention
+floor. Honest bounds recorded with it — 42 items generate origins (not the 112 that passed the gate), and
+7-day windows on daily origins overlap ~6/7, so the best bucket's n=139 is ~20 independent windows.
+
+**The mechanism hunt is the transferable part.** Two plausible causes for the −1.32% baseline were stated
+and killed before the right one was accepted: "liquid spreads are narrower than the tax" (measured 2.80%
+median across the 112 gate-passers — ABOVE tax, apparently refuted) and "the window was a downtrend"
+(median 7d mid→mid move 0.00% — the market was flat, refuted). The per-origin decomposition then showed
+the first hypothesis was RIGHT and had been mis-tested: the 42 items that actually generate origins carry
+a 1.82% entry spread, BELOW the 2% tax, because the 70 items that never generate origins are the
+wide-spread ones. **A refuting test run against a different population than the claim is not a refuting
+test** — the sharpest form of CLAUDE.md rule 11 found so far.
+
+**2. The `/24h` endpoint doctrine no longer describes the endpoint.** `marketfetch.mjs`'s header,
+`plans/PLAN-VOL24.md`, `CLAUDE.md` and `README.md` all assert `/24h` under-reports true volume by
+**10–27×** because it serves the first 1–3 hours of a UTC day. Measured two independent ways — a live
+recompose over 314 cached 1h series (corrected/broken **median 1.05×**) and a cross-check against the
+local SQLite archive over 299 items (endpoint ÷ archive-summed-24h-ending-at-the-endpoint's-own-anchor =
+**1.06×**; ÷ the first 3h after that anchor = **7.23×**, where the doctrine predicts ~0.04–0.10×). The
+endpoint today serves a **complete 24h aggregate that is ~71h stale** (anchor frozen on a UTC day
+boundary; the header still says ~26h). The 2026-07 observation was almost certainly correct when made —
+the endpoint's behaviour changed underneath a calibration justified by that behaviour, and nothing in the
+repo would notice it change again.
+
+The correction (`rolling24FromTs1h`) stays justified — a 71h-stale volume is unusable for gating — but
+its RATIONALE is staleness, not truncation. Also established: `vol24FromInputs` does not feed
+`FLOOR`/`GP_FLOOR`/`CHURN_MIN_VOL`/`MIN_GPD` (the screen takes volume from `loadAll24hRolling`), so the
+screen's gates are unaffected; and **the entire correction can be reverted with all 109 suites green** —
+mutation-proven, the strongest available statement of the test gap.
+
 ### `check-imports` coverage extended to `js/**` + `pipeline/lib/**` — closing a latent gap for free (2026-08-10, Ben-directed)
 
 The guard scanned `pipeline/commands/*.mjs` ONLY. The other 93 source files — including every module the
