@@ -32,7 +32,7 @@ items rather than genuinely-cyclical ones with nothing in the gate statistic to 
 |---|---|
 | **GATE** (parity split) | Even/odd **fit-period** days → `hourProfile` each half → Pearson-correlate the two 24-hour `devLow` vectors (and `devHi`). Interleaving in time means both halves see the same regime: a reliability measure, not a stability one. |
 | **TEST** (temporal holdout) | Fit `hourProfile` on the first 2/3 of days; on each **held-out later day**, did the fitted dip hour print at/below that day's median low (peak hour at/above its median high)? |
-| **BASELINE** | A deterministic pseudo-random hour **on the same day, scored on the same days**. Only lift over this baseline counts. The draw is uniform over 24 hours and is NOT excluded from picking the fitted hour, so ~1/24 (measured 4.14%) of baseline draws ARE the fitted hour and score as a hit. That contaminates the baseline TOWARD the treatment, i.e. the study is **conservative** by ~4%: true lift ≈ observed ÷ 0.959 (PASS ≈ +14.9, FAIL ≈ +3.3). No conclusion moves. |
+| **BASELINE** | A deterministic pseudo-random hour **on the same day, scored on the same days**. Only lift over this baseline counts. The draw is uniform over 24 hours and is NOT excluded from picking the fitted hour, so ~1/24 (measured 4.14%) of baseline draws ARE the fitted hour and score as a hit. That contaminates the baseline TOWARD the treatment, i.e. the study is **conservative** by ~4%: true lift ≈ observed ÷ 0.959, so this table's PASS +14.8 → ≈ **+15.4** and FAIL +3.2 → ≈ **+3.3**. (An earlier version wrote +14.9, which is the AS-OF-PIN re-run's 14.3 ÷ 0.959 — two panels mixed in one correction.) No conclusion moves. |
 
 ### Two bugs found in this study, both corrected here
 
@@ -123,7 +123,8 @@ What survives, and it is now a judgment call rather than a measurement verdict:
   is the ITEM-weighted figure. Gate-pass items are ~12× more liquid (median 1h volume 1253 vs 109) —
   i.e. disproportionately the ones actually quoted. Volume-weighted, PASS is **~11%** of the panel (and
   ~16% among the 50 most-liquid items), so suppression hides the window on ~89% of trading-weighted
-  attention, not ~95%. The argument survives; its one quantitative figure was 2.5× off and is corrected.
+  attention, not ~95%. The argument survives; the cost figure was overstated by 6pp (and the PASS *share*
+  it complements was understated 2.5×, 4.5% → 11.1%).
 - **Either way, keep it ATTENDED-only,** and do not let the ranking edge imply gp value while the
   flatness confound stands unmeasured. The highest-value follow-up is not a threshold argument: it is
   measuring what the ranking edge is actually worth in gp on the items that pass.

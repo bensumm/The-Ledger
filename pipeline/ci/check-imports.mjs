@@ -167,20 +167,34 @@ function codeOnly(src) {
       if (c === '\\') { i += 2; continue; }
       if (c === '`') { i++; return; }
       if (c === '$' && noComments[i + 1] === '{') {
-        i += 2; let depth = 1; const start = i;
+        i += 2; let depth = 1, dPrev = ''; const start = i;
         while (i < n && depth > 0) {           // find the interior's extent, brace-depth aware
           const d = noComments[i];
-          // Skip STRING literals while measuring depth. A brace inside a string (`${ f("{") }`) is not a
-          // real brace: counting it left depth permanently unbalanced, so the closing backtick re-entered
-          // scanTemplate() and the scan ran off to EOF — the fifth blinding shape found in this scanner.
+          // Skip STRING and REGEX literals while measuring depth. A brace or quote inside either is not
+          // structural: counting it leaves depth permanently open, the closing backtick re-enters
+          // scanTemplate(), and the scan runs off to EOF. Strings were the FIFTH blinding shape; regexes
+          // were the SIXTH, found one round later, one character away — `${ s.replace(/\{/g,'') }`.
+          // The regex omission is the file's OWN documented "failure 2" recurring inside a nested scanner,
+          // which is why the division-vs-regex rule is shared (REGEX_PREV_OK) rather than re-derived.
           if (d === "'" || d === '"') {
             const q = d; i++;
             while (i < n && noComments[i] !== q) { if (noComments[i] === '\\') i++; i++; }
-            i++; continue;
+            i++; dPrev = ')'; continue;
           }
-          if (d === '`') { scanTemplate(); continue; }          // nested template — skip past it wholesale
+          if (d === '/' && REGEX_PREV_OK.has(dPrev)) {
+            i++; let inClass = false;
+            while (i < n) {
+              const e = noComments[i]; i++;
+              if (e === '\\') { i++; continue; }
+              if (e === '[') inClass = true; else if (e === ']') inClass = false;
+              else if (e === '/' && !inClass) break;
+            }
+            dPrev = ')'; continue;
+          }
+          if (d === '`') { scanTemplate(); dPrev = ')'; continue; }   // nested template — skip wholesale
           if (d === '{') depth++;
           else if (d === '}') { depth--; if (depth === 0) break; }
+          if (!/\s/.test(d)) dPrev = d;
           i++;
         }
         out += ' ' + codeOnly(noComments.slice(start, i)) + ' ';  // RECURSE: clean the interior's own literals
@@ -243,7 +257,14 @@ function boundConstants(src) {
   // detection: it trains people to distrust the guard. Deliberately OVER-binding here — a slightly weaker
   // check that never cries wolf beats a sharper one that does.
   for (const d of clean.matchAll(/\bcatch\s*\(\s*([A-Za-z_$][\w$]*)/g)) bound.add(d[1]);
-  for (const d of clean.matchAll(/(?:^|[;{}])\s*([A-Z][A-Z0-9_]*)\s*:(?!:)/gm)) bound.add(d[1]);   // labels
+  // Labels (`OUTER: for(;;){ continue OUTER; }`), discriminated from an object KEY by what FOLLOWS the
+  // colon: a label is followed by a STATEMENT, a key by a value. Position cannot separate them — the
+  // first attempt keyed on the preceding character and excluded `{`, which broke a label at the start of
+  // a function body (caught by this file's own test). It matters because `bound` is per-file: reading
+  // `{ MAX_X: 1 }` as a label bound MAX_X everywhere and masked a genuine unbound use of it — the same
+  // masking class as the `if (X)` bug. (Latent when found: disabling the rule entirely still left the
+  // guard at 0 unbound across every entrypoint.)
+  for (const d of clean.matchAll(/([A-Z][A-Z0-9_]*)\s*:\s*(?=(?:for|while|do|switch|if)\b|\{)/g)) bound.add(d[1]);
   for (const d of clean.matchAll(/\bstatic\s+([A-Za-z_$][\w$]*)/g)) bound.add(d[1]);               // class fields
   // Parameter lists: `(…) =>`, `method(…) {`. The lookbehind is LOAD-BEARING — without it this also
   // matched `if (X) {`, `while (X) {`, `switch (X) {`, `for (…) {`, none of which BINDS anything. Because

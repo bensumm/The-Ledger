@@ -8,9 +8,12 @@
 >   validator FIRES. Do not re-open that as an ENCODE candidate — it shipped.
 > - **`--mode all` is band/churn/amplitude**, not band/spread/rising: `spread` and `rising` were DELETED
 >   (`js/flip-niches.mjs`), and value was swapped out for amplitude (THE SWAP, 2026-07-19).
-> - **The counts below are stale.** `lint-skills.mjs` now reports **136 rule-blocks across 9 skills**
->   (this doc covers only the original four), and there are **55** memory entries, not 30. A handful of
->   rows triage a `/scan` rule-block or a memory entry that no longer exists.
+> - **The counts below are stale, and any number written here goes stale immediately** — the skills are
+>   edited most weeks. Re-derive with `node pipeline/ci/lint-skills.mjs` (it prints the live total across
+>   all 9 skills; this doc covers only the original four) and `ls` the memory dir (55 entries at the time
+>   of writing, vs the 30 the table claims). A handful of rows triage a `/scan` rule-block or a memory
+>   entry that no longer exists. _(A fixed count was written here on 2026-08-09 and was wrong within the
+>   same commit, because that commit's own `/book` edit added a rule-block.)_
 >
 > The structural guard (`pipeline/ci/lint-skills.mjs`) enforces that every rule-block is TAGGED; it does
 > not check this file's prose against the code, which is why the drift above went unnoticed. Re-derive

@@ -1,6 +1,6 @@
 ---
 name: ship
-version: 2.4
+version: 2.5
 description: Land a change on main (attended direct-push under the admin bypass today; PR + checks once the gh token is refreshed) and verify it — confirm the CI checks run and the Pages deploy are green; also holds the CI/workflow-editing and gh guardrails. Triggers — "ship it", "push this", "open a PR", "commit and push", "is it live", "check the deploy", "check CI", any change landing on main.
 ---
 
@@ -63,12 +63,16 @@ gh pr create --fill                 # NOT --draft when it's ready to land
 gh pr merge --squash                # or --squash --auto (auto-merge on green)
 ```
 
-**On-demand data syncs always push direct to `main`** regardless — `node
-pipeline/commands/sync-fills.mjs` writes `fills.json`/`positions.json`/`suggestions.jsonl`, riding the
-admin bypass; the sync is on-demand (no unattended writer exists anymore — the 20-min
-`CofferFillsSync` job was eliminated, FILLS-PIPELINE.md §12), and its clobber-guard
-fast-forwards onto the current `main` before committing. On a rebase conflict on those files,
-take the remote side — they're pipeline-owned.
+**Only `sync-fills.mjs --publish` touches git — a BARE sync pushes NOTHING.** _(judgment: process guardrail)_
+`sync-fills.mjs:87`: `--publish` is the ONLY path that fetches/ff-pulls, commits and pushes; the default
+(and the `--local` synonym) is ZERO-git and just writes the artifacts. That publish runs once a day, at
+`/overnight`, and it rides the admin bypass with a clobber-guard that fast-forwards onto the current
+`main` before committing. Its add-list is **eight** files — one home, `FILLS-PIPELINE.md` §13.3. On a
+rebase conflict on those files, take the remote side; they're pipeline-owned. No unattended writer exists
+(the 20-min `CofferFillsSync` job was eliminated, §12).
+_(This block previously read "On-demand data syncs always push direct to `main` regardless — `node
+pipeline/commands/sync-fills.mjs` … riding the admin bypass", naming three files. Both halves were wrong,
+inside the skill that owns shipping and against CLAUDE.md rule 6. Corrected 2026-08-09.)_
 
 ## 3. Verify — not done until the runs are green
 

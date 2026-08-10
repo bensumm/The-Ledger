@@ -79,6 +79,25 @@ ok('FAILURE 5 — a brace inside a STRING inside `${…}` does not unbalance the
   }
 });
 
+ok('FAILURE 6 — a REGEX inside `${…}` does not unbalance the scan', () => {
+  // One round after the string fix, one character away: the depth scan skipped strings but had no regex
+  // state, so a brace/quote/backtick inside a regex left depth open and the scan ran to EOF. This is the
+  // file's own "failure 2" recurring inside the nested scanner.
+  for (const interior of ['s.replace(/\\{/g,"")', 's.replace(/["\']/g,"")', 's.replace(/`/g,"")']) {
+    const src = 'export const a = (s) => `x ${' + interior + '} y`;\nexport const z = MISSING_RE_IN_TPL + 1;';
+    assert.ok(un(src).includes('MISSING_RE_IN_TPL'), `a regex in ${interior} must not blind the rest of the file`);
+  }
+});
+
+ok('an object KEY does not bind its name file-wide', () => {
+  // The label rule used to accept `{ MAX_X:` as a label, binding MAX_X everywhere and masking a real
+  // unbound use — the same per-file masking class as `if (X) {`.
+  const src = 'export const o = { MASKED_BY_KEY: 1 };\nexport const z = MASKED_BY_KEY + 1;';
+  assert.ok(un(src).includes('MASKED_BY_KEY'), 'an object key must not bind the name for the whole file');
+  // …while a REAL label still binds.
+  assert.deepEqual(un('export function f(){ REAL_LABEL: for(;;){ continue REAL_LABEL; } }'), []);
+});
+
 ok('a TERNARY consequent is a reference, not an object key', () => {
   // `c ? MAX_X : 0` looks exactly like a key to the trailing-colon heuristic.
   assert.ok(un('export const a = (c) => c ? MISSING_TERNARY : 0;').includes('MISSING_TERNARY'));

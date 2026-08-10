@@ -15,7 +15,7 @@
 import { netMargin, clamp } from '../money-math.js';
 import { breakEven } from '../quotecore.js';   // PLAN-OUTPUT-TABLE: the ONE model-free break-even (BE floor for estSell)
 import { RECENCY_DIVERGE } from '../windowread.mjs';   // PLAN-OUTPUT-TABLE rev1: reuse the RC1 recent-vs-full divergence threshold (windowread is a leaf — no import cycle)
-import { reachRelief, REACH_DEBIAS_MAX_FRAC, askReachFactor, reachFraction } from './reach.mjs';   // PC2: liquidity/size relief + the Part-B de-bias cap; PLAN-ESTIMATOR-HONEST-SELL E1: askReachFactor — the SAME FUNCTION the rank calls, reused (never forked) so the display reads "raw margin × P(fill)" like the rank; RB-3 (PLAN-RECENCY-BASIS): this module calls it on the RECENT basis (`{prefer:'recent'}`) so the printed P matches the recent-3 price beside it, while the rank (families.mjs:332) stays full-window — a DECIDED divergence, see the pFill comment below. reachFraction = the ONE recency-basis rule reachRead also folds on.
+import { reachRelief, REACH_DEBIAS_MAX_FRAC, askReachFactor, reachFraction } from './reach.mjs';   // PC2: liquidity/size relief + the Part-B de-bias cap; PLAN-ESTIMATOR-HONEST-SELL E1: askReachFactor — the SAME FUNCTION the rank calls, reused (never forked) so the display reads "raw margin × P(fill)" like the rank; RB-3 (PLAN-RECENCY-BASIS) had this module on the RECENT basis while the rank stayed full-window; the 2026-08-09 FLIP moved it back — this module now calls it with `{prefer:'full'}` (`:128`, `:266`), the SAME basis as the rank, so the display-vs-rank divergence is RETIRED. See the pFill comment below; this line asserted the old split until 2026-08-09. reachFraction = the ONE recency-basis rule reachRead also folds on.
 import { driftExitFrom } from '../forecast.mjs';   // PLAN-ESTIMATOR-HONEST-SELL E1: the forward-projected exit LEVEL ("list at X") — computed in the SHELL off extra.forward (profile+days already in the caller's hand → zero new fetch). forecast→windowread(leaf) only, no cycle.
 import { SELL_TOP_MODELS } from './sell-models/index.mjs';   // PC3: the named sell-top proposal models (reach-fold / pressure / …)
 
@@ -139,8 +139,8 @@ function reachRead(r) {
    honest (possibly-sub-BE, possibly-negative-net) proposal; `estSellFloorBind = beFloored ? be : null` carries
    the floor as a DISPLAY FACT (an annotation on the SECONDARY reach-fold), never a number substitution.
    `pFill` reuses askReachFactor (the SAME fn the rank calls, never a reimplementation) so the display reads
-   the rank's honest pattern (raw margin × P(fill)) — on the RECENT-3 basis since RB-3, matching the recent-3
-   fold price it prints beside; the rank stays full-window (see the pFill comment in the body);
+   the rank's honest pattern (raw margin × P(fill)) — on the FULL-WINDOW basis since the 2026-08-09 flip,
+   the SAME basis as the rank and as the fold price it prints beside (this line said RECENT-3 until then);
    `estSellForward`/forward fields are the phase-aware "list at X" projection.
    extra (ALL optional — zero new fetch; the caller passes only what it already computed):
      bidReach  { reachedDays, nDays, recentHit?, recentDays? }  patient bid TOUCH counts (full + recent-3)
