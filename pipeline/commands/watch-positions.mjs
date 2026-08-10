@@ -984,7 +984,7 @@ async function main() {
   // never auto-places and never runs the scan (Ben places every offer; the LLM/Ben runs /scan).
   // Guarded like every other state use; a fresh/stale prior yields no event (no startup misfire).
   try {
-    const freed = freedCapital(priorState, held.map(it => ({ id: it.id, qty: it.qty, sellPrice: it.row.quickSell })), { now: nowMs });
+    const freed = freedCapital(priorState, held.map(it => ({ id: it.id, qty: it.qty })), { now: nowMs });
     if (freed.prompt)
       freedLine = `  ⋯ freed ~${fmtP(freed.totalFreed)} this pass — consider a scan to redeploy (${freed.events.length} lot${freed.events.length > 1 ? 's' : ''} sold since last pass)`;
   } catch { /* companion is surface-only observability — never break a pass */ }
@@ -1209,7 +1209,14 @@ async function main() {
   // ---- SUMMARY: totals + provenance + loop + discipline ---- (collected into summaryLines; the
   // capital/derived-cash math + fs read stay HERE, in main's I/O; the report renders it as text)
   const exposure = held.reduce((n, it) => n + (it.lotValue || 0), 0);
-  const committed = bidItems.reduce((n, it) => n + it.bids.reduce((m, o) => m + o.max * o.offer, 0), 0);
+  // ESCROW, not offer size: `qty` is the amount FILLED SO FAR (reconstruct/offers.mjs:114), and a
+  // filled unit has already left escrow and become inventory — where it is counted again in
+  // `exposure` above. `max × offer` therefore double-counts the filled leg of a partially-filled
+  // bid. This matches the rule derive-cash-tiers.mjs states for the authoritative escrow source
+  // ("the UNFILLED remainder … summed once each, never the whole qty×price twice") and the identical
+  // Math.max(0, max−qty)×offer in reconstruct/offers.mjs's suspectBidEscrow.
+  const committed = bidItems.reduce((n, it) =>
+    n + it.bids.reduce((m, o) => m + Math.max(0, (o.max || 0) - (o.qty || 0)) * (o.offer || 0), 0), 0);
   const summaryLines = ['=== SUMMARY ==='];
   const sumBits = [];
   if (held.length) sumBits.push(`held exposure ${fmtP(exposure)} (${held.length} lot${held.length > 1 ? 's' : ''}${asks.length ? `, ${asks.length} listed` : ''})`);

@@ -1764,7 +1764,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `velocity.mjs` (#3/YS1 — PURE `velocityClass(holdTimeSec)` → fast-cycler/mid/slow-hold/n·a off a
     MEASURED round-trip hold; placeholder thresholds), `capital-utilization.mjs` (#3/YV1 — PURE
     `bookUtilization` (working-held vs parked-bid capital split) + `parkedStats` (historical
-    "how long bids sat" + velocity mix over outcomes campaigns) + `totalCapital` (committed +
+    "how long bids sat" + velocity mix over outcomes campaigns — the mix counts SELL campaigns only,
+    the round-trip-capable side, since a buy leg has no `holdTimeSec` and can never carry a class;
+    counting both sides padded `n/a` with 438 unclassifiable buy legs) + `totalCapital` (committed +
     idle cash → the WHOLE-pool idle-vs-working split, null-safe when cash is unknown; the idle
     figure it's fed is now the DERIVED `availableCash` from `derive-cash-tiers.mjs`, not a stated snapshot);
     output-only, never a verdict input),

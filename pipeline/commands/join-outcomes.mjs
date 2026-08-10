@@ -380,7 +380,8 @@ function report(o) {
   const ps = parkedStats(o.campaigns);
   const vd = ps.velocityDist;
   console.log(`\n# Velocity + capital efficiency (#3 â€” descriptive, measured; NOT a rate)`);
-  console.log(`  velocity mix: ${['fast-cycler', 'mid', 'slow-hold', 'n/a'].map(k => `${k} ${vd[k] || 0}`).join(' Â· ')}`);
+  console.log(`  velocity mix (round-trip-capable sell campaigns only — a buy leg has no holdTimeSec and can never carry a class):`);
+  console.log(`    ${['fast-cycler', 'mid', 'slow-hold', 'n/a'].map(k => `${k} ${vd[k] || 0}`).join(' Â· ')}`);
   console.log(`  bids: ${ps.nBids} (${ps.nFilledBids} filled, ${ps.nNeverFilled} never filled)  Â·  median time a filled bid sat before first fill: ${ps.medianParkedSec != null ? fmtTurn(ps.medianParkedSec / 3600) : 'â€”'}`);
   console.log(`  âš  yield leaks to idle capital + slow fills as much as to bad picks; treat a per-item velocity as a label, not a rate.`);
 

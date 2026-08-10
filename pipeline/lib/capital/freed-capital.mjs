@@ -31,8 +31,12 @@ function parseHeldIdentity(identity) {
 /* PURE. Detect capital freed by SELLs between the prior pass and this pass.
      prior   — the loadState() map from watchstate.mjs (keys `held:<id>`, entries carry
                `{ identity:'hld:<qty>:<avgCost>', instabuy, ts, ... }`)
-     curHeld — this pass's held lots: [{ id, qty, sellPrice }] (sellPrice = live instabuy, the
-               clear-now price used to value the units that left the book; optional)
+     curHeld — this pass's held lots: [{ id, qty }] — only `id`/`qty` are read. (A `sellPrice` field
+               was documented here as "the clear-now price used to value the units that left the book"
+               until 2026-08-10, but nothing ever read it and the doc contradicted the Returns note
+               three lines below: units are valued at the PRIOR pass's instabuy, else avg cost. The
+               param is gone rather than wired, since the prior-pass instabuy is what those units were
+               actually worth when last seen — changing the valuation basis is a separate call.)
      opts.now       — ms (default Date.now()); a prior entry older than STALE_GAP_MS is NOT a
                       consecutive pass → its lots are ignored (no overnight-pause false positive)
      opts.threshold — freed-gp floor to set `prompt` (default FREED_CAPITAL_SCAN_GP)

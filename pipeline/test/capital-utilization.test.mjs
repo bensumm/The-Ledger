@@ -34,11 +34,17 @@ ok('bookUtilization edges: all-parked 0%, all-working 100%, nothing committed nu
 });
 
 ok('parkedStats: bid/filled/never-filled counts + parked-time median (filled only) + velocity mix', () => {
+  // Fixture matches PRODUCTION shape: velocityClass comes from holdTimeSec (buy-fill→sell-fill),
+  // which exists only on a SELL campaign — so every buy leg is 'n/a'. Measured 2026-08-10: 438/438
+  // buy campaigns were 'n/a', 0 classed. The pre-2026-08-10 fixture put 'fast-cycler'/'mid' on BUY
+  // campaigns, a shape production never produces, which is how the n/a-padding bug stayed pinned.
   const campaigns = [
-    { side: 'buy', everFilled: true, parkedSec: 100, velocityClass: 'fast-cycler' },
-    { side: 'buy', everFilled: true, parkedSec: 300, velocityClass: 'mid' },
-    { side: 'buy', everFilled: false, parkedSec: 9999, velocityClass: 'n/a' },   // never filled → parked, no first-fill
-    { side: 'sell', everFilled: true, parkedSec: 5, velocityClass: 'slow-hold' },
+    { side: 'buy',  everFilled: true,  parkedSec: 100,  velocityClass: 'n/a' },
+    { side: 'buy',  everFilled: true,  parkedSec: 300,  velocityClass: 'n/a' },
+    { side: 'buy',  everFilled: false, parkedSec: 9999, velocityClass: 'n/a' },  // never filled → parked, no first-fill
+    { side: 'sell', everFilled: true,  parkedSec: 5,    velocityClass: 'slow-hold' },
+    { side: 'sell', everFilled: true,  parkedSec: 7,    velocityClass: 'fast-cycler' },
+    { side: 'sell', everFilled: true,  parkedSec: 9,    velocityClass: 'n/a' },  // unmatched sell — a GENUINE n/a
   ];
   const ps = parkedStats(campaigns);
   assert.equal(ps.nBids, 3, 'three buy campaigns');
@@ -47,7 +53,9 @@ ok('parkedStats: bid/filled/never-filled counts + parked-time median (filled onl
   assert.equal(ps.medianParkedSec, 200, 'median of the two FILLED bids (100,300) — never-filled excluded');
   assert.equal(ps.velocityDist['fast-cycler'], 1);
   assert.equal(ps.velocityDist['slow-hold'], 1);
-  assert.equal(ps.velocityDist['n/a'], 1);
+  // THE REGRESSION PIN: the mix counts round-trip-capable (sell) campaigns only. The three buy legs
+  // are structurally unclassifiable and must NOT pad 'n/a' — only the one unmatched sell counts.
+  assert.equal(ps.velocityDist['n/a'], 1, 'buy legs do not pad the n/a bucket (would be 4 if they did)');
 });
 
 ok('totalCapital: committed + stated idle cash, pcts sum to 100', () => {

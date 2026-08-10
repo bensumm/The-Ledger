@@ -38,15 +38,23 @@ export function totalCapital({ workingGp = 0, parkedGp = 0, cashGp = null } = {}
 }
 
 /* parkedStats(campaigns) -> distribution + idle read over the outcomes campaign records.
-   nBids / nFilledBids / nNeverFilled, medianParkedSec (of FILLED bids), and the velocityClass mix. */
+   nBids / nFilledBids / nNeverFilled, medianParkedSec (of FILLED bids), and the velocityClass mix
+   (over SELL campaigns only — the round-trip-capable side; see the note at velocityDist below). */
 export function parkedStats(campaigns) {
   const cs = campaigns || [];
   const bids = cs.filter(c => c.side === 'buy');
   const filled = bids.filter(c => c.everFilled && c.parkedSec != null);
   const neverFilled = bids.filter(c => !c.everFilled);
   const parkedSecs = filled.map(c => c.parkedSec).filter(s => s != null);
+  // Velocity mix over the ROUND-TRIP-CAPABLE campaigns only (sells). velocityClass is derived from
+  // holdTimeSec (buy-fill→sell-fill), which exists ONLY on a sell campaign — so every buy leg is
+  // structurally 'n/a' and counting the whole set padded the 'n/a' bucket with legs that could never
+  // carry a class. Measured 2026-08-10: 438/438 buys were 'n/a', inflating a real 157 unmatched-sell
+  // 'n/a' to a reported 595/908 and making the mix read as mostly-unclassified. Side-scoping matches
+  // how `bids` above is already computed.
+  const roundTripCapable = cs.filter(c => c.side === 'sell');
   const velocityDist = {};
-  for (const c of cs) { const v = c.velocityClass || 'n/a'; velocityDist[v] = (velocityDist[v] || 0) + 1; }
+  for (const c of roundTripCapable) { const v = c.velocityClass || 'n/a'; velocityDist[v] = (velocityDist[v] || 0) + 1; }
   return {
     nBids: bids.length,
     nFilledBids: filled.length,

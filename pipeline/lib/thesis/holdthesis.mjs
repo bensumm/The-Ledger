@@ -101,7 +101,17 @@ export function upsertThesis(store,
 export function clearThesis(store, id) { return (store || []).filter(e => !(e && e.id === id)); }
 
 /* pruneHoldThesis — drop entries older than ttlDays (stale declared intent) or malformed. PURE.
-   watch-positions.mjs prunes on read so a forgotten plan can't silence forever. */
+   watch-positions.mjs prunes on read so a forgotten TIMESTAMPED plan can't silence forever.
+
+   KNOWN GAP, deliberately left (reviewed 2026-08-10 — do not "fix" this without Ben): a `ts`-LESS
+   entry is kept forever, so the sentence above does NOT hold for one. That is a real hazard on paper
+   — a hold thesis SILENCES a CUT, so an un-expirable entry could hide an exit signal indefinitely.
+   It is left alone because expiring it is WORSE: the prune is read-only in quote-items.mjs, but
+   declare-thesis.mjs SAVES the pruned store back (lines 86/117), so dropping ts-less entries would
+   permanently delete a HAND-WRITTEN thesis the next time any thesis was declared. Deleting declared
+   intent beats a stale silence only if Ben says so.
+   In practice the gap is currently unreachable: setThesis always stamps `ts` (see it below), and all
+   7 live hold-thesis.json entries carry one. The behaviour is pinned in holdthesis.test.mjs. */
 export function pruneHoldThesis(store, now = Math.floor(Date.now() / 1000), ttlDays = HOLD_THESIS_TTL_DAYS) {
   const cutoff = now - ttlDays * 86400;
   return (store || []).filter(e => e && e.id != null && (e.ts == null || e.ts >= cutoff));

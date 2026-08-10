@@ -1471,7 +1471,9 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // site simply hands rateItem the cap VALUES/flags for this row instead of stacking capGrade calls
     // outside it (the pre-G1 two-sources-of-truth bug, Flaw 7). rateItem returns the R7 `cappedBy`
     // attribution (last-binding cap) directly, so the render site no longer re-derives it with a local
-    // capGrade helper. The reach cap keys off the RECENT ask-reach fraction; PART II churn exemption =
+    // capGrade helper. The reach cap keys off the FULL-WINDOW ask-reach fraction (reachedDays/nDays —
+    // js/estimators/reach.mjs's `prefer:'full'` default; the RECENT read is the separate
+    // recentHit/recentDays path, which this does NOT use); PART II churn exemption =
     // a 'symmetric'-fillShape niche is exempt (its lap exit sells into continuous two-sided flow, so the
     // day-high reach read mismeasures it — mirrors estimateRank's askF skip). EF1(b): the exemption is
     // PLACEMENT-BOUNDED now, mirroring the rank exactly (er.exemptionBounded — an above-the-distribution

@@ -10,6 +10,46 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### pipeline — round-12 review backlog: two real capital-math fixes, three doc corrections, one deliberate non-fix (2026-08-10, no APP_VERSION bump: pipeline-only)
+
+**1. `watch-positions.mjs` double-counted the filled leg of a partially-filled bid.** `committed` summed
+`o.max × o.offer`, but `qty` is the amount FILLED SO FAR (`reconstruct/offers.mjs:114`) and a filled unit
+has already left escrow to become inventory — where it is counted again in `exposure`. Now
+`Math.max(0, max−qty) × offer`. This is not a judgment call: `derive-cash-tiers.mjs`, the authoritative
+escrow source, states the rule in its own header ("the UNFILLED remainder … summed once each, **never the
+whole qty×price twice**") and `reconstruct/offers.mjs`'s `suspectBidEscrow` already computed it that way,
+so `watch-positions` was the lone outlier of three. Feeds the `bid capital` line, `bookUtilization`'s
+working/parked split, and `totalCapital`. Inform-only; no live diff today (zero resting offers), so the
+fix is proved by arithmetic instead: three bids (0/40/100 of 100 filled @1000) read 300,000 before and
+160,000 after — the 140,000 removed is exactly the filled units already in held exposure.
+
+**2. `capital-utilization.mjs`'s velocity mix padded `n/a` with legs that can never carry a class.**
+`velocityDist` counted ALL campaigns, but `velocityClass` derives from `holdTimeSec` (buy-fill→sell-fill),
+which exists only on a SELL campaign. Measured: **438 of 438 buy campaigns were `n/a`, 0 classed** — so the
+printed mix read `n/a 595` of 908 when the honest figure is `n/a 157` of 470 sells (the 157 being genuine
+unmatched sells). Classed share goes 313/908 → 313/470; same numerator, correct denominator. Side-scoping
+matches how `bids` in the same function was already computed. The old TEST FIXTURE was the reason this
+survived: it put `fast-cycler`/`mid` on BUY campaigns, a shape production never emits.
+
+**3–5. Doc corrections, no behaviour change.** `screen-flip-niches.mjs`'s grade-cap comment claimed the
+reach cap keys off the RECENT ask-reach fraction; it uses `reachedDays/nDays`, which `js/estimators/reach.mjs`
+documents as the FULL-window default (`prefer:'full'`) — RECENT is the separate `recentHit/recentDays` path.
+`freed-capital.mjs` documented a `sellPrice` field on `curHeld` as "the price used to value the units that
+left the book", but nothing read it and the doc contradicted the Returns note three lines below (units are
+valued at the PRIOR pass's instabuy, else avg cost); the dead param is removed from the doc and the caller.
+
+**6. `pruneHoldThesis`'s `ts`-less immortality — reviewed and DELIBERATELY LEFT.** A `ts`-less entry is never
+pruned, which does contradict the function's own "a forgotten plan can't silence forever" line, and a hold
+thesis SILENCES a CUT. It was changed to expire, then **reverted after checking the call graph**: the prune
+is read-only in `quote-items.mjs`, but `declare-thesis.mjs` (86/117) SAVES the pruned store back, so expiring
+`ts`-less entries would permanently delete a HAND-WRITTEN thesis the next time any thesis was declared.
+Deleting declared intent is worse than a stale silence, and the behaviour was already an explicit pin in
+`holdthesis.test.mjs`. Currently unreachable anyway — `setThesis` always stamps `ts` and all 7 live entries
+carry one. The header now states the gap honestly instead of claiming a guarantee it does not provide.
+
+Also reviewed and **not** a defect: `ownedledger.mjs`'s unwired `foldPendingBuys` carries an explicit
+`@provisional-api` annotation (RF2 wiring, pending `sync-fills.mjs`) and has tests — intentionally dormant.
+
 ### pipeline — drop the dead predicted `velocityClass` (2026-08-10, no APP_VERSION bump: pipeline-only)
 
 Found by a ctx-shape sweep generalising `check-forecast-guards`' `dead-phase-value` rule from the
