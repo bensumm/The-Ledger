@@ -26,7 +26,8 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runLocalSync } from '../lib/reconstruct/sync-invoke.mjs';
 import { loadMapping, loadGuide, fetchItemInputs, vol24FromInputs } from '../lib/market/marketfetch.mjs';
-import { computeQuote, breakEven } from '../../js/quotecore.js';
+import { computeQuote, breakEven, QUICK_FRESH_MIN } from '../../js/quotecore.js';
+import { liveAgeTag } from '../../js/windowread.mjs';   // 2026-08-09: the ONE live-print age suffix (always renders the age; ⚠ escalation past QUICK_FRESH_MIN)
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';
 import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';
@@ -54,11 +55,12 @@ function flagVal(name) { const i = argv.indexOf(name); return i >= 0 ? argv[i + 
 const sizeToken = flagVal('--size');
 const capitalOverride = flagVal('--capital') != null ? Math.max(0, Math.round(+flagVal('--capital'))) : null;
 
-// age label for a mark: "" when fresh, " (Nm old)" when stale past QUICK_FRESH_MIN.
+// age label for a mark — ALWAYS names the age via the shared liveAgeTag (2026-08-09): `(Nm ago)` when
+// fresh, `⚠ Nm old` past QUICK_FRESH_MIN. Silent-when-fresh made an unchanged-but-current mark
+// indistinguishable from a stale one. No mark at all ⇒ still empty (nothing to date).
 function ageLabel(m) {
   if (!m || m.mark == null) return '';
-  if (m.stale && m.ageMin != null) return ` ⚠ ${Math.round(m.ageMin)}m old`;
-  return '';
+  return liveAgeTag(m.ageMin, { freshMin: QUICK_FRESH_MIN });
 }
 
 function pct(x) { return x == null ? '—' : (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%'; }

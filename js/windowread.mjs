@@ -600,16 +600,35 @@ export function formatFloorCeiling(fc, fmt, { label = '', live = null, drift = n
    returning the SAME number were indistinguishable between "nothing traded in between" (the normal case
    on a thin book: a 449/day item prints roughly once every three minutes, and each side only updates on
    its own transactions) and "we served a stale tick". That ambiguity cost a real misdiagnosis: two reads
-   minutes apart returned byte-identical live prices and were reported as a caching bug, when
-   `FETCH_TTL.latest` is 60s and the second fetch was genuinely fresh — no new trade had printed.
+   minutes apart returned byte-identical live prices and were reported as a caching bug. There was none —
+   `/latest` on that path is UNCACHED (`cachedJget` is a straight passthrough unless COFFER_FETCH_CACHE=1,
+   which nothing sets; `FETCH_TTL.latest` is declared but inert), so both were live GETs and no new trade
+   had simply printed. The first correction of this misdiagnosis cited the 60s TTL as the mechanism —
+   also wrong, and caught only by review. What makes the age trustworthy is that `lowTime`/`highTime` are
+   TRADE timestamps: an unchanged price whose age keeps GROWING proves no trade printed.
    Showing the age unconditionally makes an unchanged-but-current price self-evident.
 
    The ⚠ escalation past `freshMin` is UNCHANGED — same bar, same wording, so the existing stale-print
    doctrine (don't quote a price off a flagged tick; re-read the fresher side) reads exactly as before. */
-export function liveAgeTag(ageMin, { freshMin = 15 } = {}) {
-  if (ageMin == null || !Number.isFinite(ageMin)) return ' (age n/a)';
-  if (ageMin > freshMin) return ` ⚠ ${Math.round(ageMin)}m old`;
-  return ageMin < 1 ? ' (<1m ago)' : ` (${Math.round(ageMin)}m ago)`;
+/* The fallback freshness bar. It MIRRORS `QUICK_FRESH_MIN` (js/quotecore.js) and cannot import it:
+   quotecore imports THIS module (quotecore.js:37), so the edge would be a cycle. A drift guard in
+   windowread.test.mjs asserts the two are equal, so this second home cannot silently diverge — every
+   real call site passes the threshold explicitly, so this only ever applies to a caller that forgot. */
+export const LIVE_FRESH_MIN_FALLBACK = 15;
+
+export function liveAgeTag(ageMin, { freshMin = LIVE_FRESH_MIN_FALLBACK } = {}) {
+  // A NEGATIVE age is physically impossible (clock skew, or a future-dated print). It is UNKNOWN, not
+  // fresh — the earlier version returned ' (<1m ago)' for -45, which is the exact "silently rendered as
+  // fresh" failure this helper exists to prevent.
+  if (ageMin == null || !Number.isFinite(ageMin) || ageMin < 0) return ' (age n/a)';
+  // Compare on the ROUNDED value so the number shown always agrees with the verdict shown. Comparing the
+  // raw age let 14.6 render ' (15m ago)' and 15.4 render ' ⚠ 15m old' — the same displayed "15m" carrying
+  // opposite meanings, on a line whose entire job is display truth. This shifts the stale bar by at most
+  // 30s and is DISPLAY-ONLY: the staleLo/staleHi flags that gate askExitRead's pace refusal are computed
+  // separately from the RAW age at the call site, and are untouched by this.
+  const shown = Math.round(ageMin);
+  if (shown > freshMin) return ` ⚠ ${shown}m old`;
+  return ageMin < 1 ? ' (<1m ago)' : ` (${shown}m ago)`;
 }
 
 export function askReachDecayNote(decay, { ask = null, fmt = String } = {}) {

@@ -25,7 +25,8 @@ import { trajectoryRead } from '../../js/windowread.mjs';   // the fang under-re
 import { floorCeilingTrack, formatFloorCeiling, FC_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — the phase-aligned floor+ceiling slope-asymmetry classifier
 import { fmtHoldHorizon } from '../../js/windowread.mjs';   // PLAN-ESTIMATOR-HONEST-SELL follow-up — the shared "~Nh/Nd hold" renderer
 import { hourConcentration, HOURCONC_MIN_DAYS, HOURCONC_MIN_R, diurnalTimedLap, DT_TRANCHE_COMFORT_VOL_PCT, DT_TRANCHE_CEILING_VOL_PCT } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT1 — the timed-lap layer
-import { askReachDecayNote, liveAgeTag } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TRIAGE DT3 — the compact render of an askReachDecay() result
+import { askReachDecayNote, liveAgeTag, LIVE_FRESH_MIN_FALLBACK } from '../../js/windowread.mjs';
+import { QUICK_FRESH_MIN } from '../../js/quotecore.js';   // drift guard: windowread cannot IMPORT this (cycle), so the test pins the mirror   // PLAN-DIURNAL-TRIAGE DT3 — the compact render of an askReachDecay() result
 import * as WR from '../../js/windowread.mjs';   // DT3 — namespace import for the stays-deleted pin
 import { computeReality, realityClause, SPIKE_REACH_FRAC, SPIKE_PLACEMENT_PCTILE, SPIKE_MIN_GAP_FRAC, REALITY_TYPICAL_QUANT, REALITY_TYPICAL_RECENTN } from '../../js/windowread.mjs';   // PLAN-DIURNAL-RECENCY-GUARD — the level-reality guard + its renderer
 import { formatTimedLap } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the end-to-end quote-items/watch-positions wiring pin (real series → diurnalTimedLap → formatTimedLap)
@@ -1252,6 +1253,27 @@ ok('liveAgeTag: past the bar it ESCALATES to the unchanged stale wording', () =>
 
 ok('liveAgeTag: an unknown age is stated, never silently rendered as fresh', () => {
   for (const bad of [null, undefined, NaN, Infinity]) assert.equal(liveAgeTag(bad, { freshMin: 15 }), ' (age n/a)');
+});
+
+ok('liveAgeTag: a NEGATIVE age is unknown, never rendered as fresh', () => {
+  // clock skew / a future-dated print. The predecessor returned ' (<1m ago)' for -45 — the exact
+  // "silently rendered as fresh" failure the helper exists to prevent.
+  for (const bad of [-0.001, -0.5, -45]) assert.equal(liveAgeTag(bad, { freshMin: 15 }), ' (age n/a)');
+});
+
+ok('liveAgeTag: the DISPLAYED number never contradicts the verdict it carries', () => {
+  // Comparing the raw age let 14.6 -> " (15m ago)" and 15.4 -> " ⚠ 15m old": one printed "15m" meaning
+  // fresh, another meaning stale. Rounding BEFORE the comparison makes the shown number authoritative.
+  for (const a of [14.5, 14.6, 15.0, 15.4]) assert.equal(liveAgeTag(a, { freshMin: 15 }), ' (15m ago)', `${a} rounds to 15m ⇒ must read fresh`);
+  for (const a of [15.5, 16.0, 16.4]) assert.equal(liveAgeTag(a, { freshMin: 15 }), ' ⚠ 16m old', `${a} rounds to 16m ⇒ must read stale`);
+  assert.equal(liveAgeTag(14.4, { freshMin: 15 }), ' (14m ago)', 'and 14.4 rounds DOWN to 14, not 15');
+});
+
+ok('liveAgeTag: the fallback bar cannot drift from QUICK_FRESH_MIN', () => {
+  // windowread canNOT import quotecore (quotecore.js:37 imports windowread — a cycle), so the fallback
+  // is a deliberate second home. This is the guard that keeps it honest.
+  assert.equal(LIVE_FRESH_MIN_FALLBACK, QUICK_FRESH_MIN, 'the mirrored freshness bar must track its source');
+  assert.equal(liveAgeTag(QUICK_FRESH_MIN + 1), ` ⚠ ${QUICK_FRESH_MIN + 1}m old`, 'default bar behaves like the real one');
 });
 
 ok('liveAgeTag: the freshness bar is the CALLER\x27s — no imported threshold', () => {

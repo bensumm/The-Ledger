@@ -1151,14 +1151,6 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     sibling `askReachDecay(series1h,{days,ask})` export (PLAN-DIURNAL-TRIAGE DT3) — for a candidate ask,
     the per-day RATE of hours whose HIGH reached it and whether that rate is sliding (the Ghrazi rapier
     catch: graded fill-now while the ask had stopped clearing intraday). Rendered via the shared
-    `js/windowread.mjs` `liveAgeTag(ageMin,{freshMin})` — the /latest print-age suffix on the
-    `live instasell/instabuy now` line, rendered ALWAYS: `(<1m ago)` / `(Nm ago)` when fresh, escalating
-    to the unchanged `⚠ Nm old` past the caller-supplied bar (`QUICK_FRESH_MIN` at every call site — the
-    threshold is a parameter, not an import, so the helper stays a pure leaf). Added 2026-08-09 after the
-    silent-when-fresh predecessor made an unchanged-but-current price indistinguishable from a stale tick
-    and produced a wrong caching-bug diagnosis (`FETCH_TTL.latest` is 60s; the fetch was genuinely fresh,
-    no new trade had printed). Pinned by `windowread.test.mjs`. Also the ONE age helper in
-    `read-window-range.mjs`, which carried a second byte-identical copy until then.
     `js/windowread.mjs` `askReachDecayNote(decay,{ask,fmt})` (one owner with
     quote-items.mjs/screen-flip-niches.mjs), and ONLY when it fires. Consumers: `read-window-range.mjs
     --hourly` (the summary line; rides `--json` as `result.hourly.askDecay`), `quote-items.mjs` (an
@@ -1169,6 +1161,21 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `⚠ falling — verify (~X/d)` relabel** — measured 49.7% direction, beat predict-no-change on 6 of 380
     items. INFORM-ONLY, n≈0; fixture-tested in `pipeline/test/hourly-lmh.test.mjs` (incl. a stays-deleted
     pin on the slope)),
+    `js/windowread.mjs` `liveAgeTag(ageMin,{freshMin})` (2026-08-09) — the age suffix on the
+    ALWAYS-printed `live instasell/instabuy now` line: `(age n/a)` / `(<1m ago)` / `(Nm ago)` when fresh,
+    escalating to the UNCHANGED `⚠ Nm old` past the caller-supplied bar. The threshold is a PARAMETER,
+    not an import, so the helper stays a pure leaf (`js/windowread.mjs` imports only `money-math`) — a
+    test pins the default against `QUICK_FRESH_MIN` so the two cannot drift. `lowTime`/`highTime` are
+    TRADE timestamps from `/latest`, so a price that stays the same while its age grows PROVES no trade
+    printed rather than a stale read — which is the ambiguity the silent-when-fresh predecessor created
+    and that produced a wrong bug diagnosis. (For the record: `/latest` on this path is UNCACHED —
+    `cachedJget` passes straight through unless `COFFER_FETCH_CACHE=1`, which nothing sets, so
+    `FETCH_TTL.latest` is declared but inert.) Sole render call site today is `read-window-range.mjs`
+    (also now its ONE age helper — it carried a second byte-identical copy), and since the review pass
+    ALSO `quote-items.mjs` (the windowExit live-instabuy clause) and `read-book.mjs` (`ageLabel` on every
+    P&L mark), so all three inline live-age surfaces share one renderer. Pinned by `windowread.test.mjs`,
+    including a negative-age case, a guard that the DISPLAYED minute never contradicts the fresh/stale
+    verdict it carries, and a drift guard tying `LIVE_FRESH_MIN_FALLBACK` to `QUICK_FRESH_MIN`.
     `read-trajectory.mjs` (R1 — a thin one-word PRESET that re-execs `read-window-range.mjs --trajectory`
     with all flags forwarded, so the fetch/bucketing plumbing keeps ONE home; answers "how's `<item>`
     trending / where's it likely to be tomorrow"), `limits.mjs` (LM1 — the buy-limit read:

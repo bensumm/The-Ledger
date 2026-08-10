@@ -216,6 +216,27 @@ metadata, not a leak; the concern is content, not commit authorship.
    Status table) may be deleted without asking, local or remote (Ben, 2026-07-08); if staleness
    can't be confirmed, still ask before `git push origin --delete …`. Check `git status` for
    orphan untracked artifacts a chunk left behind. Multi-lane dispatch mechanics are `/ship` §7.
+10. **Adversarial review is the DEFAULT, not an escalation (Ben, 2026-08-09).** Any substantive
+    change — a shipped chunk, a doc-reconciliation pass, a new estimator — gets a review pass by a
+    SEPARATE agent before it's called done, briefed to find you wrong rather than to confirm you.
+    This is measured, not a nicety: on 2026-08-09 five review passes over one wave found, in order, a
+    self-contradicting doc pair inside files already declared consistent; a "regression check" that
+    never called the function it guarded; a corrected constant left wrong at its own definition site;
+    a closed negative-result plan advertised as live work; a shipped default lane whose plan still
+    said "not yet scheduled"; and a tool-wide floor stale at 2× its value in eleven places. Every one
+    passed CI green. **Brief the reviewer to attack YOUR OWN last pass first** — rounds 2, 3 and 5
+    each found the previous round's fixes had introduced or left a false claim, which is the single
+    highest-yield instruction. And **scope at least one pass AWAY from the region you just worked**:
+    four consecutive passes re-audited their predecessor's territory and converged on their own tail;
+    the widest finding only surfaced when a reviewer was told to look elsewhere.
+11. **Name the refuting test before stating a cause; if it costs under a minute, run it.** Three
+    times on 2026-08-09 a plausible mechanism was reported as an established finding and was wrong
+    (a grain explanation for what was circularity; a caching bug against an uncached path; a TTL
+    cited as the active mechanism when the cache is off by default). Each had a cheap discriminating
+    check that was skipped. Being right for the wrong reason is worse than being wrong — nothing in
+    the outcome flags it, and the wrong reason is what gets written down. When challenged on a
+    number, answer from a DIFFERENT data source than the one that produced it (the daily-grain
+    regime read said `ranging` while the hourly grid showed a two-hour-old breakdown).
 
 ## GitHub CLI (`gh`), Actions CI, and shipping — mechanics live in `/ship`
 - **`main` is protected by a ruleset** (G1, 2026-07-04): PR + `checks` required, no

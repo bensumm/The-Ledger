@@ -14,10 +14,12 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 **A wrong diagnosis is what motivated this, and the fix is aimed at the ambiguity that caused it.** Two
 `read-window-range` reads minutes apart returned byte-identical live prices, and I reported that as a
-caching bug. It was not: `FETCH_TTL.latest` is **60 seconds**, so the second fetch was genuinely fresh —
-no new trade had printed on either side, which is ordinary on a 449/day book (roughly one trade every
-three minutes, and each side only updates on its own transactions). The claim was asserted from a
-plausible symptom without checking, and caught only because the premise was verified before building.
+caching bug. It was not — and the first correction got the REASON wrong too, which review caught. The
+truth: `/latest` on this path is **uncached**. `cachedJget` is a straight passthrough unless
+`COFFER_FETCH_CACHE=1`, which nothing in the repo sets, so `FETCH_TTL.latest` is declared but **inert**;
+both reads were live GETs and no new trade had printed on either side, which is ordinary on a 449/day
+book. So a plausible mechanism was asserted twice — once as the bug, once as the explanation for why
+there was no bug — and only the second was caught before it reached a permanent comment unchallenged.
 
 **What was actually wrong is smaller and real.** `_liveTag` returned an EMPTY string for any age at or
 under `QUICK_FRESH_MIN`, so a fresh print and a 14-minute-old one rendered identically — and two
