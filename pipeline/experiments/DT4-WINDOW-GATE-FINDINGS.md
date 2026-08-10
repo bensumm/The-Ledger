@@ -1,90 +1,119 @@
 # DT4 — does a split-half reliability gate select items whose diurnal window actually holds?
 
-Study: `pipeline/experiments/dt4-window-gate-study.mjs` · run 2026-08-09 · 1h archive, last 45 days,
-2,393 items with ≥21 distinct days · **read-only, no fetches**.
+Study: `pipeline/experiments/dt4-window-gate-study.mjs` · **numbers below are the CORRECTED run
+(2026-08-09, second pass)** · 1h archive, last 45 days, 2,010 items with ≥21 distinct days ·
+**read-only, no fetches**. Every table here is printed by the script as committed — run it and compare.
+
+> **This document was rewritten after review found a real estimator bug in the first version. The
+> correction moved the headline enough to change what the study recommends.** Both errors are described
+> below rather than quietly fixed, because the first version's numbers were already quoted in a commit
+> message and someone may have read them.
 
 ## The question
 
 PLAN-DIURNAL-TRIAGE **DT4** proposes gating the rendered diurnal window on a per-item split-half
-correlation: compute `r` on the per-hour shape, render the window when `r ≥ ~0.6`, otherwise print
-"no reliable window". The triage had already measured that the window carries **~zero information for
-a resting offer** in aggregate (71.2% vs 70.5% random). DT4's premise is that a *subset* of items is
-different and that split-half `r` finds it. **That premise had never been tested** — which matters,
-because a flat, quiet item correlates beautifully with itself, so a gate could select low-noise items
-rather than genuinely-cyclical ones and nothing in the gate statistic would reveal the difference.
+correlation: render the window when `r ≥ ~0.6`, otherwise print "no reliable window". The triage had
+already measured that the window carries **~zero information for a resting offer** in aggregate. DT4's
+premise is that a *subset* of items is different and that split-half `r` finds it. That premise had never
+been tested — and a flat, quiet item correlates beautifully with itself, so a gate could select low-noise
+items rather than genuinely-cyclical ones with nothing in the gate statistic to reveal the difference.
 
-## Method — the gate and the test are deliberately on different axes
+## Method
 
 | | |
 |---|---|
-| **GATE** (parity split) | Partition the item's **fit-period** days into even/odd, run `hourProfile` on each half, Pearson-correlate the two 24-hour `devLow` vectors (and `devHi`). Interleaving in TIME means both halves see the same regime — a reliability measure, not a stability one. |
-| **TEST** (temporal holdout) | Fit `hourProfile` on the first 2/3 of days; on each **held-out later day**, ask whether the fitted dip hour printed at/below that day's median low (and the peak hour at/above its median high). |
-| **BASELINE** | A deterministic pseudo-random hour on the same day, which sits below the median ~50–52% of the time. **Only lift over this baseline counts.** |
+| **GATE** (parity split) | Even/odd **fit-period** days → `hourProfile` each half → Pearson-correlate the two 24-hour `devLow` vectors (and `devHi`). Interleaving in time means both halves see the same regime: a reliability measure, not a stability one. |
+| **TEST** (temporal holdout) | Fit `hourProfile` on the first 2/3 of days; on each **held-out later day**, did the fitted dip hour print at/below that day's median low (peak hour at/above its median high)? |
+| **BASELINE** | A deterministic pseudo-random hour **on the same day, scored on the same days**. Only lift over this baseline counts. |
 
-**A leak was found and fixed mid-study, and it mattered.** The first version computed the gate over all
-45 days — including the held-out third — so an item that happened to be stable in the test window got
-both a higher `r` *and* a higher hit rate, manufacturing part of the correlation the study existed to
-test. Restricting the gate to fit-period days is also the only honest simulation of live use. The leak
-inflated lift by ~2–5pp; every number below is from the leak-free run.
+### Two bugs found in this study, both corrected here
 
-## Result — the gate discriminates, and the relationship is monotone
+1. **The leak (found during the first pass).** The gate originally used all 45 days including the
+   held-out third, so an item that happened to be stable in the test window got both a higher `r` *and* a
+   higher hit rate — manufacturing part of the correlation the study existed to test. Gate is now
+   fit-period-only, which is also the only honest simulation of live use.
+2. **The asymmetric denominator (found by review, after the first write-up shipped).** A day was counted
+   whenever the *fitted* hour printed, but the random arm only scored when the *random* hour printed — so
+   a missing random hour was silently counted as a miss. Hours are absent ~11–13% of the time, and **more
+   often on illiquid low-`r` items**, so the bias ran *with* the gate and inflated the reported lift.
+   Scoring is now **strictly paired**: a day counts only when both hours printed, so both arms share one
+   denominator. This did not move PASS much (+15.0 → +14.8pp) but it cut FAIL by nearly two thirds
+   (+8.8 → +3.2pp) — i.e. it hit precisely the number the old recommendation rested on.
+
+Also fixed: `medVol` was computed over all days (a covariate leak, in the study whose headline is a leak
+fix) and is now fit-period-only.
+
+## Result — the gate discriminates, and more sharply than the first pass reported
 
 | r bucket | n | dip hit | dip rand | **lift** | peak hit | peak rand | **lift** |
 |---|---|---|---|---|---|---|---|
-| r < 0.2 | 1860 | 61.1% | 52.5% | +8.6pp | 59.0% | 50.7% | +8.3pp |
-| 0.2–0.4 | 284 | 60.5% | 51.9% | +8.7pp | 61.6% | 50.7% | +10.9pp |
-| 0.4–0.6 | 157 | 62.9% | 52.6% | +10.4pp | 66.3% | 50.6% | +15.8pp |
-| 0.6–0.8 | 83 | 67.5% | 54.2% | +13.3pp | 68.2% | 52.4% | +15.8pp |
-| 0.8–1.0 | 9 | 82.6% | 52.1% | +30.6pp | 77.6% | 50.3% | +27.3pp |
+| r < 0.2 | 1496 | 59.8% | 57.7% | +2.1pp | 58.6% | 56.2% | +2.3pp |
+| 0.2–0.4 | 269 | 60.4% | 54.7% | +5.7pp | 61.5% | 53.5% | +8.0pp |
+| 0.4–0.6 | 154 | 63.0% | 54.1% | +8.9pp | 66.3% | 52.4% | +13.8pp |
+| 0.6–0.8 | 82 | 68.0% | 54.9% | +13.1pp | 68.0% | 53.7% | +14.2pp |
+| 0.8–1.0 | 9 | 82.4% | 52.8% | +29.6pp | 77.7% | 51.8% | +25.9pp |
 
-**PASS (r ≥ 0.6), n=92:** dip +15.0pp · peak +16.9pp  
-**FAIL (r < 0.6), n=2301:** dip +8.8pp · peak +9.2pp
+**PASS (r ≥ 0.6), n=91:** dip +14.8pp · peak +15.4pp  
+**FAIL (r < 0.6), n=1919:** dip +3.2pp · peak +4.1pp  
+**Item-level gap PASS−FAIL = 11.3pp ± 2.0pp (1 SE), t ≈ 5.6.** Strictly monotone on both sides across
+all five buckets. Only **4.5%** of items clear `r ≥ 0.6`.
 
-Monotonicity across five buckets is the main reason to believe this is real rather than a threshold
-artifact — a spurious gate has no reason to order itself.
+**The random baseline is ~53–58%, NOT ~50%** — the first write-up claimed ~50–52% and was wrong. Scoring
+is "at or below", and **13.8% of scored day-obs are exact ties** (illiquid items whose `avgLowPrice` does
+not move), all of which count as hits. Ties fall in both arms identically so the *lift* is unaffected,
+but no absolute rate here should be read against a 50% coin flip.
 
-Only **3.8%** of items clear `r ≥ 0.6` (the plan's estimate of "~90% become an honest absence" was, if
-anything, conservative — it is ~96%).
+## Confounds — one refuted, one REAL and previously missed
 
-## The confound was tested and refuted, in the opposite direction
-
-The obvious objection is that high `r` merely proxies *quiet*. It does not — high-`r` items are the
-**liquid** ones (median 1h volume **1077** vs **56** for gate-fail), and within every volume tertile the
-gate still separates:
-
-| volume tertile | PASS n / dip lift / peak lift | FAIL n / dip lift / peak lift |
+| | PASS | FAIL |
 |---|---|---|
-| low | 19 · +23.7pp · +30.2pp | 767 · +15.2pp · +13.4pp |
-| mid | 39 · +13.2pp · +20.3pp | 777 · +6.2pp · +7.6pp |
-| high | 81 · +18.3pp · +21.6pp | 711 · +4.9pp · +5.8pp |
+| median 1h volume | 1253 | 109 |
+| median amplitude % | **4.55%** | **8.49%** |
 
-The gap is *widest* on high-volume items (+18.3 vs +4.9), which is the opposite of a quietness proxy.
-(These tertile splits are from the pre-fix run; direction and ordering are what they are cited for.)
+- **Volume: refuted, backwards.** High-`r` items are the *liquid* ones, and the gate still separates
+  inside every volume tertile — most strongly in the high-volume one (dip +18.5pp vs +2.9pp).
 
-## What this does NOT show — read before acting on it
+  | tertile | PASS n / dip / peak | FAIL n / dip / peak |
+  |---|---|---|
+  | low | 14 · +9.6pp · +8.2pp | 647 · +4.3pp · +3.8pp |
+  | mid | 23 · +8.9pp · +17.7pp | 662 · +2.6pp · +3.9pp |
+  | high | 54 · +18.5pp · +15.9pp | 610 · +2.9pp · +4.7pp |
 
-1. **It is a within-day HOUR-RANKING result, not a fill result.** "The dip hour printed below the day's
-   median" is not "a resting bid placed at the dip hour fills more often". The DT triage measured the
-   resting-offer question directly and found ~nothing. **Both can be true at once**: a resting offer
-   spans many hours, so within-day timing washes out for it, while an *attended* buy-now-vs-wait
-   decision is exactly where hour ranking would pay. This is consistent with DT2, which already made
+- **Flatness: NOT refuted — and the first write-up missed it entirely.** Gate-pass items have roughly
+  **half** the intraday amplitude of gate-fail items (4.55% vs 8.49%). The original worry was *flatness*,
+  not volume, and answering only the volume form while declaring "the confound is refuted backwards" was
+  an overclaim. Being right about the direction of the hit-rate does not establish the edge is worth
+  anything in gp: a highly-predictable hour on a 4.5%-amplitude item may be worth less than an
+  unpredictable one on a 8.5%-amplitude item.
+
+## What this does NOT show
+
+1. **It is within-day HOUR RANKING, not fills.** "The dip hour printed below the day's median" ≠ "a
+   resting bid at that hour fills more often". The triage measured the resting-offer question directly
+   and found ~nothing. Both can hold: a resting offer spans many hours so timing washes out, while an
+   *attended* buy-now-vs-wait decision is where ranking would pay. Consistent with DT2, which already made
    `softBuy`'s window an explicitly ATTENDED parenthetical.
-2. **No gp or EV claim is made.** "Below the median" is a direction, not a magnitude. How much a 15pp
-   ranking edge is worth in gp is unmeasured, and could be small on a tight band.
-3. **The top bucket is n=9.** The 0.8–1.0 row should not be quoted on its own.
-4. **PASS is only n=92 items.** Enough for a bucket comparison, thin for anything per-item.
+2. **No gp or EV claim.** Direction, not magnitude — and the flatness finding above is a direct reason to
+   doubt that the magnitude is large.
+3. **Top bucket is n=9; PASS is n=91 overall.** Fine for a bucket comparison, thin per-item.
 
-## Recommendation — DT4 should NOT ship as specified
+## Recommendation — REVISED, and weaker than the first version
 
-The gate works, but **gate-fail items still show ~+9pp of real lift**. Printing "no reliable window" on
-them would suppress a signal that is weaker, not absent — trading a false-confidence problem for a
-false-absence one. Two changes to the spec:
+The first write-up said "do not ship DT4 as specified" because gate-fail items still showed ~+9pp. **That
+number was an artifact; the true figure is +3.2pp, so that argument is largely gone.** The gate is a much
+better discriminator than the first pass reported (≈4.6× the lift, t ≈ 5.6).
 
-- **Modulate confidence, don't suppress.** Render the window either way; let `r` drive how it is worded
-  (a reliable window vs. a weak/indicative one). This also avoids `/schedule` going ~96% empty, which
-  was flagged as the main cost of the original design.
-- **Label it as ATTENDED-only**, matching DT2 and finding (1) above. Nothing here supports using the
-  window to place or price a *resting* offer, and the doctrine should keep saying so.
+What survives, and it is now a judgment call rather than a measurement verdict:
 
-Threshold choice is a judgment call, not a measured optimum: the curve is smooth, so `0.6` is a
-reasonable place to change the wording, not a cliff. **INFORM-ONLY, n≈0 for any trading claim.**
+- **Suppression as specified is defensible.** A +3.2pp edge on gate-fail items is small, and if the goal
+  is to stop presenting noise as a timing signal, suppressing it is a reasonable trade. I would no longer
+  argue against it on the evidence.
+- **Confidence-modulation still looks better, but for a different reason than before.** Not "fail items
+  are nearly as good" (they aren't) — rather that suppression costs ~95% of window coverage to remove a
+  small-but-real signal, and a wording change captures most of the honesty benefit at none of that cost.
+- **Either way, keep it ATTENDED-only,** and do not let the ranking edge imply gp value while the
+  flatness confound stands unmeasured. The highest-value follow-up is not a threshold argument: it is
+  measuring what the ranking edge is actually worth in gp on the items that pass.
+
+Threshold choice is a judgment call, not a measured optimum — the curve is smooth, so `0.6` is a
+reasonable place to change wording, not a cliff. **INFORM-ONLY, n≈0 for any trading claim.**

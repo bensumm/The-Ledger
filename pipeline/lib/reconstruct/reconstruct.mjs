@@ -202,6 +202,12 @@ export function validateSlotTransitions(events, { warn = true } = {}) {
 }
 
 export const GE_TAX = tax; // 2% floored/item, capped 5m — re-export the shared impl (chunk 4.1)
+// LATENT, recorded 2026-08-09 (not fixed — no live impact today, and fixing it would change historical
+// realised P/L): matchTrades applies GE_TAX to EVERY sell, but the Old School Bond (13190) is TAX-EXEMPT
+// (`js/money-math.js` — its cost model is buy + 10%-of-guide retrade fee, NO sell tax). This is currently
+// harmless ONLY because the bond is in `ignored-items.json`, and `quarantineEvents` drops it BEFORE
+// reconstruction — 42 filled bond events in fills.json produce zero positions.json rows. If the bond is
+// ever un-quarantined, its closed rows will be over-taxed. Route the sell through the bond branch then.
 
 // P1 (2026-07-05): snapshot-re-emission dedupe. RuneLite re-broadcasts every GE slot's current
 // state on login / world-hop / GE-open (visible as a burst of simultaneous EMPTY lines for the
@@ -359,8 +365,9 @@ export function matchTrades(offers, { keeps } = {}) {
 export function reconstruct(events, { keeps } = {}) {
   // dedupeSnapshots first (P1): strip snapshot re-emissions before offers are collapsed, so a
   // phantom duplicate terminal never becomes a second offer. monitor-offers.mjs shares reconstruct(), so
-  // its live held count gets the same fix. (join-outcomes.mjs calls collapseOffers/matchTrades directly
-  // for campaign boundaries and does NOT go through here — see the Discovered note in PLAN.md.)
+  // its live held count gets the same fix. (The forward-join siblings do NOT go through here — they use
+  // campaigns.mjs's reconstructCampaigns — but that runs dedupeSnapshots itself (campaigns.mjs:63), so
+  // campaign boundaries ARE deduped. The older note here said they were not; corrected 2026-08-09.)
   // `keeps` (SM1) is threaded through to matchTrades; omitting it disables the keep-round-trip path
   // entirely, so callers that don't supply it keep pre-SM1 behavior.
   const { closed, open, unmatched, awaitingRebuy } = matchTrades(collapseOffers(dedupeSnapshots(events)), { keeps });

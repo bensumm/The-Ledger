@@ -314,7 +314,9 @@ ready-to-paste `/loop` command:
 `/loop <interval> <command>` (the `/loop` skill) re-runs on that fixed interval; report only
 what changed vs the prior tick. 3–15 min matches GE fill dynamics — offers fill over minutes to
 hours, so a sub-minute loop just burns API calls. **Operating default cadence is 5m** (Ben,
-2026-07-10 — bounds the git churn `--sync` adds while staying inside GE fill dynamics); use a
+2026-07-10 — originally justified as "bounds the git churn `--sync` adds"; that rationale is DEAD,
+since the per-pass sync is zero-git and adds no churn. The cadence stands on GE fill dynamics and API
+politeness alone); use a
 looser 15m for a book of only patient standing offers, tighter 3m only for actively managing a
 live situation (a real breakdown/cut candidate you're watching resolve).
 
@@ -328,8 +330,10 @@ a harmless NO-OP** (`watch-positions.mjs:55`), kept only for external callers th
 **The old "ATTENDED-ONLY by contract" warning here was WRONG and has been deleted.** It stated that the
 sync "pushes to `main` on every filled pass" and that such a loop "must not be left running unattended".
 Neither is true: the local sync is zero-git and pushes nothing — publishing is exclusively the once-a-day
-`/overnight` `sync-fills.mjs --publish`, and `check-daemon-safety.mjs` fails CI if any auto-runnable
-daemon so much as imports that path. The stale warning was actively harmful: it would make an agent
+`/overnight` `sync-fills.mjs --publish`. The mechanism is `runLocalSync`
+(`pipeline/lib/reconstruct/sync-invoke.mjs`), which never passes `--publish`. (`check-daemon-safety.mjs`
+is NOT the guard here — it scans `pipeline/daemons/` only, and `watch-positions.mjs` is a command, so it
+is unscanned; citing it would be right-for-the-wrong-reason.) The stale warning was actively harmful: it would make an agent
 refuse a perfectly safe unattended `/loop` in order to prevent `main` churn that cannot occur. (The
 separate, still-valid reason not to leave near-live offers unwatched is a TRADING judgment, not a git one.)
 

@@ -110,7 +110,7 @@ function scoreItem(itemId, pts) {
     if (!heldByDay.has(d)) heldByDay.set(d, []);
     heldByDay.get(d).push(p);
   }
-  let dipHit = 0, dipN = 0, peakHit = 0, peakN = 0, randDipHit = 0, randPeakHit = 0;
+  let dipHit = 0, dipN = 0, peakHit = 0, peakN = 0, randDipHit = 0, randPeakHit = 0, dipTies = 0, peakTies = 0;
   // deterministic pseudo-random hour per (item, day) — no Math.random, so the run reproduces
   const pick = (d, salt) => { const x = Math.sin(itemId * 7919 + d * 104729 + salt) * 10000; return Math.floor((x - Math.floor(x)) * 24); };
   for (const [d, dayPts] of heldByDay) {
@@ -119,17 +119,27 @@ function scoreItem(itemId, pts) {
     if (dayPts.length < 12) continue;                  // a sparse day can't establish its own median
     const medLow = median(lows), medHi = median(his);
     const atHour = (h, key) => { const s = dayPts.find(p => new Date(p.timestamp * 1000).getHours() === h); return s ? s[key] : null; };
+    // STRICTLY PAIRED: a day scores only when BOTH the fitted hour and the random hour printed, so the
+    // two arms share one denominator. The first version incremented dipN whenever the DIP hour existed
+    // but only credited the random arm when the RANDOM hour existed — a missing random hour silently
+    // scored as a miss. Hours are missing ~11-13% of the time here (the `< 12` admission lets in days
+    // missing half their hours), and MORE often on illiquid low-r items, so the bias ran WITH the gate
+    // and inflated the headline lift. Pairing removes it without assuming anything about missingness.
     const dv = atHour(dipH, 'avgLowPrice');
-    if (dv != null && medLow != null) {
-      dipN++; if (dv <= medLow) dipHit++;
-      const rv = atHour(pick(d, 1), 'avgLowPrice');
-      if (rv != null && rv <= medLow) randDipHit++;
+    const rdv = atHour(pick(d, 1), 'avgLowPrice');
+    if (dv != null && rdv != null && medLow != null) {
+      dipN++;
+      if (dv <= medLow) dipHit++;
+      if (rdv <= medLow) randDipHit++;
+      if (dv === medLow) dipTies++;
     }
     const pv = atHour(peakH, 'avgHighPrice');
-    if (pv != null && medHi != null) {
-      peakN++; if (pv >= medHi) peakHit++;
-      const rv = atHour(pick(d, 2), 'avgHighPrice');
-      if (rv != null && rv >= medHi) randPeakHit++;
+    const rpv = atHour(pick(d, 2), 'avgHighPrice');
+    if (pv != null && rpv != null && medHi != null) {
+      peakN++;
+      if (pv >= medHi) peakHit++;
+      if (rpv >= medHi) randPeakHit++;
+      if (pv === medHi) peakTies++;
     }
   }
   if (dipN < 5 || peakN < 5) return null;
@@ -137,8 +147,10 @@ function scoreItem(itemId, pts) {
     itemId, nDays: days.length, rLow, rHi, rMin: Math.min(rLow, rHi),
     dipN, dipRate: dipHit / dipN, dipRand: randDipHit / dipN,
     peakN, peakRate: peakHit / peakN, peakRand: randPeakHit / peakN,
-    amplitude: fit.amplitude ?? null,
-    medVol: median(pts.map(p => (p.lowPriceVolume || 0) + (p.highPriceVolume || 0))),
+    amplitude: fit.amplitude ?? null, amplitudePct: fit.amplitudePct ?? null,
+    // FIT-PERIOD ONLY — an all-days covariate is a leak in the one study whose headline is a leak fix.
+    medVol: median(fitPts.map(p => (p.lowPriceVolume || 0) + (p.highPriceVolume || 0))),
+    dipTies, peakTies,
   };
 }
 
@@ -190,6 +202,49 @@ for (const [lbl, g] of [['PASS (r>=0.6)', pass], ['FAIL (r<0.6)', fail]]) {
   const ph = agg(g, 'peakRate', 'peakN'), pr = agg(g, 'peakRand', 'peakN');
   console.log(`  ${lbl.padEnd(15)} n=${String(g.length).padStart(4)}  dip ${pct(dh)} vs rand ${pct(dr)} (${((dh - dr) * 100).toFixed(1)}pp)  ·  peak ${pct(ph)} vs rand ${pct(pr)} (${((ph - pr) * 100).toFixed(1)}pp)`);
 }
+// Item-level uncertainty on the headline gap. Each item contributes one lift; the gap between the PASS
+// and FAIL means gets a two-sample SE. Reported because "PASS beats FAIL" with no interval is exactly
+// the kind of claim that reads as settled and isn't — PASS is a small group.
+const lifts = g => g.map(r => r.dipRate - r.dipRand);
+const mean = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : null;
+const sd = a => { const m = mean(a); return a.length > 1 ? Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1)) : null; };
+{
+  const lp = lifts(pass), lf = lifts(fail);
+  const se = Math.sqrt((sd(lp) ** 2) / lp.length + (sd(lf) ** 2) / lf.length);
+  const gap = mean(lp) - mean(lf);
+  console.log(`\n  item-level dip-lift gap PASS−FAIL = ${(gap * 100).toFixed(1)}pp ± ${(se * 100).toFixed(1)}pp (1 SE) · t ≈ ${(gap / se).toFixed(1)} · n ${lp.length} vs ${lf.length}`);
+}
+
+// The TIE rate — the reason the random baseline sits well above 50%. `<=` scores an exact match as a
+// hit, and on illiquid items avgLowPrice simply doesn't move, so ties are common. Both arms are scored
+// identically so this does NOT bias the lift, but it does mean the baseline is NOT ~50% and this study
+// should never claim it is.
+{
+  const tN = results.reduce((s, r) => s + r.dipN, 0), tT = results.reduce((s, r) => s + r.dipTies, 0);
+  console.log(`  exact-tie rate on the dip arm: ${pct(tT / tN)} of scored day-obs (why the random baseline sits well above 50%)`);
+}
+
+// The two confounds, reported rather than asserted away: VOLUME (is high-r just quiet?) and FLATNESS
+// (is high-r just a small intraday swing?). The volume answer runs BACKWARDS — but the amplitude answer
+// does not, so both are printed and the findings must state both.
+console.log('\nCONFOUND CHECKS (all fit-period covariates):');
+console.log(`  median 1h volume   PASS ${Math.round(q(pass.map(r => r.medVol), .5))}  vs FAIL ${Math.round(q(fail.map(r => r.medVol), .5))}`);
+console.log(`  median amplitude%  PASS ${(q(pass.map(r => r.amplitudePct), .5) * 100 || 0).toFixed(2)}%  vs FAIL ${(q(fail.map(r => r.amplitudePct), .5) * 100 || 0).toFixed(2)}%`);
+console.log('\n  within-volume-tertile (if the gate only proxies quietness, the PASS/FAIL gap vanishes here):');
+console.log('  tertile     gate    n     dip lift   peak lift');
+{
+  const vols = results.map(r => r.medVol), t1 = q(vols, .33), t2 = q(vols, .67);
+  for (const [lbl, lo, hi] of [['low vol', -Infinity, t1], ['mid vol', t1, t2], ['high vol', t2, Infinity]]) {
+    for (const [gl, g] of [['PASS', results.filter(r => r.medVol >= lo && r.medVol < hi && r.rMin >= 0.6)],
+                           ['FAIL', results.filter(r => r.medVol >= lo && r.medVol < hi && r.rMin < 0.6)]]) {
+      if (!g.length) { console.log(`  ${lbl.padEnd(11)} ${gl}   none`); continue; }
+      const w = (k, n) => g.reduce((s, r) => s + r[k] * r[n], 0) / g.reduce((s, r) => s + r[n], 0);
+      const dl = w('dipRate', 'dipN') - w('dipRand', 'dipN'), pl = w('peakRate', 'peakN') - w('peakRand', 'peakN');
+      console.log(`  ${lbl.padEnd(11)} ${gl}  ${String(g.length).padStart(4)}   ${(dl * 100).toFixed(1).padStart(5)}pp    ${(pl * 100).toFixed(1).padStart(5)}pp`);
+    }
+  }
+}
+
 console.log('\nREAD THIS AS: if PASS and FAIL show the same lift, the gate selects nothing and DT4 as');
 console.log('specified should NOT ship — it would print "no reliable window" on items whose window is');
 console.log('exactly as good as the ones it keeps. Lift near 0pp in BOTH rows means the window itself');

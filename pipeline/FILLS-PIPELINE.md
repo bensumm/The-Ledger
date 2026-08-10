@@ -161,10 +161,28 @@ Design decisions, deliberate — don't undo casually:
 ### 5.1 positions.json (derived — v1)
 
 `sync-fills.mjs` emits a second artifact next to `fills.json`, at the repo root:
-the reconstructed trade/position view the app auto-populates its Ledger from. It's
-regenerated from the full merged event history every run (idempotent), written +
-committed + pushed under the *same* change-gate as `fills.json` (`git add fills.json
-positions.json`). No file moves ⇒ **no Task Scheduler re-registration needed**.
+the reconstructed trade/position view the app auto-populates its Ledger from.
+
+**CORRECTED 2026-08-09 — the previous three sentences were wrong in three ways, and one of them is the
+exact bug §14.1 documents (a 2026-07-19 incident that FROZE the deployed app's book).** They said
+positions.json is "regenerated from the full merged event history every run", and "written + committed +
+pushed under the *same* change-gate as fills.json (`git add fills.json positions.json`)". In fact:
+
+1. **Nothing commits by default.** A bare run is LOCAL/ZERO-GIT; only `--publish` (once a day, at
+   `/overnight`) fetches, commits and pushes.
+2. **The published set is 8 files, not 2** — see the `--publish` path's add-list, not this paragraph.
+3. **Writes are per-artifact; the commit gate is `git status --porcelain`.** Conflating "this artifact
+   changed" with "there is something to commit" is precisely the §14.1 failure: fills.json was unchanged,
+   so the whole commit was skipped, so positions.json never reached the deployed app and the book froze.
+   Read §14.1 before touching the publish gate.
+
+The "no Task Scheduler re-registration needed" clause is also dead — §12 records that the scheduler was
+ELIMINATED; there is no scheduled job to re-register.
+
+**Also: it is NOT the full merged history.** Reconstruction runs over
+`quarantineEvents(merged, ignoredCfg)` — `ignored-items.json` members are dropped BEFORE reconstruction.
+That is why bonds (13190) have 42 filled events in `fills.json` and zero rows anywhere in
+`positions.json`. Quarantine is invisible in this doc otherwise; do not read a missing item as a bug.
 
 ```json
 {
@@ -172,9 +190,15 @@ positions.json`). No file moves ⇒ **no Task Scheduler re-registration needed**
   "generatedAt": "2026-07-02T08:16:01.586Z",
   "closed":   [{ "itemId":31406, "qty":61, "buyEach":13540, "sellEach":14250, "tax":17385, "realised":25925, "buyTs":..., "sellTs":... }],
   "open":     [{ "itemId":31406, "qty":1528, "buyEach":13540, "buyTs":... }],
-  "unmatched":[{ "itemId":11237, "qty":33, "sellEach":3945, "tax":..., "sellTs":... }]
+  "unmatched":[{ "itemId":11237, "qty":33, "sellEach":3945, "tax":..., "sellTs":... }],
+  "awaitingRebuy":[{ "itemId":..., "qty":..., "sellEach":..., "beRebuy":..., "sellTs":... }],
+  "pipeline":  { ... }
 }
 ```
+`awaitingRebuy` (SM1 — a `keep` sold and not yet rebought) and `pipeline` were MISSING from this schema
+block until 2026-08-09, with live rows on disk. That omission is the shape `sync-fills.mjs` warns about:
+a consumer written from this block silently reads "no change" for a key it never knew existed. The same
+gap existed in `docs/FLOW.md`'s copy.
 
 Reconstruction (in `reconstruct.mjs`, called by `sync-fills.mjs` and `monitor-offers.mjs`),
 deliberate — don't undo casually. **REMOVE tombstones apply on BOTH paths:** `sync-fills.mjs`
@@ -462,9 +486,12 @@ derivation backstop and is cleaned out of the archive on any re-sync where the p
 survives ingest. The old **interim manual procedure** — scan after each session for same-item/
 same-price terminal pairs minutes apart and tombstone the later one with `add-manual-fill.mjs
 --remove <eventId>` — is **no longer needed** for this class. (`REMOVE` tombstones remain the
-correction mechanism for genuine mislogged events — see §5.1.) Note: `join-outcomes.mjs` calls
-`collapseOffers`/`matchTrades` directly (not through `reconstruct()` or the ingest validator), so its
-campaign boundaries do not yet get this dedupe — tracked as a Discovered followup in PLAN.md.
+correction mechanism for genuine mislogged events — see §5.1.) ~~Note: `join-outcomes.mjs` calls
+`collapseOffers`/`matchTrades` directly … so its campaign boundaries do not yet get this dedupe.~~
+**CLOSED (noted 2026-08-09).** `join-outcomes.mjs` no longer touches those helpers directly — it imports
+`reconstructCampaigns` from `pipeline/lib/reconstruct/campaigns.mjs`, whose pipeline is
+`dedupeSnapshots → collapseOffers → stampFirstFill → groupCampaigns` (`campaigns.mjs:63`). Campaign
+boundaries DO get the dedupe. Don't re-open this from the stale wording.
 
 ## 11. Outcomes dataset (O1 — the algorithm-feedback foundation)
 

@@ -149,7 +149,11 @@ mobile-fills.log (phone, contents API)                       ┘        │
   (folding phone trades) + commits + pushes. So the deployed book updates nightly, the desk reads fresh
   all day.
 - `positions.json` is the FIFO-reconstructed truth: `closed` = after-tax realised P/L, `open` =
-  inventory at real average cost, `unmatched` = pre-log sells. The reconstruction is shared so
+  inventory at real average cost, `unmatched` = pre-log sells, **`awaitingRebuy`** = a `keep` sold and
+  not yet rebought (SM1), plus a **`pipeline`** metadata block. (The last two were missing from this list
+  until 2026-08-09 despite having live rows — a consumer written from an incomplete key list silently
+  reads "no change".) Reconstruction runs over `quarantineEvents(...)`, so `ignored-items.json` members
+  are dropped BEFORE it — a missing item may be quarantined, not a bug. The reconstruction is shared so
   `monitor-offers.mjs` and `sync-fills.mjs` agree. Read `pipeline/FILLS-PIPELINE.md` §5.1 before
   touching it. `fills.json`/`positions.json`/`offers.json` are **ROOT-LOCKED** (app fetches them
   same-origin — README "Root data artifacts").

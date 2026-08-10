@@ -35,9 +35,12 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 // main and only surface when Ben ran the command. The lib-subdir reorg rewrites specifiers across every
 // command, which makes that gap far likelier to bite, so the list is now the whole directory: any new
 // command is covered automatically and never needs registering here.
-const ENTRYPOINTS = fs.readdirSync(path.join(HERE, '..', 'commands'))   // HERE=pipeline/ci; '..' -> pipeline/
+// Run the CLI work ONLY when invoked directly. `unboundConstantsIn` is exported for
+// pipeline/test/check-imports-scanner.test.mjs, and importing a guard must not run it (or exit).
+const IS_MAIN = pathToFileURL(process.argv[1] || '/').href === import.meta.url;
+const ENTRYPOINTS = IS_MAIN ? fs.readdirSync(path.join(HERE, '..', 'commands'))   // HERE=pipeline/ci; '..' -> pipeline/
   .filter(f => f.endsWith('.mjs')).sort()
-  .map(f => path.join(HERE, '..', 'commands', f));
+  .map(f => path.join(HERE, '..', 'commands', f)) : [];
 
 // Extract [{ specifier, names:Set, wantDefault:bool, nsOnly:bool }] for every RELATIVE from-import in src.
 // Handles single- and multi-line braces, `as` renames (checks the EXPORTED name), default + namespace,
@@ -149,6 +152,10 @@ const CONST_RE = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g;
  * `stripComments` and imports its `REGEX_PREV_OK` rather than re-deriving the division-vs-regex rule.
  * That module's own header documents the same lesson from its own earlier bug; a second copy of this
  * knowledge is what produced failure 2 in the first place. */
+// Keywords after which a `/` starts a REGEX, not a division. `REGEX_PREV_OK`'s single-char entries can
+// never express these (see the regex-start branch below).
+const KEYWORD_BEFORE_REGEX = new Set(['return', 'typeof', 'case', 'in', 'of', 'new', 'delete', 'void', 'do', 'else', 'yield', 'await']);
+
 function codeOnly(src) {
   const noComments = stripComments(src);       // comments gone; strings/templates/regexes intact & verbatim
   const n = noComments.length;
@@ -183,7 +190,12 @@ function codeOnly(src) {
       i++; out += ' '; prevSig = ')'; continue;
     }
     if (c === '`') { scanTemplate(); prevSig = ')'; continue; }
-    if (c === '/' && REGEX_PREV_OK.has(prevSig)) {   // regex literal — dropped (never holds a real reference)
+    // Regex-start detection. `REGEX_PREV_OK` holds single characters PLUS the word 'return' — but both
+    // consumers only ever set `prevSig` to a single char, so the 'return' entry is unreachable there and
+    // `return /"/.test(s)` was misread as DIVISION: the `"` then opened a phantom string and the rest of
+    // the file went unscanned. That is the same silent-blinding failure the delegation to `stripComments`
+    // was supposed to have ended. Keyword-before-regex is therefore checked explicitly, by word.
+    if (c === '/' && (REGEX_PREV_OK.has(prevSig) || KEYWORD_BEFORE_REGEX.has((out.match(/([A-Za-z$_][\w$]*)\s*$/) || ['', ''])[1]))) {
       i++; let inClass = false;
       while (i < n) {
         const e = noComments[i]; i++;
@@ -225,8 +237,12 @@ function boundConstants(src) {
   for (const d of clean.matchAll(/\bcatch\s*\(\s*([A-Za-z_$][\w$]*)/g)) bound.add(d[1]);
   for (const d of clean.matchAll(/(?:^|[;{}])\s*([A-Z][A-Z0-9_]*)\s*:(?!:)/gm)) bound.add(d[1]);   // labels
   for (const d of clean.matchAll(/\bstatic\s+([A-Za-z_$][\w$]*)/g)) bound.add(d[1]);               // class fields
-  // any parenthesised list that is a parameter list: `(…) =>`, `function name(…)`, `catch(…)`, `method(…) {`
-  for (const d of clean.matchAll(/\(([^()]*)\)\s*(?:=>|\{)/g))
+  // Parameter lists: `(…) =>`, `method(…) {`. The lookbehind is LOAD-BEARING — without it this also
+  // matched `if (X) {`, `while (X) {`, `switch (X) {`, `for (…) {`, none of which BINDS anything. Because
+  // `bound` is one Set per file, a single `if (SOME_CONST > 3) {` anywhere silently bound SOME_CONST for
+  // the WHOLE file and masked a genuine unbound use of it — i.e. one `if` could switch this guard off for
+  // the exact defect it exists to catch. Verified by probe: masked with the `if` present, detected without.
+  for (const d of clean.matchAll(/(?<!\b(?:if|while|switch|for|catch|with)\s*)\(([^()]*)\)\s*(?:=>|\{)/g))
     for (const id of d[1].matchAll(/[A-Za-z_$][\w$]*/g)) bound.add(id[0]);
   for (const d of clean.matchAll(/\bfunction\b[^(]*\(([^()]*)\)/g))
     for (const id of d[1].matchAll(/[A-Za-z_$][\w$]*/g)) bound.add(id[0]);
@@ -266,15 +282,19 @@ function boundConstants(src) {
   return bound;
 }
 
-let unbound = 0, checkedConsts = 0;
-for (const entry of ENTRYPOINTS) {
-  const rel = path.relative(HERE, entry);
-  let src; try { src = fs.readFileSync(entry, 'utf8'); } catch { continue; }
+/* unboundConstantsIn(src) → [names] used but never imported/declared. EXPORTED so the guard's own
+   behaviour is pinned by a real test (pipeline/test/check-imports-scanner.test.mjs) rather than only by
+   the CLI's aggregate pass/fail. Three earlier drafts of this scanner each shipped broken and each was
+   "verified" by running the CLI and seeing green — the aggregate says nothing about WHICH shapes are
+   detected, so every known failure shape is now an assertion. */
+export function unboundConstantsIn(src) {
   const bound = boundConstants(src);
-  // drop the import statements themselves — an imported name appearing in its own clause is a BINDING,
-  // not a reference, and counting it would inflate the reported total.
-  const code = codeOnly(src).replace(/\bimport\b[^;]*?\bfrom\b[^;]*;/g, ' ');
-  const seen = new Set();
+  // Drop `import … from …` AND `export … from …` statements. An imported name in its own clause is a
+  // BINDING, not a reference. A RE-EXPORT (`export { X } from './y.mjs'`) is neither — it creates no local
+  // binding and is not a use, so counting it produced four false positives in `js/estimators/pair.mjs`
+  // the moment this check was pointed outside `pipeline/commands/`.
+  const code = codeOnly(src).replace(/\b(?:import|export)\b[^;]*?\bfrom\b[^;]*;/g, ' ');
+  const seen = new Set(), out = [];
   for (const hit of code.matchAll(CONST_RE)) {
     const name = hit[0];
     if (seen.has(name)) continue;
@@ -286,15 +306,26 @@ for (const entry of ENTRYPOINTS) {
     const after = code.slice(hit.index + name.length);
     if (/^\s*:(?!:)/.test(after) && !/\bcase\s+$/.test(before)) continue;
     seen.add(name);
-    checkedConsts++;
-    if (!bound.has(name)) { console.error(`✗ ${rel}: uses '${name}' but never imports or declares it (ReferenceError at runtime)`); unbound++; }
+    if (!bound.has(name)) out.push(name);
   }
+  return { unbound: out, checked: seen.size };
 }
 
-if (failures || unbound) {
-  if (failures) console.error(`\n✗ import-check FAILED — ${failures} unresolved import(s) across ${ENTRYPOINTS.length} entrypoint(s).`);
-  if (unbound) console.error(`\n✗ unbound-constant check FAILED — ${unbound} SCREAMING_SNAKE name(s) used without a binding.`);
-  process.exit(1);
+let unbound = 0, checkedConsts = 0;
+for (const entry of ENTRYPOINTS) {
+  const rel = path.relative(HERE, entry);
+  let src; try { src = fs.readFileSync(entry, 'utf8'); } catch { continue; }
+  const r = unboundConstantsIn(src);
+  checkedConsts += r.checked;
+  for (const name of r.unbound) { console.error(`✗ ${rel}: uses '${name}' but never imports or declares it (ReferenceError at runtime)`); unbound++; }
 }
-console.log(`✓ import-check passed — ${checkedImports} named/default import(s) across ${ENTRYPOINTS.length} entrypoint(s) all resolve.`);
-console.log(`✓ unbound-constant check passed — ${checkedConsts} SCREAMING_SNAKE reference(s) all bound.`);
+
+if (IS_MAIN) {
+  if (failures || unbound) {
+    if (failures) console.error(`\n✗ import-check FAILED — ${failures} unresolved import(s) across ${ENTRYPOINTS.length} entrypoint(s).`);
+    if (unbound) console.error(`\n✗ unbound-constant check FAILED — ${unbound} SCREAMING_SNAKE name(s) used without a binding.`);
+    process.exit(1);
+  }
+  console.log(`✓ import-check passed — ${checkedImports} named/default import(s) across ${ENTRYPOINTS.length} entrypoint(s) all resolve.`);
+  console.log(`✓ unbound-constant check passed — ${checkedConsts} SCREAMING_SNAKE reference(s) all bound.`);
+}

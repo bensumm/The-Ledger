@@ -1,6 +1,6 @@
 ---
 name: analyze
-version: 1.2
+version: 1.3
 description: Retro our own track record, audit that we're logging/storing the right data, and surface data-backed tuning proposals — then check the session's edits against the project guidelines. Triggers — "analyze our track record", "what should we tune", "did we log everything", "run a retro", "how are our suggestions doing", "analyze".
 ---
 

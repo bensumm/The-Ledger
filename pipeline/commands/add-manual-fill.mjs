@@ -153,4 +153,9 @@ if (A.dry) { console.log('\n[dry] not written.'); process.exit(0); }
 if (!fs.existsSync(LOG_DIR)) die('log dir not found: ' + LOG_DIR);
 fs.appendFileSync(OUT, line + '\n');
 console.log(`\nappended to ${OUT}`);
-console.log('next: node pipeline/commands/sync-fills.mjs --dry   (verify), then run it without --dry to write + push.');
+// A bare sync is LOCAL/ZERO-GIT (default since 2026-07-15) — it writes the artifacts and pushes NOTHING.
+// This line used to say "write + push", which would have someone inject a fill, sync, and believe the
+// deployed book had updated. Publishing is the once-a-day `/overnight` `--publish` run, and only that.
+console.log('next: node pipeline/commands/sync-fills.mjs --dry   (verify), then without --dry to write the');
+console.log('      artifacts LOCALLY (zero-git). The deployed book updates only at the once-a-day');
+console.log('      /overnight `sync-fills.mjs --publish`.');
