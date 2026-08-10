@@ -32,10 +32,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadMapping, fetchTs } from '../lib/market/marketfetch.mjs';
+import { loadMapping, fetchTs, fetchLatest } from '../lib/market/marketfetch.mjs';   // fetchLatest (2026-08-10): the live leg the dip-not-below-live guard needs — without it deriveDiurnalRange's reprice cannot fire
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot } from '../lib/reconstruct/offers.mjs';
-import { hourProfile, windowReliability, WINDOW_RELIABLE_R } from '../../js/windowread.mjs';
+import { hourProfile, windowReliability, WINDOW_RELIABLE_R, deriveDiurnalRange } from '../../js/windowread.mjs';   // deriveDiurnalRange = the ONE home for the Ghrazi level guard; this file used to bypass it and shipped raw hourProfile levels
 import { fmt, fmtP, fmtHour, fmtHourRange, localTzAbbrev } from '../../js/money-format.js';   // fmtP for the Level column: it is a PRICE to place an offer at, and fmt()'s 1-decimal k-range collapsed 1,051 and 1,109 onto the same "1.1k" (Ben, 2026-08-05). fmtP keeps full gp under 100k and stays compact above it — the same convention the scan's Est. buy/sell price cells use.
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 surfaces the in-flight cycle into the agenda
 import { reverseFlipCycleNotes } from '../../js/reverseflip.mjs';   // RF4/RF6 shared inform-only cycle notes (thin strand + drift + REBUY_STALE_DAYS nudge)
@@ -87,20 +87,62 @@ function windowInH(startH, endH, now) {
 // DT4 (2026-08-10): `reliable` is windowReliability's tri-state for this item. The agenda KEEPS every
 // row — an item still has a plan even when its clock doesn't repeat — but a row whose hours failed (or
 // could not be) verified is MARKED, because this table's whole content is times and an unmarked one
-// reads as a commitment. The row's Level is unaffected: levels were never what the gate measured.
-export function agendaRowsForItem({ name, tags = [], profile, now = new Date(), reliable = null }) {
+// reads as a commitment.
+// ⚠ The rest of this note used to read "The row's Level is unaffected: levels were never what the gate
+// measured." True of the GATE, but it was doing work it had not earned: read as reassurance that the
+// Level was the dependable half of a marked row, when the Level was in fact the UNGUARDED half (see
+// the level-guard block below). Both halves now carry their own honest marking; neither vouches for
+// the other.
+export function agendaRowsForItem({ name, tags = [], profile, now = new Date(), reliable = null, live = null }) {
   if (!profile) return [];
   const rows = [];
+  const liveLo = live ? (live.lo ?? null) : null;
+  const liveHi = live ? (live.hi ?? null) : null;
+  // LEVEL-GUARD fix (2026-08-10). This used to be `level: w.level ?? null` — the raw hourProfile
+  // number, the ONLY consumer in the repo that did not route through deriveDiurnalRange. That
+  // function's header calls itself "the ONE home for the Ghrazi lesson", and skipping it meant this
+  // table shipped an unguarded price under a column the /schedule skill defines as "a price to place
+  // an offer at". Live failure (Bastion potion(4), 2026-08-10): BUY dip 15,191 printed ABOVE both
+  // SELL peak rows (15,027 / 15,005), with live instasell at 14,723 — a buy-high/sell-low plan.
+  //
+  // MECHANISM (measured, not assumed): the dip HOUR is chosen by de-trended `devLow` while the LEVEL
+  // printed is that hour's ABSOLUTE price. Those are different axes and can point opposite ways —
+  // Bastion's hour 12 held the MINIMUM devLow and simultaneously the MAXIMUM absolute low of all 24
+  // hours. Over 600 archive items: 7.3% render dip level > peak level, and 86% have a dip hour that
+  // is not the cheapest hour by level. So this is not a tail case.
+  //
+  // The fix reuses deriveDiurnalRange rather than re-implementing its guard here (a second home for
+  // the Ghrazi rule is how this drifted in the first place). Each window is scored through it against
+  // the primary of the opposite side, so the SECONDARY (·2) rows are guarded identically — the
+  // obvious partial fix, guarding only `profile.dip`/`profile.peak`, would have left ·2 unguarded and
+  // recreated the same split one level down.
+  const guard = (dipW, peakW) => deriveDiurnalRange(
+    { dip: dipW, peak: peakW, trendDominates: profile.trendDominates,
+      amplitude: profile.amplitude, amplitudePct: profile.amplitudePct },
+    { liveLo, liveHi });
+  const primaryDip = (Array.isArray(profile.dips) && profile.dips[0]) || profile.dip || null;
+  const primaryPeak = (Array.isArray(profile.peaks) && profile.peaks[0]) || profile.peak || null;
   const mk = (side, w, idx) => {
     if (!w || w.startH == null || w.endH == null) return;
     const base = side === 'dip' ? 'BUY dip' : 'SELL peak';
+    const dr = side === 'dip' ? guard(w, primaryPeak) : guard(primaryDip, w);
+    // `level` is now the GUARDED number. On the dip side deriveDiurnalRange repricess to live when the
+    // dip is not below it; the peak side passes through (there is no ask-side reprice) but still earns
+    // the degenerate flag when the pair inverts.
+    const level = dr ? (side === 'dip' ? dr.bid : dr.ask) : (w.level ?? null);
+    const degenerate = !!(dr && dr.notes.some(n => n.startsWith('degenerate')));
     rows.push({
       inH: windowInH(w.startH, w.endH, now),
       startH: w.startH, endH: w.endH,
       item: name,
       action: idx >= 1 ? `${base}·2` : base,   // ·2 = the secondary (prominence-ranked) window
       secondary: idx >= 1,
-      level: w.level ?? null,
+      level,
+      rawLevel: w.level ?? null,               // what this column printed before the guard — kept so a
+                                               // reader (and the test) can see when the guard bit
+      repriced: !!(dr && side === 'dip' && dr.bidBasis === 'live'),
+      degenerate,
+      unguarded: liveLo == null,               // no live this pass ⇒ the dip guard could not run
       reliable,
       tags: [...tags],
     });
@@ -269,18 +311,27 @@ export async function buildAgenda({ scope = ['c'], now = new Date(), repoRoot = 
   const ids = [...selected.keys()];
   const profiles = new Map();
   const series = new Map();   // RF4: retain the fetched 1h series so a reverse-flip drift note reuses it (no new fetch)
+  const live = new Map();     // LEVEL-GUARD fix (2026-08-10): the live instasell/instabuy per item.
   const queue = [...ids];
   const worker = async () => {
     for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
       try { const ts = await fetchTs(id, '1h'); series.set(id, ts); profiles.set(id, hourProfile(ts, { nights: PROFILE_NIGHTS })); }
       catch { profiles.set(id, null); }
+      // The live leg is fetched SEPARATELY and failure-isolated: without it `deriveDiurnalRange`'s
+      // dip-not-below-live guard structurally cannot fire, which is the whole bug being fixed. A
+      // failed /latest degrades that item to the OLD (unguarded) behavior rather than dropping the
+      // row — but the row is then marked, because an unguarded level is exactly what misled before.
+      try { const lat = await fetchLatest(id); if (lat) live.set(id, { lo: lat.low ?? null, hi: lat.high ?? null }); }
+      catch { /* no live → guard cannot run → row marked below */ }
     }
   };
   await Promise.all(Array.from({ length: Math.min(FETCH_CONCURRENCY, ids.length) || 1 }, worker));
   const rows = [];
   for (const [id, e] of selected) {
     const tags = [...e.tags].sort();   // 'C' before 'W'
-    rows.push(...agendaRowsForItem({ name: e.name, tags, profile: profiles.get(id), now, reliable: series.has(id) ? windowReliability(series.get(id) || []).reliable : null }));
+    rows.push(...agendaRowsForItem({ name: e.name, tags, profile: profiles.get(id), now,
+      reliable: series.has(id) ? windowReliability(series.get(id) || []).reliable : null,
+      live: live.get(id) || null }));
   }
   // RF4: union the in-flight reverse-flip cycles into the agenda. Guarded on a NON-EMPTY store so the
   // common (empty) case adds zero rows AND zero compute → the agenda is byte-identical to pre-RF4. Windows
@@ -354,13 +405,31 @@ async function main() {
     // The window still prints — Ben's option B keeps the plan visible — but it is not asserted as a clock.
     const winTxt = (r.startH == null || r.endH == null) ? '—'
       : (r.reliable === true ? fmtHourRange(r.startH, r.endH) : '~' + fmtHourRange(r.startH, r.endH));
-    console.log(`| ${inTxt} | ${winTxt} | ${r.item} | ${r.action} | ${fmtP(r.level)} | ${r.tags.join('/')} |`);
+    // LEVEL-GUARD fix: the Level cell carries its OWN marking now, independent of the window's `~`.
+    //   ↧ = the dip was NOT below live, so deriveDiurnalRange repriced it to the live instasell (the
+    //       Ghrazi guard firing — the old code printed the un-repriced number as a bid price).
+    //   ⚠ = this pair is degenerate (peak level not above dip level): the plan as printed does not make
+    //       money, and that must be visible in the table, not inferable by comparing two rows by eye.
+    //   ? = no live price this pass, so the dip guard could not run — the level is the old unguarded one.
+    const lvlMark = r.degenerate ? ' ⚠' : r.repriced ? ' ↧' : (r.unguarded && r.action.startsWith('BUY')) ? ' ?' : '';
+    console.log(`| ${inTxt} | ${winTxt} | ${r.item} | ${r.action} | ${fmtP(r.level)}${lvlMark} | ${r.tags.join('/')} |`);
+  }
+  // LEVEL-GUARD legend — same discipline as the DT4 one: printed only when a mark actually appears.
+  if (rows.some(r => r.degenerate || r.repriced || (r.unguarded && r.action.startsWith('BUY')))) {
+    const deg = rows.filter(r => r.degenerate).length;
+    const rep = rows.filter(r => r.repriced).length;
+    const ung = rows.filter(r => r.unguarded && r.action.startsWith('BUY')).length;
+    const bits = [];
+    if (rep) bits.push(`↧ ${rep} dip level(s) repriced to the live instasell (the dip was not below live — a resting bid at the raw dip would not fill)`);
+    if (deg) bits.push(`⚠ ${deg} row(s) DEGENERATE: the peak level is not above the dip level, so this pair does not make money as printed — do not read it as a plan`);
+    if (ung) bits.push(`? ${ung} buy row(s) had no live price this pass, so the dip guard could not run — treat the level as unverified`);
+    console.log(`\n${bits.join('\n')}`);
   }
   // DT4 legend — printed only when at least one row is marked, so a fully-reliable agenda is unchanged.
   if (rows.some(r => r.startH != null && r.reliable !== true)) {
     const unver = rows.filter(r => r.reliable === null && r.startH != null).length;   // STRICT: `undefined` = gate never run on this row, which is not the same as measured-unmeasurable
     console.log(`
-~ = the item's dip/peak hours did not clear the split-half reliability gate (r ≥ ${WINDOW_RELIABLE_R}), or the gate was not run on that row — the LEVEL still stands, the TIME is not a commitment, and the In (h) countdown for a marked row inherits that uncertainty (it is computed FROM the marked window).${unver ? ` ${unver} row(s) were measured and could not be judged (needs ~14 days of history).` : ''}`);
+~ = the item's dip/peak hours did not clear the split-half reliability gate (r ≥ ${WINDOW_RELIABLE_R}), or the gate was not run on that row — the TIME is not a commitment, and the In (h) countdown for a marked row inherits that uncertainty (it is computed FROM the marked window). The LEVEL is judged separately (see any ↧/⚠/? marks on the Level column); this legend used to say "the LEVEL still stands", which read as a guarantee it was not making.${unver ? ` ${unver} row(s) were measured and could not be judged (needs ~14 days of history).` : ''}`);
   }
   // RF4: reverse-flip cycle notes (inform-only, n≈0) — printed ONLY for RF rows that surfaced a note. On an
   // empty store there are no RF rows → this block is skipped → byte-identical to the pre-RF4 agenda.

@@ -10,6 +10,39 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### /schedule printed an unguarded price — a buy-high/sell-low agenda on 7.3% of items (2026-08-10)
+
+`read-schedule.mjs`'s Level column read `w.level` straight off `hourProfile` — the ONLY consumer in the
+repo that did not route through `deriveDiurnalRange`, whose own header calls itself *"the ONE home for the
+Ghrazi lesson"* and which carries two guards this table never received: the dip-not-below-live reprice and
+the `ask <= bid` degenerate check.
+
+**The live failure.** Bastion potion(4) rendered `BUY dip 15,191` above BOTH its SELL rows (15,027 and
+15,005), with live instasell at 14,723 — a plan to buy high and sell low. **Mechanism** (measured, not
+assumed): the dip HOUR is chosen by de-trended `devLow` while the LEVEL printed is that hour's ABSOLUTE
+price. Those are different axes and can point opposite ways — Bastion's hour 12 held the minimum `devLow`
+and simultaneously the MAXIMUM absolute low of all 24 hours. Over 600 archive items: **7.3% render dip
+level > peak level**, and 86% have a dip hour that is not the cheapest hour by level.
+
+**What made it worse than a wrong number:** the DT4 footnote — mine — reassured the reader that on a
+`~`-marked row *"the LEVEL still stands, the TIME is not a commitment."* Every Bastion row was marked, so
+the tool actively vouched for the one number that was unguarded. Both the legend and the `/schedule` skill
+row are corrected; the window mark and the level mark are now independent and neither vouches for the other.
+
+**The fix.** Every window — including the SECONDARY `·2` rows, which a naive fix would have left behind and
+which would have recreated the same split one level down — is scored through `deriveDiurnalRange`. That
+needed a live leg the command never fetched: without `liveLo` the guard is structurally inert, so routing
+alone would have changed nothing but the addition of a note. **This was checked before building it** —
+`deriveDiurnalRange(profile, {})` returns the same 15,191. A per-item `fetchLatest` now rides the existing
+concurrent fetch loop, failure-isolated: a failed `/latest` degrades that row to the old behavior and marks
+it `?` rather than dropping it. Marks: `↧` repriced to live, `⚠` degenerate pair, `?` unguarded.
+
+Verified live: the same command now prints both Bastion BUY rows at 14,505 `↧`, below both SELL rows. Four
+tests on a fixture pinned to the exact inverted shape, mutation-verified (reverting to the raw level fails
+on the named guard). One of them exists because the first draft looped over every BUY row and demanded all
+of them reprice — the secondary dip at 14,699 is genuinely below live and must NOT move; a guard that fired
+there would be a new bug.
+
 ### DT4 — the diurnal HOURS are gated on measured reliability; the LEVELS always render (0.72.0, 2026-08-10)
 
 PLAN-DIURNAL-TRIAGE **DT4**, shipped as Ben's **option B**: keep the levels, suppress the hours on items

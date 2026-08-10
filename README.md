@@ -1231,7 +1231,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (hours to the window's next start, nearest 0.5h; `now` when inside). Each item emits up to 4 rows —
     BUY(dip)+SELL(peak), EACH up to 2: the primary window plus a prominence-ranked SECONDARY off
     `hourProfile`'s additive `dips[]`/`peaks[]` arrays, the secondary's Action marked `·2` (PLAN-MULTI-PEAK-WINDOWS;
-    a length-1 array never manufactures a `·2` row). Three MUTUALLY-EXCLUSIVE modes:
+    a length-1 array never manufactures a `·2` row). **The Level column routes through `deriveDiurnalRange`
+    (2026-08-10) — the ONE home for the dip-not-below-live guard — and fetches a live `/latest` leg per item
+    to feed it; marks `↧` repriced-to-live, `⚠` degenerate pair (peak level not above dip level), `?` no live
+    price so the guard could not run. It previously printed the RAW `hourProfile` level and was the only
+    consumer bypassing that guard, which shipped a buy-high/sell-low agenda on 7.3% of items.** Three MUTUALLY-EXCLUSIVE modes:
     `-c`/`--current-position` (DEFAULT) = the actionable set, open lots in `positions.json` ∪ open offers
     in `offers.json` (`readOpenPositions`+`readOffersSnapshot`); `-w`/`--watchlist` = `watchlist.json`
     names via `loadMapping` (`-c`+`-w` UNION, rows tagged C/W); `--audit` = flipped-but-not-watchlisted

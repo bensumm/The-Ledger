@@ -195,4 +195,70 @@ ok('buildAudit: empty closed → empty rows (no crash)', () => {
   assert.deepEqual(buildAudit({ closed: null, watchNames: null, mapping: mockMapping }), []);
 });
 
+// ── LEVEL GUARD (2026-08-10) ──────────────────────────────────────────────────────────────────────
+// The Level column shipped the RAW hourProfile level — the only consumer in the repo bypassing
+// deriveDiurnalRange, "the ONE home for the Ghrazi lesson". Live failure it produced: Bastion
+// potion(4) printed BUY dip 15,191 above BOTH its SELL rows (15,027 / 15,005) while live instasell
+// was 14,723. The fixture below is that exact shape: a dip hour whose ABSOLUTE level is HIGHER than
+// the peak's — reachable because the dip HOUR is picked by de-trended devLow while the level printed
+// is that hour's absolute price (7.3% of 600 archive items invert this way).
+const invertedProfile = {
+  dip:  { startH: 12, endH: 13, atHour: 12, level: 15191 },
+  peak: { startH: 3,  endH: 4,  atHour: 3,  level: 15005 },
+  dips:  [{ startH: 12, endH: 13, atHour: 12, level: 15191 }, { startH: 7, endH: 10, atHour: 7, level: 14699 }],
+  peaks: [{ startH: 3, endH: 4, atHour: 3, level: 15005 }, { startH: 21, endH: 22, atHour: 21, level: 15027 }],
+  trendDominates: false, amplitude: 186, amplitudePct: 1.2,
+};
+const lvlAt = new Date(2026, 7, 10, 12, 0, 0);
+
+ok('LEVEL GUARD: a dip not below live is repriced to live, not printed as a bid price', () => {
+  const rows = agendaRowsForItem({ name: 'Bastion potion(4)', profile: invertedProfile, now: lvlAt,
+    live: { lo: 14723, hi: 15100 } });
+  const b = rows.find(r => r.action === 'BUY dip');
+  assert.equal(b.rawLevel, 15191, 'the pre-guard number is retained so the guard is auditable');
+  assert.equal(b.level, 14723,
+    'MUTATION GUARD: reverting to the raw hourProfile level prints ' + b.rawLevel + ' — above both SELL rows');
+  assert.equal(b.repriced, true, 'and the row says so, rather than repricing silently');
+  // The SECONDARY dip (raw 14,699) is genuinely BELOW this live price, so it must NOT be repriced —
+  // asserted here because the first draft of this test looped over every BUY row and wrongly demanded
+  // all of them move. A guard that fires on a dip that is already below live would be a new bug.
+  const sec = rows.find(r => r.action === 'BUY dip·2');
+  assert.equal(sec.level, 14699, 'a dip already below live is left alone');
+  assert.equal(sec.repriced, false);
+});
+
+ok('LEVEL GUARD: the SECONDARY (·2) dip is guarded too — the partial fix would have missed it', () => {
+  const rows = agendaRowsForItem({ name: 'X', profile: invertedProfile, now: lvlAt, live: { lo: 14505, hi: 15100 } });
+  const sec = rows.find(r => r.action === 'BUY dip·2');
+  assert.ok(sec, 'the fixture has a secondary dip');
+  assert.equal(sec.rawLevel, 14699, 'its raw level really is above live, else this proves nothing');
+  assert.equal(sec.level, 14505, 'MUTATION GUARD: guarding only profile.dip/profile.peak leaves this at 14,699');
+});
+
+ok('LEVEL GUARD: an inverted pair is FLAGGED, not left for the reader to spot across two rows', () => {
+  // no live ⇒ the reprice cannot fire, which is exactly when the inversion survives and must be marked
+  const rows = agendaRowsForItem({ name: 'X', profile: invertedProfile, now: lvlAt, live: null });
+  const buy = rows.find(r => r.action === 'BUY dip');
+  assert.equal(buy.level, 15191, 'without live the level is the old unguarded one — stated, not hidden');
+  assert.equal(buy.unguarded, true, 'and the row carries that fact for the ? mark');
+  assert.equal(buy.degenerate, true, 'the peak-not-above-dip finding still fires and is surfaced');
+});
+
+ok('LEVEL GUARD: a healthy profile is untouched — the guard only bites when it should', () => {
+  const healthy = {
+    dip:  { startH: 2, endH: 4, atHour: 2, level: 1000 },
+    peak: { startH: 14, endH: 16, atHour: 14, level: 1200 },
+    dips: [{ startH: 2, endH: 4, atHour: 2, level: 1000 }],
+    peaks: [{ startH: 14, endH: 16, atHour: 14, level: 1200 }],
+    trendDominates: false, amplitude: 200, amplitudePct: 20,
+  };
+  const rows = agendaRowsForItem({ name: 'X', profile: healthy, now: lvlAt, live: { lo: 1100, hi: 1150 } });
+  const buy = rows.find(r => r.action === 'BUY dip');
+  const sell = rows.find(r => r.action === 'SELL peak');
+  assert.equal(buy.level, 1000, 'a dip genuinely below live is left alone');
+  assert.equal(buy.repriced, false);
+  assert.equal(buy.degenerate, false);
+  assert.equal(sell.level, 1200, 'and the ask passes through unchanged');
+});
+
 console.log(`\nAll ${pass} acceptance checks passed.`);
