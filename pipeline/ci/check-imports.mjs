@@ -170,6 +170,14 @@ function codeOnly(src) {
         i += 2; let depth = 1; const start = i;
         while (i < n && depth > 0) {           // find the interior's extent, brace-depth aware
           const d = noComments[i];
+          // Skip STRING literals while measuring depth. A brace inside a string (`${ f("{") }`) is not a
+          // real brace: counting it left depth permanently unbalanced, so the closing backtick re-entered
+          // scanTemplate() and the scan ran off to EOF — the fifth blinding shape found in this scanner.
+          if (d === "'" || d === '"') {
+            const q = d; i++;
+            while (i < n && noComments[i] !== q) { if (noComments[i] === '\\') i++; i++; }
+            i++; continue;
+          }
           if (d === '`') { scanTemplate(); continue; }          // nested template — skip past it wholesale
           if (d === '{') depth++;
           else if (d === '}') { depth--; if (depth === 0) break; }
@@ -304,7 +312,9 @@ export function unboundConstantsIn(src) {
     const before = code.slice(Math.max(0, hit.index - 8), hit.index);
     if (/\.\s*$/.test(before)) continue;
     const after = code.slice(hit.index + name.length);
-    if (/^\s*:(?!:)/.test(after) && !/\bcase\s+$/.test(before)) continue;
+    // A trailing `:` normally means an object KEY — but it also means a `case` label and a TERNARY
+    // consequent (`c ? MAX_X : 0`), both of which are real references. Both are excluded from the skip.
+    if (/^\s*:(?!:)/.test(after) && !/\bcase\s+$/.test(before) && !/\?\s*$/.test(before)) continue;
     seen.add(name);
     if (!bound.has(name)) out.push(name);
   }

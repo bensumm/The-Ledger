@@ -782,7 +782,10 @@ side effect, and crucially **no git**.
   un-pulled lines. The daemon inherits the same property.
 - The attended (`--publish`) path shares the same multi-writer guard, tombstone line, and summaries,
   **plus `offers.json` now joins its commit set** (added only when present on disk, alongside
-  `fills.json`/`positions.json`/`screen.json`/`suggestions.jsonl` — never a blanket `git add -A`).
+  an explicit add-list — never a blanket `git add -A`. **The list is EIGHT files; §13.3 is its one home
+  — do not restate it here.** This sentence used to name four, which is what §5.1's "see the `--publish`
+  add-list" pointed readers at; `dip-watchlist.json`/`hold-thesis.json`/`alerts.json` joined on 2026-07-18
+  and `offers.json` was never listed. Corrected 2026-08-09.)
   **Commit gating (corrected 2026-07-19, audit finding 1):** the publish commit fires whenever
   ANYTHING in the commit set is uncommitted vs `HEAD` — the `git add <files>` + `git status
   --porcelain` check is the ONE gate. It does NOT gate on the fresh-merge-vs-disk diff (`changed`):

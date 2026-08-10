@@ -2,7 +2,15 @@
 
 Study: `pipeline/experiments/dt4-window-gate-study.mjs` · **numbers below are the CORRECTED run
 (2026-08-09, second pass)** · 1h archive, last 45 days, 2,010 items with ≥21 distinct days ·
-**read-only, no fetches**. Every table here is printed by the script as committed — run it and compare.
+**read-only, no fetches**. Every table here is printed by the script as committed.
+
+> **AS-OF PIN — a re-run will NOT match digit-for-digit, and the earlier "run it and compare" invitation
+> was wrong to imply it would.** These are the archive as it stood ~20:00 local on 2026-08-09. The script
+> has no `--as-of`: it always takes the last 45 days from `MAX(ts)`, and the archive grows continuously,
+> so the panel shifts under it. A re-run ~2h later gave 2,022 items / 89 PASS / PASS +14.3pp / FAIL
+> +3.2pp / **t ≈ 4.8, not 5.6**. What reproduces: PASS ≈ +14–15pp vs FAIL ≈ +3pp, strict monotonicity,
+> ~4.5% pass rate, the ~14% tie rate, both covariates. What does not: third significant figures and the
+> exact `t`. **Quote the direction and the gap; do not quote `t = 5.6` or `± 2.0` as if pinned.**
 
 > **This document was rewritten after review found a real estimator bug in the first version. The
 > correction moved the headline enough to change what the study recommends.** Both errors are described
@@ -24,7 +32,7 @@ items rather than genuinely-cyclical ones with nothing in the gate statistic to 
 |---|---|
 | **GATE** (parity split) | Even/odd **fit-period** days → `hourProfile` each half → Pearson-correlate the two 24-hour `devLow` vectors (and `devHi`). Interleaving in time means both halves see the same regime: a reliability measure, not a stability one. |
 | **TEST** (temporal holdout) | Fit `hourProfile` on the first 2/3 of days; on each **held-out later day**, did the fitted dip hour print at/below that day's median low (peak hour at/above its median high)? |
-| **BASELINE** | A deterministic pseudo-random hour **on the same day, scored on the same days**. Only lift over this baseline counts. |
+| **BASELINE** | A deterministic pseudo-random hour **on the same day, scored on the same days**. Only lift over this baseline counts. The draw is uniform over 24 hours and is NOT excluded from picking the fitted hour, so ~1/24 (measured 4.14%) of baseline draws ARE the fitted hour and score as a hit. That contaminates the baseline TOWARD the treatment, i.e. the study is **conservative** by ~4%: true lift ≈ observed ÷ 0.959 (PASS ≈ +14.9, FAIL ≈ +3.3). No conclusion moves. |
 
 ### Two bugs found in this study, both corrected here
 
@@ -109,8 +117,13 @@ What survives, and it is now a judgment call rather than a measurement verdict:
   is to stop presenting noise as a timing signal, suppressing it is a reasonable trade. I would no longer
   argue against it on the evidence.
 - **Confidence-modulation still looks better, but for a different reason than before.** Not "fail items
-  are nearly as good" (they aren't) — rather that suppression costs ~95% of window coverage to remove a
-  small-but-real signal, and a wording change captures most of the honesty benefit at none of that cost.
+  are nearly as good" (they aren't) — rather that suppression removes a small-but-real signal from most of
+  the board, and a wording change captures most of the honesty benefit at none of that cost.
+  **Correction to how that cost was quantified:** an earlier draft said "~95% of window coverage", which
+  is the ITEM-weighted figure. Gate-pass items are ~12× more liquid (median 1h volume 1253 vs 109) —
+  i.e. disproportionately the ones actually quoted. Volume-weighted, PASS is **~11%** of the panel (and
+  ~16% among the 50 most-liquid items), so suppression hides the window on ~89% of trading-weighted
+  attention, not ~95%. The argument survives; its one quantitative figure was 2.5× off and is corrected.
 - **Either way, keep it ATTENDED-only,** and do not let the ranking edge imply gp value while the
   flatness confound stands unmeasured. The highest-value follow-up is not a threshold argument: it is
   measuring what the ranking edge is actually worth in gp on the items that pass.

@@ -70,6 +70,20 @@ ok('FAILURE 4 — control-flow parens do NOT bind, so they cannot mask a real us
   }
 });
 
+ok('FAILURE 5 — a brace inside a STRING inside `${…}` does not unbalance the scan', () => {
+  // Counting a quoted brace as a real brace left depth permanently open, so the closing backtick
+  // re-entered scanTemplate() and the scan ran to EOF. Latent when found (no tracked file triggered it).
+  for (const interior of ['f("{")', "f('{')", 'f("}")']) {
+    const src = 'export const a = `x ${' + interior + '} y`;\nexport const z = MISSING_BRACE_STR + 1;';
+    assert.ok(un(src).includes('MISSING_BRACE_STR'), `a quoted brace in ${interior} must not blind the rest of the file`);
+  }
+});
+
+ok('a TERNARY consequent is a reference, not an object key', () => {
+  // `c ? MAX_X : 0` looks exactly like a key to the trailing-colon heuristic.
+  assert.ok(un('export const a = (c) => c ? MISSING_TERNARY : 0;').includes('MISSING_TERNARY'));
+});
+
 ok('a `case X:` label is a REFERENCE, not an object key', () => {
   const src = 'export function p(v){ switch (v) { case MISSING_CASE: return 1; default: return 0; } }';
   assert.ok(un(src).includes('MISSING_CASE'));

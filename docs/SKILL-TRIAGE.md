@@ -1,5 +1,21 @@
 # SKILL-TRIAGE.md — three-way triage of the market skills + memory index (Pipeline-v2 P7)
 
+> **⚠ THIS IS A DATED SNAPSHOT (2026-07-09), NOT A LIVE INDEX. Corrections found 2026-08-09 — read these
+> before trusting any row.** The triage *dispositions* are still useful; its factual claims about the code
+> have drifted, and three of them would actively misroute an agent:
+> - **`reachValidator` is NOT blocked on a ts1h fetch.** Rows below say "screen/quote don't fetch ts1h yet".
+>   They do: `quote-items.mjs:333` passes `{ ts1h: true }`, and the comment right above it says the
+>   validator FIRES. Do not re-open that as an ENCODE candidate — it shipped.
+> - **`--mode all` is band/churn/amplitude**, not band/spread/rising: `spread` and `rising` were DELETED
+>   (`js/flip-niches.mjs`), and value was swapped out for amplitude (THE SWAP, 2026-07-19).
+> - **The counts below are stale.** `lint-skills.mjs` now reports **136 rule-blocks across 9 skills**
+>   (this doc covers only the original four), and there are **55** memory entries, not 30. A handful of
+>   rows triage a `/scan` rule-block or a memory entry that no longer exists.
+>
+> The structural guard (`pipeline/ci/lint-skills.mjs`) enforces that every rule-block is TAGGED; it does
+> not check this file's prose against the code, which is why the drift above went unnoticed. Re-derive
+> before citing.
+
 Ben's standing rule (2026-07-08, memory `docs-small-encode-in-scripts`): *"CLAUDE.md small,
 no fluff, lore in a separate file; prefer encoding judgment rules in scripts/validators over
 prose in skills/docs."* This file is the P7 deliverable Ben reviews: EVERY prose rule-block in
@@ -22,10 +38,11 @@ tag. The linter is a growth-visibility heuristic, NOT a semantic checker (it can
 a cited script actually enforces the rule) — this table is the semantic record, hand-maintained.
 When a rule is added to a skill, add its row here and tag it, or CI goes red.
 
-Counts (2026-07-09): 56 rule-blocks across the four skills — 9 ENCODE (enforced today; +1
+Counts **AS OF 2026-07-09** (today: `lint-skills.mjs` reports 136 rule-blocks across 9 skills; this doc
+covers only the original four): 56 rule-blocks — 9 ENCODE (enforced today; +1
 buy-limit sizing, now `limitValidator`), 44 KEEP-AS-JUDGMENT, 1 RETIRED (the lone retire-proposal,
 signed off & executed by Ben 2026-07-09 — see below), 2 F1-gated HYPOTHESIS blocks (flagged for
-revisit at F1, NOT retires — see the notable list at the bottom). All 30 memory entries triaged below.
+revisit at F1, NOT retires — see the notable list at the bottom). All 30 memory entries AS OF THEN triaged below (there are 55 today).
 
 ---
 
@@ -34,7 +51,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | Rule-block | Disposition | Change / supersession |
 | --- | --- | --- |
 | `--mode scalp` / `--mode value` provisional niches | KEEP-AS-JUDGMENT | Spec is coded (`js/flip-niches.mjs`); "only chase at the desk" is the judgment. |
-| Niche set (NY2 — band/spread/rising in `--mode all`) | ENCODE | `js/flip-niches.mjs` `inAll` + `pipeline/commands/screen-flip-niches.mjs`; the ruling itself is a Ben decision recorded in `PLAN.md`. |
+| Niche set (NY2 — ~~band/spread/rising~~ **band/churn/amplitude** in `--mode all`; spread+rising DELETED, value swapped out 2026-07-19) | ENCODE | `js/flip-niches.mjs` `inAll` + `pipeline/commands/screen-flip-niches.mjs`; the ruling itself is a Ben decision recorded in `PLAN.md`. |
 | Sync first (SY1) / run-from-main (SY1.2) | ENCODE | `pipeline/commands/sync-fills.mjs`; the run-location rule is operational, stays as prose. |
 | 250k gp/day attention floor | ENCODE | `pipeline/commands/screen-flip-niches.mjs` `--min-gpd` (default 250_000; was 500_000 until 2026-08-08, paired with the expUnits 6→2 refill haircut). |
 | SUB-FLOOR FALLBACK not qualified picks (P6c) | KEEP-AS-JUDGMENT | Mechanic in `pipeline/lib/signal/gatecandidates.mjs`; the relay-honestly rule is judgment. |
@@ -47,8 +64,8 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | Parked-capital leak (HYPOTHESIS) | KEEP-AS-JUDGMENT | Unproven lean off ~116 concentrated lots; F1-gated. Revisit at F1. |
 | Velocity beats magnitude (HYPOTHESIS) | KEEP-AS-JUDGMENT | Unproven lean; crossover unmeasured. Revisit at F1. |
 | Band-top artifact detection | KEEP-AS-JUDGMENT | `--min-active` supports; spotting the lone print is judgment. |
-| Asymmetric ask-reach read + RC1 recency split | KEEP-AS-JUDGMENT | Method over `pipeline/commands/read-window-range.mjs` / `js/windowread.mjs`; the `⚠ stale` flag is coded, the read is judgment. Partial-ENCODE candidate → `reachValidator` once screen/quote fetch ts1h (PLAN.md P2 follow-on). |
-| MANDATORY verify SELL leg before quoting profit | KEEP-AS-JUDGMENT | ENCODE candidate: `reachValidator` (`js/validate.mjs`) would enforce it, but screen/quote don't fetch ts1h yet (PLAN.md P2 follow-on). Until then it's a hard checklist step. |
+| Asymmetric ask-reach read + RC1 recency split | KEEP-AS-JUDGMENT | Method over `pipeline/commands/read-window-range.mjs` / `js/windowread.mjs`; the `⚠ stale` flag is coded, the read is judgment. ~~Partial-ENCODE candidate → reachValidator once screen/quote fetch ts1h.~~ **SHIPPED — quote DOES fetch ts1h and reachValidator fires.** |
+| MANDATORY verify SELL leg before quoting profit | KEEP-AS-JUDGMENT | ~~ENCODE candidate: reachValidator would enforce it, but screen/quote don't fetch ts1h yet.~~ **SHIPPED — ts1h IS fetched (`quote-items.mjs:333`) and `reachValidator` fires.** The checklist step remains as judgment, but it is no longer un-encodable. |
 | Fresh-repricer flag | KEEP-AS-JUDGMENT | Sizing call. |
 | Phase tag on the Regime cell | ENCODE | `phase()` in `js/quotecore.js`, folded by `pipeline/commands/screen-flip-niches.mjs`; the "spike ≠ retrace" reading is judgment. |
 | Froth entry — CLASSIFIER not PREDICTOR | KEEP-AS-JUDGMENT | `froth.mjs` probe classifies (output-only); n≈0 own trades. |
@@ -72,7 +89,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | Reading watch-positions.mjs per-held note block (V5 EMIT CONTRACT) | ENCODE | `pipeline/lib/render/emit.mjs` `heldNoteBlock()`; the block shape is the code's, the doc points at it (see MONITORING.md). |
 | Verdict-vocabulary table (interpret each verdict) | ENCODE | Verdicts emitted by `momVerdict()` (`js/quotecore.js`) / `renderHeldVerdict` (`pipeline/lib/market/item-context.mjs`); the skill translates them to actions (judgment). |
 | Sell-velocity / HOLD-band-top step-down / rising-item no-underprice / decaying-band-top / trajectory read / entry-age / override-discipline / cut-and-rebid friction / tripwire conviction / limit-blocked CROSSING / fill-progress | KEEP-AS-JUDGMENT | The interpretation layer over the verdicts; several have coded support (`convictionGate` in `lib/watchstate.mjs` for tripwire-conviction; `breakEven()` floor in `js/quotecore.js`), but the step-down/hold taste is the LLM's. |
-| Verify SELL leg before quoting profit (MANDATORY) | KEEP-AS-JUDGMENT | Same ENCODE-candidate as /scan's — `reachValidator` blocked on ts1h fetch. |
+| Verify SELL leg before quoting profit (MANDATORY) | KEEP-AS-JUDGMENT | Same as /scan's — **no longer blocked;  fires on the in-hand ts1h series.** |
 | Reading recovery-read (V6) as decision support | ENCODE | `pipeline/lib/signal/recovery.mjs`; the "apply judgment on conflict" is the judgment. |
 | Encode-learnings boilerplate | KEEP-AS-JUDGMENT | Shared process boilerplate. |
 

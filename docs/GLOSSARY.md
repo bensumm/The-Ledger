@@ -100,11 +100,14 @@ These are different things at different levels — kept as two words on purpose.
 - **rank** — the per-thesis score that orders picks: `net after tax × P(fill) ÷ TTF`, evaluated at the
   price pair the thesis posts. Replaced gp/day as the ranking metric.
 - **P(fill)** — probability the flip fills, two legs: `P(bid) × ask-reach factor`. The ask-reach leg's
-  RECENCY BASIS depends on where the number is printed (RB-3, 2026-08-04): **display** surfaces (the
-  `Est.`-cell `P(ask)~`, the `fold:` line's `P(fill)~`) read the **full-window** (~14 night) reach since 2026-08-09 — recent-3 until then — so the probability
-  matches the recent-3 price beside it; the **rank** still reads the **full ~14-day** window, pending a
-  realized-fill study. On a recency-divergent item the two legitimately differ — the `fold:` line prints
-  both when they do.
+  RECENCY BASIS was a live distinction until 2026-08-09 and is now **ONE basis**: display surfaces (the
+  `Est.`-cell `P(ask)~`, the `fold:` line's `P(fill)~`) and **rank** both read the **full-window**
+  (~14 night) reach. _(RB-3, 2026-08-04 had display on recent-3 and rank on the full window; the flip to a
+  single basis is `js/estimators/pair.mjs` — "display and rank are now on the SAME basis", pinned by
+  `pipeline/test/estimators.test.mjs`. The standing caveat that "on a recency-divergent item the two
+  legitimately differ" is **RETIRED** — they cannot differ. This entry still asserted it until 2026-08-09.)_
+  The `fold:` line still prints the recent-3 reach beside the full-window one when they diverge — that is
+  a data-freshness signal about the ITEM, not two different probability bases.
 - **TTF** — time-to-fill (kept abbreviated; standard).
 - **expected gp/day** (`expGpDay`) — the cheap pre-fetch pool orderer + the 250k attention-floor (250k since 2026-08-08 — lowered from 500k with the expUnits 6→2 refill haircut)
   input. Capital-aware (caps by what the deployable pool affords).

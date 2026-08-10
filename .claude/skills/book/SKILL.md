@@ -1,6 +1,6 @@
 ---
 name: book
-version: 1.2
+version: 1.3
 description: Show the state of the book right now — GE slots, working/parked/idle capital, per-lot P&L, and (with --size) how much of an item a given capital can buy. Triggers — "what's my book look like", "what's deployed/idle", "how many slots free", "capital dashboard", "how much X can I buy right now", "book".
 ---
 
@@ -37,8 +37,19 @@ manual sync needed. It does ONE live fetch per item in the held ∪ resting-bid 
 
 ## Honesty caveats — state these when relaying (they are decided simplifications, not bugs)
 
-- **Live marks are age-labelled.** _(judgment: display honesty)_ A mark whose last /latest print is older than ~15m is flagged
-  `⚠ Nm old`; never relay a stale P&L number as if it were live. All P&L is after-tax (`breakEven`).
+- **Live marks on the P&L BOARD are age-labelled — and the label is ALWAYS present.** _(judgment: display honesty)_
+  Since 2026-08-09 the shared `liveAgeTag` prints an age on every board mark: `(<1m ago)` / `(Nm ago)` when
+  fresh, `⚠ Nm old` past ~15m, `(age n/a)` when unknown. (It used to print nothing when fresh, which made
+  "unchanged price" and "stale read" indistinguishable.) Never relay a stale P&L number as if it were live.
+  All P&L is after-tax (`breakEven`).
+  **SCOPE — this covers the board only.** `read-book.mjs`'s own SIZER line (`net if cycled once (sell …)`)
+  and `book-model.mjs`'s reverse-flip `liveTxt` still render their marks UNLABELLED. The code headers were
+  narrowed on 2026-08-09 precisely because the tool-wide wording was false at those two sites; this skill
+  kept the old wording until 2026-08-09. Don't cite it as tool-wide coverage.
+- **The sizer REFUSES on an unknown buy limit — it never treats null as unlimited.** _(judgment: sizing honesty)_
+  `book-model.mjs` returns `refuse: true` / `refuseReason: 'unknown-limit'` with every bound null when
+  `limit == null`. Relay that as "cannot advise a size", not as an unbounded one (repo rule
+  `buy-limit-caps-every-size`).
 - **The free-slot count is a log-derived LOWER bound.** _(judgment: display honesty)_ A just-completed-but-not-yet-collected GE slot
   reads as FREE (the Exchange Logger only emits on a state change). So "N free" means "at least N
   free" — don't treat it as ground truth if a fill just landed.
