@@ -268,8 +268,9 @@ metadata, not a leak; the concern is content, not commit authorship.
   `pipeline/commands/*.mjs` entrypoint: (1) import RESOLUTION — every name imported exists in the target
   module's exports (catches a missing-export that `node --check`'s syntax-only pass lets through); and
   (2) UNBOUND CONSTANTS — every SCREAMING_SNAKE name USED is imported or declared, which is the reverse
-  direction and the one that caught a shipped `ReferenceError`. Coverage is entrypoints ONLY; `js/*.js`
-  and `pipeline/lib/**` are not scanned (clean today, so the gap is latent, not live), `fills.json`/`positions.json` parse, `lint-skills.mjs`, and
+  direction and the one that caught a shipped `ReferenceError`. **Coverage is the ENTRYPOINTS ⋃ `js/**` ⋃
+  `pipeline/lib/**`** since 2026-08-10 (was entrypoints only — the rationale, the measurements and the
+  browser-module shim live in README's `check-imports.mjs` entry, the ONE home)), `fills.json`/`positions.json` parse, `lint-skills.mjs`, and
   `lint-docs.mjs` — DL1's structural doc-drift lint: a denylist of superseded terms/commands +
   a single-source duplicate-phrase check on the CLAUDE.md ⇆ README axis; **must stay a denylist +
   structural checker, never a semantic/LLM one**, and `check-daemon-safety.mjs` — the daemon zero-git

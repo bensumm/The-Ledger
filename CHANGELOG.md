@@ -10,6 +10,31 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### `check-imports` coverage extended to `js/**` + `pipeline/lib/**` — closing a latent gap for free (2026-08-10, Ben-directed)
+
+The guard scanned `pipeline/commands/*.mjs` ONLY. The other 93 source files — including every module the
+deployed page actually runs — were unscanned, and both `CLAUDE.md` and `README.md` recorded that honestly
+as "the gap is latent, not live". **That latency is precisely how the 2026-08-09 `ReferenceError` shipped
+CI-green**: a name USED but never imported, which `node --check` (syntax-only) cannot see, which the import
+half of this guard cannot see (it checks the opposite direction), and which no test executed. `js/**` is
+the worst possible place to keep that blind spot, because CI's browser smoke only switches tabs — it never
+opens a Trends item, so a bad name there reaches users.
+
+**Coverage is now the ENTRYPOINTS ⋃ `js/**` ⋃ `pipeline/lib/**`**: 33 → 126 files, 685 → 1,141 imports,
+292 → 808 constant references. Runtime ~0.3s, so it stays inside the cheap `checks` job's budget.
+
+**It cost nothing, and that was established before wiring it**: running the existing scanner over the 93
+newly-covered files reported **0 unbound names**, so this is pure lock-in of an already-clean state rather
+than a cleanup. Both halves were then **mutation-proved in the new scope**, because a guard that has never
+failed proves nothing: an unbound constant injected into `js/windowread.mjs` (which `node --check` happily
+accepts) and a bad import name in `js/trends.js` each fail it, and both restores were hash-verified.
+
+**One implementation note.** The resolution half learns a module's exports by importing it, and the app's
+browser modules touch `document`/`location` at module scope — under bare node that throws and would have
+reported 25 phantom "unresolved import" failures. A deliberately dumb `document`/`window` Proxy shim is
+installed **CLI-only** (never when a test imports the module). It cannot mask a real missing export: that
+fails at LINK time, which no shim affects — verified by mutation above.
+
 ### DT4b follow-up — the fit-window rule gets a second mechanism, and the app stops disagreeing with the console (`APP_VERSION` 0.73.0, 2026-08-10)
 
 Closes the two findings an adversarial review raised against DT4b but which DT4b did not fix.
@@ -60,15 +85,15 @@ gap, and backwards on the peak side. Inside `clean=true`, reliability was doing 
 ⚠ **The first version of this section compared the wrong thing** (corrected 2026-08-10 after review). It
 measured the old predicate *at the new 14d lookback* against the new gate — holding constant the very
 thing this change moved, since the default lookback also went 7 → 14 here and **the old badge shipped at
-7d**. The honest before/after, stratified 1,267-item archive sample:
+7d**. The honest before/after, measured over the FULL local archive (3,800 items):
 
 | gate | rate |
 |---|---:|
-| the badge **as it actually shipped** (`clean` && pays, @7d) | **6.31%** |
-| the old predicate re-measured @14d (the misleading figure) | 2.45% |
-| **this badge** (`reliable` && pays, @14d) | **0.47%** |
+| the badge **as it actually shipped** (`clean` && pays, @7d) | **5.66%** (215) |
+| the old predicate re-measured @14d (the misleading figure) | 2.29% (87) |
+| **this badge** (`reliable` && pays, @14d) | **0.68%** (26) |
 
-So the reduction is **~13×, not the ~4×** the held-constant comparison implied. AND-ing concentration back
+So the reduction is **~8×, not the ~4×** the held-constant comparison implied. (A 1/3 stratified sample first gave ~13×; the full-archive figure above supersedes it — quoted because the difference is sampling variance, not a changed conclusion.) AND-ing concentration back
 onto the new gate would leave ~0.1% — 29 of 33 reliable items fail concentration, so keeping it would
 discard most of them on a predicate measured not to predict anything.
 

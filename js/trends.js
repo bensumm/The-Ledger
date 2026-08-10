@@ -339,9 +339,9 @@ function renderDiurnal(profSeries, qrow, it, showAnalysis){
       //   MEASURED (corrected 2026-08-10 after review — the first version of this comment compared the
       // old predicate AT 14d against the new one, holding constant the very thing this chunk changed:
       // the default lookback also moved 7 → 14, and the old badge SHIPPED at 7d). Honest before/after,
-      // stratified 1,267-item archive sample: the badge as it actually shipped (clean@7d && pays@7d)
-      // fired on 6.31% of items; this one fires on 0.47% — a 13.3× reduction, NOT the ~4× the
-      // held-constant comparison implied. (For reference the old predicate re-measured at 14d is 2.45%,
+      // FULL local archive, 3,800 items: the badge as it actually shipped (clean@7d && pays@7d)
+      // fired on 5.66% of items (215); this one fires on 0.68% (26) — an 8.3× reduction, NOT the ~4× the
+      // held-constant comparison implied. (For reference the old predicate re-measured at 14d is 2.29%,
       // and AND-ing concentration onto the new gate would leave ~0.1%: 29 of 33 reliable items fail
       // concentration, so keeping it would discard most of them on a predicate measured not to predict.)
       //   HONEST LIMITS (rule 4), both worth knowing before trusting the badge: reliability's own lift

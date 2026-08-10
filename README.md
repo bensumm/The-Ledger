@@ -1961,10 +1961,18 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     shipped broken (no regex state ⇒ a single `.replace(/"/g, …)` opened a phantom string and silently
     blinded the scan to the rest of the file). Deliberately OVER-binds parameters, catch params, labels
     and class fields: a false positive is a mysterious CI failure on correct code, which is worse than a
-    missed detection. **Scope is `pipeline/commands/*.mjs` only** — `js/*.js` and `pipeline/lib/**` are
-    NOT scanned; running the scanner over those 93 files reports 0 unbound (measured 2026-08-09, after
-    the re-export fix — before it, the same scan produced four false positives in `js/estimators/pair.mjs`,
-    so the earlier "verified clean" wording was asserted rather than run). The gap is latent, not live.
+    missed detection. **Scope EXTENDED 2026-08-10 (Ben-directed) to the ENTRYPOINTS ⋃ `js/**` ⋃ `pipeline/lib/**`** —
+    126 files, 1,141 imports, 808 constant references, still ~0.3s. It previously scanned
+    `pipeline/commands/*.mjs` ONLY, leaving 93 app/lib files unscanned with the gap recorded as "latent,
+    not live" — and that latency is exactly how the 2026-08-09 `ReferenceError` shipped. `js/**` is the
+    worst place to have it, since that is what the deployed page runs while the browser smoke never opens
+    an item. The extension cost nothing: 0 violations measured across the newly-covered files BEFORE
+    wiring, so it is pure lock-in of an already-clean state. Both halves were mutation-proved IN THE NEW
+    SCOPE — an unbound constant injected into `js/windowread.mjs` (which `node --check` happily passes)
+    and a bad import name in `js/trends.js` each fail the guard, and both restores were hash-verified.
+    Enumerating the browser modules needs a dumb `document`/`window` Proxy shim, installed CLI-only and
+    never when a test imports the module; it cannot mask a missing export, which fails at LINK time
+    regardless of any shim.
     `unboundConstantsIn` is EXPORTED and pinned by `pipeline/test/check-imports-scanner.test.mjs`, which
     asserts each of the four shipped failure shapes individually — the CLI's aggregate ✓ proved nothing
     about *which* shapes it detects, which is how three broken drafts each passed their own check.) Closes the gap that let

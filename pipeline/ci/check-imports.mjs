@@ -7,7 +7,9 @@
  * `import { … dayHighFrom5m }` rode a whole-file commit while estimators.mjs stayed behind, ESM-erroring
  * on a clean checkout). This check closes that gap.
  *
- * WHAT: for each pipeline ENTRYPOINT it STATICALLY parses the `import { … } from './rel.mjs'` statements
+ * SCOPE (extended 2026-08-10): the pipeline ENTRYPOINTS ⋃ `js/**` ⋃ `pipeline/lib/**` — 126 files. It
+ * scanned entrypoints ONLY until then; see the MODULE_ROOTS block below for why that gap mattered.
+ * WHAT: for each scanned file it STATICALLY parses the `import { … } from './rel.mjs'` statements
  * and verifies every named/default import actually exists in the TARGET module's exports. It dynamic-
  * imports only the TARGET modules (pipeline/lib/*, js/*, pipeline/probes/* — all pure, DOM-free, side-
  * effect-free on import) to read their export lists; it NEVER imports the entrypoints themselves, so no
@@ -38,9 +40,30 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Run the CLI work ONLY when invoked directly. `unboundConstantsIn` is exported for
 // pipeline/test/check-imports-scanner.test.mjs, and importing a guard must not run it (or exit).
 const IS_MAIN = pathToFileURL(process.argv[1] || '/').href === import.meta.url;
-const ENTRYPOINTS = IS_MAIN ? fs.readdirSync(path.join(HERE, '..', 'commands'))   // HERE=pipeline/ci; '..' -> pipeline/
+const COMMANDS = IS_MAIN ? fs.readdirSync(path.join(HERE, '..', 'commands'))   // HERE=pipeline/ci; '..' -> pipeline/
   .filter(f => f.endsWith('.mjs')).sort()
   .map(f => path.join(HERE, '..', 'commands', f)) : [];
+
+// COVERAGE EXTENSION (2026-08-10, Ben-directed). Until now this guard scanned ENTRYPOINTS ONLY, and
+// CLAUDE.md recorded the gap honestly: "js/*.js and pipeline/lib/** are not scanned (clean today, so the
+// gap is latent, not live)". That latency is exactly how a `ReferenceError` shipped on 2026-08-09 — a name
+// USED but never imported, which `node --check` (syntax-only) cannot see and which no test executed. The
+// app's own modules are the WORST place to have the blind spot: `js/**` is what the deployed page runs,
+// and CI's browser smoke never opens a Trends item, so a bad name there reaches users.
+// Measured BEFORE wiring this: 93 files across js/** + pipeline/lib/**, ZERO unbound names. So this costs
+// nothing today — it is pure lock-in of an already-clean state, which is the cheapest kind of guard.
+const MODULE_ROOTS = [path.join(HERE, '..', '..', 'js'), path.join(HERE, '..', 'lib')];
+function walkModules(dir, out = []) {
+  let entries; try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
+  for (const e of entries) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walkModules(p, out);
+    else if (/\.(mjs|js)$/.test(e.name)) out.push(p);
+  }
+  return out;
+}
+const MODULES = IS_MAIN ? MODULE_ROOTS.flatMap(r => walkModules(r)).sort() : [];
+const ENTRYPOINTS = [...COMMANDS, ...MODULES];
 
 // Extract [{ specifier, names:Set, wantDefault:bool, nsOnly:bool }] for every RELATIVE from-import in src.
 // Handles single- and multi-line braces, `as` renames (checks the EXPORTED name), default + namespace,
@@ -73,6 +96,28 @@ function parseRelativeImports(src) {
   const reBare = /\bimport\s*['"](\.[^'"]+)['"]/g;
   while ((m = reBare.exec(clean)) !== null) out.push({ specifier: m[1], names: new Set(), wantDefault: false, nsOnly: false });
   return out;
+}
+
+// Minimal DOM shim so the resolution pass can ENUMERATE the app's browser modules (2026-08-10).
+// `exportsOf` learns a module's exports by importing it, and js/ui.js, js/trends.js, js/market.js etc.
+// touch `document`/`location` at module scope — under bare node they throw "document is not defined",
+// which would report as 25 fake unresolved imports. This shim is deliberately DUMB (a Proxy that answers
+// anything) and is installed ONLY when this guard runs as a CLI, never when a test imports the module.
+// It cannot mask a real missing export: a genuinely absent name fails at LINK time with "does not
+// provide an export named X", which the shim has no bearing on.
+if (IS_MAIN && typeof globalThis.document === 'undefined') {
+  const el = new Proxy(function () {}, {
+    get: (t, k) => k === 'classList' ? { add() {}, remove() {}, toggle() {}, contains() { return false; } }
+      : k === 'style' ? {} : k === 'dataset' ? {} : k === 'value' ? '' : k === 'textContent' ? ''
+      : k === 'innerHTML' ? '' : (typeof k === 'string' && ['querySelectorAll', 'getElementsByTagName'].includes(k)) ? (() => [])
+      : el,
+    apply: () => el, set: () => true,
+  });
+  globalThis.document = new Proxy({}, { get: (t, k) => k === 'querySelectorAll' ? (() => []) : (() => el) });
+  globalThis.window = new Proxy({}, { get: () => el, set: () => true });
+  globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
+  globalThis.location = { href: 'http://localhost/', search: '', hash: '', hostname: 'localhost', protocol: 'http:' };
+  globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, addListener() {} });
 }
 
 let failures = 0, checkedImports = 0;
