@@ -10,6 +10,66 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### DT4b follow-up — the fit-window rule gets a second mechanism, and the app stops disagreeing with the console (`APP_VERSION` 0.73.0, 2026-08-10)
+
+Closes the two findings an adversarial review raised against DT4b but which DT4b did not fix.
+
+**1. Routing was a convention, not an invariant.** `displayFitNights` was documented as the one home for
+"which window does a displayed diurnal window get fitted over", but two surfaces rendered gated hours
+without going through it — `read-schedule.mjs` (`PROFILE_NIGHTS = 14`) and `read-window-range.mjs`
+(`NIGHTS = 14`) — agreeing with the gate only because both literals happened to equal
+`WINDOW_RELIABLE_NIGHTS`. Nothing pinned that coincidence and no test referenced either constant, so
+moving the gate window would have silently reopened the gap. They are fixed by the two *different*
+mechanisms the situation calls for, and the distinction is the point:
+
+- `read-schedule.mjs` **routes**. `PROFILE_NIGHTS` is now the imported constant and the fetch worker calls
+  `displayFitNights`, so a row that passes the gate is fitted over the days the gate judged. Output is
+  byte-identical today (both branches pick 14); the change is that it *stays* correct. It also collapses
+  two `windowReliability` calls into one and removes a now-write-only `series` map — its only readers
+  were those two calls, and the reverse-flip drift note it was retained for was deleted by DT3.
+- `read-window-range.mjs` **discloses**. Its window is `--nights`, the caller's explicit question;
+  silently refitting it would make the flag a lie. Its default is now pinned to the gate's window, and an
+  explicit `--nights` that moves the fit off it prints `⚠ window mismatch …` — naming both windows and
+  the measured cross-fit agreement (dip hour 34.4%, span 18.8%) rather than letting a 14d-measured
+  verdict read as if it described 7d-fitted hours.
+
+The rule is now one home, two renderings — refit when you can, disclose when you can't — via the new pure
+`fitWindowMismatchNote` (`js/windowread.mjs`), which is tested and mutation-checked rather than living as
+CLI-inline prose. It is still **not machine-enforced**: nothing stops a *new* surface from fitting its own
+window silently.
+
+**2. The app and the console disagreed about what makes an hour-of-day read trustworthy.** The console
+gates hour *display* on `windowReliability` (the split-half reproducibility test). The Trends tab's `★`
+gated on `hourConcentration.clean` — which the **same DT4 study measured as a non-discriminator**:
+`clean=true` ran dip +5.0pp / peak +4.4pp (n=60) against `clean=false`'s +3.6pp / +4.7pp (n=1919) — no
+gap, and backwards on the peak side. Inside `clean=true`, reliability was doing all the work (+20.7pp /
++21.5pp for its 8 passers vs +2.6pp / +1.8pp for the other 52). So:
+
+- `★` is now gated on `windowReliability` + the existing after-tax ROI floor. `hourConcentration` was
+  **removed** from `js/trends.js` rather than kept as flavour text — printing it would assert a property
+  measured not to predict anything. It remains canonical for what it *is* elsewhere.
+- Every run now prints a plain-language **`Timing check:`** line carrying the gate's tri-state (repeated /
+  did-not-repeat / no-shape-to-time / not-enough-history). It renders **always**, not only on failure,
+  because the chart and the BID/ASK line state these hours as fact.
+- **A third surface turned up while fixing the first two**: the lookback toggle offered only 7d and 28d,
+  so the app's displayed fit *never* matched the gate's 14d window — every `★` it had ever shown carried a
+  verdict measured on days it wasn't displaying. 14d was added and made the default; 7d/28d now disclose.
+
+**Honest limits (rule 4).** Reliability's own lift evidence is n=8, and the badge is now **rare by
+construction** — only ~0.8% of items pass the gate at all. Measured over a 636-item archive sample at the
+new default window: the old gate fired on 2.1% of items, `reliable && pays` fires on 0.5%, and AND-ing
+concentration back on top would cut it to 0.2% by dropping 4 of the 5 reliable items. Keeping concentration
+would have filtered on noise. Ben can revert to the old, more frequent badge if he prefers the rate.
+
+**Verification.** `js/*.js` is outside `check-imports`' coverage and CI's smoke test clicks the Trends tab
+but never opens an item, so `renderDiurnal` never executes there — exactly the blind spot that shipped a
+`ReferenceError` on 2026-08-09. This change was therefore driven in a real headless browser against
+fixtures engineered to pass and to fail the gate, confirming both `★` branches, both `Timing check`
+wordings, the 14d default, and the mismatch note appearing only after switching lookback. The failure
+fixture is the whole argument in one row: at 7d it reads `+45,310/u (+2.3%)` with a dip window of
+01:00–12:00, at 14d `-23,572/u` with a dip of 16:00–17:00 — same data, different answer, and under the old
+gate the 7d view could have earned a `★`.
+
 ### /schedule printed an unguarded price — a buy-high/sell-low agenda on 7.3% of items (2026-08-10)
 
 `read-schedule.mjs`'s Level column read `w.level` straight off `hourProfile` — the ONLY consumer in the

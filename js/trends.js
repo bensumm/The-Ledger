@@ -4,7 +4,7 @@ import { tax, netMargin, netMarginQty, now, clamp } from './money-math.js';
 import { fmt, fmtP, pad2, fmtHour, sgn } from './money-format.js';
 import { svgLine, svgBars } from './charts-static.js';
 import { createChart } from './charts-interactive.js';                                  // CL: interactive chart (diurnal viz)
-import { hourProfile, deriveDiurnalRange, windowStats, hourConcentration } from './windowread.mjs';   // shared diurnal peak-timing math (same module the console uses); windowStats → the daily series driftExitFrom's slopes read (Chunk 5); hourConcentration (DT5) → the canonical cycle-cleanliness verdict for the ★ badge
+import { hourProfile, deriveDiurnalRange, windowStats, windowReliability, fitWindowMismatchNote, WINDOW_RELIABLE_NIGHTS } from './windowread.mjs';   // shared diurnal peak-timing math (same module the console uses); windowStats → the daily series driftExitFrom's slopes read (Chunk 5); windowReliability (DT4b) → the split-half gate on the ★ badge, the SAME verdict the console gates hour-display on (hourConcentration was dropped here 2026-08-10 — measured non-discriminator, see renderDiurnal)
 import { reachValidator, floorValidator, trajectoryValidator } from './validate.mjs';   // TV: validator notes split across their viz (inform-only)
 import { termStructure } from './termstructure.mjs';                         // TV: durable multi-week floor/ceiling/typical-swing + trajectory shape (shared)
 import { diurnalForecast, fmtEta, driftExitFrom } from './forecast.mjs';                    // TV: forward 24h projection off the daily rhythm (shared, provisional n≈0); driftExitFrom (PLAN-OSCILLATION-CYCLE Chunk 5) — the drift-adjusted exit LEVEL beside the forecast readout
@@ -266,12 +266,15 @@ function renderRecent(it, s5m, qrow, showAnalysis){
    js/windowread.mjs hourProfile/deriveDiurnalRange (the SAME computation the console's screen +
    quote print — parity, not a fork) off the ALREADY-fetched 1h series (no new request). A 24-bar
    hour-of-day chart (dip hours green, peak hours red) with the derived stale-guarded BID/ASK
-   overlaid as reference lines, plus a one-line readout of BID→ASK + after-tax swing (★ = clean
-   candidate — DT5: gated on `hourConcentration`'s `.clean` verdict, PLAN-DIURNAL-TIMING §6's
-   canonical "is this a real diurnal cycle" answer (circular mean-resultant-length R over each
-   day's own trough/peak hour), AND-ed with the existing after-tax ROI floor below — cleanliness
-   of the CYCLE and profitability of the LAP are two separate questions, so both gates stay,
-   matching the console's flag). The `reach` validator note is rendered beside it,
+   overlaid as reference lines, plus a one-line readout of BID→ASK + after-tax swing (★ = the
+   hour-of-day shape REPRODUCES — DT4b, 2026-08-10: gated on `windowReliability`'s split-half test,
+   the same verdict the console gates hour-display on, AND-ed with the after-tax ROI floor below.
+   It was gated on `hourConcentration.clean` until then; that predicate is a measured
+   non-discriminator and was removed here, not demoted — the numbers are in renderDiurnal). Every
+   run also prints a plain-language "Timing check:" line carrying the gate's tri-state, because the
+   chart states these hours as fact and an unverified read has to say so. The lookback toggle
+   defaults to the gate's own window so the hours drawn are the hours judged; picking another
+   lookback refits them and says so. The `reach` validator note is rendered beside it,
    inform-only (it scores whether those diurnal levels are actually reached). It's a TIMING tool, so
    it lives in the timing tier (below Price history), NOT above the plan card. Thresholds are
    placeholders (n≈0) — the section is labeled guidance, matching the console framing.
@@ -320,17 +323,49 @@ function renderDiurnal(profSeries, qrow, it, showAnalysis){
     if(dr&&dr.bid!=null&&dr.ask!=null){
       const win=w=>fmtHour(w.startH)+'–'+fmtHour(w.endH);
       const net=Math.round(dr.ask-tax(dr.ask)-dr.bid), roi=dr.bid?net/dr.bid*100:null;
-      // DT5: cycle-cleanliness comes from hourConcentration (canonical — PLAN-DIURNAL-TIMING §3/§6),
-      // NOT a locally-reinvented concentrated/trendDominates predicate. Judgment call: keep the ROI
-      // floor as a SEPARATE economic gate — a genuinely clean per-day trough/peak cycle that still
-      // doesn't clear a positive after-tax swing isn't a tradeable ★, so DIURNAL_MIN_ROI stays live.
-      let hc=null; try{ hc=hourConcentration(profSeries||[], {nights}); }catch(_){ hc=null; }
-      const clean=!!(hc&&hc.clean) && net>0 && roi!=null && roi>=DIURNAL_MIN_ROI;
+      // DT4b follow-up (2026-08-10) — SUPERSEDES DT5 IN PLACE. This block used to read "cycle-cleanliness
+      // comes from hourConcentration (canonical) … so DIURNAL_MIN_ROI stays live", describing a ★ gated on
+      // CONCENTRATION. The app and the console disagreed about what makes an hour-of-day read
+      // trustworthy: the console gates on `windowReliability` (the split-half reproducibility test), this
+      // badge gated on `hourConcentration.clean` — which the SAME DT4 study measured as a NON-DISCRIMINATOR
+      // (clean=true ran dip +5.0pp / peak +4.4pp, n=60, against clean=false's +3.6pp / +4.7pp, n=1919 — no
+      // gap, and BACKWARDS on the peak side). Inside clean=true, reliability was doing all the work:
+      // +20.7pp / +21.5pp for its 8 passers vs +2.6pp / +1.8pp for the other 52.
+      //   So reliability is the gate now and concentration is NOT CONSULTED HERE AT ALL — deliberately
+      // removed rather than kept as flavour text, because printing it would assert a property measured
+      // not to predict anything. hourConcentration remains canonical for what it IS (PLAN-DIURNAL-TIMING
+      // §3/§6); it just isn't evidence for THIS badge. The ROI floor stays a separate economic gate — a
+      // real cycle that doesn't clear tax still isn't tradeable.
+      //   MEASURED over a 636-item archive sample at this default window: the old gate fired on 2.1% of
+      // items, `reliable && pays` fires on 0.5%, and AND-ing concentration back on top would cut it to
+      // 0.2% by dropping 4 of the 5 reliable items. HONEST LIMIT (rule 4): reliability's own lift evidence
+      // is n=8, and the badge is now RARE BY CONSTRUCTION — only ~0.8% of items pass the gate at all.
+      let rel=null; try{ rel=windowReliability(profSeries||[]); }catch(_){ rel=null; }
+      const hoursOk=!!(rel&&rel.reliable===true);
+      const paysOk=net>0 && roi!=null && roi>=DIURNAL_MIN_ROI;
+      const clean=hoursOk && paysOk;
       let s='';
-      if(clean) s+='<b class="gain" title="clean diurnal candidate — concentrated dip &amp; peak, trend-quiet, positive after-tax swing">★</b> ';
+      if(clean) s+='<b class="gain" title="the hour-of-day shape reproduced across a split-half test of the last '+WINDOW_RELIABLE_NIGHTS+' days, and the lap clears a positive after-tax swing">★</b> ';
       s+='<b>BID '+fmtP(dr.bid)+'</b> <span class="mini">('+dr.bidBasis+', dip '+win(dr.dipWindow)+')</span> → <b>ASK '+fmtP(dr.ask)+'</b> <span class="mini">(peak '+win(dr.peakWindow)+')</span>';
       if(net!=null) s+=' · <b class="'+sgn(net)+'">'+(net>=0?'+':'')+fmtP(net)+'</b>/u after tax'+(roi!=null?' ('+roi.toFixed(1)+'%)':'');
       if(prof.trendDominates) s+=' · <span class="loss">⚠ trend-dominates — the moving floor erases the intraday dip; bid priced to live.</span>';
+      // ALWAYS rendered, not only when it fails: the chart and the BID/ASK line above state these
+      // hours as fact, so a read the gate could not verify has to say so on the same line. Same three
+      // branches read-window-range --profile prints — parity of the CLAIM, not of the wording (this
+      // surface keeps the r's out per the no-jargon rule at the top of this file).
+      const relTxt=(!rel||rel.degraded)
+        ? 'Timing check: not enough hourly history to verify these hours yet (needs ~'+WINDOW_RELIABLE_NIGHTS+' days) — treat the timing as unverified and use the levels.'
+        : rel.reason==='flat-shape'
+          ? 'Timing check: this item has no real hour-of-day shape, so the dip/peak hours are an arbitrary pick among near-equal hours — use the levels, not the timing.'
+          : rel.reliable
+            ? 'Timing check: the shape repeated across a split-half test of the last '+rel.daysUsed+' days — these hours are worth acting on.'
+            : 'Timing check: the shape did NOT repeat across a split-half test of the last '+rel.daysUsed+' days — treat the hours as noise and use the levels.';
+      s+=' · <span class="mini">'+relTxt+'</span>';
+      // and when the user has moved OFF the gate's window, the verdict above no longer describes the
+      // hours drawn — say which window each one came from rather than letting them read as one fit.
+      const mm=fitWindowMismatchNote({fitNights:nights, degraded:!rel||rel.degraded, flag:'the lookback',
+        remedy:'switch the lookback back to '+WINDOW_RELIABLE_NIGHTS+'d to see the hours the gate actually judged'});
+      if(mm) s+=' <span class="mini loss">⚠ '+mm+'</span>';
       s+=' <span class="ccap">Guidance from the recent daily rhythm — timing support, not a price target; thresholds are placeholder (n≈0).</span>';
       cap.innerHTML=dpleg+'<br>'+s;
     } else {
@@ -351,7 +386,12 @@ function renderDiurnal(profSeries, qrow, it, showAnalysis){
     }
   }
   // lookback toggle: average the hour-of-day shape over a short (reactive) or long (steadier) window.
-  const LOOKBACKS=[{label:'7d',n:7},{label:'28d',n:28}];
+  // DT4b follow-up (2026-08-10): 14d ADDED and made the default — it is the reliability gate's own
+  // pinned window, so at the default the hours drawn here are the hours the gate actually judged.
+  // Before this the options were 7d/28d, i.e. the displayed fit NEVER matched the gate's window and
+  // the ★ below carried a warrant measured on days it wasn't showing. 7d/28d remain as explore
+  // settings and now announce the mismatch rather than hiding it.
+  const LOOKBACKS=[{label:'7d',n:7},{label:'14d',n:WINDOW_RELIABLE_NIGHTS},{label:'28d',n:28}];
   if(togEl){
     const lab=document.createElement('span'); lab.className='mini'; lab.style.marginRight='2px'; lab.textContent='avg over';
     togEl.appendChild(lab);
@@ -359,7 +399,7 @@ function renderDiurnal(profSeries, qrow, it, showAnalysis){
       b.title='average the hour-of-day shape over the last '+lb.label+' of history'; b.onclick=()=>setN(lb.n); togEl.appendChild(b); });
   }
   function setN(n){ if(togEl) togEl.querySelectorAll('.chartspan').forEach(b=>b.classList.toggle('on', +b.dataset.n===n)); draw(n); }
-  setN(7);
+  setN(WINDOW_RELIABLE_NIGHTS);
 }
 /* TV: the floor + trajectory validator notes, rendered WITH the term-structure overlay they qualify
    (Ben's validator-note split, not one flat block). Both are the SAME shared js/validate.mjs validators

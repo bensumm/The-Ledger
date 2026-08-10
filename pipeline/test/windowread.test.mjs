@@ -25,7 +25,7 @@ import { trajectoryRead } from '../../js/windowread.mjs';   // the fang under-re
 import { floorCeilingTrack, formatFloorCeiling, FC_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — the phase-aligned floor+ceiling slope-asymmetry classifier
 import { fmtHoldHorizon } from '../../js/windowread.mjs';   // PLAN-ESTIMATOR-HONEST-SELL follow-up — the shared "~Nh/Nd hold" renderer
 import { hourConcentration, HOURCONC_MIN_DAYS, HOURCONC_MIN_R, diurnalTimedLap, DT_TRANCHE_COMFORT_VOL_PCT, DT_TRANCHE_CEILING_VOL_PCT } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT1 — the timed-lap layer
-import { displayFitNights, WINDOW_RELIABLE_NIGHTS, phaseFromLap, diurnalPhase } from '../../js/windowread.mjs';   // DT4b — the ONE home for "which window does a DISPLAYED diurnal window get fitted over"
+import { displayFitNights, WINDOW_RELIABLE_NIGHTS, phaseFromLap, diurnalPhase, fitWindowMismatchNote } from '../../js/windowread.mjs';   // DT4b — the ONE home for "which window does a DISPLAYED diurnal window get fitted over"
 import { askReachDecayNote, liveAgeTag, LIVE_FRESH_MIN_FALLBACK } from '../../js/windowread.mjs';
 import { QUICK_FRESH_MIN } from '../../js/quotecore.js';   // drift guard: windowread cannot IMPORT this (cycle), so the test pins the mirror   // PLAN-DIURNAL-TRIAGE DT3 — the compact render of an askReachDecay() result
 import * as WR from '../../js/windowread.mjs';   // DT3 — namespace import for the stays-deleted pin
@@ -1706,4 +1706,46 @@ ok('formatTimedLap: an UNVERIFIED item is worded as unverified and still withhol
     assert.ok(!/hold ~/.test(t), `${label}: the hold horizon is an hours claim`);
   }
   assert.ok(/hours MAY repeat most days/.test(passed) && /dip 01:00/.test(passed), 'and the passing case still renders both');
+});
+
+// --- §12d DT4b FOLLOW-UP — fitWindowMismatchNote, the DISCLOSE half of the fit-window rule ---------
+// Context: displayFitNights closes the transfer gap by MOVING the fit to the gate's window. That is
+// impossible on read-window-range, where the window is the caller's explicit --nights question, so
+// that surface discloses instead. The review finding this answers was "routing is a convention, not
+// enforced, and no test references it" — so the rule is a pure tested function, not CLI-inline prose.
+ok('fitWindowMismatchNote: says nothing when the hours shown ARE the hours judged', () => {
+  assert.equal(fitWindowMismatchNote({ fitNights: WINDOW_RELIABLE_NIGHTS }), null,
+    'equal windows have no gap to disclose — a default run must stay byte-identical');
+});
+ok('fitWindowMismatchNote: discloses when the fit window differs from the gate window', () => {
+  const note = fitWindowMismatchNote({ fitNights: 7 });
+  assert.ok(note, 'a 7d fit under a 14d verdict is exactly the gap DT4b measured — it must be disclosed');
+  assert.ok(note.includes(`${WINDOW_RELIABLE_NIGHTS}d`) && note.includes('7d'),
+    `both windows must be NAMED so the reader can see which is which: ${note}`);
+  assert.ok(/does NOT transfer/.test(note), `the note must state the consequence, not just the fact: ${note}`);
+});
+// The two null branches are DIFFERENT claims and the degraded one is the subtle one: with no verdict
+// there is no warrant to transfer, so a mismatch note would imply a verdict that merely applied to
+// other hours. MUTATION GUARD — dropping the `degraded` check makes this fire on an unmeasurable item.
+ok('fitWindowMismatchNote: a degraded gate discloses NOTHING — no verdict means nothing to transfer', () => {
+  assert.equal(fitWindowMismatchNote({ fitNights: 7, degraded: true }), null,
+    'MUTATION GUARD: an unmeasurable item already says "unverified"; claiming a window mismatch on top ' +
+    'would assert a verdict exists');
+  assert.ok(fitWindowMismatchNote({ fitNights: 7, degraded: false }),
+    'and the same input WITHOUT degraded must still disclose (else the test above passes vacuously)');
+});
+ok('fitWindowMismatchNote: a missing fit window is not silently treated as a match', () => {
+  assert.equal(fitWindowMismatchNote({ fitNights: null }), null, 'null fit ⇒ nothing to say');
+  assert.equal(fitWindowMismatchNote({ fitNights: 7, gateNights: null }), null, 'null gate ⇒ nothing to say');
+  assert.equal(fitWindowMismatchNote({}), null, 'and a bare call must not throw');
+});
+// The app renders this note too, and its control is a lookback toggle rather than a CLI flag, so the
+// wording is parameterised. Pinned because a hardcoded "--nights" leaking into the browser would tell
+// a Trends user to drop a flag that does not exist on that surface.
+ok('fitWindowMismatchNote: names the caller\'s own control, not a hardcoded CLI flag', () => {
+  const app = fitWindowMismatchNote({ fitNights: 28, flag: 'the lookback', remedy: 'switch the lookback back to 14d' });
+  assert.ok(!app.includes('--nights'), `the app rendering must not mention a CLI flag: ${app}`);
+  assert.ok(app.includes('the lookback') && app.includes('switch the lookback back to 14d'), app);
+  assert.ok(fitWindowMismatchNote({ fitNights: 28 }).includes('--nights'),
+    'and the default is still the CLI wording (else the test above passes for the wrong reason)');
 });

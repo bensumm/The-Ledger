@@ -1831,14 +1831,26 @@ export function windowReliability(series, { nights = WINDOW_RELIABLE_NIGHTS, now
  * windowReliability's header. ONE home for the rule "which window does a DISPLAYED diurnal
  * window get fitted over".
  *
- * ⚠ ROUTING IS A CONVENTION, NOT AN ENFORCED INVARIANT — corrected after review. An earlier version of
- * this line said "every surface that renders gated hours MUST route through it", which reads as a
- * guarantee and is not one. Two surfaces render gated hours WITHOUT routing through it:
- * `read-schedule.mjs` (its own `PROFILE_NIGHTS`) and `read-window-range.mjs` (its own `NIGHTS`). They
- * agree with the gate today only because both constants happen to equal WINDOW_RELIABLE_NIGHTS — an
- * UNPINNED coincidence with no test on it, so changing the gate window silently reopens the gap on
- * `/schedule`. And `read-window-range --profile --nights 7` ships the original gap right now.
- * If you change WINDOW_RELIABLE_NIGHTS, grep those two files before assuming this function covered you.
+ * ROUTING — CLOSED 2026-08-10 (DT4b follow-up). This block previously read "ROUTING IS A CONVENTION,
+ * NOT AN ENFORCED INVARIANT", naming two surfaces that rendered gated hours WITHOUT routing through
+ * this function and agreed with the gate only because their own constants happened to equal
+ * WINDOW_RELIABLE_NIGHTS — an unpinned coincidence with no test on it. Both are now handled, by the
+ * TWO different mechanisms the situation actually calls for:
+ *   `read-schedule.mjs`     — ROUTES. Its `PROFILE_NIGHTS` is now `WINDOW_RELIABLE_NIGHTS` (imported,
+ *                             not a literal) and its worker calls displayFitNights, so a passing row
+ *                             is fitted over the days the gate judged. Output is byte-identical today;
+ *                             the point is that it stays correct if the gate window ever moves.
+ *   `read-window-range.mjs` — DISCLOSES, deliberately. Its window is `--nights`, the caller's explicit
+ *                             question; silently refitting it would make the flag a lie. Its default is
+ *                             now pinned to WINDOW_RELIABLE_NIGHTS, and when an explicit --nights moves
+ *                             the fit off the gate's window it prints `fitWindowMismatchNote` instead.
+ *   `js/trends.js`          — ROUTES BY DEFAULT (the third surface, found while closing the other two:
+ *                             its lookback toggle offered only 7d/28d, so the displayed fit NEVER
+ *                             matched the gate). 14d added and defaulted; 7d/28d now disclose.
+ * The rule therefore has one home and two renderings — refit when you can, disclose when you cannot.
+ * Still NOT machine-enforced: nothing stops a NEW surface from fitting its own window silently. If you
+ * add one, pick a mechanism above; if you change WINDOW_RELIABLE_NIGHTS, the three callers follow it
+ * automatically now, but grep for `hourProfile(` in any surface added since.
  *
  * THE GAP IT CLOSES. The gate judges a 14-day shape (its window is pinned — a 7-day window is
  * uncomputable for ~100% of items). The surfaces rendered the window at nights=7. So a passing
@@ -1898,6 +1910,33 @@ export function windowReliability(series, { nights = WINDOW_RELIABLE_NIGHTS, now
 export function displayFitNights(series, { nights = 7, now = new Date() } = {}) {
   const reliability = windowReliability(series, { now });
   return { reliability, fitNights: reliability.reliable === true ? WINDOW_RELIABLE_NIGHTS : nights };
+}
+
+/**
+ * fitWindowMismatchNote — the OTHER half of the fit-window transfer rule, for surfaces that CANNOT
+ * refit. `displayFitNights` closes the gap by moving the fit to the gate's window; a surface where the
+ * window is the caller's explicit question (`read-window-range --nights N`) must not silently override
+ * that flag, so it DISCLOSES the gap instead. Same rule, one home, two renderings.
+ *
+ * Returns null when there is nothing to disclose — which is the common case, so a default run is
+ * byte-identical. Two distinct reasons it returns null, and they are NOT the same claim:
+ *   degraded  — the gate produced no verdict at all, so no warrant exists to transfer. The caller's
+ *               own "NOT MEASURABLE / unverified" wording already covers it; adding a mismatch note
+ *               would imply there was a verdict that merely applied to other hours.
+ *   windows equal — the hours shown ARE the hours judged. Nothing to say.
+ *
+ * The 34.4% figure is measured (DT4-WINDOW-GATE-FINDINGS.md, gate-passers n=32: a 7d and a 14d fit of
+ * the same passing item agree on the dip hour 34.4% of the time, on the full span 18.8%). It is quoted
+ * as the ~34% approximation because it is an ORDER-OF-MAGNITUDE honesty signal, not a per-item rate.
+ *
+ * PURE, zero fetch. @returns {string|null}
+ */
+export function fitWindowMismatchNote({ fitNights, gateNights = WINDOW_RELIABLE_NIGHTS, degraded = false,
+                                        flag = '--nights', remedy = null } = {}) {
+  if (degraded) return null;
+  if (fitNights == null || gateNights == null || fitNights === gateNights) return null;
+  const fix = remedy || `drop ${flag} to see the hours the gate actually judged`;
+  return `window mismatch — that verdict was measured over ${gateNights}d, but the hours shown are fitted over ${flag} ${fitNights}d. Two fits of the same item agree on the dip hour only ~34% of the time, so it does NOT transfer to these exact hours — ${fix}.`;
 }
 
 // --- the timed-lap layer (PLAN-DIURNAL-TIMING §0/§1, DT1) ---------------------------------------

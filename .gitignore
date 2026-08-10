@@ -26,3 +26,9 @@ pipeline/suggestions-archive/
 # PLAN-OSCILLATION-CYCLE Chunk 4: per-item cycle-expectation state for watch-positions.mjs --cycle.
 # Desk-side runtime state (like pipeline/.cache/watch-state.json), rebuilt fresh each pass — NEVER committed.
 cycle-watch.json
+
+# Local dev dependencies. The repo has NO package.json and NO build step (deployed exactly as the
+# files sit on disk) — this only ever appears when someone installs the CI smoke's playwright
+# locally (`npm install --no-save playwright`) to run pipeline/ci/smoke-test.mjs or a targeted
+# browser check of a js/*.js render path. Never committed.
+node_modules/

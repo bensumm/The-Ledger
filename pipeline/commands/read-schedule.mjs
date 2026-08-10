@@ -35,7 +35,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping, fetchTs, fetchLatest } from '../lib/market/marketfetch.mjs';   // fetchLatest (2026-08-10): the live leg the dip-not-below-live guard needs — without it deriveDiurnalRange's reprice cannot fire
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot } from '../lib/reconstruct/offers.mjs';
-import { hourProfile, windowReliability, WINDOW_RELIABLE_R, deriveDiurnalRange } from '../../js/windowread.mjs';   // deriveDiurnalRange = the ONE home for the Ghrazi level guard; this file used to bypass it and shipped raw hourProfile levels
+import { hourProfile, displayFitNights, WINDOW_RELIABLE_R, WINDOW_RELIABLE_NIGHTS, deriveDiurnalRange } from '../../js/windowread.mjs';   // deriveDiurnalRange = the ONE home for the Ghrazi level guard; this file used to bypass it and shipped raw hourProfile levels
 import { fmt, fmtP, fmtHour, fmtHourRange, localTzAbbrev } from '../../js/money-format.js';   // fmtP for the Level column: it is a PRICE to place an offer at, and fmt()'s 1-decimal k-range collapsed 1,051 and 1,109 onto the same "1.1k" (Ben, 2026-08-05). fmtP keeps full gp under 100k and stays compact above it — the same convention the scan's Est. buy/sell price cells use.
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 surfaces the in-flight cycle into the agenda
 import { reverseFlipCycleNotes } from '../../js/reverseflip.mjs';   // RF4/RF6 shared inform-only cycle notes (thin strand + drift + REBUY_STALE_DAYS nudge)
@@ -43,7 +43,11 @@ import { reverseFlipCycleNotes } from '../../js/reverseflip.mjs';   // RF4/RF6 s
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.join(HERE, '..', '..');
 const FETCH_CONCURRENCY = 5;   // copy screen-flip-niches.mjs's constant — keep modest (wiki API ≤15 concurrent)
-const PROFILE_NIGHTS = 14;     // same window read-window-range.mjs --profile uses (NIGHTS default 14)
+// PINNED to the reliability gate's window (was a bare literal 14 — equal to it only by coincidence,
+// with no test on the coincidence, so changing the gate silently reopened DT4b's fit-window gap here).
+// This is the FALLBACK window for a row whose hours did NOT pass; a passing row refits to the gate's
+// own window via displayFitNights below, which is the whole point of routing through it.
+const PROFILE_NIGHTS = WINDOW_RELIABLE_NIGHTS;   // same window read-window-range.mjs --profile defaults to
 
 // ── PURE `In (h)` math (fixture-tested in read-schedule.test.mjs) ─────────────────────────────────
 // hoursUntil(startH, now) — hours from `now` to the NEXT occurrence of local hour-of-day `startH`,
@@ -310,12 +314,25 @@ export async function buildAgenda({ scope = ['c'], now = new Date(), repoRoot = 
   }
   const ids = [...selected.keys()];
   const profiles = new Map();
-  const series = new Map();   // RF4: retain the fetched 1h series so a reverse-flip drift note reuses it (no new fetch)
+  // (The RF4 `series` map is GONE — it existed so a reverse-flip drift note could reuse the fetched 1h
+  //  series, DT3 deleted that note 2026-08-09, and its only remaining readers were the two duplicate
+  //  windowReliability calls now folded into the single displayFitNights call below. Write-only = dead.)
   const live = new Map();     // LEVEL-GUARD fix (2026-08-10): the live instasell/instabuy per item.
+  const reliable = new Map(); // DT4b: windowReliability's tri-state, computed once with the fit window.
   const queue = [...ids];
   const worker = async () => {
     for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
-      try { const ts = await fetchTs(id, '1h'); series.set(id, ts); profiles.set(id, hourProfile(ts, { nights: PROFILE_NIGHTS })); }
+      // DT4b routing (2026-08-10): the displayed window is fitted over displayFitNights' window, not a
+      // local constant — so a row that PASSES the gate is fitted over the same days the gate judged.
+      // Byte-identical today (PROFILE_NIGHTS === WINDOW_RELIABLE_NIGHTS, so both branches pick 14); the
+      // point is that it stays correct if the gate window ever moves. windowReliability runs ONCE here
+      // and its verdict is reused below — it used to be recomputed per row from the retained series.
+      try {
+        const ts = await fetchTs(id, '1h');
+        const { reliability, fitNights } = displayFitNights(ts, { nights: PROFILE_NIGHTS });
+        reliable.set(id, reliability.reliable);
+        profiles.set(id, hourProfile(ts, { nights: fitNights }));
+      }
       catch { profiles.set(id, null); }
       // The live leg is fetched SEPARATELY and failure-isolated: without it `deriveDiurnalRange`'s
       // dip-not-below-live guard structurally cannot fire, which is the whole bug being fixed. A
@@ -330,7 +347,7 @@ export async function buildAgenda({ scope = ['c'], now = new Date(), repoRoot = 
   for (const [id, e] of selected) {
     const tags = [...e.tags].sort();   // 'C' before 'W'
     rows.push(...agendaRowsForItem({ name: e.name, tags, profile: profiles.get(id), now,
-      reliable: series.has(id) ? windowReliability(series.get(id) || []).reliable : null,
+      reliable: reliable.has(id) ? reliable.get(id) : null,
       live: live.get(id) || null }));
   }
   // RF4: union the in-flight reverse-flip cycles into the agenda. Guarded on a NON-EMPTY store so the
@@ -359,7 +376,9 @@ export async function buildAgenda({ scope = ['c'], now = new Date(), repoRoot = 
       if (prof) profileByItem[e.id] = prof;
     }
     const rfReliable = {};
-    for (const e of rfState) { if (e && e.id != null && series.has(e.id)) rfReliable[e.id] = windowReliability(series.get(e.id) || []).reliable; }
+    // Reuses the SAME verdict computed with the fit window above (was a second windowReliability call
+    // over the retained series — two call sites, one of which could drift from the displayed fit).
+    for (const e of rfState) { if (e && e.id != null && reliable.has(e.id)) rfReliable[e.id] = reliable.get(e.id); }
     rows.push(...reverseFlipRows(rfState, { profileByItem, reliableByItem: rfReliable, now }));
   }
   return { rows: sortRows(rows), warnings, itemCount: ids.length, reverseFlipCount: rfState.length };

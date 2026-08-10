@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 2.3
+version: 2.4
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -477,8 +477,10 @@ This is the tribal layer the script can't do — apply ALL of these:
   `formatTimedLap` (`pipeline/lib/render/emit.mjs`), `pipeline/commands/screen-flip-niches.mjs` Diurnal timing
   block)_ `screen-flip-niches.mjs` now prints a `Diurnal timing` line for EVERY flip-niche survivor (was
   top-picks-only), FREE — off the in-hand 1h series, zero new fetch, blank-line-separated per item. Two
-  shapes off `hourConcentration`'s verdict (replaces the old `★` candidate flag):
-  - **Clean cycle** (concentrated, consistent per-day dip/peak hour): `BID <x> (basis, dip HH–HH) · ASK
+  shapes off **`windowReliability`**'s split-half verdict (DT4, 2026-08-10 — this line said
+  "`hourConcentration`'s verdict" until then, which the bullets below already contradicted; that
+  predicate was measured NOT to discriminate and no longer picks the shape on any surface):
+  - **Clean cycle** (the daily shape reproduces across a parity split): `BID <x> (basis, dip HH–HH) · ASK
     <y> (peak HH–HH) · timed +net/u (roi%) · same-hour ±net/u · range · reach bid N/M·ask N/M · hold
     ~Xh · base ↑/↓`. `timed` = the trough→peak lap; `same-hour` = the SAME-HOUR/churn margin — the two
     can DIVERGE hard on a big ticket (same-hour spread thinner than tax while the trough→peak clears it

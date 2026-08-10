@@ -904,7 +904,9 @@ simultaneous independent rungs on one item.
   `pipeline/lib/render/emit.mjs` `formatTimedLap` (also `quote-items.mjs`'s DT3 call site, so
   `screen-flip-niches.mjs` and `quote-items.mjs` render byte-identical diurnal text off one
   definition, not several that can silently disagree). Two shapes off
-  `hourConcentration`'s verdict (replaces the old `★` clean-candidate flag):
+  **`windowReliability`**'s split-half verdict (DT4, 2026-08-10 — this line said "`hourConcentration`'s
+  verdict" until then, contradicting the second bullet immediately below it; that predicate was measured
+  NOT to discriminate and since 0.73.0 no longer picks the shape on ANY surface, console or app):
   - **Clean cycle** — the stale-guarded BID (recent dip-window level, priced to LIVE when a dominating
     trend erases the dip — the Ghrazi lesson) and ASK (recent peak-window level), the TIMED trough→peak
     net/roi AND the SAME-HOUR/churn `instantNet` (both always shown — they can diverge hard on a
@@ -948,9 +950,16 @@ simultaneous independent rungs on one item.
   `deriveDiurnalRange` call sites (the shadow-log bid/ask co-log, the `diurnalAsk` cycle-fallback exit)
   onto `diurnalTimedLap` — those are value consumers, not note-render sites, so only the underlying
   computation moved, the numbers are unchanged. `read-window-range.mjs --profile` prints the full
-  hour-by-hour table; the app renders the pre-DT2 shape in Trends (DT5, not yet landed, reconciles
-  `js/trends.js`'s own local `clean` predicate onto `hourConcentration`). This is the ENCODED form of
-  the manual windowrange dance — read the block; the manual read is now a CONFIRMATION.
+  hour-by-hour table, plus the raw split-half `r` values and — when an explicit `--nights` moves the fit
+  off the gate's own window — a `⚠ window mismatch` note, because that surface answers the caller's
+  chosen window rather than silently refitting to the gate's (DT4b follow-up, 2026-08-10). The app's
+  Trends tab now gates its `★` on the SAME `windowReliability` verdict the console gates hour-display on
+  and prints a plain-language `Timing check:` line carrying the tri-state; its lookback toggle gained a
+  14d option and defaults to it, so the hours drawn are the hours judged. _(Superseded in place: this
+  sentence used to say "the app renders the pre-DT2 shape in Trends (DT5, not yet landed, reconciles
+  `js/trends.js`'s own local `clean` predicate onto `hourConcentration`)" — DT5 landed at 0.68.0 and was
+  itself superseded at 0.73.0, since `hourConcentration.clean` is a measured non-discriminator.)_ This is
+  the ENCODED form of the manual windowrange dance — read the block; the manual read is now a CONFIRMATION.
 - **Base position (multi-week, PLAN-DIURNAL-TIMING DT6, 2026-07-23), inform-only, n≈0.** The diurnal
   read above is intraday/recent (a 3-day `lowTrend` slope at most) and structurally cannot see the
   MULTI-WEEK shape — a live session proved this insufficient on its own: a bludgeon read "+180k flip"
