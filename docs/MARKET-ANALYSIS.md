@@ -541,7 +541,7 @@ its sign; a ±same-magnitude drift moves the note by the identical arithmetic). 
 a sibling console note (`ℹ drift-exit` in band/churn/scalp, a timing/trajectory line in invest), never a
 gate/drop/grade/`screen.json` input:
 F-C (2026-07-22): each thesis now feeds `driftExitFrom` its OWN real hold horizon instead of the
-amplitude lane's blanket 1.5d default — band/churn/scalp use `DRIFT_INTRADAY_HOLD_DAYS` (~2h, the
+oscillation-forecast blanket 1.5d default (`OSC_HOLD_HORIZON_DAYS` — NOT the amplitude hold, which DT1 re-horizoned to 4d) — band/churn/scalp use `DRIFT_INTRADAY_HOLD_DAYS` (~2h, the
 screen's own Bar-E band window), value uses `DRIFT_VALUE_HOLD_DAYS` (14d, the same multi-week window
 the value gate's own term structure already reads). This was a real GAP (band/churn/scalp were
 overstating the drift shift on an hours-long flip; value was understating it on a multi-week hold),

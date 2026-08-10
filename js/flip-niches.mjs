@@ -66,8 +66,9 @@ export const DRIFT_NEAR_HIGH_FRAC = 0.02;
 
 // F-C (PLAN-OSCILLATION-CYCLE post-landing follow-up, 2026-07-22) — per-thesis HOLD HORIZONS for the
 // drift-adjusted-exit note (`driftExitFrom`'s `holdHorizonDays`, js/forecast.mjs). Chunk 6 originally
-// left every driftInform call site on the bare default (OSC_HOLD_HORIZON_DAYS=1.5d — the OSCILLATION-FORECAST horizon, NOT the amplitude hold, which is AMP_HOLD_DAYS_DEFAULT=4 since DT1; do NOT "reconcile" 1.5 → 4, it re-scales every driftAdjustedExit. Historically the AMPLITUDE
-// lane's own hold length) — mis-scaled for band/churn/scalp (real hold: hours, not 1.5 days — the
+// left every driftInform call site on the bare default (OSC_HOLD_HORIZON_DAYS=1.5d — the OSCILLATION-FORECAST
+// horizon, NOT the amplitude hold, which is AMP_HOLD_DAYS_DEFAULT=4 since DT1; do NOT "reconcile" 1.5 → 4,
+// it re-scales every driftAdjustedExit for every other caller) — mis-scaled for band/churn/scalp (real hold: hours, not 1.5 days — the
 // residual-horizon shift ends up OVERSTATED) and for value (real hold: multi-week — 1.5d wildly
 // UNDERSTATES the drift the position will actually ride). Both are NAMED PLACEHOLDERS (n≈0), anchored
 // to an EXISTING constant elsewhere in the codebase rather than invented fresh:

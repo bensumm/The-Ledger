@@ -179,7 +179,7 @@ band + churn + AMPLITUDE — `value` is OUT of the default (took its slot); valu
   predicted at ≥0.25 realized ~5%. The lane was mis-horizoned, not signal-free: the survivors are the
   repeatable multi-DAY oscillator class (Masori chaps 12.9% at 24h but **71% at 7d**; fang ~6–8d), which
   is the taxonomy gap the standing `multi-week-oscillator-class` memory already named. *Honesty limits:
-  one 74-day era, one update cycle; completion measured on hourly aggregates, NOT executed fills, so
+  one ~73-day archive era, one update cycle; completion measured on hourly aggregates, NOT executed fills, so
   every rate is an UPPER BOUND; item-day clustering ⇒ effective n well below nominal.*
   **Judgment layer:** (1) these are PATIENT multi-DAY plays — list them
   under **deploy/accumulate**, NEVER as act-now rows (actionable-first discipline). (2) **The

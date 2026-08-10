@@ -263,11 +263,15 @@ export function whenSellable(fc, targetAsk) {
 
 // hold-horizon-to-slope multiplier — the number of DAYS of ceiling/floor drift applied to the diurnal
 // projection BEYOND the next peak/trough eta. n≈0 PLACEHOLDER (the fang cycle is ~6–8d; a same-cycle
-// daily flip holds ~1–1.5d — the amplitude lane's AMP_HOLD_DAYS default). NOT validated; F1 owns it.
+// daily flip holds ~1–1.5d). NOT validated; F1 owns it. ⚠ This is NOT the amplitude hold — see below.
 //
-// F-C (PLAN-OSCILLATION-CYCLE post-landing follow-up, 2026-07-22): this is the AMPLITUDE lane's OWN
-// hold horizon — `renderAmplitudeMode` passes its real `AMP_HOLD_DAYS` explicitly and never relies on
-// this default. Every OTHER `driftExitFrom` caller that KNOWS its thesis's real hold now passes its own
+// ⚠ DO NOT "RECONCILE" THIS TO 4 (2026-08-09). It reads like the amplitude hold and is NOT one: the
+// amplitude hold is `AMP_HOLD_DAYS_DEFAULT` = 4 since DT1 re-horizoned the lane, and `renderAmplitudeMode`
+// passes its real `AMP_HOLD_DAYS` EXPLICITLY — amplitude never consumes this constant. Changing 1.5 → 4
+// to "match amplitude" would silently re-scale every driftAdjustedExit for every OTHER caller.
+//
+// F-C (PLAN-OSCILLATION-CYCLE post-landing follow-up, 2026-07-22): `renderAmplitudeMode` passes its real
+// `AMP_HOLD_DAYS` explicitly and never relies on this default. Every OTHER `driftExitFrom` caller that KNOWS its thesis's real hold now passes its own
 // `holdHorizonDays` too (band/churn/scalp → `DRIFT_INTRADAY_HOLD_DAYS`, value → `DRIFT_VALUE_HOLD_DAYS`,
 // both in js/flip-niches.mjs, wired at their `driftInform.holdDays` registry field). This INCLUDES the
 // two per-item estimator surfaces (PLAN-ESTIMATOR-HONEST-SELL follow-up, 2026-07-22): `quote-items.mjs`
@@ -285,8 +289,9 @@ export function whenSellable(fc, targetAsk) {
 // `holdHorizonDays` used via `fmtHoldHorizon` (`formatFloorCeiling` in js/windowread.mjs) — nothing is
 // silently mis-scaled: a reader always sees which horizon produced each number. The
 // `watch-positions.mjs --cycle` loop (PLAN-OSCILLATION-CYCLE Chunk 4) is DELIBERATELY left on this
-// default too — it is specifically the multi-week oscillator/amplitude cycle-watch feature, not a
-// generic per-position note, so the amplitude-shaped horizon is the CORRECT one there, not a gap.
+// default too — it is specifically the multi-week oscillator cycle-watch feature, not a generic
+// per-position note, so a MULTI-DAY-shaped horizon is the CORRECT one there, not a gap. (It is ~1.5d
+// because that is this constant's value, NOT because it tracks the amplitude lane's 4d hold.)
 export const OSC_HOLD_HORIZON_DAYS = 1.5;
 // oscillation-vs-knife detector thresholds (n≈0 PLACEHOLDERS, pending F1):
 export const OSC_MIN_DAYS = 5;            // fewer completed daily mids than this ⇒ null (can't read a cycle)

@@ -488,6 +488,18 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 
 ## Discovered
 
+- **RETRO-JOIN'S AMPLITUDE CLAIM WINDOW IS SHORTER THAN THE THESIS IT MEASURES — found 2026-08-09
+  (audit round 3), DELIBERATELY UNRESOLVED, one-line fix awaiting an owner call.**
+  `HORIZON_AMPLITUDE_SEC` (`pipeline/lib/render/retrojoin.mjs`) is **2 days**. It was set when the
+  amplitude thesis was a 24h cycle. DT1 re-horizoned the lane to `AMP_HOLD_DAYS_DEFAULT` = **4 days**
+  after measuring 4.8% completion within 24h, and the MEDIAN completion is **~69h** — so the typical
+  real round trip now closes on day 3, outside the claim window, and is never attributed to the
+  suggestion that called it. The retro therefore systematically UNDER-measures the amplitude lane, and
+  will keep doing so. Fix direction: derive the horizon from `AMP_HOLD_DAYS_DEFAULT` so there is ONE
+  home (the current constant is a second, now-stale home for the hold number — exactly what
+  `suggestlog.mjs`'s header warns about). NOT taken unilaterally because it **changes which fills the
+  retro attributes**, which moves every historical amplitude number `/analyze` reports.
+
 - **PROXIMITY-TO-EXTREMES AS A PRIMARY SCREEN — Ben's idea, 2026-08-09, FLAGGED FOR INVESTIGATION,
   not scheduled.** "I wonder if we're just looking too deep — what if we just look for items based on
   their proximity to 1/3/7/14/30-day lows and highs?" A deliberately SHALLOW screen: rank/gate on

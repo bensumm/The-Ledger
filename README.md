@@ -590,7 +590,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   chaps 12.9% @24h n=31) while the in-sample version reads ~100% on the same items, which is why
   `ampWalkForward` ships and `pFillAmplitude` ranks on it. UNLIKE the others it is NOT freely deletable:
   `js/amplitudescreen.mjs` and `js/estimators/families.mjs` both cite it as their validation source, and
-  it is the standing regression check — if its two columns ever converge, the pre-origin fit has broken.
+  it is the standing regression check. It runs THREE columns — the rejected in-sample figure, an
+  independent reimplementation of the study, and the SHIPPED `ampWalkForward`. Cols 2 and 3 agreeing is
+  the HEALTHY state (they are independent implementations of one design). Col 1 converging on col 3 ⇒ a
+  break in the shared helpers; col 3 diverging from col 2 ⇒ a regression inside `ampWalkForward` itself.
   All read the `/1h` SQLite archive read-only and gate nothing.
 - `ignored-items.json` — tracked repo-root config (2026-07-07): items QUARANTINED from the MERCH
   book (farming inputs / loot / personal-use — e.g. snapdragon seed 5300, snapdragon 3000). Its
@@ -759,10 +762,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   1/3) and `quote-items` a reach-folded bid (12.80m, break-even above mid), so the item was called dead;
   a hand-picked **12,501,000** reads **14/16 · recent 3/3** on the 5m archive against a 13.30m ask at
   recent 3/3, i.e. +533k/u (4.26%). Records three verified defects in `js/amplitudescreen.mjs`:
-  `pFill2leg = bidFrac × askFrac` was a PRODUCT OF MARGINALS not a measured joint — **FIXED 2026-08-09 by
-  PLAN-DIURNAL-TRIAGE DT1, which deleted it for the measured ordered `cycleCompletion`**, so this
-  defect is closed and BL-anything addressing it is superseded; `legOk`
-  (:199-202) never checks that the low printed BEFORE the high, though the playbook is explicitly
+  `pFill2leg = bidFrac × askFrac` was a PRODUCT OF MARGINALS not a measured joint — **FIXED 2026-08-09:
+  DT1 deleted it, its first replacement (an in-sample, circular day-grain completion rate) was rejected the
+  same day, and DT1b landed the WALK-FORWARD `ampWalkForward` as the ranked P(fill)**, so this defect is
+  closed and BL-anything addressing it is superseded; `legOk`
+  never checks that the low printed BEFORE the high, though the playbook is explicitly
   same-day trough→peak; and the levels are quantile-pinned (`AMP_BID_Q`/`AMP_ASK_Q` = 0.5), so nothing
   is optimised. Chunks BL1 (pure `lib/signal/bothleg.mjs` — day bars carrying `tLo`/`tHi`, measured
   same-day joint with ordering, EV frontier) · BL2 (`read-both-leg.mjs`, READ-ONLY, prefers 5m —

@@ -87,8 +87,12 @@ export const DENYLIST = [
     // NOT banned: `ask-reprints` / `cycleCompletion` / `pFill2leg` as bare nouns — several live docs
     // legitimately name them to say they were WITHDRAWN, and banning the noun would punish the honest
     // "in place of the withdrawn X" phrasing. Only the LIVE-FORM descriptions above are denied.
-    // EXCLUDED from `files` by design: CHANGELOG.md + plans/* (dated records — restating the superseded
-    // state is their job) and this file (the SELF-REFERENCE CAVEAT above).
+    // EXCLUDED from `files` by design: CHANGELOG.md + plans/* + docs/LORE.md (dated records / narrative —
+    // restating the superseded state is their job) and this file (the SELF-REFERENCE CAVEAT above).
+    // KNOWN LIMIT: this catches the three LIVE-FORM names, not every possible sentence that describes a
+    // retired estimator as current — audit round 3 found `cycleCompletion` named as the live fix in prose
+    // this pattern does not match. A denylist bounds recurrence of NAMED drift; it is not a semantic check
+    // (and must not become one — see this file's header).
     pattern: /daily-reach-2leg|two-leg daily[- ]reach family|measured-cycle-completion/,
     files: ['CLAUDE.md', 'README.md', 'index.html',
             'docs/GLOSSARY.md', 'docs/MARKET-ANALYSIS.md', 'docs/SIGNAL-AUDIT.md',

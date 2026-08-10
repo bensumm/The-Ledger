@@ -6,9 +6,11 @@
  *                                                                 shadow both-leg would-have-fill rate
  *   node pipeline/commands/join-amplitude-outcomes.mjs --json     dump the per-pick replay array
  *
- * THE MAKE-OR-BREAK QUESTION (§4): the amplitude gate measures the levels PRINTED (the daily trough/peak
+ * THE MAKE-OR-BREAK QUESTION (§4): the amplitude GATE measures the levels PRINTED (the daily trough/peak
  * reached on N of M days); it does NOT measure whether BOTH legs actually FILL within the hold horizon,
- * repeatably. The daily low/high ARE reached each day but not at predictable times, so a same-day round
+ * repeatably. (Since DT1b, `ampWalkForward` DOES measure that HISTORICALLY per item and is what the lane
+ * ranks on — this joiner is the FORWARD replay of picks as they were logged, a different and still-needed
+ * check. Neither is a realized fill; the retro-join in `/analyze` remains the only ground truth.) The daily low/high ARE reached each day but not at predictable times, so a same-day round
  * trip isn't guaranteed. This joiner is the CHEAP FALSIFIER (n-rich, zero real fills needed): for every
  * amplitude pick the screen logged to suggestions.jsonl (the `amplitude` shadow block — ampBid/ampAsk/
  * holdDays), it replays against the NEXT holdDays of the per-item 1h archive:

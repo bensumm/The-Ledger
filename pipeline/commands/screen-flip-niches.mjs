@@ -250,8 +250,9 @@ let VALUE_CAP_GP = VALUE_CAPITAL / VALUE_SLOTS;
 // working discovery screen rather than an empty board. `--max-price` still overrides for a filtered read.
 let MAX_PRICE = MAX_PRICE_EXPLICIT ? parseGp(A['max-price'])
   : (VALUE_CAPITAL > 0 ? VALUE_CAPITAL : 100_000_000);
-// A3 (PLAN-AMPLITUDE-SCAN §2.4): the amplitude hold horizon — 1 (default: buy the trough, sell the peak
-// same local day) or the 1.5-day experiment (fill day-1's trough, sell into day-2's peak). Feeds the
+// A3 (PLAN-AMPLITUDE-SCAN §2.4): the amplitude hold horizon — DEFAULT 4 DAYS since DT1 re-horizoned the
+// lane (the original 1-day "sell the peak same local day" premise was MEASURED and refuted: 4.8% completion
+// within 24h given entry, median ~69h). `--hold-days 1.5` survives as the day-crossing experiment. Feeds the
 // amplitude family's ttf, the deployable-units accumulation leg, and the §A5 shadow-replay horizon. A
 // flag, not a fork. PLACEHOLDER (n≈0).
 const AMP_HOLD_DAYS = A['hold-days'] != null ? Math.max(1, +A['hold-days']) : AMP_HOLD_DAYS_DEFAULT;

@@ -124,7 +124,7 @@ of that window, not predictive. Nothing in them has been encoded into a gate or 
 
 ## `amp-cycle-reproduction.mjs` — did the DT1 amplitude study actually hold up? (2026-08-09)
 
-A REPRODUCTION harness, not a study. Runs two designs head-to-head on the same items and the same 1h
+A REPRODUCTION harness, not a study. Runs THREE columns on the same items and the same 1h
 archive: (a) the day-grain `cycleCompletion` shipped in DT1, whose levels come from the same 14-day
 window it then scores, and (b) the DT1 study's own design — `amplitudeRanges` levels fitted strictly
 before each origin day (`p.timestamp < midnight(T)`, 15-day warmup), entry = the first day-T hour at or
@@ -136,9 +136,11 @@ exactly** — Saturated heart 0.0% @96h (n=41) and Masori chaps 12.9% @24h (n=31
 median-of-the-scored-days levels are cleared by ~50% of those days by definition, and a multi-day horizon
 compounds that to ~94%. This is why `pFillAmplitude` briefly reported an honest n=0 prior rather than the
 in-sample figure — and why the out-of-sample design (which separated these 4 pre-build items 0% / 24% / 42% / 48% @96h)
-became `ampWalkForward`, the production estimator shipped in **DT1b** the same day. This harness is now
-the standing regression check on that decision: if the two columns ever converge, the pre-origin fit has
-been broken somewhere.
+became `ampWalkForward`, the production estimator shipped in **DT1b** the same day — which the harness
+now runs as a THIRD column, so a regression inside the shipped function moves a number here. Reading the
+output: cols 2 and 3 AGREEING is healthy (independent implementations of one design). Col 1 converging on
+col 3 ⇒ the pre-origin fit broke in the shared `amplitudeRanges`/`windowStats` helpers; col 3 diverging
+from col 2 ⇒ a regression inside `ampWalkForward`.
 
 Reads the archive READ-ONLY and `js/` production code; writes nothing. Re-run:
 `node pipeline/experiments/amp-cycle-reproduction.mjs`. SELF-CONTAINED as of 2026-08-09 — it loads
