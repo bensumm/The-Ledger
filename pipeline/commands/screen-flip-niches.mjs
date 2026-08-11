@@ -187,7 +187,7 @@ const MODE_ALIASES = { invest: 'value' };
 const rawMode = resolve('mode', { flag: A.mode != null && A.mode !== true ? String(A.mode).toLowerCase() : undefined, config: CONFIG.mode, fallback: 'band' }).active;
 const MODE = MODE_ALIASES[rawMode] || rawMode;
 if (MODE !== 'all' && !MODES.includes(MODE)) { console.error(`! unknown --mode "${A.mode}". Use one of: ${MODES.join(', ')}, invest, all (or omit for band).`); process.exit(1); }
-const FLOOR = A.floor != null ? +A.floor : 3500;   // PLAN-VOL24 step 2: recalibrated 50 → 3500 against the CORRECTED rolling-24h volume distribution (count-matched to the old 50/legacy selectivity; the /24h endpoint under-read ~10–27×, so the old 50 was ~18× too loose in corrected units). Band `thin` (limitVol < FLOOR) auto-follows.
+const FLOOR = A.floor != null ? +A.floor : 3500;   // PLAN-VOL24 step 2: recalibrated 50 → 3500 against the CORRECTED rolling-24h volume distribution (COUNT-MATCHED to the old 50/legacy selectivity — that empirical match is what anchors 3500; the 2026-07 "~18× too loose" rationale rested on a ~10–27× /24h under-report that no longer holds, see the marketfetch.mjs loadAll24hRolling header). Band `thin` (limitVol < FLOOR) auto-follows.
 const MIN_ROI = A['min-roi'] != null ? +A['min-roi'] : 1.5;
 const MIN_PRICE = A['min-price'] != null ? parseGp(A['min-price']) : 0;
 const MAX_PRICE_EXPLICIT = A['max-price'] != null;
@@ -449,14 +449,18 @@ PUBLISH = refusePublishIfNonNeutral({
     { on: ARCHIVE_REGIME, message: '! --archive-regime is an UNPROMOTED data-source swap (AF5b) — refusing --publish under it (screen.json + the deployed app stay on the live 6h series until AF6 promotes it).' },
   ],
 });
-// --- PLAN-VOL24 (2026-07-13): --vol-source rolling|legacy. The wiki /24h endpoint is BROKEN (it serves a
-// frozen ~1–3h slice of a stale UTC day, under-reporting the true rolling 24h ~10–27× — see PLAN-VOL24.md).
+// --- PLAN-VOL24 (2026-07-13): --vol-source rolling|legacy. The wiki /24h endpoint is unusable as a
+// trailing-24h source — as re-measured 2026-08-10 it serves a COMPLETE, exact UTC-day aggregate that is
+// STALE by ~24–48h at its newest (the ~10–27× under-report seen in 2026-07 now measures ~1.0×). ONE home for the current
+// description: the marketfetch.mjs loadAll24hRolling header; full history: PLAN-VOL24.md.
 // The DEFAULT is now `rolling` (step 2, Ben-validated): the corrected trailing-24h volume composed from the
 // healthy /1h grain (loadAll24hRolling — 24 bulk /1h windows, mostly warm from the SQLite 1h archive) is the
 // ACTIVE volDay behind every gate/rank/column, and the volume-denominated floors (FLOOR/GP_FLOOR/VALUE_LIQ_
 // FLOOR/CHURN_MIN_VOL/DIP_LOOP_LIQUID_FLOOR/DL4_MIN_GP_FLOW) were count-matched to the corrected distribution
-// in the same change. `--vol-source legacy` restores the broken /24h value (kept as an escape hatch / for
-// reproducing pre-recal output). Every published row also logs the corrected per-item volume as the lean
+// in the same change. `--vol-source legacy` switches to the raw bulk /24h map — but it does NOT reproduce
+// pre-recal output any more: bulk /24h is now a complete day that is only 24–48h stale, so legacy/rolling
+// measures median 1.151× and disagrees on just 5.2% of FLOOR admissions (2026-08-10, 1961 items). It is a
+// staleness A/B, not a time machine. Every published row also logs the corrected per-item volume as the lean
 // `volDayRolling` shadow field regardless of this flag (from the in-hand 1h series → no new fetch).
 // NOTE: MIN_GPD (the ATTENTION floor) was KEPT at 500k through the VOL24 recal (Ben's call) — it is a
 // real-world NET-throughput quantity, so 500k of TRUE throughput was the honest floor. SUPERSEDED
@@ -2816,8 +2820,9 @@ async function main() {
   const [v24legacy, latest, guide] = await Promise.all([loadAll24h(), loadAllLatest(), loadGuide()]);  // independent endpoints — fetch concurrently, not summed round-trips
   // PLAN-VOL24 step 2 (Ben-validated): DEFAULT `rolling` — the corrected whole-market trailing-24h map (24
   // bulk /1h windows, mostly warm from the SQLite archive) is the ACTIVE volume behind every gate/rank/
-  // column, with the volume floors count-matched to it in the same change. `--vol-source legacy` restores
-  // the broken /24h map (escape hatch / pre-recal repro). loadAll24hRolling is a small extra fetch cost on a
+  // column, with the volume floors count-matched to it in the same change. `--vol-source legacy` switches to
+  // the raw bulk /24h map (a staleness escape hatch — NOT a pre-recal repro; see the --vol-source block
+  // above for the measured 1.151× / 5.2%). loadAll24hRolling is a small extra fetch cost on a
   // cold archive (≤24 bulk /1h, mostly deduped against buckets loadSnapshot/loadDaily already accrue).
   const v24 = VOL_SOURCE === 'rolling' ? await loadAll24hRolling() : v24legacy;
 

@@ -48,8 +48,9 @@ all-or-nothing; details + evidence in §6.
    post-fetch confirm off `windowStats`.
 3. **The liquidity floor is the existing count-matched pair, not a new number — and the lane's
    big tickets enter via the gp-flow THIN path.** The draft's "~100/day" style floor is a
-   pre-PLAN-VOL24 legacy-units number (the /24h endpoint under-read 10–27×; floors were
-   count-matched to corrected volume: unit floor 3,500, gp-flow 4.5b). Masori body at ~250/d
+   pre-PLAN-VOL24 legacy-units number (floors were count-matched to corrected volume: unit floor
+   3,500, gp-flow 4.5b — the count-match is the anchor; the ~10–27× `/24h` under-report cited here
+   in 2026-07 no longer holds, see the `marketfetch.mjs` `loadAll24hRolling` header). Masori body at ~250/d
    corrected is *below* the unit floor and admits via gp-flow (250 × 42m ≈ 10.5b) — meaning the
    amplitude class is largely **thin-class by construction**, with the honesty consequences
    (thin reserve, `THIN_GRADE_CAP` A-) spelled out in §2.1. Also: the default `MAX_PRICE` 45m

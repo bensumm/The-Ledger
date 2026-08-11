@@ -46,7 +46,8 @@ export const ENTRY_PATH_KEYS = Object.freeze([PATH_KEYS.SCALP, PATH_KEYS.VALUE_H
 
 // The churn volume floor — a buy-limit-cycle commodity must trade this many two-sided units/day AND
 // have a real buy limit. PLAN-VOL24 step 2: recalibrated 2000 → 65000 against the CORRECTED rolling-24h
-// volume (the /24h endpoint under-read ~10–27×; count-matched to the old 2000/legacy churn selectivity).
+// volume (count-matched to the old 2000/legacy churn selectivity — the count-match is what anchors this
+// number, not any ratio; see the marketfetch.mjs loadAll24hRolling header for what /24h actually serves).
 // Node-only (screen-flip-niches.mjs churn flip-niche via gatecandidates) — NOT app-imported, so no APP_VERSION bump.
 export const CHURN_MIN_VOL = 65000;
 

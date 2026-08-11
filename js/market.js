@@ -191,7 +191,24 @@ export function ratingParts(it, staleRisk){
    universe item without hammering the rate limit), so it ranks the LIVE QUICK pair (`priceBasis:'quick'`)
    rather than the console's 2h band pair. So a Finder rank is a COARSE pre-filter that differs from the
    band-precise rank the per-item `quote`/Trends read produces; the UI labels it so and the quote button
-   is the precise read. volDay = the limiting side (min hpv/lpv), matching the console's liquidity basis.
+   is the precise read.
+   ⚠ KNOWN BUG, FOUND 2026-08-10, NOT YET FIXED — `volDay` here is an HOURLY figure fed into
+   DAILY-anchored scoring. This line used to claim it was "the limiting side (min hpv/lpv), matching the
+   console's liquidity basis"; that is FALSE. `STATE.VOL` is loaded from `/1h` (see the snapshot fetch at
+   the top of this file), so `desirabilityOf`'s `volDay` is ONE HOUR of two-sided volume — but every
+   consumer reads it as per-day: `js/estimators/families.mjs` `TTF_REF_VOL = 1000` in
+   `sqrt(TTF_REF_VOL/volDay)`, `js/rating.mjs` `liqFactor` (`F0=50/F1=5000`, whose own header says
+   "limiting-side DAILY volume"), and `js/ui.js` renders the result as "≈ N/day".
+   Effect: an item trading 24k/day arrives as ~1000/hour, giving a TTF factor of 1.0 where the truth is
+   ~0.25 — the rank (`net × P(fill) ÷ TTF`) is understated roughly 4× on liquid items, which drives the
+   visible Grade column and the default sort. The `thin = volDay < 50` test below is measuring an hour
+   against a daily floor that itself moved to 3500 (see `js/rating.mjs`).
+   Proof it is a bug and not a convention: the LEGACY scorer in this same file feeds the same
+   `STATE.VOL` into `RATE_VOL_MAX`, which `js/state.js` annotates "// hourly volume". Two scorers, one
+   source, opposite unit assumptions — and the daily-anchored one is the newer.
+   Deliberately NOT fixed in the 2026-08-10 doc pass: the fix changes Ben's visible Finder grades and
+   ordering, and `STATE.VOL` is shared with the legacy path that correctly wants hourly, so it needs its
+   own change + review rather than riding a documentation commit.
    No confirmable multi-day regime here ⇒ the uniform 0.85 regime haircut applies to every row (a constant
    — it shifts all grades, not the ordering). Bond rides its tax-exempt retrade-fee opts so it can't grade
    off a phantom spread. */

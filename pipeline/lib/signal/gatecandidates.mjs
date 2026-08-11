@@ -82,8 +82,11 @@ export const DEFAULT_THRESHOLDS = {
   // 07-09: raised 20 → 50 (= the base FLOOR) after the value scan surfaced 1/d–6/d untradeable rows
   // (Adamant halberd 6/d, Gloves of silence 1/d) — a hold you can't exit isn't a hold. PLACEHOLDER
   // (rule 4). Two-sided liquidity (hpv>0 && lpv>0) stays non-negotiable.
-  // PLAN-VOL24 step 2: 50 → 3500, tracking the base FLOOR against the CORRECTED rolling-24h volume (the
-  // /24h endpoint under-read ~10–27×, so the old 50 was ~18× too loose in corrected units).
+  // PLAN-VOL24 step 2: 50 → 3500, tracking the base FLOOR against the CORRECTED rolling-24h volume.
+  // (The 2026-07 rationale read "the /24h endpoint under-reads ~10–27×, so the old 50 was ~18× too loose
+  // in corrected units". The ratio is history — /24h measures ~1.0× as of 2026-08-10, see the
+  // marketfetch.mjs loadAll24hRolling header — but 3500 was COUNT-MATCHED to the corrected distribution,
+  // so it is anchored empirically and unaffected by the ratio being wrong.)
   VALUE_LIQ_FLOOR: 3500,
   // VALUE_CAP_GP: the per-position capital cap that bounds valueScore's deployable-units (bankroll leg). NOT
   // a fixed doctrine number — screen-flip-niches.mjs derives it from --capital ÷ --slots (Ben's current capital spread

@@ -923,8 +923,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   into every rank family — highest-leverage, app-touching), G3 (invocation-independent per-mode
   normalized grading), G4 (collapse `riskMult` + kill the momentum double-count), G5 (bound TTF leverage),
   G6 (`(thin)` confidence marker), G7 (retro-retune, F1-gated/deferred). PLANNING ONLY, no code yet.
-- `PLAN-VOL24.md` — in-flight per-topic plan: the `/24h` endpoint is broken (serves a frozen stale
-  ~1–3h UTC-day slice, under-reporting true rolling 24h ~10–27×). Steps 1+2 (SHIPPED 2026-07-13) — the
+- `PLAN-VOL24.md` — in-flight per-topic plan: the `/24h` endpoint is unusable as a trailing-24h source.
+  **Re-measured 2026-08-10**: it now serves a COMPLETE, exact UTC-day aggregate (bit-exact vs the `/1h`
+  sum over `[T, T+23h]`, 374/374 items) whose newest data is ~24–48h old — so the defect is staleness, not the
+  ~10–27× under-report recorded in 2026-07 (that now measures ~1.0×; kept as history in the plan).
+  The composed fix stands either way. Steps 1+2 (SHIPPED 2026-07-13) — the
   corrected `/1h`-composed rolling source (`marketfetch.mjs` `loadAll24hRolling`/`rolling24FromTs1h`) is now
   the DEFAULT `screen-flip-niches.mjs` volume (`--vol-source legacy` = escape hatch), and every volume-denominated floor
   was count-matched to the corrected distribution (`FLOOR`/`VALUE_LIQ_FLOOR` 50→3500, `CHURN_MIN_VOL`
@@ -932,8 +935,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   was KEPT at 500k through that recal — Ben, real NET-throughput floor — then LOWERED to 250k on
   2026-08-08, paired with the expUnits 6→2 refill haircut (gpDay had no attention axis and flattered
   cheap churn); `DL4_MIN_ABS_SWING` unchanged). `volDayRolling` logged on
-  `suggestions.jsonl`. Step 3 REMAINING = the browser app fix (`js/marketfetch.js` Finder/Watch/Trends still
-  read the broken `/24h`; APP_VERSION-bumping). Folds into `PLAN.md` and is deleted when step 3 ships.
+  `suggestions.jsonl`. ⚠ **Step 3 was RE-SCOPED 2026-08-10 — it was aimed at a non-problem.** It read
+  "the browser app fix (`js/marketfetch.js` Finder/Watch/Trends still read the broken `/24h`)". But the app's
+  per-item read is `js/marketfetch.js:29` → `/24h?id=`, and the PER-ITEM endpoint measures as the TRUE
+  trailing-24h (22/24 bit-identical to the composed value); only the BULK endpoint is broken. The real
+  app defect is a DIFFERENT one found the same day: the Finder loads `/1h` into `STATE.VOL` and feeds it
+  to daily-anchored scoring as `volDay` (`js/market.js` `desirabilityOf`) — a ~24× unit error understating
+  rank ~4× on liquid items. See the ⚠ block at `desirabilityOf`. Still APP_VERSION-bumping when fixed.
 - `PLAN-ESTIMATOR-FIDELITY.md` — per-topic plan (2026-08-01): the discovery
   estimator understates both legs against the daily distribution (the 2h-band basis + the
   clamp-to-bandTop blend make a verified daily-basis ask/dip structurally unquotable), the rank
@@ -1592,7 +1600,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     letting `quote-items.mjs` converge its logged liquidity `class` on screen's bulk snapshot for free) + the
     PLAN-VOL24 CORRECTED rolling-24h volume composers `loadAll24hRolling({db})` (whole-market trailing-24h
     map from the last 24 complete `/1h?timestamp` bulk windows, reusing the SQLite 1h archive; the fix for
-    the broken `/24h` endpoint that serves a frozen stale ~1–3h slice) + `loadDailyRangeBulk(days,{db,ids})`
+    the BULK `/24h` endpoint, which serves a complete UTC-day aggregate whose newest data is ~24–48h old —
+    the "frozen ~1–3h slice" reading is 2026-07 history, see the `loadAll24hRolling` header) + `loadDailyRangeBulk(days,{db,ids})`
     (PLAN-LANE-ADMISSION Chunk A — the thin READ-ONLY wrapper over `archive.dailyRangeBulk`: whole-market
     per-item per-day intraday range `{id:{date:{hi,lo}}}` straight from the SQLite archive, ZERO fetch,
     plus a `coverageDays`/`partialDays` HONESTY field — number of days with FULL 24-bucket `/1h` coverage,
@@ -1601,7 +1610,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     since the newest `/1h` bucket, or `null` on a cold archive, so the cache-warm guard reads "how cold are
     we?" without opening the archive itself) + `rolling24FromTs1h(ts1h)` (the same
     sum off an already-fetched per-item 1h series → zero new fetch) — now the DEFAULT `screen-flip-niches.mjs` volume
-    (`--vol-source legacy` restores the broken `/24h`; PLAN-VOL24 step 2), with the volume floors recalibrated
+    (`--vol-source legacy` switches to the raw bulk `/24h` — a staleness A/B, NOT a pre-recal repro:
+    measured median 1.151× and only 5.2% `FLOOR`-admission disagreement, 2026-08-10; PLAN-VOL24 step 2), with the volume floors recalibrated
     to the corrected distribution; consumed by `screen-flip-niches.mjs` and logged as the `volDayRolling` shadow field for the
     floor recalibration (`PLAN-VOL24.md`) + `vol24FromInputs(inp)` (PLAN-VOL24 step 2b — the per-item corrected
     volume for `quote-items.mjs`/`watch-positions.mjs`: `rolling24FromTs1h` off the in-hand `ts1h`, reassigned onto `inp.vol24`
@@ -2202,6 +2212,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `expUnits` moved to the HAIRCUT `ACTIONABLE_WINDOWS_PER_DAY = 2` while `expUnitsOvernight` kept the
     PHYSICAL refill count, so scaling the day figure by 8/24 now double-counts the haircut. The line 335
     entry above always described this correctly — the two README statements contradicted each other),
+    `vol24.test.mjs` (PLAN-VOL24 — pins the rolling-24h correction, which NOTHING pinned before
+    2026-08-10: the whole of `vol24FromInputs` was reverted as a mutation and all 109 suites passed.
+    13 groups, offline/deterministic (fixed clock, zero fetch): the `[anchor-23h, anchor]` window
+    arithmetic + both-ends exclusivity, VWAP volume-weighting, the degradation contract (absent /
+    too-short / all-zero series), **F4's both-ends coverage guard** (a series reaching back far enough
+    but stopping short of the anchor used to sum a PARTIAL window while still reporting
+    `volSrc:'rolling'` — measured at 4/24 items, 3 under-reporting by >1%), F5's `buckets` count, and
+    F7 (a string-timestamped series degrades SAFELY — `rolling24FromTs1h`'s `>=` would coerce it while
+    the guard's `Number.isFinite` does not; the disagreement is real and pinned in its safe direction).
+    Mutation-proven twice — disabling the correction fails the guard test, restoring the old
+    start-only guard fails the F4 test),
     `rebid.test.mjs` (COD-3 — the cut-and-rebid helpers in `js/quotecore.js`: `rebidBar`'s friction
     arithmetic (tax + half-spread below the clear) + `rebidAdvice`'s trajectory-branch selection — knife→against,
     oscillating→rebid-at-trough/sell-peak with diurnal level carry-through, else→friction-bar governs),

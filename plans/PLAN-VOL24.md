@@ -2,13 +2,98 @@
 
 Per-topic plan (folds into `PLAN.md` and is deleted when its last chunk ships — the plan-file rule).
 
-## The finding (investigated 2026-07-13, empirically confirmed)
+## ⚠ RE-MEASURED 2026-08-10/11 — the endpoint CHANGED; the fix stands, the reason does not
+
+**Read this before quoting any number below.** The 2026-07-13 finding (next section) described the
+endpoint as it behaved *then* and is kept verbatim as the historical record. It no longer describes
+what `/24h` serves.
+
+### The headline: BULK and PER-ITEM are no longer the same endpoint
+
+This plan's finding section states "The `/24h` response (bulk AND per-item — identical)". **That is
+false as of 2026-08-10**, and it is the single most consequential correction here, because it decides
+which call sites need the fix:
+
+| | what it serves now | verdict |
+| --- | --- | --- |
+| **bulk `/24h`** | a complete, bit-exact **UTC-day** aggregate, newest data ~24–48h old | **BROKEN** — `loadAll24hRolling` is load-bearing |
+| **per-item `/24h?id=`** | the **true trailing 24h** | **CORRECT** — `vol24FromInputs` is currently a no-op |
+
+Per-item evidence (stratified thick/mid/thin sample, exact production path `fetch24hOne` +
+`vol24FromInputs`): **22/24 bit-identical** to the `/1h`-composed rolling value, the other two within
+~6%, and `volSrc='rolling'` on all 24 — so the correction genuinely ran and agreed, rather than the
+24h-coverage guard silently degrading to the raw read. Cross-check against bulk on 9 liquid items:
+per-item matched true rolling 7/9, bulk matched it **0/9**, and bulk exactly equalled per-item **0/9**.
+
+**Keep the per-item correction — and note WHY it still earns its place.** Its arithmetic is a no-op
+when the 1h series fully covers the window. Its **coverage guard is not**: the two items that differed
+in the sample above were not endpoint error at all, but items whose 1h series was missing the anchor
+hour, so the *composed* value under-reported (725 against a correct 770, −6%). That is the F4
+end-of-window hole, fixed 2026-08-10 — measured rate across 24 items, **4 had incomplete coverage and 3
+of those were under-reported by >1%**. So the honest statement is: the correction's present-day value is
+that it *refuses* a partial window, not that it improves on the endpoint's number.
+
+### The bulk endpoint: which window does `timestamp` label?
+
+Re-measured against the local SQLite 1h archive (a different source from the live
+recompose that produced the original finding), 374 items with full 24-bucket coverage on both windows:
+
+| Hypothesis for the window `/24h`'s `timestamp` T labels | median | p25 | p75 | within ±10% |
+| --- | --- | --- | --- | --- |
+| `[T-23h, T]` — T is the day's END | 1.102 | 0.988 | 1.283 | 144/374 (39%) |
+| **`[T, T+23h]` — T is the day's START** | **1.000** | **1.000** | **1.000** | **374/374 (100%)** |
+
+So today `/24h` serves a **complete and exact UTC-day aggregate** — bit-exact against the `/1h` sum.
+
+⚠ **But note what does and does not establish that.** The ±10% band above is weak evidence: an offset
+scan over 61 candidate windows across ±30h found **39 of 53** evaluable offsets land inside ±10%, and
+offset −1h scores 244/247 (median 1.0031) — nearly indistinguishable from offset 0. What actually
+establishes the window is **exact integer equality on both hpv and lpv: 247/247 at offset 0, 0/247 at
+every other offset**, plus `T % 86400 == 0`. Cite that, not the ratio.
+
+An earlier version of this section offered "the archive's own FWD/BACK ratio is the identical
+1.102/39%" as a *control*. It is a **tautology** — since endpoint == FWD exactly, endpoint/BACK ≡
+FWD/BACK by construction, computed over the same rows. Retracted. The conclusion (that BACK's near-1.0
+is day-to-day volume similarity) still holds; it just wasn't shown by that number.
+
+**What is broken now is STALENESS, not magnitude.** T lagged **71.3h** on 2026-08-10 and **48.1h** on
+2026-08-11 — the anchor advances a day at a time, so the endpoint reports a whole day that closed 2–3
+days ago. The under-report ratio that justified this plan now measures **~1.0×**, not 10–27×.
+
+**Why it changed is UNKNOWN — do not invent a mechanism.** An earlier version of this section claimed
+the endpoint "served a partial, still-accumulating day in July and now waits for the day to close,
+which is exactly why staleness grew while accuracy went to exact." **Retracted.** It contradicts the
+July evidence it claimed to explain — §"The finding" below records 14 days of *historical*
+`/24h?timestamp=` buckets each truncated to their first 1–3h, i.e. **closed** days truncated, not
+accumulating ones — and if T is the day's START, a 26h-old T describes a day that closed 2h before the
+read and cannot still be accumulating. Both measurements are real; the causal link between them is
+not established, and the earlier hedge ("almost certainly correct when made") was stronger than the
+story that replaced it. State the two measurements in their own tense and stop there.
+
+**Consequences.**
+- The fix (compose from `/1h`) is **unchanged and still correct** — a 2–3-day-old daily total cannot
+  gate today's liquidity, whatever its internal accuracy.
+- Every count-matched floor (`FLOOR` 3500, `CHURN_MIN_VOL` 65000, …) is **unaffected** — but NOT for
+  the reason first written here. The claim "they were calibrated against the composed rolling source,
+  not against `/24h`" is **false**: the floors were *solved on* rolling but *anchored to* a raw-`/24h`
+  quantity (§Step 2 below — count-matched to "the same item count the old floor did under legacy").
+  The conclusion survives on direct check of the design targets, which is the evidence that belongs
+  here: `FLOOR` 3500 admits **820** today against a July target of 884; `CHURN_MIN_VOL` 65000 admits
+  **364** against 361; `DIP_LOOP_LIQUID_FLOOR` 40000 admits **428** against 438. Nothing is mis-gating.
+  (A re-solve against *today's* legacy distribution suggests `FLOOR ≈ 47` and "2.5–3× too strict" —
+  that is wrong, because today's legacy distribution is ≈ true volume and is not the target the gate
+  was ever built on. Do not re-solve on it.)
+- The `~10–27×` figure is HISTORY. Do not restate it in the present tense. The ONE home for the
+  current description is the `marketfetch.mjs` `loadAll24hRolling` header.
+
+## The finding (investigated 2026-07-13, empirically confirmed — SUPERSEDED as a description of today, see above)
 
 The tool's `Vol/d` column and every liquidity gate/rank consume
 `volDay = min(highPriceVolume, lowPriceVolume)` from the OSRS wiki `/24h` endpoint. **`/24h` is NOT a
 rolling-24h window.** Live probing showed:
 
-- The `/24h` response (bulk AND per-item — identical) carried a `timestamp` field ~26h stale, and the
+- The `/24h` response (bulk AND per-item — identical **← NO LONGER TRUE, see the re-measurement above:
+  per-item is now the correct trailing-24h while bulk is a 2–3-day-stale UTC day**) carried a `timestamp` field ~26h stale, and the
   served hpv/lpv **exactly matched** (zero delta, both sides, multiple items) the sum of the `/5m`/`/1h`
   buckets over just the **first 1–3 hours of that stale UTC day**.
 - Across 14 days of `/24h?timestamp=` daily buckets (and the identical `/timeseries?timestep=24h`), every
@@ -21,7 +106,9 @@ rolling-24h window.** Live probing showed:
 - `/5m`, `/1h`, `/6h` are healthy (each serves the last complete bucket, fresh). Only the `/24h`
   aggregation grain is broken. `/24h` is also undocumented on the wiki API page.
 - **Side-casualty**: the `pressure` ratio and the `/24h` `avgHigh`/`avgLow` (gatecandidates' `mid`, the dip
-  "24h avg low" reference) come from the same frozen bucket — treat them as ~26h-stale 1–3h samples too.
+  "24h avg low" reference) come from the same bucket. As of the 2026-08 re-measurement they are
+  complete-day averages whose newest data is ~24–48h old (they were ~26h-stale 1–3h samples when this was written)
+  — still not a live reference, but stale rather than truncated.
 
 **Confidence**: HIGH on "what it serves now" (exact integer matches, both sides, many items, 14d of
 history). Inferred (not proven beyond 14d): how long it has been broken — plausibly the repo's whole

@@ -51,11 +51,12 @@ wiki API                    marketfetch                 quotecore               
                                                                                └─ watch-positions.mjs
 ```
 
-- The wiki's `/24h` endpoint is **broken** as a trailing-24h source (frozen stale slice); the
+- The wiki's `/24h` endpoint is **unusable** as a trailing-24h source (as of 2026-08-10 a complete
+  UTC-day aggregate whose newest data is ~24–48h old); the
   true rolling-24h is composed from the healthy `/1h` grain at the fetch layer
   (`pipeline/lib/market/marketfetch.mjs` `loadAll24hRolling`, `js/quotecore.js` consumers). Every
-  volume-denominated gate/floor is calibrated to that corrected scale. Full story:
-  `docs/GLOSSARY.md` "/24h broken", `PLAN-VOL24.md` (working doc).
+  volume-denominated gate/floor is calibrated to that corrected scale. Full story: the
+  `loadAll24hRolling` header (the ONE home), `PLAN-VOL24.md` (working doc + history).
 - `computeQuote` turns raw prices + the 2h band + the 24h stats into the **row model** — Guide,
   Quick/Optimistic (robust `robustBand` edges), momentum tell, pressure, break-even, regime.
   Every surface renders that row; none re-derives prices. The canonical rendered shape is the

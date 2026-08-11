@@ -101,6 +101,18 @@ async function main() {
     try { inp = await fetchItemInputs(id, { ts1h: wantTs1h }); }
     catch (e) { console.error(`⚠ fetch failed for #${id}: ${(e && e.message) || e}`); continue; }
     inputsById.set(id, inp);
+    // PLAN-VOL24 parity: correct vol24 BEFORE computeQuote, so the row's volDay/pressure and the sizer's
+    // clearability below can never be two different answers off the same `inp` (they were: the sizer path
+    // corrected at its own call site while this row kept the raw /24h read). Same ordering as the
+    // quote-items.mjs / watch-positions.mjs paths — the reassign-then-quote pattern is the convention.
+    // COVERAGE LIMIT, stated plainly: only the sizer target fetches a 1h series (`wantTs1h`, Risk 3), and
+    // vol24FromInputs DEGRADES to the raw /24h value without one. So for every other id this is a no-op
+    // and `row.volDay` stays the raw PER-ITEM /24h read — which the reverse-flip thin read below consumes.
+    // That is fine as of 2026-08-10: the PER-ITEM /24h?id= endpoint measures as the true trailing-24h
+    // (22/24 bit-identical to the composed value), so no number here is currently wrong. This reorder buys
+    // CONSISTENCY, not a corrected figure — one `inp`, one volume answer — so the surfaces cannot drift
+    // apart if that endpoint changes again (it already has, twice). See the loadAll24hRolling header.
+    inp.vol24 = vol24FromInputs(inp, now).vol24;
     const row = computeQuote({ ...inp, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, now, id });
     quoteById.set(id, row);
   }
@@ -133,7 +145,7 @@ async function main() {
     const inp = inputsById.get(sizerId);
     const limit = map.byId[sizerId]?.limit ?? null;
     const w = limitWindow({ buys: buysByItem(events).get(sizerId) || [], limit, now });
-    const v = inp ? vol24FromInputs(inp, now).vol24 : null;
+    const v = inp ? inp.vol24 : null;   // already the corrected value (assigned pre-computeQuote above)
     const dailyVol = v ? Math.min(v.highPriceVolume || 0, v.lowPriceVolume || 0) : null;
     // unit cost = the price you pay to acquire (live instasell / quickBuy), falling back to the mark.
     const unitCost = (row && row.quickBuy != null) ? row.quickBuy : (row && row.quickSell != null ? row.quickSell : null);

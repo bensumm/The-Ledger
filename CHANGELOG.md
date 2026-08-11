@@ -12,8 +12,10 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ### PLAN-DAY-LOW-SURFACING CLOSED as a measured negative + the `/24h` doctrine reconciled (2026-08-10)
 
-Two findings, both of which correct something the repo previously asserted. No code shipped; no
-`APP_VERSION` bump (nothing in the deployed app changed).
+Three findings, each correcting something the repo previously asserted. The only executable change is
+a statement-ordering fix in `read-book.mjs` (point 3) that alters no output; everything else is comment
+and doc reconciliation. **No `APP_VERSION` bump** — the one deployed-app file touched (`js/flip-niches.mjs`)
+changed a COMMENT only, with no behaviour change. `/scan`'s SKILL.md bumps its own `version:` 2.4 → 2.5.
 
 **1. The day-low lane separates but does not pay — closed after four measurement passes.** Ben asked for
 a surfacing lane over items resting on their 1/3/7/30-day lows. The blocking Chunk 0 measured it instead
@@ -41,22 +43,92 @@ a 1.82% entry spread, BELOW the 2% tax, because the 70 items that never generate
 wide-spread ones. **A refuting test run against a different population than the claim is not a refuting
 test** — the sharpest form of CLAUDE.md rule 11 found so far.
 
-**2. The `/24h` endpoint doctrine no longer describes the endpoint.** `marketfetch.mjs`'s header,
-`plans/PLAN-VOL24.md`, `CLAUDE.md` and `README.md` all assert `/24h` under-reports true volume by
-**10–27×** because it serves the first 1–3 hours of a UTC day. Measured two independent ways — a live
-recompose over 314 cached 1h series (corrected/broken **median 1.05×**) and a cross-check against the
-local SQLite archive over 299 items (endpoint ÷ archive-summed-24h-ending-at-the-endpoint's-own-anchor =
-**1.06×**; ÷ the first 3h after that anchor = **7.23×**, where the doctrine predicts ~0.04–0.10×). The
-endpoint today serves a **complete 24h aggregate that is ~71h stale** (anchor frozen on a UTC day
-boundary; the header still says ~26h). The 2026-07 observation was almost certainly correct when made —
-the endpoint's behaviour changed underneath a calibration justified by that behaviour, and nothing in the
-repo would notice it change again.
+**2. The `/24h` endpoint doctrine no longer describes the endpoint.** Sixteen tracked sites —
+`marketfetch.mjs`'s header, `PLAN-VOL24.md`, `README.md`, `MARKET-ANALYSIS.md`, `FLOW.md`,
+`GLOSSARY.md`, `/scan`'s SKILL.md, `flip-niches.mjs`, `gatecandidates.mjs`, `screen-flip-niches.mjs`,
+`quote-items.mjs`, `watch-positions.mjs`, and two more plans — assert `/24h` under-reports true volume
+by **10–27×** because it serves the first 1–3 hours of a UTC day. (`CLAUDE.md` was named in the first
+pass and does NOT carry the claim; the real set is ~4× larger than first reported.)
 
-The correction (`rolling24FromTs1h`) stays justified — a 71h-stale volume is unusable for gating — but
-its RATIONALE is staleness, not truncation. Also established: `vol24FromInputs` does not feed
-`FLOOR`/`GP_FLOOR`/`CHURN_MIN_VOL`/`MIN_GPD` (the screen takes volume from `loadAll24hRolling`), so the
-screen's gates are unaffected; and **the entire correction can be reverted with all 109 suites green** —
-mutation-proven, the strongest available statement of the test gap.
+Measured three ways. A live recompose over 314 cached 1h series: **1.05×**. A cross-check against the
+local SQLite 1h archive, 299 items: **1.06×**. Then the discriminating test for *which* 24h window the
+`timestamp` T labels: the endpoint serves a **complete, bit-exact UTC-day aggregate** and T is that
+day's START. Established by **exact integer equality on both hpv and lpv — 247/247 at offset 0 and
+0/247 across 60 other candidate windows spanning ±30h**, plus `T % 86400 == 0`.
+
+Two pieces of evidence from the first pass were **retracted under adversarial review**. The ±10% band
+(`374/374`) barely discriminates: offset −1h also scores 244/247 within ±10%. And the "control" —
+that the archive's own FWD/BACK ratio is the identical 1.102/39% — is a **tautology**, since
+`endpoint == FWD` exactly makes `endpoint/BACK ≡ FWD/BACK` by construction. Right conclusion, wrong
+evidence; the offset scan is what actually shows it. (CLAUDE.md rule 11, applied to my own pass.)
+
+What is broken is **staleness, not magnitude**, and the first pass got the number wrong twice. It is
+not "frozen on a UTC day boundary" (the anchor advances once per UTC day), and it is not "2–3 days
+stale" — that conflated the age of T with the age of the *data*. Since the served day CLOSES at T+24h,
+a T lag of 71.3h (08-10) and 48.2h (08-11) means the day closed **47.3h and 24.2h** before those
+reads. Freshness sawtooths: **the newest data is ~24–48h old**, and the aggregate spans 24–72h back.
+The wrong figure had already propagated to ~12 files and a memory before review caught it.
+
+**Why the endpoint changed is UNKNOWN**, and the first pass's reconciliation story ("it used to serve a
+partial, still-accumulating day and now waits for the day to close") is **retracted**: PLAN-VOL24's own
+July evidence is 14 days of *historical* buckets each truncated to their first 1–3h — closed days,
+truncated, not accumulating — and a 26h-old START describes a day that closed 2h before the read. The
+retracted story was also *less* hedged than the text it replaced, which is an epistemic regression, not
+a fix.
+
+**And the bigger correction, found while fixing something else:** `/24h` **bulk** and `/24h?id=`
+**per-item** are no longer the same endpoint. PLAN-VOL24 recorded them as identical; measured now,
+per-item matched the true rolling-24h **7/9** while bulk matched **0/9**, and bulk equalled per-item
+**0/9**. On the exact production path (`fetch24hOne` + `vol24FromInputs`) over a stratified
+thick/mid/thin sample, the per-item endpoint is **22/24 bit-identical** to the composed value — with
+`volSrc='rolling'` on all 24. **Consequence: the BULK correction (`loadAll24hRolling`, the screen) is
+load-bearing; the PER-ITEM correction's *arithmetic* (`vol24FromInputs` — quote-items,
+watch-positions, read-book) is a no-op.** But its *coverage guard* is not — see point 4, which is what
+the two non-identical items in that sample turned out to be.
+
+The correction (`rolling24FromTs1h`) stays justified — a 2–3-day-old daily total cannot gate today's
+liquidity — but its RATIONALE is staleness, not truncation, and every count-matched floor is
+**unaffected** (they were calibrated against the composed rolling source, never against `/24h`). Also
+established: `vol24FromInputs` does not feed `FLOOR`/`GP_FLOOR`/`CHURN_MIN_VOL`/`MIN_GPD` (the screen
+takes volume from `loadAll24hRolling`), so the screen's gates are unaffected; and **the entire
+correction can be reverted with all 109 suites green** — mutation-proven, the strongest available
+statement of the test gap.
+
+**3. `read-book.mjs` volume-parity reorder — and an honest downgrade of what it was.** The command
+computed its `computeQuote` row (`:105`) off the raw `inp.vol24`, then computed the sizer's
+clearability (`:136`) off the *corrected* value — one `inp`, two different volume answers, and the
+row's `volDay` feeds the reverse-flip "thin read" via `rfInfoById`. `vol24FromInputs` now runs BEFORE
+`computeQuote`, matching the reassign-then-quote convention in `quote-items.mjs` and
+`watch-positions.mjs`.
+
+It was reported (by me) as a live display defect. It is not, and finding 2 is why: the per-item
+`/24h?id=` endpoint is already the true trailing-24h, so both numbers were already right. **Verified
+by running it** — `read-book --size` output before and after is byte-identical apart from a clock tick
+in an age tag, and a direct probe of the sizer item showed raw and corrected `vol24` identical on both
+sides (16640/7228). The change buys internal consistency and removes a trap, nothing more. Two limits
+stated in the code rather than papered over: only the sizer fetches a 1h series (`wantTs1h`, Risk 3),
+so this is a no-op for every other id; correcting those would cost a 1h fetch each, which is a budget
+decision and not a bug fix.
+
+**4. `vol24FromInputs` had an END-OF-WINDOW hole (F4) that was silently under-reporting — fixed, and it
+is the one live-correctness change in this batch.** The 24h coverage guard checked only that the 1h
+series reached the window START (`earliest <= from`). A series that reached back far enough but stopped
+hours SHORT of the anchor passed the guard and summed a partial window — while still reporting
+`volSrc: 'rolling'`, so it looked corrected. The guard now requires coverage at BOTH ends
+(`latest >= anchor`), and the returned object carries a `buckets` count (F5) so callers can see how much
+data backed the answer.
+
+**Measured, not assumed.** Across 24 sampled items, **4 have incomplete coverage and 3 of those were
+being under-reported by >1%** — roughly 1 item in 8. This is also the resolution of the two
+"non-identical" items in point 2: they were not endpoint error, they were this bug (one read 725 against
+a correct 770, −6%).
+
+**New `pipeline/test/vol24.test.mjs`** — 13 assertion groups, offline and deterministic (fixed clock, no
+fetch), covering the window arithmetic, VWAP weighting, the degradation contract, F4's both-ends
+coverage, F5's bucket count, and F7 (a string-timestamped series degrades safely — the two functions
+genuinely disagree on coercion, and the test pins that it fails in the SAFE direction so a future
+"cleanup" has to be deliberate). **Mutation-proven, twice**: disabling the correction entirely fails the
+guard test, and restoring the old start-only guard fails the F4 test. Suite count 109 → 110.
 
 ### `check-imports` coverage extended to `js/**` + `pipeline/lib/**` — closing a latent gap for free (2026-08-10, Ben-directed)
 

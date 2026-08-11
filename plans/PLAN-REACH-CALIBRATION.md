@@ -85,8 +85,9 @@ is actually ground truth: our own realized fills.
   cross-day 5m-grain reach read for most days; it extends coverage opportunistically and
   improves passively with every scan/watch run. The wiki serves 5m timeseries ~30h back
   live; 1h ~15 days.
-- **Volume denominators:** the wiki `/24h` endpoint is broken (frozen 1–3h slice,
-  10–27× under-report — memory + PLAN-VOL24). `vol24FromInputs` (marketfetch.mjs)
+- **Volume denominators:** the wiki `/24h` endpoint is unusable as a trailing-24h source (as
+  re-measured 2026-08-10, a complete UTC-day aggregate whose newest data is ~24–48h old; the 1–3h-slice/10–27×
+  reading is 2026-07 history — see the `loadAll24hRolling` header). `vol24FromInputs` (marketfetch.mjs)
   composes the true trailing 24h from the in-hand 1h series on quote/watch; the SCREEN
   default is still the legacy path (`--vol-source rolling` is opt-in). A deflated volDay
   OVERSTATES sizeShare — conservative direction for this plan's relief, but every

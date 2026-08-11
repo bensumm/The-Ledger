@@ -104,7 +104,9 @@
  *               declared/BE flags; the F1 join scores estSell against the realized sell. Lean-included;
  *               PLACEHOLDER model n≈3–14.)
  *     volDayRolling?,  (PLAN-VOL24 2026-07-13 — the CORRECTED trailing-24h volume {hpv,lpv} from the
- *               /1h grain (the broken /24h endpoint serves a frozen stale ~1–3h slice); logged BESIDE
+ *               /1h grain (the BULK /24h endpoint is unusable as a trailing-24h source — it serves a
+ *               complete UTC-day aggregate whose newest data is ~24–48h old; the "frozen ~1–3h slice"
+ *               reading is 2026-07 history, see the marketfetch.mjs loadAll24hRolling header); logged BESIDE
  *               the active legacy volDay/class for the floor-recalibration retro-join. Lean-included;
  *               absent when no 1h series was in hand — e.g. watchlist rows.)
  *     grade?,  (AZ-forward 2026-07-12 — the rating LETTER as rendered then ('S+'…'D', incl. any
@@ -589,8 +591,9 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   if (grade != null)         e.grade = grade;
   // PLAN-VOL24 (2026-07-13) — the CORRECTED trailing-24h volume { hpv, lpv } composed from the /1h
   // grain (marketfetch.rolling24FromTs1h, off an already-fetched 1h series → zero new fetch), logged
-  // BESIDE the ACTIVE legacy `volDay`/`class` (which still come from the broken /24h endpoint until the
-  // floors are recalibrated — PLAN-VOL24 step 2). This is the "start collecting real numbers" shadow:
+  // BESIDE `volDay`/`class`. ⚠ STALE COMMENT, corrected 2026-08-10: this said the active volDay "still
+  // come[s] from the broken /24h endpoint until the floors are recalibrated". Step 2 SHIPPED 2026-07-13 —
+  // `rolling` is the screen DEFAULT and the floors ARE recalibrated. This is the "start collecting real numbers" shadow:
   // F1/the recalibration read the true distribution from here without any live gate/display flipping.
   // Lean-included (YS2 pattern): a caller with no 1h series in hand (watchlist rows) supplies null →
   // no field → byte-identical shape.

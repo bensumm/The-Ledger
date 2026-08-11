@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 2.4
+version: 2.5
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -310,11 +310,16 @@ This is the tribal layer the script can't do — apply ALL of these:
 - **Two-sided liquidity discipline.** _(enforced: `pipeline/lib/signal/gatecandidates.mjs` two-sided gate; the FLOOR is `judgment:`)_ Real liquidity = a two-sided daily market
   (`lowPriceVolume>0 && highPriceVolume>0`), never the `/volumes` count (bursty/weekly, overstates
   tradability). NOTE (PLAN-VOL24, 2026-07-13): Vol/d now comes from the CORRECTED rolling-24h source
-  (composed from the `/1h` grain — the raw `/24h` endpoint is broken, it serves a frozen stale ~1–3h
-  slice that under-read ~10–27×), and the gate `FLOOR` was recalibrated to that scale (50→3,500). So the
+  (composed from the `/1h` grain — the raw `/24h` endpoint is unusable as a trailing-24h source; as
+  re-measured 2026-08-10 it serves a complete but 2–3-day-STALE UTC-day aggregate, and the ~10–27×
+  under-report recorded in 2026-07 now measures ~1.0×), and the gate `FLOOR` was recalibrated to that scale (50→3,500). So the
   practical mental floor is a few-thousand limiting-side units/day, not the old deflated ~100; below it
   the juicy "margins" are ghost-spreads (cosmetics, ornament kits — uncrossable). The `--vol-source
-  legacy` flag restores the old broken numbers if you need to reproduce a pre-recal read.
+  legacy` flag switches back to the raw bulk `/24h` map. It NO LONGER "restores the old broken
+  numbers": measured 2026-08-10 over 1,961 items, legacy/rolling `volDay` is median **1.151×** (not
+  the ~0.04–0.10× the old doctrine implies) and the two disagree on only **5.2%** of `FLOOR`
+  admissions — because bulk `/24h` is now a complete day that is merely 24–48h stale. Treat it as a
+  staleness A/B, NOT as a way to reproduce a pre-recal read.
 - **Tax dominates thin flips.** _(judgment: the >0.5% after-tax bar)_ The 2% tax eats most of a tight spread — need meaningfully
   >~0.5% after-tax to bother. Stable/tight ≠ profitable.
 - **Band-is-the-edge pricing.** _(judgment: pricing call)_ For a liquid item with a stable *regime* but a wide

@@ -360,7 +360,7 @@ unscheduled/exogenous), so DL2 adds a **reactive** detector that fires a `FLUSH`
   (`nominateDip`) over that universe and re-scores flush-SUITABLE candidates into a **self-pruning** pool
   (`reconcileDipPool` — NOT append-only) so the reactive `--dip` loop always has a fresh, breadth-discovered,
   BOUNDED pool to poll. Suitability = two-sided + wide-enough amplitude + **two floors**: a gp-SCALE floor
-  (gp-flow `mid × limitVol ≥ DL4_MIN_GP_FLOW` (9m since the PLAN-VOL24 recal — was 500k, scaled ~18× to the corrected rolling-24h gp-flow)) AND a **per-unit swing floor**
+  (gp-flow `mid × limitVol ≥ DL4_MIN_GP_FLOW` (9m since the PLAN-VOL24 recal — was 500k, scaled by a flat ~18×; ⚠ that factor came from the now-RETRACTED `/24h` under-report, so unlike the genuinely count-matched floors this one has no empirical anchor — see the `DL4_MIN_GP_FLOW` declaration in `js/quotecore.js`)) AND a **per-unit swing floor**
   (`bandHi−bandLo ≥ DL4_MIN_ABS_SWING`, 2026-07-12) — the swing floor EXCLUDES cheap high-throughput churn
   (a flush on a 2gp item is worth ~nothing/unit; that's the CHURN niche's job), superseding the old "cheap
   churn passes" behavior. A survivor flushing NOW is score-bonused. **Pool hygiene:** each scan keeps the

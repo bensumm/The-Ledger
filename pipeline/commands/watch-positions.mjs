@@ -433,7 +433,8 @@ function flushAlert(it, sig, buysByItemMap) {
 async function buildItem({ id, name, qty, avgCost, buyTs }, map, guide) {
   const inp = await fetchItemInputs(id, { ts1h: true }); // ts1h feeds the window-context line
   // PLAN-VOL24: correct vol24 from the in-hand 1h series (rolling24, zero new fetch) — the /24h per-item
-  // endpoint is broken (frozen stale ~1–3h slice); degrades to the /24h read when the series is too short.
+  // endpoint is unusable as a trailing-24h source (a complete UTC-day aggregate whose newest data is ~24–48h old — see the
+  // marketfetch.mjs loadAll24hRolling header); degrades to the /24h read when the series is too short.
   // Reassigned so Vol/d + pressure + the avgLow24 dip reference all read the corrected value; computeQuote untouched.
   const _cv = vol24FromInputs(inp); inp.vol24 = _cv.vol24;
   const held = qty != null;

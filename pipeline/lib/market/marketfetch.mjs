@@ -238,12 +238,51 @@ export async function loadAllLatest() {
   writeCache('latest.json', d); return d;
 }
 
-/* --- Rolling-24h volume (PLAN-VOL24, 2026-07-13) --------------------------------------------
-   The wiki /24h endpoint is BROKEN as a trailing-24h source: it serves a FROZEN ~1–3h slice of a
-   STALE UTC day (its top-level `timestamp` field lagged ~26h at investigation; the served hpv/lpv
-   matched EXACTLY the first 1–3 hours of that UTC day, under-reporting the true rolling 24h by
-   ~10–27× — worst in early/mid-UTC hours, i.e. Ben's US-afternoon sessions). Full evidence:
-   PLAN-VOL24.md. The /5m, /1h, /6h grains are healthy; only the 24h aggregation is broken. These
+/* --- Rolling-24h volume (PLAN-VOL24, 2026-07-13; re-measured 2026-08-10) ---------------------
+   THIS BLOCK IS THE ONE HOME for what /24h actually serves. Every other site points here.
+
+   ⚠ BULK /24h AND PER-ITEM /24h?id= ARE NOT THE SAME THING (re-measured 2026-08-10/11).
+   PLAN-VOL24 recorded them as identical in 2026-07. They are not identical now, and the
+   difference decides which call sites actually need correcting:
+     • BULK /24h (no id) — BROKEN as a trailing-24h source. It serves a COMPLETE, bit-exact
+       UTC-DAY aggregate whose top-level `timestamp` T is the day's START: served hpv/lpv equal
+       the /1h sum over [T, T+23h].
+       EXACTNESS is established by an OFFSET SCAN, not by a ratio: over 61 candidate 24-bucket
+       windows across ±30h, exact integer equality on BOTH hpv and lpv holds 247/247 at offset 0
+       and 0/247 at every other offset, and T % 86400 == 0. Do NOT cite the ±10% band for this —
+       offset −1h also scores 244/247 within ±10%, so that test barely discriminates the true
+       window from one shifted a single hour. (An earlier version of this block cited the
+       archive's own FWD/BACK ratio as a "control". That was a TAUTOLOGY: since endpoint == FWD
+       exactly, endpoint/BACK ≡ FWD/BACK by construction. Removed.)
+       The defect is STALENESS, not magnitude — and state it against the day's CLOSE, not T:
+       the served day closes at T+24h, so a T lag of 71.3h (08-10) and 48.2h (08-11) means the
+       day closed 47.3h and 24.2h before those reads. The anchor advances once per UTC day, so
+       freshness SAWTOOTHS: the newest data is between ~24h and ~48h old, and the aggregate spans
+       24–72h back. ("2–3 days stale" was wrong and is retracted.)
+       This is the source loadAll24hRolling exists to replace.
+     • PER-ITEM /24h?id= (fetch24hOne) — currently CORRECT. Measured against the /1h-composed
+       rolling value on a stratified thick/mid/thin sample: 22/24 BIT-IDENTICAL. So when the 1h
+       series FULLY covers the window, vol24FromInputs agrees with the endpoint and is a no-op.
+       The two that differed were NOT endpoint error — they were items whose 1h series was missing
+       the anchor hour, so the COMPOSED value under-reported (e.g. 725 vs a correct 770, −6%).
+       That was the F4 end-of-window hole, fixed 2026-08-10; measured rate before the fix, 24 items:
+       4 had incomplete coverage and 3 of those 4 were under-reported by >1%. So the per-item
+       correction's real present-day value is its coverage GUARD, not its arithmetic. Keep it:
+       zero-fetch, and this endpoint has demonstrably changed behaviour twice.
+     • As measured 2026-07-13 (the original finding, kept in PLAN-VOL24.md): a ~1–3h slice of a
+       UTC day at ~26h lag — a ~10–27× under-report. HISTORY. Not re-verifiable, and NOT true of
+       either endpoint today. Do NOT restate ~10–27× in the present tense; bulk now measures
+       ~1.0× against the day it labels.
+   WHY IT CHANGED IS UNKNOWN — do not invent a mechanism. An earlier version of this block claimed
+   the endpoint "used to serve a partial, still-accumulating day and now waits for it to close,
+   which is exactly why staleness grew while accuracy went to exact." That story is RETRACTED: it
+   contradicts the July evidence it claimed to explain (PLAN-VOL24 records 14 days of HISTORICAL
+   /24h?timestamp= buckets each truncated to their first 1–3h — closed days, truncated, not
+   accumulating), and if T is the day's START then a 26h-old T describes a day that closed 2h
+   before the read and cannot still be accumulating. Both observations are real; the causal link
+   between them is not established. State the two measurements in their own tense and stop there.
+   Net: the BULK correction below is load-bearing; the per-item correction is insurance.
+   The /5m, /1h, /6h grains are healthy. These
    composers reconstruct the TRUE trailing-24h volume from the /1h grain:
      • rolling24FromTs1h — sums an ALREADY-FETCHED per-item /timeseries?1h (ZERO new fetch on a row
        whose 1h series is in hand: screen survivors, quote COD-4).
@@ -253,9 +292,12 @@ export async function loadAllLatest() {
    Both were proven EXACT vs a per-item timeseries sum (10/10 items, hpv AND lpv, 2026-07-13). The
    emitted per-id shape MATCHES loadAll24h's entry — {highPriceVolume,lowPriceVolume,avgHighPrice,
    avgLowPrice} — so a caller can swap sources with no shape change; the avg prices are volume-weighted
-   24h means of the hourly avgs (a real VWAP, unlike /24h's single averaged number). SHADOW/opt-in for
-   now: screen-flip-niches.mjs --vol-source rolling opts loadAll24hRolling in; the DEFAULT legacy path never calls
-   it, so nothing changes live and no extra fetch is added, pending the floor recalibration (step 2). */
+   24h means of the hourly avgs (a real VWAP, unlike /24h's single averaged number).
+   ⚠ `rolling` IS THE SCREEN DEFAULT and has been since step 2 shipped (2026-07-13) —
+   screen-flip-niches.mjs `--vol-source` has `fallback: 'rolling'`, pinned by compose.test.mjs.
+   This paragraph said the opposite ("SHADOW/opt-in … the DEFAULT legacy path never calls it, so
+   nothing changes live … pending the floor recalibration") for roughly a month after the thing it
+   was pending on had shipped. `--vol-source legacy` is the ESCAPE HATCH, not the default. */
 export const ROLL24_HOURS = 24;
 // last COMPLETE 1h bucket start (unix sec); the trailing-24h window is [anchor-23h, anchor].
 function lastCompleteHour(now = Date.now()) { return Math.floor(now / 1000 / 3600) * 3600 - 3600; }
@@ -277,9 +319,13 @@ export function rolling24FromTs1h(ts1h, now = Date.now()) {
   }
   return { highPriceVolume: hpv, lowPriceVolume: lpv, avgHighPrice: vwap(hi), avgLowPrice: vwap(lo) };
 }
-/* vol24FromInputs(inp, now) → { vol24, volSrc } — the CORRECTED per-item volume for a quote/watch read.
-   The broken /24h per-item endpoint (fetch24hOne → inp.vol24) serves a frozen stale ~1–3h slice, so
-   prefer the TRUE trailing-24h composed from the item's IN-HAND 1h series (rolling24FromTs1h — zero new
+/* vol24FromInputs(inp, now) → { vol24, volSrc, buckets } — the CORRECTED per-item volume for a quote/watch read.
+   ⚠ STATUS (re-measured 2026-08-10): the PER-ITEM /24h?id= endpoint this overrides is CURRENTLY CORRECT
+   (22/24 bit-identical to the composed value on a stratified sample). So its ARITHMETIC is presently a
+   no-op — but its COVERAGE GUARD is not: on 24 sampled items, 4 had a 1h series that failed to cover the
+   window and 3 of those were being under-reported by >1% before the F4 fix below. The BULK /24h is the
+   broken one, and loadAll24hRolling (the screen) is the load-bearing correction. See that header.
+   It prefers the TRUE trailing-24h composed from the item's IN-HAND 1h series (rolling24FromTs1h — zero new
    fetch on a surface that already fetched ts1h: quote COD-4, watch window line). DEGRADES to the /24h read
    (volSrc 'peritem-24h') when the 1h series is absent OR too short to cover the trailing 24h (a brand-new
    item, or a truncated fetch) — a partial 1h sum would UNDER-report worse than /24h. The returned vol24 is
@@ -288,17 +334,28 @@ export function rolling24FromTs1h(ts1h, now = Date.now()) {
    touch computeQuote (js/quotecore.js is app-imported — byte-identical); it only changes the VALUE passed in. */
 export function vol24FromInputs(inp, now = Date.now()) {
   const ts1h = inp && inp.ts1h;
+  const fallback = (buckets) => ({ vol24: inp ? (inp.vol24 ?? null) : null, volSrc: 'peritem-24h', buckets });
   if (Array.isArray(ts1h) && ts1h.length) {
     const anchor = lastCompleteHour(now);
     const from = anchor - (ROLL24_HOURS - 1) * 3600;
-    let earliest = Infinity;
-    for (const p of ts1h) if (p && Number.isFinite(p.timestamp) && p.timestamp < earliest) earliest = p.timestamp;
-    if (earliest <= from) {                                   // the series REACHES the window start → full 24h coverage
-      const r = rolling24FromTs1h(ts1h, now);
-      if (r && ((r.highPriceVolume || 0) > 0 || (r.lowPriceVolume || 0) > 0)) return { vol24: r, volSrc: 'rolling' };
+    let earliest = Infinity, latest = -Infinity, buckets = 0;
+    for (const p of ts1h) {
+      if (!p || !Number.isFinite(p.timestamp)) continue;
+      if (p.timestamp < earliest) earliest = p.timestamp;
+      if (p.timestamp > latest) latest = p.timestamp;
+      if (p.timestamp >= from && p.timestamp <= anchor) buckets++;
     }
+    // COVERAGE MUST HOLD AT BOTH ENDS. `earliest <= from` alone left an END-OF-WINDOW hole: a series that
+    // reaches far enough BACK but stops hours short of the anchor passed the guard and summed a PARTIAL
+    // window — under-reporting in exactly the way this function exists to prevent, and silently, since
+    // volSrc still said 'rolling'. Requiring `latest >= anchor` closes it. Pinned by vol24.test.mjs.
+    if (earliest <= from && latest >= anchor) {
+      const r = rolling24FromTs1h(ts1h, now);
+      if (r && ((r.highPriceVolume || 0) > 0 || (r.lowPriceVolume || 0) > 0)) return { vol24: r, volSrc: 'rolling', buckets };
+    }
+    return fallback(buckets);
   }
-  return { vol24: inp ? (inp.vol24 ?? null) : null, volSrc: 'peritem-24h' };   // DEGRADED: the broken /24h read
+  return fallback(0);   // DEGRADED: the raw per-item /24h read
 }
 export async function loadAll24hRolling({ db } = {}) {
   const cached = readCache('all24h-rolling.json', ALL24H_TTL);

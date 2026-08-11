@@ -173,11 +173,12 @@ PLACEHOLDER model (n≈3–14); `estBuy`/`estSell`/`estConfidence` ride `suggest
 ### The other columns
 - **Guide** = the real GE guide price, NEVER the wiki mapping `value` field (that's base/alch value).
 - **Vol/d** = the limiting side, `min(highPriceVolume, lowPriceVolume)`. It comes from the CORRECTED
-  rolling-24h source composed from the `/1h` grain — **the wiki `/24h` endpoint is broken** (a frozen
-  stale slice that under-reads the true rolling 24h ~10–27×). Every volume-denominated floor is
-  calibrated to the corrected scale. `--vol-source legacy` restores the broken read. Full story +
-  the recalibrated floor values: `docs/GLOSSARY.md` "/24h broken" + the `marketfetch.mjs`
-  `loadAll24hRolling` header. (The browser app still reads the broken `/24h` until a deferred step.)
+  rolling-24h source composed from the `/1h` grain — **the wiki `/24h` endpoint is unusable as a
+  trailing-24h source** (as re-measured 2026-08-10 it serves a complete, exact UTC-day aggregate that
+  closed ~24–48h before you read it; the ~10–27× under-report it showed in 2026-07 is history and now measures ~1.0×).
+  Every volume-denominated floor is calibrated to the corrected scale. `--vol-source legacy` restores
+  the raw read. Full story + the recalibrated floor values: the `marketfetch.mjs`
+  `loadAll24hRolling` header (the ONE home) + `PLAN-VOL24.md`. (The browser app still reads the broken `/24h` until a deferred step.)
 - **Net/u** = after the 2% tax. **Regime** = the multi-day `regimeDrift` (flat/rising/falling), with
   a display-only **phase tag** folded in (`spike`/`decay`/`basing`, from `phase()`) — NOT a gate.
   Since R2 (PLAN-SIGNAL-RECENCY), `regimeDrift`'s flat/rising/falling comes from `floorCeilingTrack`'s
