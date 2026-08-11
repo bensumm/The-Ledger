@@ -53,6 +53,9 @@ jobs:
       - name: forecast-guards (every diurnalForecast/driftExitFrom ctx passes `phase` — the fail-open refusal pin)
         run: node pipeline/ci/check-forecast-guards.mjs
 
+      - name: verdict-guards (every production momVerdict() threads lotCtx — the dropped-softening pin)
+        run: node pipeline/ci/check-verdict-guards.mjs
+
       - name: archlint (every file ARCHITECTURE.md names resolves on disk — doc-reference guard E7)
         run: node pipeline/ci/lint-arch.mjs
 

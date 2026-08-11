@@ -10,7 +10,53 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
-### 0.74.0 — the Finder grades off DAILY two-sided volume, and the S+ tier stops being a bug (2026-08-11)
+### 0.74.1 — the Watch tab stops painting CUT on fresh fills; a dropped-argument guard (2026-08-10)
+
+**`APP_VERSION` 0.74.0 → 0.74.1.**
+
+`momVerdict`'s 6th argument `lotCtx` carries Gate D's two V3 softenings: a lot bought under
+`FRESH_HOURS` ago reads `WATCH — fresh entry`, and an own ask filling above the clear price reads
+`HOLD — ask filling`. Both are **fail-open** — `lotCtx && lotCtx.askFilling` is just false when the
+caller passes no lotCtx — so a blind call returns `CUT-CANDIDATE` with no error and nothing to see.
+
+**Two production callers were blind.** `js/watch.js` (the app's Watch tab) and
+`pipeline/commands/trigger-alerts.mjs` (push alerts) both called it with 4 args. In each, the lot's
+`buyTs` was already computed and sitting unread — `heldGroups()` derives it, `readOpenPositions()`
+derives it. So the app painted a red CUT badge on a minutes-old fill, and the alerts path could push
+a spurious CUT on one.
+
+Verified by running it, not by reading it. Same quote row and real 5m series, 4-arg vs 6-arg:
+`CUT-CANDIDATE` → `WATCH — fresh entry`. Then end-to-end in headless chromium against the real
+render path: a 10-minute-old underwater lot renders `WATCH — fresh entry`, an ask filling above the
+clear renders `HOLD — ask filling`, and a **40-hour-old lot still renders `CUT-CANDIDATE`** — the fix
+threads context, it does not soften the gate.
+
+`askIsFilling` moved from `pipeline/lib/market/item-context.mjs` into `js/quotecore.js` (exported)
+so the app and the pipeline share one definition instead of forking it — the encoding-boundary rule.
+`trigger-alerts.mjs` gets `buyTs` only; `askFilling` stays false there because that loop reads
+`positions.json` and never the live offer book, which is unchanged behavior, not a regression.
+
+`js/trends.js` was already passing `{buyTs}` and documents its own `askFilling` omission — left as is.
+
+**New CI guard `pipeline/ci/check-verdict-guards.mjs`** fails the build on any production
+`momVerdict(` call with fewer than 6 args, or a 6th arg literally `undefined`/`null`. **Its own v1 was
+fail-open in a third way**: the comment/string scrubber had no regex-literal case, so
+`js/watch.js`'s `.replace(/"/g, '&quot;')` opened a phantom string that blanked the rest of the file —
+the guard saw zero call sites there and reported ✓ over the exact bug it was written for. Fixed, and
+backstopped by `lostSites()` so the next scrubber bug fails loudly instead of passing green.
+
+**Also corrected: the bond docblock in `js/money-math.js` was false three ways** — it claimed
+`state.js` re-exports `BOND_ID` (it imports only `now`), that the app "excludes the bond from its
+catalog entirely" (contradicted by `js/market.js:14`, "Bonds ARE kept in the catalog now"), and that
+"no surface has to special-case it" (every surface opts in via `row.bond`). The last one is the
+dangerous claim: `js/ui.js`'s `realised()` does **not** opt in, so a closed bond row would render
+over-taxed. That gap is **latent, not live** — the bond is in `ignored-items.json` and
+`quarantineEvents` drops it before reconstruction, so its 42 filled events in `fills.json` produce
+**zero** `positions.json` rows (verified). Recorded next to the twin gap already noted in
+`reconstruct.mjs` rather than fixed: both need a guide price at the P/L surface and would move
+historical realised P/L, and there is no bond data to verify a fix against.
+
+### 0.74.0 — the Finder grades off DAILY two-sided volume, and the S+ tier stops being a bug (2026-08-10)
 
 Three defects in one expression, fixed together because fixing any one alone leaves the others and
 because measuring them apart gives wrong answers. **`APP_VERSION` 0.73.0 → 0.74.0.**

@@ -39,7 +39,7 @@
  * SAME `heldMomVerdict(ctx)` decision. Both strings are reproduced VERBATIM from the pre-P0 inline
  * functions so existing output stays byte-identical; only the shared source of `mv` changed.
  */
-import { computeQuote, momVerdict, breakEven, phase, BIG_TICKET_GP, FRESH_HOURS } from '../../../js/quotecore.js';
+import { computeQuote, momVerdict, breakEven, phase, askIsFilling, BIG_TICKET_GP, FRESH_HOURS } from '../../../js/quotecore.js';
 import { fmtP } from '../../../js/money-format.js';
 import { computeDeltas, advanceState, convictionGate, pathPersistence,
   verdictPersistence, VERDICT_PERSIST_MS } from '../thesis/watchstate.mjs';
@@ -83,13 +83,6 @@ export function historyStage(ctx, { ts6h = null, termStructure = null } = {}) {
 export function intradayStage(ctx, { ts5m = null, ts6h = null, ts1h = null, reach = null } = {}) {
   ctx.intraday = { ts5m, ts6h, ts1h, reach };
   return ctx;
-}
-
-// Is the held lot's OWN ask actively transacting ABOVE the clear price? The V3 Gate-D fill-progress
-// heuristic, byte-identical to watch-positions.mjs's inline test — an active sell with filled units priced
-// above the live instabuy. Normalized offer shape `{ price, filled, total }`; null ask → false.
-function askIsFilling(row, ask) {
-  return !!(ask && ask.filled > 0 && row && row.quickSell != null && ask.price > row.quickSell);
 }
 
 // ---------------------------------------------------------------------------

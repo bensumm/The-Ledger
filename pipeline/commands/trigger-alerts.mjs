@@ -100,8 +100,11 @@ function emit(obj, human) {
 // Returns the alertable signal for a held row, or null. `sig` is the transition key stored in
 // state; a change in sig (and cooldown clear) is what fires. Verdict text is sourced from the
 // shared momVerdict() so it can't drift from the app / quote-items.mjs.
-export function positionSignal(row, be, lotValue, ts5m) {
-  const mv = momVerdict(row, be, lotValue, ts5m);
+// `lotCtx` carries Gate D's V3 softenings; without it a fresh fill or a filling ask escalates to
+// CUT-CANDIDATE and pushes a spurious alert. askFilling is unavailable here (this loop reads
+// positions.json, never the live offer book) so it stays false — same as before; buyTs is not.
+export function positionSignal(row, be, lotValue, ts5m, lotCtx) {
+  const mv = momVerdict(row, be, lotValue, ts5m, undefined, lotCtx);
   const strongDown = row.mom === 'breakdown' && (row.momPct || 0) >= MOM_STRONG_PCT;
   const underwater = be != null && row.quickSell != null && row.quickSell < be;
   // (a) momVerdict escalated to a CUT-class decision (CUT or CUT-CANDIDATE both carry action CUT)
@@ -130,13 +133,13 @@ async function runPositions(st) {
   const guide = await loadGuide();
   const quiet = isOvernightNow();
   const seen = new Set();
-  for (const { itemId, qty, cost, avgCost } of groups) {
+  for (const { itemId, qty, cost, avgCost, buyTs } of groups) {
     seen.add(String(itemId));
     const name = map.byId[itemId]?.name || ('#' + itemId);
     const be = breakEven(avgCost);
     const inp = await fetchItemInputs(itemId);
     const row = computeQuote({ ...inp, guide: guide[itemId] ?? null, limit: map.byId[itemId]?.limit ?? null, held: true, asked: true });
-    const s = positionSignal(row, be, cost, inp.ts5m);
+    const s = positionSignal(row, be, cost, inp.ts5m, { buyTs: buyTs ?? null, askFilling: false });
     const prev = st.held[String(itemId)] || null;
     if (!s) { st.held[String(itemId)] = { sig: null }; continue; }   // no longer alerting → clear baseline
     const transitioned = !prev || prev.sig !== s.sig;

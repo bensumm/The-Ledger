@@ -1008,7 +1008,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   makes each role structural, since the exec bit doesn't): **`pipeline/commands/`** = the
   workflow CLIs you run (screen-flip-niches, quote-items, watch-positions, sync-fills, …);
   **`pipeline/ci/`** = the CI/dev guards + test runner (check-imports, check-dead-exports,
-  check-daemon-safety, check-forecast-guards, lint-arch/docs/skills, run-tests, smoke-test) plus two NON-GATING report
+  check-daemon-safety, check-forecast-guards, check-verdict-guards, lint-arch/docs/skills, run-tests, smoke-test) plus two NON-GATING report
   tools the `/cleanup` skill reads (lint-plan-lifecycle, report-branches — never wired into
   `checks.yml`); **`pipeline/lib/`** = the imported-only
   shared libraries — **being regrouped into concept subdirectories one cluster at a time**
@@ -2037,6 +2037,21 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     REAL key set — obtained by CALLING computeQuote, never parsed or hardcoded, so the rule retires itself if a
     `phase` field is ever legitimately added. A throw while probing that shape EXITS NONZERO rather than skipping
     the rule. Produces/consumes nothing; exit 1 + a per-site report on violation)
+  - `check-verdict-guards.mjs` (0.74.1, 2026-08-10 — the same fail-open class as the forecast guard, one function
+    over. `momVerdict`'s 6th arg `lotCtx` carries Gate D's two V3 softenings (`buyTs` under `FRESH_HOURS` →
+    `WATCH — fresh entry`; an own ask filling above the clear → `HOLD — ask filling`), and `lotCtx && lotCtx.x`
+    is simply false when the caller omits it, so a blind call silently returns CUT-CANDIDATE with no error.
+    `js/watch.js` (the app's Watch tab) and `trigger-alerts.mjs` (push alerts) both called it with 4 args while
+    the lot's `buyTs` sat computed and unread on the line above — a red CUT badge on a minutes-old fill, verified
+    live before the fix (same row + real 5m series: 4-arg → CUT-CANDIDATE, 6-arg fresh → WATCH — fresh entry).
+    Scans `js/`, `pipeline/commands/`, `pipeline/lib/` (test dirs exempt — proving the degradation path REQUIRES
+    a 5-arg call) and fails on (1) fewer than 6 args, (2) a 6th arg literally `undefined`/`null`, which reads
+    identically to omitting it. The 5th (`now`) IS legitimately `undefined`. **Its own v1 was fail-open in a
+    third distinct way:** the comment/string scrubber had no regex-literal case, so `js/watch.js`'s
+    `.replace(/"/g, '&quot;')` opened a phantom string that blanked the REST OF THE FILE — the guard saw zero
+    call sites there and reported ✓ over the very bug it was written for. Fixed by handling regex literals, and
+    backstopped by `lostSites()`: any raw `momVerdict(` with arguments that the scan did not see fails the build,
+    so the NEXT scrubber bug is loud instead of silent. Produces/consumes nothing; exit 1 + a per-site report)
   - `check-daemon-safety.mjs` (PLAN-DAEMON-SUBSYSTEM Hardening finding #1, the CI half approved for Phase 1 —
     a STRUCTURAL, DENYLIST-style zero-git guard run in the cheap `checks` job. Scans `pipeline/daemons/registry.mjs`
     + every `pipeline/daemons/*.mjs` (non-test) and FAILS the build if a local/auto-runnable daemon (1) IMPORTs

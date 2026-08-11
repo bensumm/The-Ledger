@@ -8,12 +8,17 @@ export const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 export const now=()=>Math.floor(Date.now()/1000);
 export function tax(p){ if(!p||p<50) return 0; return Math.min(Math.floor(p*0.02),TAXCAP); }
 // --- Old School Bond: the ONE tax exception (Ben 2026-07-09) --------------------------------------
-// A bond is EXEMPT from the 2% GE tax, but a bond bought with GP is untradeable and costs 10% of its
-// GUIDE value to make re-tradeable — so a bond flip's effective cost is `buy + 10%×guide` and the sell
-// is tax-free. i.e. compare `sell` against `buy + bondFee(guide)`, with NO sell-side tax. Encoded here
-// as an exception in the tax/net math (netMargin below + breakEven in quotecore.js) so no surface has to
-// special-case it. BOND_ID is the canonical home; state.js re-exports it for the app (which excludes the
-// bond from its catalog entirely — this exception is what keeps the PIPELINE quote/screen honest instead).
+// A bond is EXEMPT from the 2% GE tax, but a GP-bought bond is untradeable and costs 10% of its GUIDE
+// value to make re-tradeable: net = sell − (buy + bondFee(guide)), NO sell-side tax. Encoded in netMargin
+// below + breakEven/maxBuyForExit in quotecore.js. BOND_ID is the canonical home — nothing re-exports it.
+// OPT-IN, NOT automatic: netMargin can't see an itemId, so every caller passes `{bond:true, guide}` itself.
+// Bonds ARE in the app catalog (js/market.js `bondMarginOpts`); estimators/pair/reach/validate opt in
+// via `row.bond`, which computeQuote sets.
+// LATENT GAP (2026-08-10): js/ui.js `realised()` does NOT opt in, so a closed bond row would render
+// over-taxed by tax(sell) and short the retrade fee. Harmless today only because the bond is in
+// ignored-items.json and quarantineEvents drops it BEFORE reconstruction — 42 filled bond events in
+// fills.json produce ZERO positions.json rows (verified). Twin of the matchTrades gap noted in
+// reconstruct.mjs; fixing either needs a guide price at the P/L surface and moves historical realised P/L.
 export const BOND_ID=13190;
 export const BOND_RETRADE_PCT=0.10;          // fee (of guide) to re-tradeable a GP-bought bond
 export const isBond=id=>id===BOND_ID;

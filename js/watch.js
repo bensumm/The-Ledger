@@ -14,7 +14,7 @@
    it reuses marketfetch's cached ts/24h store, so it's a light refresh, not a new data poller. */
 import { API, STATE, IS_LOCALHOST, sGet, sSet, logEvent } from './state.js';
 import { jget, fetchTs, fetch24h } from './marketfetch.js';
-import { computeQuote, momVerdict, breakEven, momCell, offerVerdict, regimeCellText } from './quotecore.js';
+import { computeQuote, momVerdict, breakEven, momCell, offerVerdict, regimeCellText, askIsFilling } from './quotecore.js';
 import { netMargin } from './money-math.js';
 import { fmt, fmtP } from './money-format.js';
 import { resolveId } from './market.js';
@@ -51,6 +51,12 @@ function heldGroups() {
   }
   return [...byId.values()].map(g => ({ ...g, avgBuy: g.qty ? Math.round(g.cost / g.qty) : 0, value: g.cost }));
 }
+// the V3 lot context every heldVerdict call passes: entry age (heldGroups already tracks the oldest
+// lot's buyTs) + whether this item's own resting ask is filling above the clear price.
+const lotCtxFor = (g, row) => ({
+  buyTs: g.buyTs || null,
+  askFilling: askIsFilling(row, (STATE.offers || []).find(o => o.side === 'sell' && o.itemId === g.itemId) || null),
+});
 // closed flips whose SELL landed today (local) — drives the Day P/L cell.
 const closedToday = () => STATE.trades
   .filter(t => t.sell !== null && !t.withdrawn && isSameLocalDay(t.closed, Date.now()))
@@ -70,10 +76,12 @@ async function fetchWatchQuote(id) {
   return { row, ts5m: arr(ts5m) };
 }
 
-// The held verdict: the shared cut-trigger first (byte-identical to watch-positions.mjs's heldVerdict),
-// falling back to the same regime-based tokens when momVerdict defers.
-function heldVerdict(row, be, lotValue, ts5m) {
-  const mv = momVerdict(row, be, lotValue, ts5m);
+// The held verdict: the shared cut-trigger first (same inputs as watch-positions.mjs's heldVerdict —
+// lotCtx included, else Gate D's V3 softenings are unreachable and a fresh or filling lot paints CUT),
+// falling back to the same regime-based tokens when momVerdict defers. `now` stays undefined to match
+// the pipeline call exactly (momVerdict defaults it to Date.now()).
+function heldVerdict(row, be, lotValue, ts5m, lotCtx) {
+  const mv = momVerdict(row, be, lotValue, ts5m, undefined, lotCtx);
   if (mv) return { verdict: mv.verdict, mv };
   if (row.falling) return { verdict: 'FALLING', mv: null };
   if (row.quickSell != null && be != null && row.quickSell < be) return { verdict: 'UNDERWATER', mv: null };
@@ -177,7 +185,7 @@ function heldCardHtml(g, q) {
   }
   const { row, ts5m } = q;
   const lotValue = g.value;
-  const { verdict, mv } = heldVerdict(row, be, lotValue, ts5m);
+  const { verdict, mv } = heldVerdict(row, be, lotValue, ts5m, lotCtxFor(g, row));
   const fam = verdictFamily(verdict);
   const m = momCell(row.mom, row.momPct);
   const momCls = m.cls === 'mommuted' ? 'wmommut' : m.cls;
@@ -279,7 +287,7 @@ export function renderWatchTab() {
   const util = capitalSplit(agg.exposureGp, parkedGp);
 
   // alerts (spec D): CUT-family held + CANCEL-BID buy offers — both from the quote cache
-  const heldVerdicts = flips.map(g => { const q = quoteCache.get(g.itemId); return q ? heldVerdict(q.row, breakEven(g.avgBuy), g.value, q.ts5m).verdict : null; }).filter(Boolean);
+  const heldVerdicts = flips.map(g => { const q = quoteCache.get(g.itemId); return q ? heldVerdict(q.row, breakEven(g.avgBuy), g.value, q.ts5m, lotCtxFor(g, q.row)).verdict : null; }).filter(Boolean);
   const offerVerdicts = (STATE.offers || []).filter(o => o.side === 'buy').map(o => { const q = quoteCache.get(o.itemId); return q ? offerVerdict(q.row, o.price) : null; }).filter(Boolean);
   const alerts = alertCount(heldVerdicts, offerVerdicts);   // the ONE alert-count home (watchcore) — never re-inline this expression (it must not diverge)
   const alertMeta = alerts > 0 ? (heldVerdicts.filter(isHeldAlert)[0] || CANCEL_BID) : (heldVerdicts.length || offerVerdicts.length ? 'all clear' : 'nothing to action');

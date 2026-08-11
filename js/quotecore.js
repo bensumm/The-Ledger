@@ -588,6 +588,14 @@ export function moveShape(ts5m){
   return 'ambiguous';
 }
 
+// Is the held lot's OWN ask actively transacting ABOVE the clear price? The V3 Gate-D fill-progress
+// test — an active sell with filled units priced above the live instabuy. Offer shape `{price, filled}`
+// (pipeline normalizes to `{price, filled, total}`, STATE.offers already matches); null ask → false.
+// Lives HERE, next to the gate that reads it, so the app and the pipeline can't fork the definition.
+export function askIsFilling(row, ask){
+  return !!(ask && ask.filled > 0 && row && row.quickSell != null && ask.price > row.quickSell);
+}
+
 /* --- cut-trigger overlay = the PLAN-3 underwater decision tree (was chunk-6 momVerdict) -----
    A HELD position's precise 2h read modifies the HOLD / list-at / CUT verdict. This is the ONE
    shared implementation — js/trends.js reviewPositions, pipeline/commands/quote-items.mjs --positions, and
