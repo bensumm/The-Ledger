@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 2.5
+version: 2.6
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -311,7 +311,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   (`lowPriceVolume>0 && highPriceVolume>0`), never the `/volumes` count (bursty/weekly, overstates
   tradability). NOTE (PLAN-VOL24, 2026-07-13): Vol/d now comes from the CORRECTED rolling-24h source
   (composed from the `/1h` grain — the raw `/24h` endpoint is unusable as a trailing-24h source; as
-  re-measured 2026-08-10 it serves a complete but 2–3-day-STALE UTC-day aggregate, and the ~10–27×
+  re-measured 2026-08-11 it serves a complete UTC-day aggregate whose newest data is ~24–48h old, and the ~10–27×
   under-report recorded in 2026-07 now measures ~1.0×), and the gate `FLOOR` was recalibrated to that scale (50→3,500). So the
   practical mental floor is a few-thousand limiting-side units/day, not the old deflated ~100; below it
   the juicy "margins" are ghost-spreads (cosmetics, ornament kits — uncrossable). The `--vol-source

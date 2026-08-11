@@ -200,9 +200,21 @@ export function ratingParts(it, staleRisk){
    `sqrt(TTF_REF_VOL/volDay)`, `js/rating.mjs` `liqFactor` (`F0=50/F1=5000`, whose own header says
    "limiting-side DAILY volume"), and `js/ui.js` renders the result as "≈ N/day".
    Effect: an item trading 24k/day arrives as ~1000/hour, giving a TTF factor of 1.0 where the truth is
-   ~0.25 — the rank (`net × P(fill) ÷ TTF`) is understated roughly 4× on liquid items, which drives the
-   visible Grade column and the default sort. The `thin = volDay < 50` test below is measuring an hour
-   against a daily floor that itself moved to 3500 (see `js/rating.mjs`).
+   ~0.25. The `thin = volDay < 50` test below is measuring an hour against a daily floor that itself
+   moved to 3500 (see `js/rating.mjs`). The rank (`net × P(fill) ÷ TTF`) is understated — but ⚠ THE
+   MAGNITUDE AND POPULATION FIRST WRITTEN HERE ("roughly 4× on liquid items") WERE BOTH WRONG, corrected
+   2026-08-11 by calling the real `estimateRank` twice per row, once with the hourly figure the Finder
+   actually passes and once with the true daily one. The TTF-factor half is exact, but `rankScore`
+   SATURATES (`net·p/(days + TTF_SAT_DAYS)`), so the rank ratio is a curve, not a constant:
+
+     daily      1200   2400   6000  24000  120000  600000
+     understated 4.10× 4.45×  4.24×  3.25×   1.59×   1.00×
+
+   So it peaks at ~4.45× around 2.4k/day, is 3.25× at this comment's own 24k example, and decays to
+   EXACTLY 1.00× above ~600k/day where both the used and true TTF factors clamp. The distortion is
+   concentrated on LOW/MID liquidity; "on liquid items" named the region where the bug does the LEAST.
+   It still drives the visible Grade column and the default sort — the error is in how it was described,
+   not in whether it matters.
    Proof it is a bug and not a convention: the LEGACY scorer in this same file feeds the same
    `STATE.VOL` into `RATE_VOL_MAX`, which `js/state.js` annotates "// hourly volume". Two scorers, one
    source, opposite unit assumptions — and the daily-anchored one is the newer.

@@ -247,28 +247,41 @@ export async function loadAllLatest() {
      • BULK /24h (no id) — BROKEN as a trailing-24h source. It serves a COMPLETE, bit-exact
        UTC-DAY aggregate whose top-level `timestamp` T is the day's START: served hpv/lpv equal
        the /1h sum over [T, T+23h].
-       EXACTNESS is established by an OFFSET SCAN, not by a ratio: over 61 candidate 24-bucket
-       windows across ±30h, exact integer equality on BOTH hpv and lpv holds 247/247 at offset 0
-       and 0/247 at every other offset, and T % 86400 == 0. Do NOT cite the ±10% band for this —
-       offset −1h also scores 244/247 within ±10%, so that test barely discriminates the true
-       window from one shifted a single hour. (An earlier version of this block cited the
-       archive's own FWD/BACK ratio as a "control". That was a TAUTOLOGY: since endpoint == FWD
-       exactly, endpoint/BACK ≡ FWD/BACK by construction. Removed.)
+       EXACTNESS is established by an OFFSET SCAN, not by a ratio: exact integer equality on BOTH
+       hpv and lpv, over candidate 24-bucket windows at other offsets, plus T % 86400 == 0.
+       Re-run 2026-08-11 over the FULL two-sided market (3,767 items, T=1786233600): offset 0
+       scores 3767/3767, offset −1h 414/3767, offset +1h 383/3767, with T re-read after the scan
+       to confirm it had not advanced. Discrimination is overwhelming but NOT literally zero off
+       the true window — a thin item whose boundary hours are empty matches at ±1h too, so an
+       earlier "0/247 at every other offset" (taken on a coverage-filtered 247-item sample) does
+       not generalize. Do NOT cite the ±10% band for this — offset −1h scores 244/247 within
+       ±10%, so that test barely discriminates the true window from one shifted a single hour.
+       (An earlier version of this block cited the archive's own FWD/BACK ratio as a "control".
+       That was a TAUTOLOGY: since endpoint == FWD exactly, endpoint/BACK ≡ FWD/BACK by
+       construction. Removed.)
        The defect is STALENESS, not magnitude — and state it against the day's CLOSE, not T:
-       the served day closes at T+24h, so a T lag of 71.3h (08-10) and 48.2h (08-11) means the
-       day closed 47.3h and 24.2h before those reads. The anchor advances once per UTC day, so
+       the served day closes at T+24h, so a T lag of 71.3h (08-10) and 48.9h (08-11) means the
+       day closed 47.3h and 24.9h before those reads. The anchor advances once per UTC day, so
        freshness SAWTOOTHS: the newest data is between ~24h and ~48h old, and the aggregate spans
        24–72h back. ("2–3 days stale" was wrong and is retracted.)
        This is the source loadAll24hRolling exists to replace.
-     • PER-ITEM /24h?id= (fetch24hOne) — currently CORRECT. Measured against the /1h-composed
-       rolling value on a stratified thick/mid/thin sample: 22/24 BIT-IDENTICAL. So when the 1h
-       series FULLY covers the window, vol24FromInputs agrees with the endpoint and is a no-op.
-       The two that differed were NOT endpoint error — they were items whose 1h series was missing
-       the anchor hour, so the COMPOSED value under-reported (e.g. 725 vs a correct 770, −6%).
-       That was the F4 end-of-window hole, fixed 2026-08-10; measured rate before the fix, 24 items:
-       4 had incomplete coverage and 3 of those 4 were under-reported by >1%. So the per-item
-       correction's real present-day value is its coverage GUARD, not its arithmetic. Keep it:
-       zero-fetch, and this endpoint has demonstrably changed behaviour twice.
+     • PER-ITEM /24h?id= (fetch24hOne) — currently CORRECT, and it is the COMPOSED value that errs
+       when the two disagree. ⚠ TWO EARLIER FIGURES HERE WERE RETRACTED 2026-08-11: this block said
+       "22/24 BIT-IDENTICAL" and, in the next breath, "4 had incomplete coverage and 3 of those 4
+       under-reported by >1%" — which cannot both hold on one 24-item sample (3 under-reports means
+       at least 3 differ, so at most 21 can be identical). They came from two different probes both
+       of size 24 and were written as if one. Re-measured on ONE stratified thick/mid/thin sample,
+       n=24, 2026-08-11:
+         – composed == endpoint, bit-exact on both sides: 19/24.
+         – 1h series stopping SHORT of the anchor (admitted by the pre-F4 start-only guard, rejected
+           by the current both-ends guard): 10/24.
+         – of those 10, FIVE were still bit-exact — the missing hour simply had no trades — and TWO
+           under-reported the limiting side by >1%.
+       So the disagreements are all COMPOSITION shortfalls, never endpoint error, and the last rate
+       is not a constant: it tracks how fresh the in-hand 1h series is relative to the anchor, which
+       is precisely why the guard exists rather than a fixed expectation. The per-item correction's
+       present-day value is that coverage GUARD, not its arithmetic. Keep it: zero-fetch, and this
+       endpoint has demonstrably changed behaviour twice.
      • As measured 2026-07-13 (the original finding, kept in PLAN-VOL24.md): a ~1–3h slice of a
        UTC day at ~26h lag — a ~10–27× under-report. HISTORY. Not re-verifiable, and NOT true of
        either endpoint today. Do NOT restate ~10–27× in the present tense; bulk now measures
@@ -320,10 +333,13 @@ export function rolling24FromTs1h(ts1h, now = Date.now()) {
   return { highPriceVolume: hpv, lowPriceVolume: lpv, avgHighPrice: vwap(hi), avgLowPrice: vwap(lo) };
 }
 /* vol24FromInputs(inp, now) → { vol24, volSrc, buckets } — the CORRECTED per-item volume for a quote/watch read.
-   ⚠ STATUS (re-measured 2026-08-10): the PER-ITEM /24h?id= endpoint this overrides is CURRENTLY CORRECT
-   (22/24 bit-identical to the composed value on a stratified sample). So its ARITHMETIC is presently a
-   no-op — but its COVERAGE GUARD is not: on 24 sampled items, 4 had a 1h series that failed to cover the
-   window and 3 of those were being under-reported by >1% before the F4 fix below. The BULK /24h is the
+   ⚠ STATUS (re-measured 2026-08-11): the PER-ITEM /24h?id= endpoint this overrides is CURRENTLY CORRECT
+   — on one stratified n=24 sample, composed == endpoint bit-exact 19/24, and every disagreement was the
+   COMPOSED side falling short, never the endpoint. So its ARITHMETIC is presently a no-op; its COVERAGE
+   GUARD is not (10 of those 24 had a 1h series stopping short of the anchor, 2 under-reporting the limiting
+   side by >1% before the F4 fix below). The full figures + the retraction of the earlier "22/24" and
+   "4 of 24 / 3 under-reported" pair — which came from two different probes and contradicted each other —
+   are in the loadAll24hRolling ONE HOME block above; do not restate them here. The BULK /24h is the
    broken one, and loadAll24hRolling (the screen) is the load-bearing correction. See that header.
    It prefers the TRUE trailing-24h composed from the item's IN-HAND 1h series (rolling24FromTs1h — zero new
    fetch on a surface that already fetched ts1h: quote COD-4, watch window line). DEGRADES to the /24h read
@@ -331,7 +347,13 @@ export function rolling24FromTs1h(ts1h, now = Date.now()) {
    item, or a truncated fetch) — a partial 1h sum would UNDER-report worse than /24h. The returned vol24 is
    the SAME shape computeQuote consumes ({highPriceVolume,lowPriceVolume,avgHighPrice,avgLowPrice}), so it's
    a drop-in override that also corrects the pressure ratio + the 24h avg-low/high dip reference. It does NOT
-   touch computeQuote (js/quotecore.js is app-imported — byte-identical); it only changes the VALUE passed in. */
+   touch computeQuote (js/quotecore.js is app-imported — byte-identical); it only changes the VALUE passed in.
+   ⚠ `volSrc` and `buckets` are DIAGNOSTIC ONLY — as of 2026-08-11 NO production caller reads either; both
+   call sites (`read-book.mjs`, and the quote/watch path) take `.vol24` and discard the rest, so the fields
+   are kept alive solely by vol24.test.mjs. Do not write a comment claiming callers "judge coverage" on
+   `buckets` until one actually does. They are cheap and genuinely useful when probing a degraded read by
+   hand, which is why they stay; surfacing `volSrc` on a degraded quote is an open, unscheduled follow-up.
+   (check-dead-exports.mjs sees exports, not returned FIELDS, so nothing catches this class automatically.) */
 export function vol24FromInputs(inp, now = Date.now()) {
   const ts1h = inp && inp.ts1h;
   const fallback = (buckets) => ({ vol24: inp ? (inp.vol24 ?? null) : null, volSrc: 'peritem-24h', buckets });
@@ -349,6 +371,16 @@ export function vol24FromInputs(inp, now = Date.now()) {
     // reaches far enough BACK but stops hours short of the anchor passed the guard and summed a PARTIAL
     // window — under-reporting in exactly the way this function exists to prevent, and silently, since
     // volSrc still said 'rolling'. Requiring `latest >= anchor` closes it. Pinned by vol24.test.mjs.
+    // DO NOT "STRENGTHEN" THIS TO `buckets === 24`. I suspected the both-ends test still admitted a
+    // series with INTERIOR gaps that would sum a partial window; that is REFUTED (2026-08-11).
+    // /timeseries?timestep=1h OMITS no-trade hours entirely, so a missing interior bucket carries zero
+    // volume and the sum is still complete — measured across 120 sampled items, every series this guard
+    // accepted with FEWER than 24 in-window buckets was bit-identical to the per-item endpoint, down to
+    // a single-bucket series. A `buckets === 24` requirement would be strictly worse: it would reject
+    // correct sparse (thin-item) series wholesale.
+    // Known, accepted cost: the both-ends test does falsely reject some thin series whose composed value
+    // was already exact. The fallback is the per-item /24h?id= read, which is currently correct at every
+    // call site, so no live number moves — it degrades the correction, it does not corrupt a figure.
     if (earliest <= from && latest >= anchor) {
       const r = rolling24FromTs1h(ts1h, now);
       if (r && ((r.highPriceVolume || 0) > 0 || (r.lowPriceVolume || 0) > 0)) return { vol24: r, volSrc: 'rolling', buckets };

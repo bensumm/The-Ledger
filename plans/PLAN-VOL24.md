@@ -48,17 +48,28 @@ So today `/24h` serves a **complete and exact UTC-day aggregate** — bit-exact 
 ⚠ **But note what does and does not establish that.** The ±10% band above is weak evidence: an offset
 scan over 61 candidate windows across ±30h found **39 of 53** evaluable offsets land inside ±10%, and
 offset −1h scores 244/247 (median 1.0031) — nearly indistinguishable from offset 0. What actually
-establishes the window is **exact integer equality on both hpv and lpv: 247/247 at offset 0, 0/247 at
-every other offset**, plus `T % 86400 == 0`. Cite that, not the ratio.
+establishes the window is **exact integer equality on both hpv and lpv**, plus `T % 86400 == 0`. Cite
+that, not the ratio.
+
+⚠ **The "0/247 at every other offset" figure was sample-specific and is corrected.** Re-run 2026-08-11
+over the **full two-sided market** (3,767 items, `T = 1786233600`, with `/24h` re-read after the scan to
+confirm T had not advanced): **offset 0 → 3767/3767 bit-exact**, offset −1h → 414/3767, offset +1h →
+383/3767. The discrimination is overwhelming, but it is not literally zero off the true window — a thin
+item whose boundary hours carry no trades matches at ±1h as well. The earlier 0/247 came from a
+coverage-filtered 247-item sample and does not generalize past it.
 
 An earlier version of this section offered "the archive's own FWD/BACK ratio is the identical
 1.102/39%" as a *control*. It is a **tautology** — since endpoint == FWD exactly, endpoint/BACK ≡
 FWD/BACK by construction, computed over the same rows. Retracted. The conclusion (that BACK's near-1.0
 is day-to-day volume similarity) still holds; it just wasn't shown by that number.
 
-**What is broken now is STALENESS, not magnitude.** T lagged **71.3h** on 2026-08-10 and **48.1h** on
-2026-08-11 — the anchor advances a day at a time, so the endpoint reports a whole day that closed 2–3
-days ago. The under-report ratio that justified this plan now measures **~1.0×**, not 10–27×.
+**What is broken now is STALENESS, not magnitude.** T lagged **71.3h** on 2026-08-10 and **48.9h** on
+2026-08-11 — the anchor advances a day at a time. State the defect against the day's **CLOSE**, not
+against T: the served day closes at `T+24h`, so those two lags mean the day closed **47.3h** and
+**24.9h** before the reads, i.e. the newest data is **~24–48h old** and the aggregate spans 24–72h back.
+(An earlier version of this paragraph said "a whole day that closed 2–3 days ago" — that conflated the
+age of T with the age of the DATA and is **retracted**; it also contradicted the very numbers printed
+beside it.) The under-report ratio that justified this plan now measures **~1.0×**, not 10–27×.
 
 **Why it changed is UNKNOWN — do not invent a mechanism.** An earlier version of this section claimed
 the endpoint "served a partial, still-accumulating day in July and now waits for the day to close,
@@ -78,11 +89,26 @@ story that replaced it. State the two measurements in their own tense and stop t
   not against `/24h`" is **false**: the floors were *solved on* rolling but *anchored to* a raw-`/24h`
   quantity (§Step 2 below — count-matched to "the same item count the old floor did under legacy").
   The conclusion survives on direct check of the design targets, which is the evidence that belongs
-  here: `FLOOR` 3500 admits **820** today against a July target of 884; `CHURN_MIN_VOL` 65000 admits
-  **364** against 361; `DIP_LOOP_LIQUID_FLOOR` 40000 admits **428** against 438. Nothing is mis-gating.
+  here. ⚠ **The counts first written here (820 / 364 / 428) were WRONG and are corrected** — they were
+  taken from a review agent's output and propagated without being re-derived, the exact failure this
+  plan elsewhere warns about. Re-derived independently 2026-08-11 (the `eachLiquidCandidate` predicate
+  applied to `loadAll24hRolling`, 4,152 items):
+
+  | constant | value | admits today | July target |
+  | --- | --- | --- | --- |
+  | `FLOOR` / `VALUE_LIQ_FLOOR` | 3,500 | **943** | 884 |
+  | `CHURN_MIN_VOL` | 65,000 | **378** | 361 |
+  | `DIP_LOOP_LIQUID_FLOOR` | 40,000 | **450** | 438 |
+  | `GP_FLOOR` (thin gp-flow hatch) | 4,500m | **88** | 89 |
+
+  Nothing is mis-gating — but note the **direction inverts** from what was first written: all four sit
+  *at or slightly above* their targets (+2% to +7%), so `FLOOR` **over**-admits by ~7%, it does not
+  under-admit. The old text had it backwards as well as off by 13%.
   (A re-solve against *today's* legacy distribution suggests `FLOOR ≈ 47` and "2.5–3× too strict" —
   that is wrong, because today's legacy distribution is ≈ true volume and is not the target the gate
-  was ever built on. Do not re-solve on it.)
+  was ever built on. Do not re-solve on it. Measured for the record: `FLOOR` 50 on the raw bulk `/24h`
+  map now admits **2,426**, not the 884 that was July's count-match anchor — which is the whole reason
+  that re-solve is invalid.)
 - The `~10–27×` figure is HISTORY. Do not restate it in the present tense. The ONE home for the
   current description is the `marketfetch.mjs` `loadAll24hRolling` header.
 
@@ -93,7 +119,7 @@ The tool's `Vol/d` column and every liquidity gate/rank consume
 rolling-24h window.** Live probing showed:
 
 - The `/24h` response (bulk AND per-item — identical **← NO LONGER TRUE, see the re-measurement above:
-  per-item is now the correct trailing-24h while bulk is a 2–3-day-stale UTC day**) carried a `timestamp` field ~26h stale, and the
+  per-item is now the correct trailing-24h while bulk is a complete UTC day whose newest data is ~24–48h old**) carried a `timestamp` field ~26h stale, and the
   served hpv/lpv **exactly matched** (zero delta, both sides, multiple items) the sum of the `/5m`/`/1h`
   buckets over just the **first 1–3 hours of that stale UTC day**.
 - Across 14 days of `/24h?timestamp=` daily buckets (and the identical `/timeseries?timestep=24h`), every

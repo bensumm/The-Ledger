@@ -5,12 +5,19 @@
  * WHY THIS FILE EXISTS. On 2026-08-10 the ENTIRE correction was reverted as a mutation experiment —
  * `vol24FromInputs` made to return the raw endpoint value unconditionally — and all 109 suites passed.
  * Nothing anywhere pinned it. That is the strongest possible statement of a test gap, and this file
- * closes it: every assertion below fails under that mutation.
+ * closes it: the suite FAILS under that mutation, which is what a pin has to do.
+ * ⚠ Be precise about how much it fails by. This line used to claim "every assertion below fails under
+ * that mutation"; measured 2026-08-11 by building the mutation as a shim and running this file against
+ * it, THREE of the thirteen groups fail (the mutation guard, the F4 anchor-boundary case, and the F5
+ * bucket count) and ten pass. Ten passing assertions are ones that hold under a broken implementation
+ * and therefore carry no weight ALONE — that is normal for a suite that also pins window arithmetic and
+ * degradation shape, but it is not what the old sentence said.
  *
- * WHAT IS ACTUALLY BROKEN (re-measured 2026-08-10 — the ONE home is the loadAll24hRolling header):
+ * WHAT IS ACTUALLY BROKEN (re-measured 2026-08-11 — the ONE home is the loadAll24hRolling header):
  *   • BULK /24h        — a complete, bit-exact UTC-DAY aggregate whose newest data is ~24–48h old. Genuinely
  *                        broken as a trailing-24h source; loadAll24hRolling is the load-bearing fix.
- *   • PER-ITEM /24h?id= — currently the TRUE trailing-24h (22/24 bit-identical to the composed value).
+ *   • PER-ITEM /24h?id= — currently the TRUE trailing-24h (19/24 bit-identical to the composed value on a
+ *                        stratified n=24 sample; every disagreement was the COMPOSED side falling short).
  *                        So `vol24FromInputs` is presently a NO-OP in production. It is kept as
  *                        zero-fetch insurance, and these tests pin the MECHANISM so a future
  *                        regression (or another silent endpoint change) is caught rather than assumed.
@@ -110,7 +117,8 @@ ok('F4 — the boundary case: a series ending EXACTLY at the anchor is still acc
   assert.equal(volSrc, 'rolling', 'the guard must not be off-by-one against a perfectly-covering series');
 });
 
-// --- F5: bucket count is reported so callers can judge coverage ------------------------------
+// --- F5: bucket count is reported as a DIAGNOSTIC (no production caller reads it — see the
+//         vol24FromInputs header; this test is currently the only thing exercising the field) ---
 ok('F5 — `buckets` reports how many in-window buckets backed the answer', () => {
   assert.equal(vol24FromInputs({ vol24: RAW, ts1h: series({ n: 24 }) }, NOW).buckets, 24);
   assert.equal(vol24FromInputs({ vol24: RAW, ts1h: series({ n: 6 }) }, NOW).buckets, 6);

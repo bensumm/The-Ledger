@@ -2218,7 +2218,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     arithmetic + both-ends exclusivity, VWAP volume-weighting, the degradation contract (absent /
     too-short / all-zero series), **F4's both-ends coverage guard** (a series reaching back far enough
     but stopping short of the anchor used to sum a PARTIAL window while still reporting
-    `volSrc:'rolling'` — measured at 4/24 items, 3 under-reporting by >1%), F5's `buckets` count, and
+    `volSrc:'rolling'` — measured on one stratified n=24 sample at 10/24 items with short coverage, of
+    which 5 were still bit-exact because the missing hour had no trades and 2 under-reported by >1%;
+    an earlier "4/24, 3 under-reporting" figure came from a different probe and was incompatible with
+    the "22/24 bit-identical" published beside it), F5's `buckets` count (DIAGNOSTIC — no production
+    caller reads it, or `volSrc`; this test is the only thing exercising either field), and
     F7 (a string-timestamped series degrades SAFELY — `rolling24FromTs1h`'s `>=` would coerce it while
     the guard's `Number.isFinite` does not; the disagreement is real and pinned in its safe direction).
     Mutation-proven twice — disabling the correction fails the guard test, restoring the old

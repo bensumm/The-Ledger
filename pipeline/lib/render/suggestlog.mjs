@@ -106,9 +106,14 @@
  *     volDayRolling?,  (PLAN-VOL24 2026-07-13 — the CORRECTED trailing-24h volume {hpv,lpv} from the
  *               /1h grain (the BULK /24h endpoint is unusable as a trailing-24h source — it serves a
  *               complete UTC-day aggregate whose newest data is ~24–48h old; the "frozen ~1–3h slice"
- *               reading is 2026-07 history, see the marketfetch.mjs loadAll24hRolling header); logged BESIDE
- *               the active legacy volDay/class for the floor-recalibration retro-join. Lean-included;
- *               absent when no 1h series was in hand — e.g. watchlist rows.)
+ *               reading is 2026-07 history, see the marketfetch.mjs loadAll24hRolling header); intended as a
+ *               shadow BESIDE the active volDay/class for the floor-recalibration retro-join. ⚠ CORRECTED
+ *               2026-08-11: it shadows nothing. `suggestionEntry` has never written a `volDay` field at all
+ *               — 0 of 7,290 logged rows carry one; only the coarse `class` bucket is stored. And the word
+ *               "legacy" here was wrong twice over: it is the term this file's own :594 comment retracted,
+ *               and since `rolling` became the screen DEFAULT this field DUPLICATES the gating quantity
+ *               rather than shadowing an alternative to it. Lean-included; absent when no 1h series was in
+ *               hand — e.g. watchlist rows.)
  *     grade?,  (AZ-forward 2026-07-12 — the rating LETTER as rendered then ('S+'…'D', incl. any
  *               thin/sub-floor cap), so the grade-clumping audit can segment without parsing
  *               `verdict` (which watch-positions.mjs uses for action verdicts); lean-included, screen supplies
@@ -258,8 +263,13 @@ export function readSuggestionLines({ ledger = LEDGER, archiveDir = ARCHIVE_DIR 
 // two-sided practical floor (~100/d) and a rough liquid cutoff. watch-positions.mjs instead passes its
 // richer classify() taxonomy label (FALLING / THIN_BIG_TICKET_VOLATILE / …) — that IS "the label
 // as computed then" for that script.
-// liqClassOf(volDay) is the raw-number core (join-outcomes.mjs joins on stored volDay, no row); liqClass(row)
-// is the row convenience wrapper. ONE threshold set (X1 dedup — was copied as liqClassOf in join-outcomes.mjs).
+// liqClassOf(volDay) is the raw-number core; liqClass(row) is the row convenience wrapper. ONE threshold
+// set (X1 dedup — was copied as liqClassOf in join-outcomes.mjs).
+// ⚠ CORRECTED 2026-08-11: this said join-outcomes.mjs "joins on STORED volDay". It does not, and there is
+// no stored volDay to join on (see the volDayRolling note above). join-outcomes.mjs:171/225/244 RECOMPUTES
+// the figure from a live v24 map and logs it under a different name, `volDayCurrent` — a present-day
+// liquidity read, NOT the volume as it stood when the suggestion was made. Don't reason about that join
+// as if it were point-in-time.
 // NY2.4: this 'thin' (volDay < 100) is DISTINCT from screen-flip-niches.mjs's grade-capping `thin` (the gp-flow-only
 // admission path, limitVol < 50). Because volDay == limitVol, an item at 50–99/day logs class:'thin'
 // here yet is NOT gp-flow-thin, so it grades on merit — a class:'thin' + high grade in the ledger is
@@ -591,10 +601,13 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   if (grade != null)         e.grade = grade;
   // PLAN-VOL24 (2026-07-13) — the CORRECTED trailing-24h volume { hpv, lpv } composed from the /1h
   // grain (marketfetch.rolling24FromTs1h, off an already-fetched 1h series → zero new fetch), logged
-  // BESIDE `volDay`/`class`. ⚠ STALE COMMENT, corrected 2026-08-10: this said the active volDay "still
+  // BESIDE `class`. ⚠ STALE COMMENT, corrected 2026-08-10: this said the active volDay "still
   // come[s] from the broken /24h endpoint until the floors are recalibrated". Step 2 SHIPPED 2026-07-13 —
-  // `rolling` is the screen DEFAULT and the floors ARE recalibrated. This is the "start collecting real numbers" shadow:
-  // F1/the recalibration read the true distribution from here without any live gate/display flipping.
+  // `rolling` is the screen DEFAULT and the floors ARE recalibrated. ⚠ AND AGAIN 2026-08-11: that fix left
+  // "BESIDE `volDay`/`class`" standing. There is no logged `volDay` — 0 of 7,290 rows have one. So this is
+  // not a shadow of an alternative source; with `rolling` as the default it now records the SAME quantity
+  // the gate used. Still worth logging (it is the only per-row volume in the ledger at all), just don't
+  // read it as an A/B against a broken sibling — there is no sibling.
   // Lean-included (YS2 pattern): a caller with no 1h series in hand (watchlist rows) supplies null →
   // no field → byte-identical shape.
   if (volDayRolling != null) e.volDayRolling = volDayRolling;
