@@ -28,7 +28,7 @@ import {
   reachFraction,   // RB-3 (PLAN-RECENCY-BASIS): the ONE recency-basis rule (full default / recent opt-in)
   MIRAGE_PLACEMENT, DEADBID_PFILL_FLOOR, symmetricExemptionHolds,   // EF1 (PLAN-ESTIMATOR-FIDELITY): the placement-bounded churn exemption + the dead-bid reprice floor
   PFILL_PRIOR, PFILL_DEPTH_SLOPE, PFILL_BREAKDOWN_PENALTY, PFILL_ASKREACH_FLOOR,
-  TTF_INTRADAY_PRIOR_SEC, TTF_MULTIDAY_PRIOR_SEC, TTF_REF_VOL, TTF_SAT_DAYS,
+  TTF_INTRADAY_PRIOR_SEC, TTF_MULTIDAY_PRIOR_SEC, TTF_REF_VOL, TTF_SAT_DAYS, TTF_VEL_MAX,   // TTF_VEL_MAX — the 0.74.2 zero-volume pin
   RISING_PFILL_CONFIRMED, RISING_PFILL_UNCONFIRMED,
 } from '../lib/signal/estimators.mjs';
 
@@ -130,6 +130,27 @@ ok('intraday ttf: deeper book (higher volume) is faster than the prior; a real v
   // a measured velocity overrides the prior and carries its n.
   const v = ttfIntraday({ velocity: { medianFillSec: 1234, n: 7 }, volDay: 5 });
   assert.equal(v.value, 1234); assert.equal(v.n, 7); assert.equal(v.basis, 'velocity');
+});
+
+/* REGRESSION PIN (0.74.2) — a MEASURED zero volume must rank as the WORST book, never as "no data".
+   The bug: `volDay > 0` guards sent zero down the same path as null, so a no-trade item got the
+   unscaled 12h prior AND its full buy limit as one lap, taking rank #1 of the Finder board. The
+   direction is what matters — assert zero is slower than a barely-traded item, not a magic constant. */
+ok('zero volume is the SLOWEST book, not the unscaled prior — and null (unknown) keeps the prior', () => {
+  const zero   = ttfIntraday({ volDay: 0 });
+  const barely = ttfIntraday({ volDay: 3 });
+  const unknown = ttfIntraday({ volDay: null });
+  assert.ok(zero.value >= barely.value,
+    `a no-trade item must not be modelled as FASTER than a 3-unit one (zero ${zero.value}s vs barely ${barely.value}s)`);
+  assert.ok(zero.value > TTF_INTRADAY_PRIOR_SEC, 'zero volume must be slower than the reference-volume prior');
+  assert.equal(zero.value, TTF_INTRADAY_PRIOR_SEC * TTF_VEL_MAX, 'zero pins to the slowest factor we model');
+  assert.equal(unknown.value, TTF_INTRADAY_PRIOR_SEC,
+    'UNKNOWN is not measured-zero: a missing /24h map must keep the wide prior, not a fabricated worst case');
+  // the lapUnits half of the same bug: zero feasible depth cannot buy a full buy limit.
+  assert.equal(churnLapUnits({ limit: 25_000, volDay: 0 }), 1, 'zero volume → a one-unit lap, NOT the whole limit');
+  assert.equal(churnLapUnits({ volDay: 0 }), 1, 'zero volume, no limit → one unit');
+  assert.equal(churnLapUnits({ limit: 25_000, volDay: null }), 25_000,
+    'UNKNOWN depth still bounds the lap by the buy limit — only a measured zero collapses it');
 });
 
 /* --- value family math ---------------------------------------------------------------------------- */

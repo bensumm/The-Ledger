@@ -257,7 +257,7 @@ live: Soul rune Vol/d 477k(broken) → **9.82m** rolling, pressure recomputed, r
 book computes its real small volume and degrades sanely. Also landed the **CI import-resolution guard**
 (`pipeline/import-check.mjs` → `checks.yml`) that closes the gap which let a missing export ride onto main.
 
-### Step 3 — SHIPPED 2026-08-11 in APP_VERSION 0.74.0
+### Step 3 — SHIPPED 2026-08-10 in APP_VERSION 0.74.0 (`195c074`)
 Originally scoped as "the app's `/24h` read is broken". ⚠ **That framing was wrong twice and the record
 should show both.** (1) The app's per-item read was never the *broken* endpoint — both `/24h` variants
 serve complete UTC-DAY aggregates and per-item is the fresher one (see the ONE HOME block in
@@ -272,10 +272,29 @@ book, and a `volDay > 0` guard that disabled the grade cap for zero-volume items
 the app's S+ grades** (count drifts 66–95 by hour; the ratio does not), all of them search-only rows
 that fail the browse liquidity gate. Pinned by `smoke-test.mjs`'s paired volDay assertion.
 
-Still open, deliberately NOT in that change: `estimateRank` treats `volDay === 0` as *unknown* rather
-than *worst*, so a zero-volume item ranks at parity with a 1,000/day one — the LETTER is capped but the
-Finder sorts on rank. That is a shared-module change (`js/estimators/families.mjs`) and needs its own
-commit and its own pin.
+Deferred out of that change and now SHIPPED as Step 4 below: `estimateRank` treated `volDay === 0` as
+*unknown* rather than *worst*. ⚠ The severity recorded here was **understated** — "ranks at parity with
+a 1,000/day one" is true of the TTF prior in isolation, but measurement showed a zero-volume item was
+modelled as *faster* than a 3-unit one (12h vs 48h, because 3 units hits `TTF_VEL_MAX` and zero skipped
+the scaling entirely), and `churnLapUnits` separately handed it its whole buy limit as one lap.
+
+### Step 4 — SHIPPED 2026-08-11 in APP_VERSION 0.74.2
+The rank half of Step 3. Three escapes of the same shape — a MEASURED zero falling through guards
+written for MISSING data — fixed together: `ttfIntraday`'s unscaled prior, `churnLapUnits`' `Infinity`
+feasible depth, and `desirabilityOf` reading an item ABSENT from a present `/24h` map as null.
+
+That third one was not on the list; it turned up while measuring the first two, and it was the larger
+share of the board. Absence from a full map is a measurement of zero, not missing data: **0.0% of the
+178 absent items traded during the day that map covers** (median last trade 66h old) against a
+present-item median of 0h. `vol24Of(id)` in `js/market.js` is now the ONE home for the
+measured-zero-vs-unknown distinction; an unusable MAP still returns null and still keeps the wide prior.
+
+Effect on one live snapshot (2,770-item pool, same cached fetch): no-trade items in the top 50 **29 →
+10**, top 100 **47 → 24**, real traded items in the top 20 **10 → 14**, `maxRank` 69.3M → 41.6M. It does
+NOT clear the class — six untraded items remain in the top 20 because rank is dominated by nominal
+`net`. Pinned in `estimators.test.mjs` on the DIRECTION (zero ≥ 3-unit latency), mutation-tested in both
+halves. `js/trends.js`'s `it.volume*24` header went with it — the same extrapolation this plan rejected,
+still shipping in the app until now. Full writeup: CHANGELOG 0.74.2.
 
 ### Combined-effect verification (2026-07-13, applied config: rolling + new floors + MIN_GPD 500k)
 `node pipeline/screen.mjs --mode all --stats` on the EXACT applied config:

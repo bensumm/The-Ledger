@@ -237,8 +237,20 @@ export function ttfIntraday(ctx = {}) {
   const vel = c.velocity;
   if (vel && num(vel.medianFillSec) != null && num(vel.n)) return estR(Math.round(vel.medianFillSec), vel.n, 'velocity');
   const volDay = num(c.volDay);
+  // A MEASURED zero is the SLOWEST book we model, not the unscaled prior. Until 0.74.2 the `> 0` test
+  // sent zero down the `factor = 1` path, so an item that traded NOTHING was modelled at the 12h
+  // reference-volume prior while an item that traded 3 units hit TTF_VEL_MAX (48h) — i.e. a no-trade
+  // item was modelled as flipping 4× FASTER than a barely-traded one, and it took rank #1 of the whole
+  // Finder board (measured 2026-08-11: 222 zero-volume items in the browse pool, 4 in the top 20, 12 in
+  // the top 50; #1 was also the maxRank denominator, so it squashed every real item's rating bar).
+  // Zero now gets its own branch; the `> 0` test remains only to keep the division safe.
+  // NULL stays on the unscaled prior DELIBERATELY — unknown ≠ measured-zero. The distinction is owned by
+  // js/market.js's desirabilityOf header: an item absent from a PRESENT /24h map traded zero (measured:
+  // 0.0% of them traded during the day the map covers) and maps to 0; null is reserved for an
+  // UNAVAILABLE map, where a wide prior is the honest answer rather than a fabricated worst case.
   let factor = 1;
-  if (volDay != null && volDay > 0) factor = clamp(Math.sqrt(TTF_REF_VOL / volDay), TTF_VEL_MIN, TTF_VEL_MAX);
+  if (volDay != null && volDay <= 0) factor = TTF_VEL_MAX;
+  else if (volDay != null && volDay > 0) factor = clamp(Math.sqrt(TTF_REF_VOL / volDay), TTF_VEL_MIN, TTF_VEL_MAX);
   return estR(Math.round(TTF_INTRADAY_PRIOR_SEC * factor), 0, 'volume-velocity-prior');
 }
 
@@ -268,7 +280,13 @@ export function ttfRising() {
 export function churnLapUnits(ctx = {}) {
   const c = ctx || {};
   const limit = num(c.limit), volDay = num(c.volDay);
-  const feasible = (volDay != null && volDay > 0) ? volDay : Infinity;
+  // A MEASURED zero means zero feasible depth, so the Math.max(1,…) floor takes it down to a one-unit
+  // lap. Until 0.74.2 this read `volDay > 0 ? volDay : Infinity`, which handed a no-trade item its
+  // ENTIRE buy limit as one lap — and estimateRank multiplies lapUnits straight into the rank, so the
+  // escape was a rank multiplier, not a rounding error. Infinity remains correct for NULL (depth
+  // unknown → the buy limit is the only bound we can honestly claim). See ttfIntraday's header for the
+  // measured-zero vs unknown distinction; both escapes were the same bug.
+  const feasible = (volDay != null) ? volDay : Infinity;
   if (limit != null && limit > 0) return Math.max(1, Math.min(limit, feasible));
   return (volDay != null && volDay > 0) ? volDay : 1;   // no known limit → a single volume-bounded lap
 }

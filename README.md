@@ -69,7 +69,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   + one cached `fetchTs`/`fetch24h` store, A2), `market.js`
   (price/guide fetch + scoring; keeps the bond in the catalog — searchable — with a
   bond-aware Finder margin via `bondMarginOpts`; AP4 `desirabilityOf` computes the Finder's shared
-  rank + Desirability grade off `js/estimators.mjs`+`js/rating.mjs`), `trends.js` (archive + seasonal analysis +
+  rank + Desirability grade off `js/estimators.mjs`+`js/rating.mjs`. **`vol24Of(id)` (0.74.2) is THE ONE
+  HOME for turning `STATE.VOL24` into a daily volume** — every reader goes through it so the
+  absent-vs-unavailable rule cannot be re-derived per call site: an item ABSENT from a PRESENT `/24h`
+  map traded ZERO (measured — 0.0% of absent items traded during the day the map covers), while a
+  null return means the MAP is unusable and the consumer must keep its wide prior. Consumed by
+  `desirabilityOf` and by `trends.js`'s item header), `trends.js` (archive + seasonal analysis +
   regime/patient/backtest — renders the Trends view; pure analytics live in
   `trendcore.js`; TV — also renders the **Diurnal timing** section via the shared
   `windowread.mjs` `hourProfile`/`deriveDiurnalRange` + a `charts-interactive.js` bar chart + an

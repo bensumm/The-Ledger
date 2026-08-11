@@ -253,18 +253,44 @@ export function ratingParts(it, staleRisk){
    64% of the pool and 74 of the visible top 80, re-creating the flat wall of A- this fix removed. The
    console's 3,500 is an ADMISSION floor paired with a gp-flow escape hatch; the Finder has no admission
    gate, so they are not interchangeable. Fixing the unit is what makes 50 correct for the first time.
-   Null volDay (fetch degraded / item absent) flows honestly: liqFactor → 0.5, ttfIntraday → its 12h
-   prior. Wide, not fabricated.
+   Null volDay means ONE thing: the /24h MAP is unavailable (fetch degraded / rejected / too stale). It
+   flows honestly — liqFactor → 0.5, ttfIntraday → its 12h prior: wide, not fabricated. An item ABSENT
+   from a PRESENT map is NOT null — it is 0, because it did not trade (0.74.2; the measurement and the
+   refuting test are on vol24Of below). Conflating the two is what let 178 no-trade items rank off the
+   unscaled prior, six of them inside the Finder's top 20.
    No confirmable multi-day regime here ⇒ the uniform 0.85 regime haircut applies to every row (a constant
    — it shifts all grades, not the ordering). Bond rides its tax-exempt retrade-fee opts so it can't grade
    off a phantom spread. */
 const FINDER_SPEC = { estimator: 'intraday', priceBasis: 'quick' };
 const THIN_VOL_DAY = 50;   // daily limiting-side floor for the grade cap — see the header on why NOT 3,500
+
+/* vol24Of(id) — THE ONE HOME for turning STATE.VOL24 into a daily volume. Every reader goes through
+   here so the absent-vs-unavailable rule below can't be re-derived (and re-broken) per call site.
+   Returns null ONLY when the MAP itself is unusable; otherwise { limiting, total, traded }.
+
+   ABSENT FROM A PRESENT MAP MEANS ZERO, NOT UNKNOWN (measured 2026-08-11, 0.74.2). The endpoint lists
+   items that traded; an item missing from a full 4,152-item map did not trade that day. The refuting
+   test: if absence meant "untracked", absent items' last-trade times would resemble present items'.
+   They don't — 0.0% of the 178 absent items traded during the day the map covers (median last trade
+   66h old, p25 37h) vs a present-item median of 0h. Reading absence as null sent them to ttfIntraday's
+   unscaled 12h prior, which put six of them in the Finder's top 20.
+   The two causes must stay distinguishable: a MISSING MAP (fetch failed / VOL24_MIN_ITEMS rejected /
+   past VOL24_STALE_MAX) is genuinely unknown and must keep the wide prior — fabricating a worst case
+   there would punish every item on a degrade. `STATE.VOL24` null → null; entry missing → 0. */
+export function vol24Of(id){
+  if(!STATE.VOL24) return null;                                  // map unusable → UNKNOWN, honestly wide
+  const v=STATE.VOL24[id];
+  if(!v) return {limiting:0, total:0, traded:false};             // map present, item absent → it did not trade
+  const hpv=v.highPriceVolume||0, lpv=v.lowPriceVolume||0;
+  return {limiting:Math.min(hpv,lpv), total:hpv+lpv, traded:true};
+}
+
 export function desirabilityOf(it){
-  // DAILY two-sided limiting side. No `||` fallback: 0 is a real answer (one-sided book) and null is a
-  // real answer (no daily data) — both must survive to the cap and to liqFactor.
-  const v=(STATE.VOL24 && STATE.VOL24[it.id])||null;
-  const volDay=v?Math.min(v.highPriceVolume||0, v.lowPriceVolume||0):null;
+  // DAILY two-sided limiting side. No `||` fallback: 0 is a real answer (one-sided book, or an item
+  // that did not trade) and null is a real answer (the map is unavailable) — both must survive to the
+  // cap and to liqFactor. vol24Of owns which of the two an absent entry is.
+  const v=vol24Of(it.id);
+  const volDay=v?v.limiting:null;
   const bo=bondMarginOpts(it.id);
   const row={ quickBuy:it.low, quickSell:it.high, optBuy:null, optSell:null, band:null, mom:null,
     regime:null, rising:false, falling:false, volDay, mid:(it.low+it.high)/2, limit:it.limit,

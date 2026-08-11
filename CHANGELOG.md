@@ -10,6 +10,69 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.74.2 — a measured zero stops reading as "no information" (2026-08-11)
+
+**`APP_VERSION` 0.74.1 → 0.74.2.**
+
+0.74.0 stopped a zero-volume item from *grading* S+. It did not stop one from *ranking* #1, and the
+Finder's default sort is the rank (`js/ui.js` `defaultKey:'score'` → `desir.rank`), so the fix was
+half-delivered. Three escapes, all the same bug — **a measured zero was falling through the guards
+written for missing data**:
+
+1. **`ttfIntraday` (`js/estimators/families.mjs`).** `if (volDay != null && volDay > 0)` sent zero down
+   the `factor = 1` path, i.e. the unscaled 12h prior — the latency of an item trading at
+   `TTF_REF_VOL` (1,000/day). An item trading **3 units** hit `TTF_VEL_MAX` and got 48h. So a
+   **no-trade item was modelled as flipping 4× faster than a barely-traded one**. That inversion, not
+   the magnitude, is the bug.
+2. **`churnLapUnits` (same file).** `volDay > 0 ? volDay : Infinity` gave a zero-volume item unbounded
+   feasible depth, so its lap size became its **entire buy limit**. `estimateRank` multiplies
+   `lapUnits` straight into the rank — a rank multiplier, not a rounding error.
+3. **`desirabilityOf` (`js/market.js`) read absence as null.** An item missing from the `/24h` map was
+   treated as unknown liquidity and given the same wide prior. It is not unknown — it did not trade.
+
+**The third one was found by measuring, not by reading.** The refuting test: if absence meant
+"untracked", absent items' last-trade times would resemble present items'. They don't — of 178 items
+absent from a full 4,152-item map, **0.0% traded during the day that map covers** (median last trade
+66h old, p25 37h) against a present-item median of 0h. Absence is a measurement of zero.
+
+The distinction that had to survive is *measured-zero vs unknown*, and it now has exactly one home:
+`vol24Of(id)` in `js/market.js`. A missing **map** (fetch failed / `VOL24_MIN_ITEMS` rejected / past
+`VOL24_STALE_MAX`) still returns null and still keeps the wide prior — fabricating a worst case there
+would punish the whole board on a degrade, which is the mirror of the bug being fixed. A missing
+**entry in a present map** returns 0. `liqFactor` already floors both at 0.5, so no grade moves on
+that account; what moves is the rank.
+
+**Measured on one live snapshot, before vs after (2,770-item browse pool, same cached fetch):**
+
+| | before | after |
+| --- | --- | --- |
+| no-trade items in the top 20 | 10 | 6 |
+| no-trade items in the top 50 | 29 | 10 |
+| no-trade items in the top 100 | 47 | 24 |
+| real traded items in the top 20 | 10 | 14 |
+| `maxRank` (the rating-bar denominator) | 69,333,271 | 41,632,649 |
+
+**Be honest about what this does NOT fix:** six untraded items remain in the top 20. Rank is
+`net × pFill ÷ TTF`, and a 100M+ item with a wide nominal spread outranks a real flip even after a 4×
+TTF penalty. This change removes the inversion and demotes the class; it does not clear it. The
+`net`-dominance of the rank is a separate, unmeasured lever — see the deferred `TTF_REF_VOL`
+re-anchoring, which needs `GRADE_CUTOFFS` moved with it.
+
+**`js/trends.js` was still rendering the extrapolation 0.74.0 rejected.** The item header printed
+`~fmt(it.volume*24)+'/day'` off the `/1h` figure while real daily volume sat unused in `STATE.VOL24`.
+It now shows the measured daily **limiting side** via `vol24Of`. Two bugs died with the `×24`: the
+extrapolation itself (hourly-min×24 is a median 0.10 of true daily with 44% zeros over 1.25M
+item-hours), and the fact that `it.volume` is the **sum** of both sides — so a one-sided book rendered
+as liquid. Verified in a real browser against a stubbed market: a one-sided book that would have
+printed `~24k/day` now prints `0/day limiting side`, and an item absent from the map prints `0/day`
+rather than a guess. An unusable map drops the clause instead of inventing one.
+
+**Pinned, and the pin was proven able to fail.** `pipeline/test/estimators.test.mjs` asserts the
+*direction* (zero is not faster than 3 units) rather than a magic constant, plus that null keeps the
+prior and that a zero-volume lap is 1 unit rather than the whole limit. Both halves were
+mutation-tested: reverting either escape turns the suite red with the real numbers in the assertion
+message (`zero 43200s vs barely 172800s`). 110 suites, all 8 CI guards, and the browser smoke pass.
+
 ### 0.74.1 — the Watch tab stops painting CUT on fresh fills; a dropped-argument guard (2026-08-10)
 
 **`APP_VERSION` 0.74.0 → 0.74.1.**

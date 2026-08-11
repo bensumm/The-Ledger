@@ -8,7 +8,7 @@ import { hourProfile, deriveDiurnalRange, windowStats, windowReliability, fitWin
 import { reachValidator, floorValidator, trajectoryValidator } from './validate.mjs';   // TV: validator notes split across their viz (inform-only)
 import { termStructure } from './termstructure.mjs';                         // TV: durable multi-week floor/ceiling/typical-swing + trajectory shape (shared)
 import { diurnalForecast, fmtEta, driftExitFrom } from './forecast.mjs';                    // TV: forward 24h projection off the daily rhythm (shared, provisional n≈0); driftExitFrom (PLAN-OSCILLATION-CYCLE Chunk 5) — the drift-adjusted exit LEVEL beside the forecast readout
-import { fetchGuideSeries, resolveItem, resolveId, searchCatalog, rebuildDatalist, coarseTrend, refineTrend } from './market.js';
+import { fetchGuideSeries, resolveItem, resolveId, searchCatalog, rebuildDatalist, coarseTrend, refineTrend, vol24Of } from './market.js';   // vol24Of (0.74.2) — the ONE home for STATE.VOL24 → daily volume, so the head can't fork the absent-means-zero rule
 import { toggleWatch } from './ui.js';
 import { switchTab } from './main.js';
 import { regimeDrift, regimeLabel, momVerdict, momCell, breakEven, phase } from './quotecore.js';   // shared impls (regime + regimeLabel classification mapping + cut-trigger + T2 momentum token + tax-capped break-even) so quotes/positions/Trends reuse them; phase — the spike/decay shape the forecast refuses to project through (renderForecast; was read off the nonexistent qrow.phase)
@@ -110,7 +110,14 @@ export async function togglePin(id){
 export function renderTrendHead(it){
   const watched=STATE.watchlist.includes(it.id), isPinned=STATE.pinned.includes(it.id), off=!!it.offscreen;
   let h='<div class="trhead"><span class="trhead-name">'+it.name+'</span>';
-  if(it.volume!=null) h+='<span class="trhead-vol" title="units traded in the last hour (both sides) — the liquidity behind these prices">'+fmt(it.volume)+'/hr traded · ~'+fmt(it.volume*24)+'/day</span>';
+  // Daily volume is MEASURED (/24h via vol24Of), never the hour ×24. The old `it.volume*24` was exactly
+  // the extrapolation 0.74.0 removed from the Finder: hourly-min×24 lands at a median 0.10 of the true
+  // daily figure with 44% zeros over 1.25M item-hours. It also read the SUM of both sides, so a
+  // one-sided book looked liquid — the limiting side is what actually caps a fill, so that is what's
+  // shown. A zero prints as 0 (a real answer); an unavailable map drops the clause rather than guessing.
+  if(it.volume!=null){ const v24=vol24Of(it.id);
+    h+='<span class="trhead-vol" title="Hourly: units traded in the last hour, both sides (/1h). Daily: the LIMITING side — min(buys, sells) — over the last complete day (/24h), which is the side that caps a fill. The daily figure is measured, not the hour extrapolated.">'
+      +fmt(it.volume)+'/hr traded'+(v24?' · '+fmt(v24.limiting)+'/day limiting side':'')+'</span>'; }
   if(off) h+='<span class="qtag">quote only · off the flip screen</span>';
   h+='<span class="trhead-acts">';
   h+='<button class="tgl '+(watched?'on':'')+'" data-watch="'+it.id+'">'+(watched?'★ Watching':'☆ Watch')+'</button>';
