@@ -1620,7 +1620,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (`--vol-source legacy` switches to the raw bulk `/24h` — a staleness A/B, NOT a pre-recal repro:
     measured median 1.151× and only 5.2% `FLOOR`-admission disagreement, 2026-08-10; PLAN-VOL24 step 2), with the volume floors recalibrated
     to the corrected distribution; consumed by `screen-flip-niches.mjs` and logged as the `volDayRolling` shadow field for the
-    floor recalibration (`PLAN-VOL24.md`) + `vol24FromInputs(inp)` (PLAN-VOL24 step 2b — the per-item corrected
+    floor recalibration (`PLAN-VOL24.md`; a sibling `volDay` scalar — the raw limiting-side number behind
+    `class` — is logged from 2026-08-11, so `class` is reproducible from the record and a future source
+    split is diagnosable; absent on earlier rows, which are therefore unrepairable) + `vol24FromInputs(inp)` (PLAN-VOL24 step 2b — the per-item corrected
     volume for `quote-items.mjs`/`watch-positions.mjs`: `rolling24FromTs1h` off the in-hand `ts1h`, reassigned onto `inp.vol24`
     so Vol/d + pressure + the dip reference read corrected volume; degrades to the `/24h` read when the 1h series
     is too short)), `cli.mjs` (shared arg/format/table

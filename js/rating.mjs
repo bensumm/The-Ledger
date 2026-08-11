@@ -46,16 +46,17 @@ import { clamp } from './money-math.js';   // shared clamp — was reimplemented
 // Regime stability. Flat = full marks; rising is discounted by froth magnitude (a +5% drift barely
 // dents, a +100% reprice is frothy → size-small territory); an unconfirmed regime takes a mild
 // haircut.
-// ⚠ KNOWN BUG (2026-08-11, NOT FIXED — changes visible grades; needs its own review + APP_VERSION bump).
-// This never reads `row.falling`; `return 1.0` is annotated "flat" but is the catch-all, so a CONFIRMED
-// FALLER gets FULL MARKS: measured falling−40% → 1.000, falling−90% → 1.000, vs rising+40% → 0.753 and
-// unconfirmed → 0.850. A faller outscores an item we merely lack history on — the risk inversion.
-// Its old justification ("only falling-ACCEPTING specs reach here; band/spread/rising/churn exclude
-// fallers") is wrong 3 ways: spread+rising are DELETED; value is knife-guarded not accepting (accepting
-// = scalp, reverse); and fallers arrive anyway. Measured over 8,000 ledger rows: 1,119 falling screen
-// rows, 411 ≥ B-, 8 S+. 1,040 are `watchlist` (bypasses niche exclusion BY DESIGN, so the exclusion
-// premise can never carry this factor); 8 landed in `band`, whose spec excludes — that residue is
-// UNEXPLAINED and worth chasing before fixing.
+// `return 1.0` is the CATCH-ALL, so a confirmed FALLER scores full marks (vs 0.850 unconfirmed, 0.753
+// rising). Looks like a risk inversion. DO NOT ADD A FALLING BRANCH — ruled 2026-08-11, measured:
+//  · `row.falling` never reaches the rank: ctx.regime's only consumer is pFillRising, which tests
+//    'rising', and no shipped spec uses estimator:'rising'. Toggling it is byte-identical.
+//  · 4 factors combine as a GEOMETRIC MEAN, so f lands as f^0.25 (≤15.9% cut) against 2×-wide cutoffs.
+//    The S+ faller that motivated this needs f < 0.16. The lever can't reach it.
+//  · Falling is already handled per-population upstream (surviveMode drop, heldFallingOverride, knife
+//    guards, or accepted as the thesis). A global penalty stacks on all of them — the O6 mistake again.
+//  · flip-niches.mjs's 71d study measured knife +4.08% / rising −7.28% — a mirrored penalty has the
+//    wrong sign. If ever changed anyway: MUST exempt spec.falling==='accept' (scalp is 100% fallers).
+// Full evidence: CHANGELOG 2026-08-11.
 export function regimeFactor(row) {
   if (!row.regime || !row.regime.ok) return 0.85;                 // unconfirmed / too little history
   if (row.rising) return clamp(0.9 - (row.regime.driftPct - 5) / 95 * 0.4, 0.5, 0.9); // +5%→0.9 … +100%→0.5
@@ -76,14 +77,16 @@ export function momFactor(row) {
 
 // Liquidity / exit-ease. Saturating in the limiting-side daily volume: at the practical floor (~50/d)
 // you can barely exit → 0.5; by ~5000/d it's a deep two-sided market → 1.0.
-// ⚠ STALE ANCHORS (2026-08-11, NOT CHANGED — moving F0/F1 changes every grade; own review + bump).
-// F0/F1 encode the PRE-recalibration scale. PLAN-VOL24 §2 moved FLOOR 50 → 3,500 and claimed to sweep
-// "every volume-denominated floor"; MISSED F0/F1, TTF_REF_VOL (families.mjs, landed 4 days before the
-// rebase) and LIQUID_FLOOR_PER_DAY (watch-positions.mjs). None are in that table.
-// Effect: documented as 0.5→1.0, effectively pinned at the top. Over the FLOOR-admitted pool (946):
-// liqFactor == 1.000 on 90.9%; liqFactor(3500)=0.961; F1's "deep market" 5,000/d is now only ~1.4× the
-// admission floor. Same on the TTF side: ttfIntraday sits on its 10,800s floor for 56.7% of the pool.
-// So both factors are near-constant and contribute ~nothing to ordering. Don't assume they discriminate.
+// ⚠ STALE ANCHORS, deliberately NOT changed. F0/F1 are the PRE-recalibration scale (PLAN-VOL24 §2 moved
+// FLOOR 50 → 3,500 and missed these, and TTF_REF_VOL). Derived replacements: F0 3,500, F1 ~150,000
+// (F1 is JUDGMENT — the fit extrapolates 2.5× past its top anchor, 84% LOO error there).
+// UNCHANGED FOR AN ARCHITECTURAL REASON, not caution: the 4-factor geometric mean caps this factor's
+// authority at (0.5)^0.25 = 0.841, a 15.9% score cut, against 2×-wide cutoffs. No F0/F1 can move a
+// grade letter — measured 0 of 73 board rows. Re-anchor for honesty; expect no decision to move.
+// TTF_REF_VOL is the lever with real authority (it rescales the rank BASIS, ~0.274 median ≈ 2 letters)
+// and must ship with a GRADE_CUTOFFS re-anchor. Effect today: liqFactor == 1.000 on ~90.6% of the
+// FLOOR-admitted pool. (Quote no ttfIntraday-floor % without its population: 16.5% all two-sided /
+// 65.0% FLOOR-admitted / 48.6% ≥1,000. A bare "56.7%" published here reproduced on none of them.)
 export function liqFactor(volDay) {
   if (!volDay || volDay <= 0) return 0.5;
   const F0 = 50, F1 = 5000;

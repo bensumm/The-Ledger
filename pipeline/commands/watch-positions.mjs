@@ -146,16 +146,16 @@ function logGuideChanges(items, guide) {
 // CLASSIFICATION taxonomy — tunable named constants, NOT magic numbers.
 // Boundaries are justified in pipeline/MONITORING.md ("Item-type classes"); the
 // short version:
-//   LIQUID_FLOOR_PER_DAY — two-sided daily volume below which a book is "thin". Vol/d here is
-//     already the limiting side (min hi/lo vol) from computeQuote.
-//     ⚠ STALE + NOT FIXED (changing it changes poll CADENCE — behaviour). This value was missed by
-//     PLAN-VOL24 §2's sweep when FLOOR moved 50 → 3,500. Measured: volDay >= 100 holds for 99.66% of
-//     rows, so the 'thin' branch fires on 0.34% (at the recalibrated scale, 66%). A thin big-ticket
-//     lot at 800/d classifies STABLE_LIQUID (15m glance) where 3,500 would give it
-//     THIN_BIG_TICKET_VOLATILE (3m manage) — that branch is near-dead today.
-//     Do NOT re-cite "100/d is codified in CLAUDE.md" — it is not there (zero matches), and
-//     MONITORING.md marks it retired while ALSO arguing it is a separate judgment ghost-spread floor
-//     from the gate's `--floor`. Resolve that contradiction before changing the number.
+//   LIQUID_FLOOR_PER_DAY — two-sided daily volume below which a book is "thin"; steers poll CADENCE.
+//     Same quantity/units/basis as the screen's FLOOR (volDay is vol24FromInputs-corrected at :447).
+//     100 → 3,500 (2026-08-11): PLAN-VOL24 §2's sweep missed it, leaving a pre-correction scale on
+//     which the thin branch was dead — 99.68% of watch rows read liquid, so a thin big-ticket lot got
+//     the 15m glance instead of THIN_BIG_TICKET_VOLATILE's 3m manage. Item-weighted p25 is 431/d.
+//     Value is INSENSITIVE (population is bimodal, p25 431 → p50 73,877; anything in [1k, 40k]
+//     partitions identically) — 3,500 just single-sources with FLOOR. Risk is ONE-WAY: it only polls
+//     faster, so it cannot cause a missed action. n=26 items, distribution match, not calibrated.
+//     Do NOT re-cite "100/d is codified in CLAUDE.md" — it is not. Different PURPOSE from the gate's
+//     admission --floor justifies a different value, not a different SCALE.
 //   BIG_TICKET_UNIT_GP — per-UNIT price at/above which a single unit is large capital, so a
 //     drop is expensive per fill (bludgeon/lightbearer territory). Distinct from the chunk-6
 //     BIG_TICKET_GP, which is a whole-LOT (qty×cost) capital-at-risk threshold — momVerdict
@@ -164,7 +164,7 @@ function logGuideChanges(items, guide) {
 //     enough to be the edge (ladder the band). Tax is 2% on the sell, and CLAUDE.md wants
 //     meaningfully >~0.5% AFTER tax → ~3% gross spread is the smallest band worth scalping.
 // ---------------------------------------------------------------------------
-const LIQUID_FLOOR_PER_DAY = 100;
+const LIQUID_FLOOR_PER_DAY = 3500;
 const BIG_TICKET_UNIT_GP   = 1_000_000;
 const WIDE_SPREAD_PCT      = 3;
 // Offers/HELD LOTS below this TOTAL value (max × price, or qty × avgCost) are noise, not

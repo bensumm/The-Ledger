@@ -194,11 +194,13 @@ export function ratingParts(it, staleRisk){
    is the precise read.
    ⚠ TWO KNOWN BUGS in `volDay` below (found 2026-08-10/11, NEITHER FIXED — both change visible grades,
    so they need one reviewed change + APP_VERSION bump. Fixing one leaves the other.)
-   BUG 1 — UNIT. `STATE.VOL` is loaded from /1h, so `volDay` is ONE HOUR of volume, but every consumer
-   is daily-anchored: `families.mjs` TTF_REF_VOL=1000 in sqrt(TTF_REF_VOL/volDay), `rating.mjs`
-   liqFactor (F0=50/F1=5000, header says "DAILY"), `ui.js` renders "≈ N/day". Not a convention: the
-   LEGACY scorer here feeds the same STATE.VOL into RATE_VOL_MAX, annotated "// hourly volume" in
-   state.js — two scorers, one source, opposite assumptions.
+   BUG 1 — UNIT. `STATE.VOL` is loaded from /1h, so `volDay` is ONE HOUR of volume, but its consumers
+   are daily-anchored: `families.mjs` TTF_REF_VOL=1000 in sqrt(TTF_REF_VOL/volDay), and `rating.mjs`
+   liqFactor (F0=50/F1=5000, header says "DAILY"). Not a convention: the LEGACY scorer here feeds the
+   same STATE.VOL into RATE_VOL_MAX, annotated "// hourly volume" in state.js — two scorers, one source,
+   opposite assumptions.
+   (Do NOT cite ui.js's "≈ N/day" as a third leg — that string is the RANK, not volume. The Finder has
+   no volume column; trends.js is the only volume render and labels it "/hr traded" correctly.)
    Rank understatement is a CURVE (rankScore saturates), verified invariant across spread/price/limit
    since `net` cancels in the ratio. Landmarks have closed forms — use these, not sampled points:
        peak  4.54× at volDay 1,500    = 24·TTF_REF_VOL/TTF_VEL_MAX²

@@ -268,16 +268,15 @@ which held lots want action, what filled today).
 
 Boundaries are **tunable named constants** at the top of `watch-positions.mjs`, not magic numbers:
 
-- `LIQUID_FLOOR_PER_DAY = 100` — two-sided daily volume (the limiting side, `min(hi,lo)` from
-  `computeQuote`) below which a book is **thin**. ⚠ The old "~100/d practical floor" this bullet used to
-  cite was RETIRED by the PLAN-VOL24 recalibration — `/scan` now says the practical mental floor is a few
-  THOUSAND limiting-side units/day, not the old deflated ~100 (the `/24h` endpoint was under-reporting).
-  Below the real floor, exits are unreliable ghost-spreads. **Two different things are both called "the floor" — don't conflate them:**
-  this ~100/d is the *judgment* ghost-spread floor (in `watch-positions.mjs`/`/scan`, "is a book liquid
-  enough to trust an exit?"). `screen-flip-niches.mjs`'s `--floor` (default **3500** since the PLAN-VOL24 recal — was 50) is a separate *script
-  gate* — the raw per-unit `limitVol ≥ FLOOR` liquidity threshold that a candidate must clear
-  (OR the `--gp-floor` gp-flow path, S1) to even enter the screen. Different purposes,
-  different values.
+- `LIQUID_FLOOR_PER_DAY = 3500` — two-sided daily volume (limiting side, `vol24FromInputs`-corrected)
+  below which a book is **thin**, steering poll CADENCE. **Raised 100 → 3,500 (2026-08-11)**: PLAN-VOL24
+  §2's sweep missed it, leaving a pre-correction scale on which the thin branch was dead (99.68% of watch
+  rows read liquid, so a thin big-ticket lot got the 15m glance instead of `THIN_BIG_TICKET_VOLATILE`'s
+  3m manage). Value is insensitive — anything in [1k, 40k] partitions the bimodal watched population
+  identically; 3,500 single-sources with `FLOOR`. Risk is one-way (only polls faster). n=26 items, not
+  calibrated. **Distinct in PURPOSE from `screen-flip-niches.mjs`'s `--floor`** (an *admission* gate;
+  same default 3500) — but a different purpose justifies a different value, **not a different scale**,
+  which is why 100 was wrong rather than merely different.
 - `BIG_TICKET_UNIT_GP = 1_000_000` — per-**unit** price at/above which one unit is large
   capital, so a drop is expensive per fill (bludgeon/lightbearer/seed territory). Distinct
   from chunk-6 `BIG_TICKET_GP` (a whole-**lot** qty×cost threshold, which `momVerdict` still

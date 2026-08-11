@@ -106,6 +106,8 @@
  *               doctrine? } — recent-3 (RC1) AND full-window reach counts, the entry doctrine, and the
  *               declared/BE flags; the F1 join scores estSell against the realized sell. Lean-included;
  *               PLACEHOLDER model n≈3–14.)
+ *     volDay?,   (2026-08-11 — the RAW limiting-side scalar behind `class`, so `class` is reproducible
+ *                 from the record. Absent on pre-2026-08-11 rows, which are therefore unrepairable.)
  *     volDayRolling?,  (PLAN-VOL24 — the TRUE trailing-24h volume {hpv,lpv} composed from /1h; neither
  *               /24h endpoint is a trailing source, see the marketfetch.mjs loadAll24hRolling header.
  *               Lean-included; absent when no 1h series was in hand — e.g. watchlist rows.
@@ -294,11 +296,13 @@ export function liqClass(row) { return liqClassOf(row && row.volDay); }
 // 3,581 items (10.9%). Needs a decision on which source `class` should follow.
 export function classAndSource(row, id, warmBulk) {
   const be = warmBulk ? (warmBulk[id] || warmBulk[String(id)]) : null;
+  // Returns `volDay` too so the caller can log the scalar the class came from (the number, not a
+  // second derived bucket) — without it a class is not reproducible and a source split is invisible.
   if (be) {
     const volDay = Math.min(be.highPriceVolume || 0, be.lowPriceVolume || 0);   // same min(hpv,lpv) basis as computeQuote
-    return { cls: liqClassOf(volDay), volSrc: 'bulk' };
+    return { cls: liqClassOf(volDay), volSrc: 'bulk', volDay };
   }
-  return { cls: liqClass(row), volSrc: 'peritem' };
+  return { cls: liqClass(row), volSrc: 'peritem', volDay: row && row.volDay != null ? row.volDay : null };
 }
 
 // --- reachability head-to-head ledger-shadow reshapers (RC-S1/RC-S2, PLAN-REACHABILITY-CONSOLIDATION) --
@@ -495,7 +499,7 @@ export function timedLapShadow(lap) {
 // The MEASURED velocityClass (velocity.mjs, off a real round-trip) is untouched and still live.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap, pathA, via, preRank, prePool, askPlacement, repriced, exemptionBounded, rankPre } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDay, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap, pathA, via, preRank, prePool, askPlacement, repriced, exemptionBounded, rankPre } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -606,6 +610,11 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // Lean-included (YS2 pattern): a caller with no 1h series in hand (watchlist rows) supplies null →
   // no field → byte-identical shape.
   if (volDayRolling != null) e.volDayRolling = volDayRolling;
+  // The RAW scalar behind `class` (added 2026-08-11). Before this, 0 of 99,587 rows carried it, so no
+  // historical class is reconstructible and the 2026-07-13 quote/screen source split was invisible in
+  // the record. Also the point-in-time volume join-outcomes.mjs SHOULD join on — it recomputes from a
+  // live map, so F1 cells bucket by today's liquidity. Lean-included (YS2): absent → old rows identical.
+  if (volDay != null)        e.volDay = volDay;
   // PLAN-CAPITAL-THROUGHPUT (2026-07-14) — the ACTIVE capital-aware expGpDay + the LEGACY capital-blind
   // expGpDayLegacy, logged as a shadow pair so a --stats/analyze read can diff old-vs-new surfacing on
   // real rows before/after the default flip (the same rollout the volDayRolling shadow served for VOL24).

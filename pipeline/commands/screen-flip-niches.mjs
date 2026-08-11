@@ -1698,7 +1698,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // absent-field pattern — normal rows stay byte-identical) so calibration can segment or exclude them
   // and a ledger reader can never mistake one for a floor-qualified suggestion.
   logSuggestions('screen', { mode, params: SCREEN_PARAMS },
-    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), volSrc: VOL_SRC_LABEL, verdict: r.grade, grade: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath, subFloor: subFloor ? subFloor.relaxed : null, cappedBy: r.cappedBy, ...estFields(r.er),
+    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), volDay: r.row.volDay, volSrc: VOL_SRC_LABEL, verdict: r.grade, grade: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath, subFloor: subFloor ? subFloor.relaxed : null, cappedBy: r.cappedBy, ...estFields(r.er),
       // PART II shadow field: the asymmetric estimate BESIDE the symmetric rank (same row → the F1 A/B join)
       asym: asymShadow(r.asymEr),
       // PLAN-OUTPUT-TABLE shadow pair: the reconciliation estimate the DEFAULT table renders (F1 scores estSell vs the realized sell)
@@ -2129,7 +2129,7 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
     const vpFill = ESTIMATORS.value.pFill({ valueRanges: vr });
     const vttf = ESTIMATORS.value.ttf({ valueRanges: vr });
     const vrank = rankScore({ net: netU, pFill: vpFill.value, ttfSec: vttf.value });
-    sugg.push(suggestionEntry(row, { itemId: s.id, cls: liqClass(row), volSrc: VOL_SRC_LABEL, verdict: tier === 'buy-now' ? 'VALUE-BUY' : 'VALUE-WATCH', posture: POSTURE, path: 'value-hold',   // SF-3: volDay provenance follows VOL_SOURCE
+    sugg.push(suggestionEntry(row, { itemId: s.id, cls: liqClass(row), volDay: row.volDay, volSrc: VOL_SRC_LABEL, verdict: tier === 'buy-now' ? 'VALUE-BUY' : 'VALUE-WATCH', posture: POSTURE, path: 'value-hold',   // SF-3: volDay provenance follows VOL_SOURCE
       bid: vr.buyLow, ask: vr.durableHigh, pFill: round2(vpFill.value), ttfSec: vttf.value, rank: Math.round(vrank), estBasis: `${vpFill.basis}/${vttf.basis}`, estN: Math.min(vpFill.n, vttf.n),
       // 2026-08-08: value rows never carried `validators`, so the value niche was the ONE surface whose
       // validator findings left no ledger trace — the reason the knife gate could not be judged from the
@@ -2378,7 +2378,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
     // + dip/peak windows + holdDays), so the shadow both-leg replay joiner can measure the would-have-fill
     // rate as an UPPER BOUND, and the retro-join attributes realized round trips.
     sugg.push(suggestionEntry(row, {
-      itemId: s.id, cls: liqClass(row), volSrc: VOL_SRC_LABEL, verdict: 'AMP-CYCLE', grade, cappedBy: r.cappedBy, posture: POSTURE, path: 'scalp',   // R7: amplitude only applies rateItem's THIN cap → r.cappedBy
+      itemId: s.id, cls: liqClass(row), volDay: row.volDay, volSrc: VOL_SRC_LABEL, verdict: 'AMP-CYCLE', grade, cappedBy: r.cappedBy, posture: POSTURE, path: 'scalp',   // R7: amplitude only applies rateItem's THIN cap → r.cappedBy
       bid: ar.ampBid, ask: ar.ampAsk, pFill: round2(pFill.value), ttfSec: ttf.value, rank: Math.round(rank),
       // DT1b: estN must track the estimator NAMED in estBasis — pFill.n is the walk-forward `judged`
       // count (30–50 on a measured row, 0 on a prior fallback), NOT ar.nDays (the ~14-day windowStats
@@ -2530,7 +2530,7 @@ async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
     const rankCell = { t: `${fmtP(r.score)} · net ${fmt(er.net || 0)} P~${er.pFill.value.toFixed(2)} ttf~${fmtTtf(er.ttf.value)}`, c: 'mini' };
     const cells = [std[0], gradeCell, ...std.slice(1), rankCell, { t: watchlistNote(row, d, bands, id, limit), c: 'mini' }];
     rows.push({ id, cells });
-    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), volSrc: VOL_SRC_LABEL, verdict: r.grade, grade: r.grade, cappedBy: r.cappedBy, posture: POSTURE, ...estFields(er) }));   // SF-3: watchlist row's volDay follows VOL_SOURCE (v24all — rolling by default). AZ-forward: grade letter logged explicitly · R7: THIN cap only → r.cappedBy
+    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), volDay: row.volDay, volSrc: VOL_SRC_LABEL, verdict: r.grade, grade: r.grade, cappedBy: r.cappedBy, posture: POSTURE, ...estFields(er) }));   // SF-3: watchlist row's volDay follows VOL_SOURCE (v24all — rolling by default). AZ-forward: grade letter logged explicitly · R7: THIN cap only → r.cappedBy
   }
   logSuggestions('screen', { mode: 'watchlist', params: SCREEN_PARAMS }, sugg);
   const headers = [...HEADERS, 'Note'];

@@ -591,7 +591,7 @@ async function runItems() {
     }
     rows.push(RAW ? std : [std[0], std[1], ...estPairCells(estShown), std[4], std[5], std[6]]);
     const cs = classAndSource(row, id, warm24h);   // SF-3: class + volSrc ('bulk' when warm24h had it, else 'peritem')
-    sugg.push(suggestionEntry(row, { itemId: id, cls: cs.cls, volSrc: cs.volSrc, verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres),
+    sugg.push(suggestionEntry(row, { itemId: id, cls: cs.cls, volDay: cs.volDay, volSrc: cs.volSrc, verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres),
       estBuy: est ? est.estBuy : null, estSell: est ? est.estSell : null, estConfidence: estConfLean(est), winClear,
       reachable: reachableShadow(reachable), depthExit: depthExitShadow(depthExit, { qty: heldQty.get(id), volDay: row.volDay }), asym: asymShadow(ae) }));  // per-item read has no verdict; PLAN-OUTPUT-TABLE shadow pair + PLAN-WINDOW-CLEAR winClear + RC-S2 reachable/depthExit/asym ride the row
     // PM1: probes over this per-item read (OUTPUT-ONLY — no verdict/gate/rating input). ctx carries the
@@ -931,7 +931,7 @@ async function runPositions() {
     // WC1: the deferred O1 suggestion push (moved down from above so the big-ticket `windowExit` rung shadow
     // rides this row). windowExitShadowVal is null for a non-big-ticket lot → byte-identical to the prior row.
     const cs = classAndSource(row, itemId, warm24h);   // SF-3: class + volSrc ('bulk' via snap.v24 on the normal path)
-    sugg.push(suggestionEntry(row, { itemId, cls: cs.cls, volSrc: cs.volSrc, verdict: v, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres), windowExit: windowExitShadowVal }));  // the emitted per-position verdict string
+    sugg.push(suggestionEntry(row, { itemId, cls: cs.cls, volDay: cs.volDay, volSrc: cs.volSrc, verdict: v, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres), windowExit: windowExitShadowVal }));  // the emitted per-position verdict string
     // reachPlacement — the existing bid+ask percentile note. For a big-ticket lot the ASK clause is now
     // carried by the richer windowExit note above, so keep only the BID clause here (no redundancy); a
     // non-big-ticket lot keeps both, unchanged.

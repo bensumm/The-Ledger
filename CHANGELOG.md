@@ -10,6 +10,70 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Four subagent investigations: three of the four "obvious fixes" should not ship (2026-08-11)
+
+Investigated the open items from the vol24 wave with four parallel read-only agents. The useful result
+is negative: the architecture, not the constants, decides which levers can move a grade. `rateItem`
+combines four risk factors as a **geometric mean**, so any factor lands as `f^0.25` against
+`GRADE_CUTOFFS` that sit 2× apart — a factor at its floor cuts the score **15.9%**, a quarter of one
+letter. That single fact disposes of two of the four proposals.
+
+**Shipped here (no `APP_VERSION` bump — `js/` changes are comments only):**
+
+**1. `LIQUID_FLOOR_PER_DAY` 100 → 3,500.** Missed by PLAN-VOL24 §2's sweep, so it sat on the
+pre-correction scale and its `thin` branch was dead: 99.68% of watch rows read liquid, meaning a
+genuinely thin big-ticket lot got `STABLE_LIQUID`'s 15m glance instead of `THIN_BIG_TICKET_VOLATILE`'s
+3m manage cadence. Item-weighted p25 of watched items is 431/d. The value is **insensitive** — the
+watched population is bimodal with an empty gap (p25 431 → p50 73,877), so anything in [1k, 40k]
+partitions it identically; 3,500 single-sources with `FLOOR`. Risk is one-way: it only polls faster, so
+it cannot cause a missed action. Verified by executing the real `classify()` against straddling values —
+the boundary flips at exactly 3,500, and 431/d and 800/d move from glance to manage. n=26 items, a
+distribution match, not calibrated. `MONITORING.md`'s self-contradicting bullet (which called the
+figure "retired" and then defended it as a separate floor) is resolved: different purpose justifies a
+different value, not a different scale.
+
+**2. Forward-only `volDay` logging.** `class` has been logged since the start; the volume behind it
+never was — **0 of 99,587 rows**. So no historical `class` is reconstructible, and when quote and
+screen began deriving it from different sources on 2026-07-13 nothing in the record could show it.
+Now logged as a lean field (YS2 absent-field pattern — old rows byte-identical) and wired through all
+six emit sites, with `classAndSource` returning the scalar it used. Verified end-to-end: 153/153 item
+rows on a live `--mode all` run carry it. This is also the point-in-time volume `join-outcomes.mjs`
+should join on — it currently recomputes from a live map and stores the result as `liqClass`, which is
+what F1's calibration cell key buckets on, so **every F1 cell segments campaigns by an item's liquidity
+today rather than when the suggestion was made**. That bug is recorded, not yet fixed.
+
+**Investigated and deliberately NOT changed:**
+
+**`regimeFactor`'s missing falling branch.** A confirmed faller scores full marks (1.000) against 0.850
+unconfirmed and 0.753 rising — a real inversion, and the fix is still wrong. `row.falling` never reaches
+the rank at all: `ctx.regime`'s only consumer is `pFillRising`, which tests `'rising'`, and no shipped
+spec declares `estimator:'rising'`. The lever is also too weak to matter — the S+ faller that motivated
+it needs `f < 0.16` to demote. Every population reaching the factor with `falling` is already handled
+upstream, so a global penalty stacks on all of them (the O6 "one home" mistake by another route). And
+`flip-niches.mjs`'s 71-day forward study measured knife **+4.08%** / rising **−7.28%**, so a mirrored
+penalty prices the wrong sign. Two figures in the original report were also wrong: the "8 S+ fallers"
+are one item (Old school bond) in the console-only amplitude lane, and the 8 `band` rows are one item
+Ben holds (Bastion potion(4)) — the documented held-item exception firing by design.
+
+**`liqFactor` F0/F1.** Derived replacements are F0 3,500 and F1 ~150,000 (F1 is judgment: the fit
+extrapolates 2.5× past its top anchor, where leave-one-out error is 84%). Unchanged because the
+geometric-mean bound means no choice of F0/F1 can move a grade letter — measured **0 of 73** board rows.
+
+**`TTF_REF_VOL` 1,000 → 40,000 — held.** This one *does* have authority, because it rescales the rank
+basis rather than multiplying a damped risk term (median board multiplier 0.274 ≈ 2 letters), so it
+needs `GRADE_CUTOFFS` re-anchored in the same change. More importantly, re-anchoring it together with
+`liqFactor` compounds **V-shaped**, with a verified trough (continuous scan, not a sampled grid) at
+`TTF_REF/TTF_VEL_MAX²`: the joint multiplier is **0.168 at 3.5k–16k/d** and **exactly 1.000 above
+640k/d**. It punishes mid-liquidity hardest and deep items not at all — and mid-liquidity is precisely
+the lane PLAN-VOL24 step 2 was built to surface. Actionable rows would go 11 → 4, all seven lost being
+mid-tier commodities. Applying the obvious fix would partially undo the thing it completes.
+
+**Two more of my published numbers were wrong.** "`ttfIntraday` sits on its floor for 56.7%" reproduces
+on no population (16.5% all two-sided / 65.0% FLOOR-admitted / 48.6% ≥1,000) — a bare percentage with no
+population attached, the same defect as the earlier offset-scan and rank-peak figures. And the
+`js/market.js` unit-bug comment cited `ui.js` rendering "≈ N/day" as evidence; that string is the
+**rank**, not volume. The bug stands on two legs, not three.
+
 ### Review round 3: the premise the whole vol24 wave reasoned from was measured inside the one UTC hour where it is true (2026-08-11)
 
 Third adversarial pass. Round 1 broke four claims, round 2 broke six more. Round 3 broke the
