@@ -210,11 +210,30 @@ export function ratingParts(it, staleRisk){
      daily      1200   2400   6000  24000  120000  600000
      understated 4.10× 4.45×  4.24×  3.25×   1.59×   1.00×
 
-   So it peaks at ~4.45× around 2.4k/day, is 3.25× at this comment's own 24k example, and decays to
-   EXACTLY 1.00× above ~600k/day where both the used and true TTF factors clamp. The distortion is
-   concentrated on LOW/MID liquidity; "on liquid items" named the region where the bug does the LEAST.
+   The RATIOS above are robust — verified invariant across spread 1%→60%, price 5 gp→30m, and
+   limit ∈ {1, 5000, null}, because `net` enters `rankScore` linearly and cancels in the ratio while
+   the intraday family's pFill/ttf never read price. But ⚠ THE TWO SENTENCES THAT USED TO SUMMARISE
+   THEM WERE BOTH WRONG (corrected 2026-08-11 — the third correction to this comment). They described
+   SAMPLED POINTS as if they were the curve's landmarks. Both landmarks have closed forms:
+     • the peak is 4.54× at volDay = 1,500 — that is 24·TTF_REF_VOL/TTF_VEL_MAX² — NOT "~4.45× around
+       2.4k/day"; the table above simply steps over the maximum between its 1200 and 2400 samples.
+     • unity begins at volDay = 384,000 — that is 24·TTF_REF_VOL/TTF_VEL_MIN² — NOT "above ~600k/day",
+       which is off by 56% and is merely the first sampled point past the knee.
+   So: the distortion is concentrated on LOW/MID liquidity, peaks just under 2k/day, and is gone by
+   384k/day. "on liquid items" named the region where the bug does the LEAST.
    It still drives the visible Grade column and the default sort — the error is in how it was described,
    not in whether it matters.
+   ⚠ SECOND, SEPARATE BUG IN THE SAME LINE (found 2026-08-11, also NOT fixed) — `volDay` below is
+   `Math.min(hpv,lpv) || it.volume || 0`, and `it.volume` is `hpv + lpv` (set at the universe build,
+   ~line 146). So when the limiting side is exactly **0** — a ONE-SIDED book, no trades on one side —
+   the `||` falls through and substitutes the SUM OF BOTH SIDES. An item with `lpv = 0` and
+   `hpv = 37,876` is scored as if it traded 37,876/day two-sided, when its real two-sided volume is
+   ZERO. That is not a degraded estimate, it is the maximum possible value standing in for the minimum.
+   The comment on that line claims the "console basis"; the console basis
+   (`gatecandidates.mjs` `eachLiquidCandidate`) EXCLUDES one-sided items outright — `hpv<=0 || lpv<=0`
+   is its NON-NEGOTIABLE first gate — so this is the opposite of what it says it mirrors. Orthogonal to
+   the hourly/daily unit bug above: fixing one leaves the other. Same reason for not fixing it here (it
+   changes visible grades), and the two should be fixed together with a single review + version bump.
    Proof it is a bug and not a convention: the LEGACY scorer in this same file feeds the same
    `STATE.VOL` into `RATE_VOL_MAX`, which `js/state.js` annotates "// hourly volume". Two scorers, one
    source, opposite unit assumptions — and the daily-anchored one is the newer.
@@ -235,6 +254,12 @@ export function desirabilityOf(it){
   const er=estimateRank(FINDER_SPEC, row);
   // thin = below the practical two-sided exit floor (~50/day limiting side) — mirrors the console's
   // THIN_GRADE_CAP so an illiquid big-ticket can't headline S+ off a fat per-unit net it can't move fast.
+  // ⚠ STALE, FOUND 2026-08-11, NOT YET CHANGED — and it contradicts the ⚠ block ~50 lines above in this
+  // same function, which records that the daily floor moved to 3,500 (PLAN-VOL24 Step 2). This 50 is the
+  // PRE-recalibration scale, so on the console's current basis almost nothing trips it. Same stale value
+  // in `pipeline/lib/render/suggestlog.mjs` (NY2.4) and, until this pass, in `js/rating.mjs`'s thin-cap
+  // note. Left alone for the same reason as the two bugs above: it changes visible grades, so it belongs
+  // in the single reviewed Finder-scoring change, not in a documentation pass.
   const thin=volDay>0 && volDay<50;
   const rt=rateItem({ row, rank:er.rank, thin });
   return { rank:er.rank, grade:rt.grade, score:rt.score, thin, ttfSec:er.ttf&&er.ttf.value };

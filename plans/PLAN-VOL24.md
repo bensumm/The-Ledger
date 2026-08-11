@@ -16,22 +16,33 @@ which call sites need the fix:
 
 | | what it serves now | verdict |
 | --- | --- | --- |
-| **bulk `/24h`** | a complete, bit-exact **UTC-day** aggregate, newest data ~24–48h old | **BROKEN** — `loadAll24hRolling` is load-bearing |
-| **per-item `/24h?id=`** | the **true trailing 24h** | **CORRECT** — `vol24FromInputs` is currently a no-op |
+| **bulk `/24h`** | a complete, bit-exact **UTC-day** aggregate; that day closed 24–48h before the read | **not a trailing-24h source** — `loadAll24hRolling` is load-bearing |
+| **per-item `/24h?id=`** | a complete, bit-exact **UTC-day** aggregate, one day FRESHER; that day closed 0–24h before the read | **also not a trailing-24h source** — `vol24FromInputs` does real work ~23h/day |
 
-Per-item evidence (stratified thick/mid/thin sample, exact production path `fetch24hOne` +
-`vol24FromInputs`): **22/24 bit-identical** to the `/1h`-composed rolling value, the other two within
-~6%, and `volSrc='rolling'` on all 24 — so the correction genuinely ran and agreed, rather than the
-24h-coverage guard silently degrading to the raw read. Cross-check against bulk on 9 liquid items:
-per-item matched true rolling 7/9, bulk matched it **0/9**, and bulk exactly equalled per-item **0/9**.
+⚠ **THIS TABLE SAID THE OPPOSITE UNTIL 2026-08-11, and the error propagated through three commits.**
+It recorded per-item as "the **true trailing 24h** / **CORRECT** — `vol24FromInputs` is currently a
+no-op", on evidence of "**22/24 bit-identical**" and later "19/24". Both measurements were taken inside
+the **00:00–01:00 UTC** hour — the only hour in which `lastCompleteHour()`'s composed window coincides
+with the per-item served day. That is 17:00–18:00 PDT, the hour these sessions habitually run in.
 
-**Keep the per-item correction — and note WHY it still earns its place.** Its arithmetic is a no-op
-when the 1h series fully covers the window. Its **coverage guard is not**: the two items that differed
-in the sample above were not endpoint error at all, but items whose 1h series was missing the anchor
-hour, so the *composed* value under-reported (725 against a correct 770, −6%). That is the F4
-end-of-window hole, fixed 2026-08-10 — measured rate across 24 items, **4 had incomplete coverage and 3
-of those were under-reported by >1%**. So the honest statement is: the correction's present-day value is
-that it *refuses* a partial window, not that it improves on the endpoint's number.
+What per-item actually is, measured n=30 by summing each item's own `/1h` series two ways:
+
+| compared against | bit-exact |
+| --- | --- |
+| the **UTC day** its own `timestamp` labels, `[T, T+23h]` | **30/30** |
+| the **true trailing 24h** | **4/30** |
+
+Its `timestamp` is a day boundary (`T % 86400 == 0`) exactly **24h ahead of bulk's**. Also worth
+knowing: the **`?id=` parameter is IGNORED** — `/24h?id=2` and `/24h?id=13190` both return the same
+full 4,152-item map, so `fetch24hOne` downloads the whole market to read one row.
+
+**Keep the per-item correction — for its ARITHMETIC, not merely its coverage guard.** The earlier
+"its arithmetic is a no-op, only the guard earns its place" framing understated it by about 23 hours a
+day. Both endpoints answer "what did this item trade during a fixed past UTC day", which is not the
+question a liquidity gate asks; composing from `/1h` is the only trailing-24h source available.
+Corollary, since it was asserted here too: "every disagreement is the COMPOSED side falling short" is
+false — on a fresh out-of-window probe the composed value **exceeded** the endpoint on 8/24, by up to
++56%, because the two are measuring different windows rather than one being truncated.
 
 ### The bulk endpoint: which window does `timestamp` label?
 
@@ -82,8 +93,8 @@ not established, and the earlier hedge ("almost certainly correct when made") wa
 story that replaced it. State the two measurements in their own tense and stop there.
 
 **Consequences.**
-- The fix (compose from `/1h`) is **unchanged and still correct** — a 2–3-day-old daily total cannot
-  gate today's liquidity, whatever its internal accuracy.
+- The fix (compose from `/1h`) is **unchanged and still correct** — a fixed past UTC day cannot gate
+  today's liquidity, whatever its internal accuracy, and that is true of BOTH endpoints.
 - Every count-matched floor (`FLOOR` 3500, `CHURN_MIN_VOL` 65000, …) is **unaffected** — but NOT for
   the reason first written here. The claim "they were calibrated against the composed rolling source,
   not against `/24h`" is **false**: the floors were *solved on* rolling but *anchored to* a raw-`/24h`
@@ -91,19 +102,31 @@ story that replaced it. State the two measurements in their own tense and stop t
   The conclusion survives on direct check of the design targets, which is the evidence that belongs
   here. ⚠ **The counts first written here (820 / 364 / 428) were WRONG and are corrected** — they were
   taken from a review agent's output and propagated without being re-derived, the exact failure this
-  plan elsewhere warns about. Re-derived independently 2026-08-11 (the `eachLiquidCandidate` predicate
-  applied to `loadAll24hRolling`, 4,152 items):
+  plan elsewhere warns about. Re-derived 2026-08-11 by counting the two-sided pool (3,718 items) out of
+  `loadAll24hRolling`'s **4,148** ids. ⚠ Two things the first correction also got wrong: it described the
+  method as "the `eachLiquidCandidate` predicate", but `FLOOR` is that function's `thin` CLASSIFIER (not
+  an admission gate — admission is `FLOOR` OR gp-flow), and `CHURN_MIN_VOL` / `DIP_LOOP_LIQUID_FLOOR` do
+  not appear in it at all; and it cited a population of 4,152, which is the `/24h?id=` map size, not the
+  object measured.
 
-  | constant | value | admits today | July target |
-  | --- | --- | --- | --- |
-  | `FLOOR` / `VALUE_LIQ_FLOOR` | 3,500 | **943** | 884 |
-  | `CHURN_MIN_VOL` | 65,000 | **378** | 361 |
-  | `DIP_LOOP_LIQUID_FLOOR` | 40,000 | **450** | 438 |
-  | `GP_FLOOR` (thin gp-flow hatch) | 4,500m | **88** | 89 |
+  | constant | value | admits today | at its OWN solved value | July target |
+  | --- | --- | --- | --- | --- |
+  | `FLOOR` / `VALUE_LIQ_FLOOR` | 3,500 | 946 | **934** @ 3,652 | 884 |
+  | `CHURN_MIN_VOL` | 65,000 | **372** | — | 361 |
+  | `DIP_LOOP_LIQUID_FLOOR` | 40,000 | 446 | **438** @ 42,425 | 438 |
+  | `GP_FLOOR` (items clearing the gp-flow threshold) | 4,500m | **91** | — | 89 |
 
-  Nothing is mis-gating — but note the **direction inverts** from what was first written: all four sit
-  *at or slightly above* their targets (+2% to +7%), so `FLOOR` **over**-admits by ~7%, it does not
-  under-admit. The old text had it backwards as well as off by 13%.
+  Nothing is mis-gating. ⚠ **But the "+2–7% above target, the direction INVERTS, `FLOOR` over-admits"
+  framing was itself wrong** — it reported a deliberate design choice as a discovery. Step 2 below
+  records `FLOOR` as "rounded 3,652→**3,500**, leaning looser per Ben's surface-the-lane intent" and
+  `DIP_LOOP` as "rounded from 42,425": both were shipped deliberately loose, so they admit more than
+  target BY CONSTRUCTION. At its own solved value `DIP_LOOP` admits **exactly 438 = the July target**,
+  zero drift — the entire overage is the documented round. Real distribution drift is only `FLOOR`
+  (+5.7% at 3,652) and `CHURN` (+3.0%). And treat the third digit as noise: these counts move ~1–2% per
+  hour, so an earlier run of the same script gave 943/378/450. `GP_FLOOR` is **91** — the count-match
+  counts items clearing the gp-flow threshold; the "88" published in the first correction (and the
+  "88–91" published as if it were measurement uncertainty) answered a different question, `limitVol <
+  3500 && flow ≥ 4.5b`.
   (A re-solve against *today's* legacy distribution suggests `FLOOR ≈ 47` and "2.5–3× too strict" —
   that is wrong, because today's legacy distribution is ≈ true volume and is not the target the gate
   was ever built on. Do not re-solve on it. Measured for the record: `FLOOR` 50 on the raw bulk `/24h`

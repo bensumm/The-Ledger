@@ -10,6 +10,80 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Review round 3: the premise the whole vol24 wave reasoned from was measured inside the one UTC hour where it is true (2026-08-11)
+
+Third adversarial pass. Round 1 broke four claims, round 2 broke six more. Round 3 broke the
+**premise** — which means parts of both previous rounds were reasoning correctly from a false
+starting point. Every correction below was re-derived on my own scripts before being written.
+No `APP_VERSION` bump: all `js/` changes are comment text.
+
+**1. `/24h?id=` is NOT the true trailing-24h. Neither endpoint is.** The 2026-08-10 wave concluded
+"bulk is broken, per-item is CORRECT, so `vol24FromInputs` is a no-op." Both halves are false. BOTH
+endpoints serve a complete, bit-exact **UTC-DAY aggregate**; they differ only in which day. Per-item's
+`timestamp` is a day boundary exactly **24h ahead of bulk's** — so its day closed 0–24h before the read
+(1.5h when measured) against bulk's 24–48h. Measured by summing each item's own `/1h` series two ways,
+n=30: **30/30** exact against the UTC day its timestamp labels, **4/30** against the true trailing 24h.
+
+**How the wrong conclusion survived two review rounds, which is the part worth keeping.**
+`lastCompleteHour()` makes the composed trailing window coincide with the per-item served day *only
+during 00:00–01:00 UTC*. Commit `d8f63e2` is stamped 01:03 UTC. That is 17:00–18:00 PDT — the hour
+these sessions habitually run in, so it will recur. Re-running the identical script one hour later
+returns **4/24** where it had returned 19/24. A measurement that is only true for one hour a day, taken
+in that hour, twice, by two different people.
+
+**Consequences, all corrected at their own sites:** `vol24FromInputs` does real work ~23 hours a day,
+not "insurance"; `read-book.mjs`'s "no number here is currently wrong" is void, and its reorder fixes a
+real figure rather than an ordering smell; the "no live number moves" cost note added in `d8f63e2`
+itself is void (falling back measured up to −10.2%); "every disagreement is the COMPOSED side falling
+short" is false — the composed value **exceeds** the endpoint about as often, by up to +56%, because
+they measure different windows. Also: the **`?id=` parameter is ignored** — `/24h?id=2` and
+`/24h?id=13190` both return the same 4,152-item map, so `fetch24hOne` downloads the whole market for
+one row.
+
+**2. The rank curve's two landmarks were sampled points described as landmarks — wrong for the third
+time.** The ratios themselves are robust (verified invariant across spread 1%→60%, price 5 gp→30m, and
+`limit ∈ {1, 5000, null}`, because `net` cancels in the ratio). But both summary sentences were wrong,
+and both landmarks have closed forms: the peak is **4.54× at volDay 1,500** = `24·TTF_REF_VOL/TTF_VEL_MAX²`
+(the table steps over it between its 1200 and 2400 samples), and unity begins at **384,000/day** =
+`24·TTF_REF_VOL/TTF_VEL_MIN²`, not the "~600k" I published — off by 56%.
+
+**3. The floor framing reported a deliberate design choice as a discovery.** "+2–7% above target, the
+direction INVERTS, `FLOOR` over-admits" — but Step 2 records `FLOOR` as "rounded 3,652→3,500, leaning
+looser per Ben's intent" and `DIP_LOOP` as "rounded from 42,425". At its own solved value `DIP_LOOP`
+admits **exactly 438 = the July target**, zero drift; the whole overage is the documented round. Real
+drift is only `FLOOR` (+5.7%) and `CHURN` (+3.0%). Three further specifics corrected: the method was
+described as "the `eachLiquidCandidate` predicate" but `FLOOR` is that function's `thin` classifier and
+`CHURN`/`DIP_LOOP` are not in it at all; the population is **4,148**, not the 4,152 I cited (that is the
+`/24h?id=` map size); and `GP_FLOOR` is **91**, with the "88–91" I published being two different
+questions presented as measurement uncertainty.
+
+**4. My DL4 argument proved too much.** I claimed the constant "cannot be re-count-matched" because its
+target came from a vanished July distribution — but the same July targets (884/361/438) are used as
+valid checks two bullets earlier in the same commit. A count-match target is a COUNT, and counts survive
+a change of basis. The real obstacle is duller: Step 2's table records DL4's basis with **no target
+count at all**, the only row lacking one. A bookkeeping gap, not an epistemic impossibility.
+
+**5. I swept the retracted PHRASE and not the retracted FIGURES.** Round 2's own finding #3 was "the
+retracted claim survived in three places" — and the retracted *numbers* then survived in seven more,
+including two files that commit edited. Fixed in `README.md` (×2), `PLAN-VOL24.md` (×3), `CHANGELOG.md`,
+and `read-book.mjs`. Also corrected: an older entry glossed 4-of-24 as "roughly 1 item in 8"; 4/24 is 1
+in **6**, wrong when written.
+
+**6. Away-scope, all documented-not-fixed (each changes visible grades or cadence).** `regimeFactor`
+(`js/rating.mjs`) never reads `row.falling`, so a confirmed **falling** item scores **1.000 — full
+marks**, better than an unconfirmed regime (0.850) and better than any riser (0.753); measured over
+8,000 ledger rows, 1,119 falling screen rows, **411 graded B- or better**, 8 of them S+. Its header's
+justification named two deleted niches and mis-described a third. `js/market.js` has a **second**
+unit bug in the line whose comment this wave twice rewrote: `Math.min(hpv,lpv) || it.volume` substitutes
+`hpv+lpv` when the limiting side is 0, so a one-sided book is scored on its non-zero side — the exact
+opposite of the console basis it claims to mirror, which excludes one-sided items as a non-negotiable
+gate. `liqFactor`'s `F0=50/F1=5000` and `TTF_REF_VOL=1000` were missed by Step 2's sweep: liqFactor is
+exactly 1.000 on **90.9%** of the admitted pool, and `ttfIntraday` sits on its floor for **56.7%** —
+two factors documented as discriminating that are nearly constant. `LIQUID_FLOOR_PER_DAY = 100` cited a
+CLAUDE.md floor that **does not exist there** and that MONITORING.md marks retired; its `thin` branch
+fires on 0.34% of rows. And a quote row's `class` comes from the bulk map while its `volDay` comes from
+the rolling one — different sources on one row, disagreeing on **10.9%** of items.
+
 ### Review round 2 on the vol24 batch: six of my own numbers were wrong, and two real bugs sat outside the region I was working (2026-08-11)
 
 A second adversarial pass over `bf71035`, briefed to attack round 1's fixes and to scope at least one
@@ -220,9 +294,12 @@ here as being there "so callers can see how much data backed the answer" — no 
 `volSrc` either; both are DIAGNOSTIC, kept alive only by the test, and are now labelled as such.
 
 **Measured, not assumed.** Across 24 sampled items, **4 have incomplete coverage and 3 of those were
-being under-reported by >1%** — roughly 1 item in 8. This is also the resolution of the two
-"non-identical" items in point 2: they were not endpoint error, they were this bug (one read 725 against
-a correct 770, −6%).
+being under-reported by >1%**. ⚠ Three corrections to that sentence, all made later: it was gloss-read
+as "roughly 1 item in 8" — 4/24 is 1 in **6**, wrong when written; the figure itself is superseded (see
+the 2026-08-11 entries); and its conclusion, that this bug is "the resolution of the two non-identical
+items in point 2", assumed the endpoint was correct and the composed side truncated. The composed value
+in fact **exceeds** the endpoint about as often as it falls short, because the two measure different
+windows. Keep the F4 fix — the coverage hole was real — but not this explanation of it.
 
 **New `pipeline/test/vol24.test.mjs`** — 13 assertion groups, offline and deterministic (fixed clock, no
 fetch), covering the window arithmetic, VWAP weighting, the degradation contract, F4's both-ends

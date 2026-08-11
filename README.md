@@ -936,12 +936,19 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   2026-08-08, paired with the expUnits 6→2 refill haircut (gpDay had no attention axis and flattered
   cheap churn); `DL4_MIN_ABS_SWING` unchanged). `volDayRolling` logged on
   `suggestions.jsonl`. ⚠ **Step 3 was RE-SCOPED 2026-08-10 — it was aimed at a non-problem.** It read
-  "the browser app fix (`js/marketfetch.js` Finder/Watch/Trends still read the broken `/24h`)". But the app's
-  per-item read is `js/marketfetch.js:29` → `/24h?id=`, and the PER-ITEM endpoint measures as the TRUE
-  trailing-24h (22/24 bit-identical to the composed value); only the BULK endpoint is broken. The real
-  app defect is a DIFFERENT one found the same day: the Finder loads `/1h` into `STATE.VOL` and feeds it
-  to daily-anchored scoring as `volDay` (`js/market.js` `desirabilityOf`) — a ~24× unit error understating
-  rank ~4× on liquid items. See the ⚠ block at `desirabilityOf`. Still APP_VERSION-bumping when fixed.
+  "the browser app fix (`js/marketfetch.js` Finder/Watch/Trends still read the broken `/24h`)". The app's
+  per-item read is `js/marketfetch.js:29` → `/24h?id=`. ⚠ **The 2026-08-10 re-scope reasoned from a claim
+  that was itself wrong and is corrected 2026-08-11**: it said the per-item endpoint "measures as the TRUE
+  trailing-24h (22/24 bit-identical)" and that only bulk was broken. Per-item is a complete UTC-DAY
+  aggregate too — just one day fresher (30/30 exact against its own day, 4/30 against the trailing
+  window); the 22/24 was measured inside the single UTC hour where the two coincide. So step 3 was aimed
+  at a REAL problem after all, merely a smaller one than first written: the app's per-item volume is a
+  day-aggregate, not a trailing window. The other app defect found the same day still stands: the Finder
+  loads `/1h` into `STATE.VOL` and feeds it to daily-anchored scoring as `volDay` (`js/market.js`
+  `desirabilityOf`) — a ~24× unit error understating rank up to 4.54× (peak at 1,500/day, gone by
+  384k/day; the "~4× on liquid items" first published here named the region where it does the LEAST),
+  plus a second bug in the same line that substitutes `hpv+lpv` for a one-sided book. See the ⚠ blocks at
+  `desirabilityOf`. Still APP_VERSION-bumping when fixed.
 - `PLAN-ESTIMATOR-FIDELITY.md` — per-topic plan (2026-08-01): the discovery
   estimator understates both legs against the daily distribution (the 2h-band basis + the
   clamp-to-bandTop blend make a verified daily-basis ask/dip structurally unquotable), the rank
@@ -2221,7 +2228,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `volSrc:'rolling'` — measured on one stratified n=24 sample at 10/24 items with short coverage, of
     which 5 were still bit-exact because the missing hour had no trades and 2 under-reported by >1%;
     an earlier "4/24, 3 under-reporting" figure came from a different probe and was incompatible with
-    the "22/24 bit-identical" published beside it), F5's `buckets` count (DIAGNOSTIC — no production
+    the "22/24 bit-identical" published beside it — and the "19/24" that replaced BOTH was itself an
+    artifact of the 00:00–01:00 UTC read hour, see the loadAll24hRolling header), F5's `buckets` count (DIAGNOSTIC — no production
     caller reads it, or `volSrc`; this test is the only thing exercising either field), and
     F7 (a string-timestamped series degrades SAFELY — `rolling24FromTs1h`'s `>=` would coerce it while
     the guard's `Number.isFinite` does not; the disagreement is real and pinned in its safe direction).

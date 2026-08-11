@@ -16,8 +16,11 @@
  * WHAT IS ACTUALLY BROKEN (re-measured 2026-08-11 — the ONE home is the loadAll24hRolling header):
  *   • BULK /24h        — a complete, bit-exact UTC-DAY aggregate whose newest data is ~24–48h old. Genuinely
  *                        broken as a trailing-24h source; loadAll24hRolling is the load-bearing fix.
- *   • PER-ITEM /24h?id= — currently the TRUE trailing-24h (19/24 bit-identical to the composed value on a
- *                        stratified n=24 sample; every disagreement was the COMPOSED side falling short).
+ *   • PER-ITEM /24h?id= — ALSO a complete UTC-DAY aggregate, one day FRESHER than bulk (30/30 exact
+ *                        against the day its own timestamp labels, 4/30 against the true trailing
+ *                        window). ⚠ Earlier headers here called it "the TRUE trailing-24h" on 22/24 and
+ *                        then 19/24 bit-identical; both were measured inside the 00:00–01:00 UTC hour
+ *                        where the composed window coincides with the served day. Corrected 2026-08-11.
  *                        So `vol24FromInputs` is presently a NO-OP in production. It is kept as
  *                        zero-fetch insurance, and these tests pin the MECHANISM so a future
  *                        regression (or another silent endpoint change) is caught rather than assumed.

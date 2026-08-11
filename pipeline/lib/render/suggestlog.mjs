@@ -16,7 +16,12 @@
  *                 a 10-min snapshot, .guide-history.jsonl holds only CHANGES. The live side needs no
  *                 field — quickBuy IS the live instasell, quickSell IS the live instabuy — so this one
  *                 field makes both depth-vs-guide and depth-vs-live computable. Lean-included.)
- *     volSrc?,   (SF-3 — 'bulk' | 'peritem': which /24h endpoint the volume behind `class` came from;
+ *     volSrc?,   (SF-3 — 'bulk' | 'peritem' | 'rolling': which volume source lies behind `class`.
+ *                 ⚠ 'rolling' was ADDED 2026-08-11 and this enum was not updated at the time — the
+ *                 screen had been hardcoding 'bulk' while running the rolling source since 2026-07-13,
+ *                 so ~1,940 of the last 2,000 rows are mislabelled at rest; treat a pre-2026-08-11
+ *                 screen 'bulk' as UNKNOWN. No consumer switches on the string (analyze.mjs tests
+ *                 presence only), so adding a value broke nothing at runtime.
  *                 lean-included, quote/screen always supply it, watch-positions.mjs omits it)
  *     posture?, tripwire?, fillWindowHrs?, thesis?, validators?, path?,
  *     bid?, ask?, pFill?, ttfSec?, rank?, estBasis?, estN?,   (P6b rank estimate — the quoted pair +
@@ -270,10 +275,15 @@ export function readSuggestionLines({ ledger = LEDGER, archiveDir = ARCHIVE_DIR 
 // the figure from a live v24 map and logs it under a different name, `volDayCurrent` — a present-day
 // liquidity read, NOT the volume as it stood when the suggestion was made. Don't reason about that join
 // as if it were point-in-time.
-// NY2.4: this 'thin' (volDay < 100) is DISTINCT from screen-flip-niches.mjs's grade-capping `thin` (the gp-flow-only
-// admission path, limitVol < 50). Because volDay == limitVol, an item at 50–99/day logs class:'thin'
-// here yet is NOT gp-flow-thin, so it grades on merit — a class:'thin' + high grade in the ledger is
-// expected, not a cap escape (see rating.mjs THIN_GRADE_CAP note).
+// NY2.4: this 'thin' (volDay < 100) is DISTINCT from screen-flip-niches.mjs's grade-capping `thin` (the
+// gp-flow-only admission path, limitVol < FLOOR).
+// ⚠ THE WORKED EXAMPLE HERE WAS STALE AND IS CORRECTED 2026-08-11. It read: "an item at 50–99/day logs
+// class:'thin' here yet is NOT gp-flow-thin, so it grades on merit — a class:'thin' + high grade in the
+// ledger is expected, not a cap escape." That reasons from `FLOOR = 50`; FLOOR is 3,500 (PLAN-VOL24
+// Step 2), so a 50–99/day item IS gp-flow-thin, the cap DOES apply, and the "expected, not a cap
+// escape" reassurance is void — such a row would now be a genuine anomaly. The two labels do still
+// differ in general (this cut is 100/day, the admission cut is 3,500); it is the example that inverted.
+// The identical stale reasoning was corrected in `js/rating.mjs`'s THIN_GRADE_CAP note in the same pass.
 export function liqClassOf(volDay) {
   if (volDay == null) return 'unknown';
   if (volDay < 100) return 'thin';
@@ -290,7 +300,13 @@ export function liqClass(row) { return liqClassOf(row && row.volDay); }
 // endpoint screen uses → the classes CONVERGE, tagged volSrc:'bulk'. When cold, keep the per-item
 // row.volDay and tag volSrc:'peritem' (the honesty label F1 can bucket/normalize on). This is PURE —
 // it fetches nothing; the warm map is whatever the caller already had (the hard no-cold-fetch constraint
-// lives at the loadAll24hWarm accessor). screen-flip-niches.mjs passes volSrc:'bulk' directly (it already reads bulk).
+// lives at the loadAll24hWarm accessor). ⚠ CORRECTED 2026-08-11: this said "screen-flip-niches.mjs passes
+// volSrc:'bulk' directly (it already reads bulk)". It doesn't — it passes VOL_SRC_LABEL, which is
+// 'rolling' by default. THIS function still legitimately tags 'bulk', because it genuinely reads the raw
+// all24h.json warm map. ⚠ Which is itself worth flagging: a quote row's `class` is therefore derived from
+// the BULK (older) UTC day while the same row's logged `volDay` came from the rolling composition — two
+// different sources on one row. Measured 2026-08-11: 390 of 3,581 two-sided items (10.9%) get a different
+// liqClass from the two. Not fixed here; it needs a decision about which source `class` should follow.
 export function classAndSource(row, id, warmBulk) {
   const be = warmBulk ? (warmBulk[id] || warmBulk[String(id)]) : null;
   if (be) {

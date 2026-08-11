@@ -475,7 +475,8 @@ if (!['legacy', 'rolling'].includes(VOL_SOURCE)) { console.error(`! unknown --vo
 // provenance label contradicting their own `params.volSource:'rolling'` — F1 would bucket
 // rolling-sourced rows as bulk. Rows written BEFORE this date are mislabelled at rest: treat a
 // pre-2026-08-11 `volSrc:'bulk'` from this script as UNKNOWN, not as bulk.
-// (Note suggestlog.mjs's warmClass() legitimately tags 'bulk' — it reads the raw all24h.json warm file.)
+// (Note suggestlog.mjs's classAndSource() legitimately tags 'bulk' — it reads the raw all24h.json warm
+// file. An earlier version of this line named a function `warmClass()`, which does not exist.)
 const VOL_SRC_LABEL = VOL_SOURCE === 'rolling' ? 'rolling' : 'bulk';
 // --- PLAN-OUTPUT-TABLE (2026-07-13): the DEFAULT niche-table stdout view is the reconciliation-
 // estimator pair — Est. buy / Est. sell / Net/u (ROI) / BE with confidence riding in the price cells

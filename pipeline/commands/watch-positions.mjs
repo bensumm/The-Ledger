@@ -146,9 +146,21 @@ function logGuideChanges(items, guide) {
 // CLASSIFICATION taxonomy — tunable named constants, NOT magic numbers.
 // Boundaries are justified in pipeline/MONITORING.md ("Item-type classes"); the
 // short version:
-//   LIQUID_FLOOR_PER_DAY — two-sided daily volume below which a book is "thin". 100/d is
-//     the practical floor codified in CLAUDE.md (below it is ghost-spreads / no reliable
-//     exit); Vol/d here is already the limiting side (min hi/lo vol) from computeQuote.
+//   LIQUID_FLOOR_PER_DAY — two-sided daily volume below which a book is "thin". Vol/d here is
+//     already the limiting side (min hi/lo vol) from computeQuote.
+//     ⚠ THE CITATION HERE WAS FALSE, corrected 2026-08-11. It read "100/d is the practical floor
+//     codified in CLAUDE.md". CLAUDE.md contains no such floor (zero matches), and MONITORING.md
+//     records that "the old '~100/d practical floor' this bullet used to cite was RETIRED by the
+//     PLAN-VOL24 recalibration". The VALUE is also not in PLAN-VOL24 Step 2's sweep table, so it
+//     was missed when FLOOR moved 50 → 3,500 against the corrected volume basis.
+//     Measured consequence (not fixed here — changing it changes poll CADENCE, a behaviour change):
+//     volDay >= 100 holds for 99.66% of rows, so the 'thin' branch fires on 0.34% of them; at the
+//     recalibrated scale it would be 66%. A genuinely thin big-ticket lot at 800/d classifies
+//     STABLE_LIQUID (15m glance cadence) where the recalibrated floor would give it
+//     THIN_BIG_TICKET_VOLATILE (3m manage cadence) — so that branch is near-dead today.
+//     Note MONITORING.md is itself muddled on this: it calls the number retired and then argues it
+//     is a SEPARATE judgment ghost-spread floor from the gate's `--floor`. Resolve that before
+//     changing the value; the false CLAUDE.md citation is what is fixed now.
 //   BIG_TICKET_UNIT_GP — per-UNIT price at/above which a single unit is large capital, so a
 //     drop is expensive per fill (bludgeon/lightbearer territory). Distinct from the chunk-6
 //     BIG_TICKET_GP, which is a whole-LOT (qty×cost) capital-at-risk threshold — momVerdict
@@ -433,8 +445,10 @@ function flushAlert(it, sig, buysByItemMap) {
 async function buildItem({ id, name, qty, avgCost, buyTs }, map, guide) {
   const inp = await fetchItemInputs(id, { ts1h: true }); // ts1h feeds the window-context line
   // PLAN-VOL24: correct vol24 from the in-hand 1h series (rolling24, zero new fetch) — the /24h per-item
-  // endpoint is unusable as a trailing-24h source (a complete UTC-day aggregate whose newest data is ~24–48h old — see the
-  // marketfetch.mjs loadAll24hRolling header); degrades to the /24h read when the series is too short.
+  // endpoint is unusable as a trailing-24h source (a complete UTC-day aggregate — ⚠ the "~24–48h old"
+  // figure that stood here until 2026-08-11 is BULK's staleness; the per-item day is one UTC day fresher,
+  // closing 0–24h before the read — see the marketfetch.mjs loadAll24hRolling header, the ONE HOME);
+  // degrades to the /24h read when the series is too short.
   // Reassigned so Vol/d + pressure + the avgLow24 dip reference all read the corrected value; computeQuote untouched.
   const _cv = vol24FromInputs(inp); inp.vol24 = _cv.vol24;
   const held = qty != null;
