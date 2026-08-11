@@ -2,31 +2,19 @@
 /**
  * vol24.test.mjs — pins the rolling-24h volume correction (PLAN-VOL24).
  *
- * WHY THIS FILE EXISTS. On 2026-08-10 the ENTIRE correction was reverted as a mutation experiment —
- * `vol24FromInputs` made to return the raw endpoint value unconditionally — and all 109 suites passed.
- * Nothing anywhere pinned it. That is the strongest possible statement of a test gap, and this file
- * closes it: the suite FAILS under that mutation, which is what a pin has to do.
- * ⚠ Be precise about how much it fails by. This line used to claim "every assertion below fails under
- * that mutation"; measured 2026-08-11 by building the mutation as a shim and running this file against
- * it, THREE of the thirteen groups fail (the mutation guard, the F4 anchor-boundary case, and the F5
- * bucket count) and ten pass. Ten passing assertions are ones that hold under a broken implementation
- * and therefore carry no weight ALONE — that is normal for a suite that also pins window arithmetic and
- * degradation shape, but it is not what the old sentence said.
+ * WHY IT EXISTS: on 2026-08-10 the ENTIRE correction was reverted as a mutation (`vol24FromInputs`
+ * returning the raw endpoint unconditionally) and all 109 suites passed — nothing pinned it.
+ * Under that mutation this suite FAILS, specifically 3 of 13 groups (mutation guard, F4 anchor
+ * boundary, F5 bucket count). The other 10 hold under a broken implementation and carry no weight
+ * ALONE — they pin window arithmetic and degradation shape. Don't claim "every assertion fails".
  *
- * WHAT IS ACTUALLY BROKEN (re-measured 2026-08-11 — the ONE home is the loadAll24hRolling header):
- *   • BULK /24h        — a complete, bit-exact UTC-DAY aggregate whose newest data is ~24–48h old. Genuinely
- *                        broken as a trailing-24h source; loadAll24hRolling is the load-bearing fix.
- *   • PER-ITEM /24h?id= — ALSO a complete UTC-DAY aggregate, one day FRESHER than bulk (30/30 exact
- *                        against the day its own timestamp labels, 4/30 against the true trailing
- *                        window). ⚠ Earlier headers here called it "the TRUE trailing-24h" on 22/24 and
- *                        then 19/24 bit-identical; both were measured inside the 00:00–01:00 UTC hour
- *                        where the composed window coincides with the served day. Corrected 2026-08-11.
- *                        So `vol24FromInputs` is presently a NO-OP in production. It is kept as
- *                        zero-fetch insurance, and these tests pin the MECHANISM so a future
- *                        regression (or another silent endpoint change) is caught rather than assumed.
- * The tests below are all deterministic and offline — they construct series directly and never fetch.
+ * WHAT THESE PIN: neither /24h endpoint is a trailing-24h source; both serve complete UTC-DAY
+ * aggregates (per-item one day fresher than bulk), so `vol24FromInputs` moves the number ~23h/day.
+ * All figures + the 00:00-01:00 UTC measurement trap live in the marketfetch loadAll24hRolling ONE
+ * HOME block — do not restate them here.
  *
- * Run: `node pipeline/test/vol24.test.mjs`  (exits non-zero on any failure).
+ * Deterministic and offline: series are constructed directly, nothing fetches, clock is fixed.
+ * Run: `node pipeline/test/vol24.test.mjs` (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
 import { rolling24FromTs1h, vol24FromInputs, ROLL24_HOURS } from '../lib/market/marketfetch.mjs';

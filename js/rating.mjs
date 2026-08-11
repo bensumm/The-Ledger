@@ -46,23 +46,16 @@ import { clamp } from './money-math.js';   // shared clamp — was reimplemented
 // Regime stability. Flat = full marks; rising is discounted by froth magnitude (a +5% drift barely
 // dents, a +100% reprice is frothy → size-small territory); an unconfirmed regime takes a mild
 // haircut.
-// ⚠ KNOWN BUG, FOUND 2026-08-11, NOT YET FIXED — a CONFIRMED FALLING item scores FULL MARKS here.
-// This function never reads `row.falling`: the `return 1.0` is annotated "flat" but is the catch-all,
-// so falling lands there. Measured: falling −40% → 1.000 and falling −90% → 1.000, while rising +40%
-// → 0.753 and an UNCONFIRMED regime → 0.850. A confirmed faller is thus scored BETTER than an item
-// we simply have too little history on, and better than any riser — the exact inversion of the risk
-// this factor exists to price.
-// The justification that used to sit here — "Falling reaches here only via the falling-ACCEPTING specs
-// (P5 scalp/value); the default band/spread/rising/churn niches still EXCLUDE fallers before rating" —
-// is wrong three ways: `spread` and `rising` are DELETED niches; `value` is knife-guarded, not
-// falling-accepting (the accepting specs are `scalp` and `reverse`); and fallers reach rating anyway.
-// Measured over the last 8,000 ledger rows: 1,119 falling-regime screen rows, 411 graded B- or better,
-// 8 of them S+. Most are `watchlist` (1,040), which bypasses niche exclusion BY DESIGN — so the
-// exclusion premise cannot carry this factor even where the specs do exclude — but 8 landed in `band`,
-// whose spec says exclude, and that residue is UNEXPLAINED.
-// Deliberately NOT fixed here: reading `row.falling` changes the visible grade and default ordering on
-// every falling row Ben reads, which is a product decision, not a comment fix. Needs its own change,
-// its own review, and an APP_VERSION bump.
+// ⚠ KNOWN BUG (2026-08-11, NOT FIXED — changes visible grades; needs its own review + APP_VERSION bump).
+// This never reads `row.falling`; `return 1.0` is annotated "flat" but is the catch-all, so a CONFIRMED
+// FALLER gets FULL MARKS: measured falling−40% → 1.000, falling−90% → 1.000, vs rising+40% → 0.753 and
+// unconfirmed → 0.850. A faller outscores an item we merely lack history on — the risk inversion.
+// Its old justification ("only falling-ACCEPTING specs reach here; band/spread/rising/churn exclude
+// fallers") is wrong 3 ways: spread+rising are DELETED; value is knife-guarded not accepting (accepting
+// = scalp, reverse); and fallers arrive anyway. Measured over 8,000 ledger rows: 1,119 falling screen
+// rows, 411 ≥ B-, 8 S+. 1,040 are `watchlist` (bypasses niche exclusion BY DESIGN, so the exclusion
+// premise can never carry this factor); 8 landed in `band`, whose spec excludes — that residue is
+// UNEXPLAINED and worth chasing before fixing.
 export function regimeFactor(row) {
   if (!row.regime || !row.regime.ok) return 0.85;                 // unconfirmed / too little history
   if (row.rising) return clamp(0.9 - (row.regime.driftPct - 5) / 95 * 0.4, 0.5, 0.9); // +5%→0.9 … +100%→0.5
@@ -83,20 +76,14 @@ export function momFactor(row) {
 
 // Liquidity / exit-ease. Saturating in the limiting-side daily volume: at the practical floor (~50/d)
 // you can barely exit → 0.5; by ~5000/d it's a deep two-sided market → 1.0.
-// ⚠ KNOWN STALE ANCHORS, FOUND 2026-08-11, NOT YET CHANGED. F0/F1 still encode the PRE-recalibration
-// volume scale. `FLOOR` moved 50 → 3,500 when PLAN-VOL24 Step 2 rebased volume onto the corrected
-// rolling-24h source and claimed to sweep "every volume-denominated floor" — F0/F1 are not in that
-// table and were missed, as were `TTF_REF_VOL` (js/estimators/families.mjs, landed four days BEFORE the
-// rebase) and `LIQUID_FLOOR_PER_DAY` (watch-positions.mjs).
-// Consequence: this factor is documented as spanning 0.5 → 1.0 but is effectively pinned at the top for
-// everything that survives the gate. Measured over the FLOOR-admitted pool (946 items): liqFactor is
-// exactly 1.000 on 90.9% of them; liqFactor(3500) = 0.961, and 5,000/d — the value F1 calls "a deep
-// two-sided market" — is now only ~1.4× the admission floor itself. Corroborating measurement on the
-// TTF side: `ttfIntraday` returns exactly its 10,800s floor on 56.7% of the real pool, so that term
-// contributes nothing to the ordering of over half the board either.
-// Deliberately NOT re-anchored here: moving F0/F1 changes every visible grade, so it is a product
-// change needing its own review and an APP_VERSION bump — not a comment fix. Documented so the next
-// reader doesn't assume this factor is discriminating when it is nearly constant.
+// ⚠ STALE ANCHORS (2026-08-11, NOT CHANGED — moving F0/F1 changes every grade; own review + bump).
+// F0/F1 encode the PRE-recalibration scale. PLAN-VOL24 §2 moved FLOOR 50 → 3,500 and claimed to sweep
+// "every volume-denominated floor"; MISSED F0/F1, TTF_REF_VOL (families.mjs, landed 4 days before the
+// rebase) and LIQUID_FLOOR_PER_DAY (watch-positions.mjs). None are in that table.
+// Effect: documented as 0.5→1.0, effectively pinned at the top. Over the FLOOR-admitted pool (946):
+// liqFactor == 1.000 on 90.9%; liqFactor(3500)=0.961; F1's "deep market" 5,000/d is now only ~1.4× the
+// admission floor. Same on the TTF side: ttfIntraday sits on its 10,800s floor for 56.7% of the pool.
+// So both factors are near-constant and contribute ~nothing to ordering. Don't assume they discriminate.
 export function liqFactor(volDay) {
   if (!volDay || volDay <= 0) return 0.5;
   const F0 = 50, F1 = 5000;
@@ -141,30 +128,19 @@ export function gradeFor(score) {
    (The exit-ease PENALTY itself is already delivered by liqFactor, which reads the low volDay; this
    cap is the separate can-never-be-a-headline-flip ceiling.)
 
-   NY2.4 — DIFFERENT "thin"s, don't conflate them (now THREE, since G6). This cap keys off the screen's `thin` flag,
-   which is the GP-FLOW-ONLY ADMISSION PATH: `limitVol < FLOOR` (3500/day — **this said 50/day until
-   2026-08-10**, i.e. 70× stale, at the very site that DEFINES the rule; PLAN-VOL24 step 2 recalibrated
-   FLOOR 50 → 3500 against the corrected rolling-24h volume) AND admitted only because
-   `limitVol×mid ≥ GP_FLOOR` (screen-flip-niches.mjs gateCandidates). That is the ONLY `thin` that caps a grade,
-   and it is capped every time it reaches rateItem (both the niche and watchlist paths pass it). It is
-   NOT the same label as suggestlog's coarse `liqClass` 'thin' (`volDay < 100`) written to the `class`
-   field of suggestions.jsonl.
-   ⚠ THE WORKED EXAMPLE THAT USED TO SIT HERE WAS SELF-CONTRADICTORY — corrected 2026-08-11. It read:
-   "an item with volume in [50, 100)/day is `liqClass:'thin'` (logged) yet NOT gp-flow-thin (limitVol ≥
-   50) → it grades ON MERIT and can legitimately log `class:'thin', verdict:'S+'` (the Armadyl-crossbow
-   case that looked like a cap escape — it isn't; the cap never applied)." That reasons from `FLOOR =
-   50` — five lines after this same comment records that FLOOR moved 50 → 3500. Under the LIVE floor a
-   [50,100)/day item is `limitVol < 3500`, so it IS gp-flow-thin, the cap DOES apply, and `S+` is
-   unreachable for it (measured: volDay 60 and 99 both → gp-flow-thin, grade capped at A-). The
-   Armadyl-crossbow exoneration is therefore void as written; a `class:'thin' + S+` row in the ledger
-   from after the recalibration would be a genuine anomaly worth chasing, not the expected vocabulary
-   mismatch this paragraph used to explain away. The two labels DO still differ in general (the `class`
-   cut is 100/day, the admission cut is 3500) — that part stands; it is the [50,100) worked example and
-   its "no code gap" conclusion that were stale.
-   THE THIRD "thin" (G6, below): the CONFIDENCE marker (`thinConfidence` / `(thin)` on the letter) keys off
-   the pFill reach SAMPLE `n` < CONF_THIN_N_FLOOR — "the fill call rests on thin evidence." It MARKS the
-   letter, never caps or shrinks it, and is independent of BOTH the gp-flow admission `thin` (a liquidity
-   fact) and suggestlog's `liqClass` (a volume bucket). Three triggers, one label — the tooltip says which. */
+   NY2.4 — THREE different "thin"s (since G6), don't conflate:
+     1. THIS cap keys off the screen's gp-flow-only admission `thin` = `limitVol < FLOOR` (FLOOR is
+        3500/day; this site said 50 until 2026-08-10) AND admitted only via `limitVol×mid ≥ GP_FLOOR`.
+        The ONLY `thin` that caps a grade; applied every time it reaches rateItem (niche + watchlist).
+     2. suggestlog's coarse `liqClass` 'thin' = `volDay < 100`, written to `class` in suggestions.jsonl.
+        Logging vocabulary only, never caps.
+     3. G6 `thinConfidence` — the pFill reach sample n < CONF_THIN_N_FLOOR. MARKS the letter, never caps.
+   ⚠ Under FLOOR=3500 a [50,100)/day item IS gp-flow-thin, so the cap DOES apply and S+ is unreachable
+   (measured: volDay 60 and 99 → capped A-). An earlier version here argued the opposite from FLOOR=50
+   and used it to exonerate an Armadyl-crossbow `class:'thin' + S+` row as a harmless vocabulary
+   mismatch. That is void: a post-recalibration `class:'thin' + S+` row is a REAL anomaly — chase it.
+   All three are independent (liquidity fact / volume bucket / evidence count). Three triggers, one
+   label — the tooltip says which. */
 export const THIN_GRADE_CAP = 'A-';
 
 /* G6 (PLAN-GRADE-REWORK — Fix E, reshaped by O5): a `(thin)` CONFIDENCE MARKER — mark, don't shrink.

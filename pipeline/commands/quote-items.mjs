@@ -351,8 +351,8 @@ async function runItems() {
     // (skip the ts1h enrichment past N items, degrading reach/diurnal to "not fetched — batch too large").
     const inp = await fetchItemInputs(id, { ts1h: true });
     // PLAN-VOL24: the /24h per-item endpoint is unusable as a trailing-24h source (a complete UTC-day
-    // aggregate — ⚠ the "~24–48h old" figure that stood here until 2026-08-11 is BULK's staleness; the
-    // per-item day is one UTC day fresher, closing 0–24h before the read — marketfetch.mjs loadAll24hRolling header). Correct vol24 from the
+    // aggregate closing 0–24h before the read; "~24–48h" is BULK's staleness, don't apply it here —
+    // marketfetch.mjs loadAll24hRolling header). Correct vol24 from the
     // in-hand 1h series (rolling24, zero new fetch); degrades to the /24h read when the series is too short.
     // Reassigned on inp so EVERY downstream use — computeQuote's Vol/d + pressure, avgLow24/avgHigh24 dip
     // reference, reach-relief input — reads the corrected value. computeQuote itself is untouched (app-safe).

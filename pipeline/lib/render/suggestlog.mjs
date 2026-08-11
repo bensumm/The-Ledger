@@ -16,13 +16,11 @@
  *                 a 10-min snapshot, .guide-history.jsonl holds only CHANGES. The live side needs no
  *                 field — quickBuy IS the live instasell, quickSell IS the live instabuy — so this one
  *                 field makes both depth-vs-guide and depth-vs-live computable. Lean-included.)
- *     volSrc?,   (SF-3 — 'bulk' | 'peritem' | 'rolling': which volume source lies behind `class`.
- *                 ⚠ 'rolling' was ADDED 2026-08-11 and this enum was not updated at the time — the
- *                 screen had been hardcoding 'bulk' while running the rolling source since 2026-07-13,
- *                 so ~1,940 of the last 2,000 rows are mislabelled at rest; treat a pre-2026-08-11
- *                 screen 'bulk' as UNKNOWN. No consumer switches on the string (analyze.mjs tests
- *                 presence only), so adding a value broke nothing at runtime.
- *                 lean-included, quote/screen always supply it, watch-positions.mjs omits it)
+ *     volSrc?,   (SF-3 — 'bulk' | 'peritem' | 'rolling': volume source behind `class`. Lean-included;
+ *                 quote/screen supply it, watch-positions omits it. No consumer switches on the string
+ *                 (analyze.mjs tests presence only). ⚠ DATA CAVEAT: the screen hardcoded 'bulk' while
+ *                 running rolling from 2026-07-13 to 2026-08-11, so ~1,940 of the 2,000 rows before that
+ *                 date are mislabelled at rest — treat a pre-2026-08-11 screen 'bulk' as UNKNOWN.)
  *     posture?, tripwire?, fillWindowHrs?, thesis?, validators?, path?,
  *     bid?, ask?, pFill?, ttfSec?, rank?, estBasis?, estN?,   (P6b rank estimate — the quoted pair +
  *     net×P÷TTF components; lean-included, absent on older rows)
@@ -108,17 +106,14 @@
  *               doctrine? } — recent-3 (RC1) AND full-window reach counts, the entry doctrine, and the
  *               declared/BE flags; the F1 join scores estSell against the realized sell. Lean-included;
  *               PLACEHOLDER model n≈3–14.)
- *     volDayRolling?,  (PLAN-VOL24 2026-07-13 — the CORRECTED trailing-24h volume {hpv,lpv} from the
- *               /1h grain (the BULK /24h endpoint is unusable as a trailing-24h source — it serves a
- *               complete UTC-day aggregate whose newest data is ~24–48h old; the "frozen ~1–3h slice"
- *               reading is 2026-07 history, see the marketfetch.mjs loadAll24hRolling header); intended as a
- *               shadow BESIDE the active volDay/class for the floor-recalibration retro-join. ⚠ CORRECTED
- *               2026-08-11: it shadows nothing. `suggestionEntry` has never written a `volDay` field at all
- *               — 0 of 7,290 logged rows carry one; only the coarse `class` bucket is stored. And the word
- *               "legacy" here was wrong twice over: it is the term this file's own :594 comment retracted,
- *               and since `rolling` became the screen DEFAULT this field DUPLICATES the gating quantity
- *               rather than shadowing an alternative to it. Lean-included; absent when no 1h series was in
- *               hand — e.g. watchlist rows.)
+ *     volDayRolling?,  (PLAN-VOL24 — the TRUE trailing-24h volume {hpv,lpv} composed from /1h; neither
+ *               /24h endpoint is a trailing source, see the marketfetch.mjs loadAll24hRolling header.
+ *               Lean-included; absent when no 1h series was in hand — e.g. watchlist rows.
+ *               ⚠ Built as a "shadow beside the active volDay" but it shadows NOTHING: suggestionEntry
+ *               has never written a `volDay` field (0 of 7,290 rows); only the coarse `class` is stored.
+ *               And with `rolling` as the screen default it now duplicates the GATING quantity rather
+ *               than offering an alternative to it. It is the only per-row volume in the ledger, so keep
+ *               it — just don't read it as an A/B.)
  *     grade?,  (AZ-forward 2026-07-12 — the rating LETTER as rendered then ('S+'…'D', incl. any
  *               thin/sub-floor cap), so the grade-clumping audit can segment without parsing
  *               `verdict` (which watch-positions.mjs uses for action verdicts); lean-included, screen supplies
@@ -270,20 +265,12 @@ export function readSuggestionLines({ ledger = LEDGER, archiveDir = ARCHIVE_DIR 
 // as computed then" for that script.
 // liqClassOf(volDay) is the raw-number core; liqClass(row) is the row convenience wrapper. ONE threshold
 // set (X1 dedup — was copied as liqClassOf in join-outcomes.mjs).
-// ⚠ CORRECTED 2026-08-11: this said join-outcomes.mjs "joins on STORED volDay". It does not, and there is
-// no stored volDay to join on (see the volDayRolling note above). join-outcomes.mjs:171/225/244 RECOMPUTES
-// the figure from a live v24 map and logs it under a different name, `volDayCurrent` — a present-day
-// liquidity read, NOT the volume as it stood when the suggestion was made. Don't reason about that join
-// as if it were point-in-time.
-// NY2.4: this 'thin' (volDay < 100) is DISTINCT from screen-flip-niches.mjs's grade-capping `thin` (the
-// gp-flow-only admission path, limitVol < FLOOR).
-// ⚠ THE WORKED EXAMPLE HERE WAS STALE AND IS CORRECTED 2026-08-11. It read: "an item at 50–99/day logs
-// class:'thin' here yet is NOT gp-flow-thin, so it grades on merit — a class:'thin' + high grade in the
-// ledger is expected, not a cap escape." That reasons from `FLOOR = 50`; FLOOR is 3,500 (PLAN-VOL24
-// Step 2), so a 50–99/day item IS gp-flow-thin, the cap DOES apply, and the "expected, not a cap
-// escape" reassurance is void — such a row would now be a genuine anomaly. The two labels do still
-// differ in general (this cut is 100/day, the admission cut is 3,500); it is the example that inverted.
-// The identical stale reasoning was corrected in `js/rating.mjs`'s THIN_GRADE_CAP note in the same pass.
+// ⚠ join-outcomes.mjs does NOT join on a stored volDay (there is none — see the volDayRolling note).
+// It RECOMPUTES from a live v24 map as `volDayCurrent` — a present-day read, not point-in-time.
+// NY2.4: this 'thin' (volDay < 100) is DISTINCT from the screen's grade-capping `thin` (gp-flow-only
+// admission, limitVol < FLOOR = 3500). ⚠ A [50,100)/day item IS gp-flow-thin under the live FLOOR, so
+// the cap applies — an earlier note argued the reverse from the stale FLOOR=50 and treated a
+// `class:'thin' + S+` row as expected. It is a real anomaly. Same fix in rating.mjs THIN_GRADE_CAP.
 export function liqClassOf(volDay) {
   if (volDay == null) return 'unknown';
   if (volDay < 100) return 'thin';
@@ -300,13 +287,11 @@ export function liqClass(row) { return liqClassOf(row && row.volDay); }
 // endpoint screen uses → the classes CONVERGE, tagged volSrc:'bulk'. When cold, keep the per-item
 // row.volDay and tag volSrc:'peritem' (the honesty label F1 can bucket/normalize on). This is PURE —
 // it fetches nothing; the warm map is whatever the caller already had (the hard no-cold-fetch constraint
-// lives at the loadAll24hWarm accessor). ⚠ CORRECTED 2026-08-11: this said "screen-flip-niches.mjs passes
-// volSrc:'bulk' directly (it already reads bulk)". It doesn't — it passes VOL_SRC_LABEL, which is
-// 'rolling' by default. THIS function still legitimately tags 'bulk', because it genuinely reads the raw
-// all24h.json warm map. ⚠ Which is itself worth flagging: a quote row's `class` is therefore derived from
-// the BULK (older) UTC day while the same row's logged `volDay` came from the rolling composition — two
-// different sources on one row. Measured 2026-08-11: 390 of 3,581 two-sided items (10.9%) get a different
-// liqClass from the two. Not fixed here; it needs a decision about which source `class` should follow.
+// lives at the loadAll24hWarm accessor). This function's 'bulk' tag is CORRECT — it genuinely reads the
+// raw all24h.json warm map. (screen-flip-niches.mjs passes VOL_SRC_LABEL, 'rolling' by default.)
+// ⚠ OPEN, NOT FIXED: a quote row's `class` therefore comes from the BULK (older) UTC day while the same
+// row's `volDay` comes from the rolling composition — two sources on one row, disagreeing on 390 of
+// 3,581 items (10.9%). Needs a decision on which source `class` should follow.
 export function classAndSource(row, id, warmBulk) {
   const be = warmBulk ? (warmBulk[id] || warmBulk[String(id)]) : null;
   if (be) {
@@ -615,15 +600,9 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // computes a grade, so it's a caller param (quote/watch never supply it). Lean-included (YS2 pattern):
   // absent on every pre-field row and on grade-less scripts — consumers treat absent as unknown.
   if (grade != null)         e.grade = grade;
-  // PLAN-VOL24 (2026-07-13) — the CORRECTED trailing-24h volume { hpv, lpv } composed from the /1h
-  // grain (marketfetch.rolling24FromTs1h, off an already-fetched 1h series → zero new fetch), logged
-  // BESIDE `class`. ⚠ STALE COMMENT, corrected 2026-08-10: this said the active volDay "still
-  // come[s] from the broken /24h endpoint until the floors are recalibrated". Step 2 SHIPPED 2026-07-13 —
-  // `rolling` is the screen DEFAULT and the floors ARE recalibrated. ⚠ AND AGAIN 2026-08-11: that fix left
-  // "BESIDE `volDay`/`class`" standing. There is no logged `volDay` — 0 of 7,290 rows have one. So this is
-  // not a shadow of an alternative source; with `rolling` as the default it now records the SAME quantity
-  // the gate used. Still worth logging (it is the only per-row volume in the ledger at all), just don't
-  // read it as an A/B against a broken sibling — there is no sibling.
+  // PLAN-VOL24 — the TRUE trailing-24h volume { hpv, lpv } composed from /1h (rolling24FromTs1h, off an
+  // already-fetched series → zero new fetch). Full field semantics + the shadows-nothing caveat are in
+  // the volDayRolling entry of this file's header schema; don't restate them here.
   // Lean-included (YS2 pattern): a caller with no 1h series in hand (watchlist rows) supplies null →
   // no field → byte-identical shape.
   if (volDayRolling != null) e.volDayRolling = volDayRolling;

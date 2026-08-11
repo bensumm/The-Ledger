@@ -238,102 +238,39 @@ export async function loadAllLatest() {
   writeCache('latest.json', d); return d;
 }
 
-/* --- Rolling-24h volume (PLAN-VOL24, 2026-07-13; re-measured 2026-08-10) ---------------------
-   THIS BLOCK IS THE ONE HOME for what /24h actually serves. Every other site points here.
+/* --- /24h volume — THIS BLOCK IS THE ONE HOME. Every other site points here. -------------
+   FACT. Neither /24h endpoint is a trailing-24h source. Both serve a COMPLETE, bit-exact UTC-DAY
+   aggregate whose top-level `timestamp` T is that day's START (T % 86400 == 0).
+     bulk /24h      T = day start; that day closed 24-48h before the read.
+     per-item ?id=  T = bulk T + exactly 24h; that day closed 0-24h before the read.
+   Evidence: sum an item's own /1h over [T, T+23h] vs served — 30/30 exact. vs the TRUE trailing
+   24h — 4/30. Bulk offset scan, full market: 3767/3767 at offset 0; 414 at -1h, 383 at +1h (thin
+   items with empty boundary hours also match, so it is overwhelming, not zero — do not claim 0).
+   Do NOT use a ±10% band to identify the window; offset -1h scores 244/247 within ±10%.
+   ?id= IS IGNORED — /24h?id=2 and ?id=13190 both return the same full 4152-item map, so
+   fetch24hOne downloads the whole market for one row. Correct, but not cheap.
 
-   ⚠⚠ READ THIS FIRST — THE PREMISE OF THE 2026-08-10 WAVE WAS WRONG, CORRECTED 2026-08-11.
-   That wave concluded "bulk is broken, PER-ITEM is CORRECT (the true trailing-24h), so
-   vol24FromInputs is a no-op". **Both halves of that are false.** NEITHER endpoint serves a
-   trailing 24h. Both serve a COMPLETE, bit-exact UTC-DAY aggregate; they differ only in WHICH
-   day, and per-item is one day fresher:
-       bulk      `timestamp` T = 2026-08-09T00:00Z  (that day closed ~25h before the read)
-       per-item  `timestamp` T = 2026-08-10T00:00Z  (that day closed ~1.5h before the read)
-       the two Ts differ by EXACTLY 24h; both satisfy T % 86400 == 0.
-   Measured directly (n=30, each item's own /1h series summed two ways):
-       served == sum over the UTC DAY [T, T+23h]  →  30/30
-       served == sum over the TRUE TRAILING 24h   →   4/30
-   HOW THE WRONG CONCLUSION SURVIVED — this is the part to remember. `lastCompleteHour()` makes
-   the composed trailing window coincide with the per-item served day ONLY during 00:00–01:00
-   UTC. The "22/24" and then the "19/24 bit-identical" measurements were both taken inside that
-   hour (commit d8f63e2 is stamped 01:03 UTC), which is 17:00–18:00 PDT — the hour these
-   sessions habitually run in, so it WILL recur. Re-running the identical script one hour later
-   gives 4/24. If you are about to conclude the two agree, CHECK THE CLOCK FIRST.
-   CONSEQUENCE: vol24FromInputs is NOT a no-op. It does real work roughly 23 hours a day, and
-   every downstream statement built on "no live number moves" is void (they are corrected at
-   their own sites: read-book.mjs, quote-items.mjs, watch-positions.mjs).
-   ALSO: the `?id=` parameter is IGNORED — `/24h?id=2` and `/24h?id=13190` both return the same
-   full 4,152-item map. `fetch24hOne` therefore downloads the entire market to read one row.
-   Not a correctness bug (it indexes by id), but it is not the cheap call its name implies.
+   ⚠⚠ TRAP THAT COST THREE REVIEW ROUNDS. lastCompleteHour() makes the composed trailing window
+   coincide with PER-ITEM's served day ONLY during 00:00-01:00 UTC (= 17:00-18:00 PDT, the hour
+   these sessions habitually run in). Measured in that hour, composed == per-item endpoint 19/24
+   and the wave concluded "per-item is correct, vol24FromInputs is a no-op". Same script one hour
+   later: 4/24. CHECK THE CLOCK before concluding the two agree.
 
-   The two endpoints, as they actually behave:
-     • BULK /24h (no id) — the STALER day. It serves a COMPLETE, bit-exact
-       UTC-DAY aggregate whose top-level `timestamp` T is the day's START: served hpv/lpv equal
-       the /1h sum over [T, T+23h].
-       EXACTNESS is established by an OFFSET SCAN, not by a ratio: exact integer equality on BOTH
-       hpv and lpv, over candidate 24-bucket windows at other offsets, plus T % 86400 == 0.
-       Re-run 2026-08-11 over the FULL two-sided market (3,767 items, T=1786233600): offset 0
-       scores 3767/3767, offset −1h 414/3767, offset +1h 383/3767, with T re-read after the scan
-       to confirm it had not advanced. Discrimination is overwhelming but NOT literally zero off
-       the true window — a thin item whose boundary hours are empty matches at ±1h too, so an
-       earlier "0/247 at every other offset" (taken on a coverage-filtered 247-item sample) does
-       not generalize. Do NOT cite the ±10% band for this — offset −1h scores 244/247 within
-       ±10%, so that test barely discriminates the true window from one shifted a single hour.
-       (An earlier version of this block cited the archive's own FWD/BACK ratio as a "control".
-       That was a TAUTOLOGY: since endpoint == FWD exactly, endpoint/BACK ≡ FWD/BACK by
-       construction. Removed.)
-       The defect is STALENESS, not magnitude — and state it against the day's CLOSE, not T:
-       the served day closes at T+24h, so a T lag of 71.3h (08-10) and 48.9h (08-11) means the
-       day closed 47.3h and 24.9h before those reads. The anchor advances once per UTC day, so
-       freshness SAWTOOTHS: the newest data is between ~24h and ~48h old, and the aggregate spans
-       24–72h back. ("2–3 days stale" was wrong and is retracted.)
-       This is the source loadAll24hRolling exists to replace.
-     • PER-ITEM /24h?id= (fetch24hOne) — the FRESHER day, and still NOT a trailing-24h source.
-       Its T is one UTC day ahead of bulk's, so the day it serves has typically closed 0–24h ago
-       (1.5h at the 2026-08-11 01:30Z read) against bulk's 24–48h. That is a genuine and useful
-       difference — it is the better of the two — but "fresher" is not "correct", and the whole
-       2026-08-10 wave turned on conflating them.
-       ⚠ THREE SUCCESSIVE FIGURES HERE HAVE NOW BEEN RETRACTED. (1) "22/24 BIT-IDENTICAL" sat
-       beside "4 had incomplete coverage and 3 of those under-reported by >1%", which cannot both
-       hold on one 24-item sample — two probes written as one. (2) The replacement, "19/24", was
-       measured inside the 00:00–01:00 UTC hour where the composed window coincides with the
-       served day; the same script an hour later returns 4/24. (3) "Every disagreement is the
-       COMPOSED side falling short, never endpoint error" is false — on a fresh out-of-window
-       probe the composed value EXCEEDED the endpoint on 8/24, by as much as +56%, because it is
-       measuring a different window rather than a truncated one.
-       What is left standing, and it is the useful part: composing from /1h is the ONLY trailing-24h
-       source we have. Both endpoints answer a different question (what did this item trade in a
-       fixed past UTC day), which is not the question a liquidity gate asks. So keep the correction
-       for its ARITHMETIC as well as its coverage guard — the earlier "it is insurance / a no-op"
-       framing understated it by about 23 hours a day.
-     • As measured 2026-07-13 (the original finding, kept in PLAN-VOL24.md): a ~1–3h slice of a
-       UTC day at ~26h lag — a ~10–27× under-report. HISTORY. Not re-verifiable, and NOT true of
-       either endpoint today. Do NOT restate ~10–27× in the present tense; bulk now measures
-       ~1.0× against the day it labels.
-   WHY IT CHANGED IS UNKNOWN — do not invent a mechanism. An earlier version of this block claimed
-   the endpoint "used to serve a partial, still-accumulating day and now waits for it to close,
-   which is exactly why staleness grew while accuracy went to exact." That story is RETRACTED: it
-   contradicts the July evidence it claimed to explain (PLAN-VOL24 records 14 days of HISTORICAL
-   /24h?timestamp= buckets each truncated to their first 1–3h — closed days, truncated, not
-   accumulating), and if T is the day's START then a 26h-old T describes a day that closed 2h
-   before the read and cannot still be accumulating. Both observations are real; the causal link
-   between them is not established. State the two measurements in their own tense and stop there.
-   Net: the BULK correction below is load-bearing; the per-item correction is insurance.
-   The /5m, /1h, /6h grains are healthy. These
-   composers reconstruct the TRUE trailing-24h volume from the /1h grain:
-     • rolling24FromTs1h — sums an ALREADY-FETCHED per-item /timeseries?1h (ZERO new fetch on a row
-       whose 1h series is in hand: screen survivors, quote COD-4).
-     • loadAll24hRolling — walks the last 24 complete /1h?timestamp bulk windows (the loadDaily/
-       loadBands grid-aligned pattern), REUSING the Tier-1 SQLite 1h archive (check-before-fetch, so a
-       warm machine fetches only the gaps loadSnapshot/loadDaily didn't accrue).
-   Both were proven EXACT vs a per-item timeseries sum (10/10 items, hpv AND lpv, 2026-07-13). The
-   emitted per-id shape MATCHES loadAll24h's entry — {highPriceVolume,lowPriceVolume,avgHighPrice,
-   avgLowPrice} — so a caller can swap sources with no shape change; the avg prices are volume-weighted
-   24h means of the hourly avgs (a real VWAP, unlike /24h's single averaged number).
-   ⚠ `rolling` IS THE SCREEN DEFAULT and has been since step 2 shipped (2026-07-13) —
-   screen-flip-niches.mjs `--vol-source` has `fallback: 'rolling'`, pinned by compose.test.mjs.
-   This paragraph said the opposite ("SHADOW/opt-in … the DEFAULT legacy path never calls it, so
-   nothing changes live … pending the floor recalibration") for roughly a month after the thing it
-   was pending on had shipped. `--vol-source legacy` is the ESCAPE HATCH, not the default. */
+   CONSEQUENCE: both corrections do real work. loadAll24hRolling replaces bulk; vol24FromInputs
+   moves the per-item number ~23h/day. Any claim that a fallback here "moves no live number" is
+   false (measured to -10.2%). Composed EXCEEDS the endpoint about as often as it falls short
+   (8/24, up to +56%) — different windows, not truncation.
+   The ~10-27x under-report (2026-07-13) is HISTORY; bulk measures ~1.0x vs the day it labels.
+   Why the endpoint changed is UNKNOWN — do not invent a mechanism.
+   Full retraction history: CHANGELOG 2026-08-10 / 2026-08-11 entries, PLAN-VOL24.md.
+
+   /5m, /1h, /6h are healthy. Composers that reconstruct the TRUE trailing 24h from /1h:
+     • rolling24FromTs1h  — sums an ALREADY-FETCHED per-item /timeseries?1h (zero new fetch).
+     • loadAll24hRolling  — walks the last 24 complete bulk /1h?timestamp windows, reusing the
+       Tier-1 SQLite 1h archive (check-before-fetch). Emits loadAll24h's per-id shape, so callers
+       swap sources with no shape change; avg prices are true VWAPs of the hourly avgs.
+   `rolling` IS THE SCREEN DEFAULT (since 2026-07-13; --vol-source fallback:'rolling', pinned by
+   compose.test.mjs). `--vol-source legacy` is an escape hatch, not the default. */
 export const ROLL24_HOURS = 24;
 // last COMPLETE 1h bucket start (unix sec); the trailing-24h window is [anchor-23h, anchor].
 function lastCompleteHour(now = Date.now()) { return Math.floor(now / 1000 / 3600) * 3600 - 3600; }
@@ -356,27 +293,16 @@ export function rolling24FromTs1h(ts1h, now = Date.now()) {
   return { highPriceVolume: hpv, lowPriceVolume: lpv, avgHighPrice: vwap(hi), avgLowPrice: vwap(lo) };
 }
 /* vol24FromInputs(inp, now) → { vol24, volSrc, buckets } — the CORRECTED per-item volume for a quote/watch read.
-   ⚠ STATUS (corrected 2026-08-11 — the THIRD revision of this paragraph; read the ONE HOME block above
-   before trusting any figure here). The PER-ITEM /24h?id= endpoint this overrides is NOT the true
-   trailing-24h: it is a complete UTC-DAY aggregate, one day fresher than bulk. Measured 30/30 exact
-   against the day its own `timestamp` labels, 4/30 against the true trailing window. So this function's
-   ARITHMETIC is NOT a no-op — it moves the number roughly 23 hours a day, and is a no-op only inside the
-   00:00–01:00 UTC hour where the composed window happens to coincide with the served day. Two earlier
-   versions of this paragraph claimed the opposite ("currently correct", "presently a no-op"); both were
-   measured inside that hour. Its coverage guard matters too, but it is no longer the only thing that does.
-   It prefers the TRUE trailing-24h composed from the item's IN-HAND 1h series (rolling24FromTs1h — zero new
-   fetch on a surface that already fetched ts1h: quote COD-4, watch window line). DEGRADES to the /24h read
-   (volSrc 'peritem-24h') when the 1h series is absent OR too short to cover the trailing 24h (a brand-new
-   item, or a truncated fetch) — a partial 1h sum would UNDER-report worse than /24h. The returned vol24 is
-   the SAME shape computeQuote consumes ({highPriceVolume,lowPriceVolume,avgHighPrice,avgLowPrice}), so it's
-   a drop-in override that also corrects the pressure ratio + the 24h avg-low/high dip reference. It does NOT
-   touch computeQuote (js/quotecore.js is app-imported — byte-identical); it only changes the VALUE passed in.
-   ⚠ `volSrc` and `buckets` are DIAGNOSTIC ONLY — as of 2026-08-11 NO production caller reads either; both
-   call sites (`read-book.mjs`, and the quote/watch path) take `.vol24` and discard the rest, so the fields
-   are kept alive solely by vol24.test.mjs. Do not write a comment claiming callers "judge coverage" on
-   `buckets` until one actually does. They are cheap and genuinely useful when probing a degraded read by
-   hand, which is why they stay; surfacing `volSrc` on a degraded quote is an open, unscheduled follow-up.
-   (check-dead-exports.mjs sees exports, not returned FIELDS, so nothing catches this class automatically.) */
+   Prefers the TRUE trailing 24h composed from the item's IN-HAND 1h series (rolling24FromTs1h, zero new
+   fetch: quote COD-4, watch window line). DEGRADES to the raw /24h read (volSrc 'peritem-24h') when that
+   series is absent or fails the coverage guard below. Returns computeQuote's vol24 shape, so it is a
+   drop-in override that also corrects the pressure ratio + the avgLow24/avgHigh24 dip reference.
+   computeQuote itself is untouched (js/quotecore.js is app-imported, byte-identical).
+   NOT a no-op: it moves the number ~23h/day. It is a no-op only inside 00:00-01:00 UTC — see the TRAP in
+   the ONE HOME block above, which is where every figure about these endpoints lives.
+   `volSrc`/`buckets` are DIAGNOSTIC — no production caller reads either (both sites take .vol24 and drop
+   the rest); kept for hand-probing a degraded read. check-dead-exports sees exports, not returned fields,
+   so nothing catches this automatically. Do not claim callers "judge coverage" on `buckets` until one does. */
 export function vol24FromInputs(inp, now = Date.now()) {
   const ts1h = inp && inp.ts1h;
   const fallback = (buckets) => ({ vol24: inp ? (inp.vol24 ?? null) : null, volSrc: 'peritem-24h', buckets });
@@ -390,30 +316,17 @@ export function vol24FromInputs(inp, now = Date.now()) {
       if (p.timestamp > latest) latest = p.timestamp;
       if (p.timestamp >= from && p.timestamp <= anchor) buckets++;
     }
-    // COVERAGE MUST HOLD AT BOTH ENDS. `earliest <= from` alone left an END-OF-WINDOW hole: a series that
-    // reaches far enough BACK but stops hours short of the anchor passed the guard and summed a PARTIAL
-    // window — under-reporting in exactly the way this function exists to prevent, and silently, since
-    // volSrc still said 'rolling'. Requiring `latest >= anchor` closes it. Pinned by vol24.test.mjs.
-    // DO NOT "STRENGTHEN" THIS TO `buckets === 24`. I suspected the both-ends test still admitted a
-    // series with INTERIOR gaps that would sum a partial window; that is REFUTED (2026-08-11).
-    // /timeseries?timestep=1h OMITS no-trade hours entirely, so a missing interior bucket carries zero
-    // volume and the sum is still complete — measured across 120 sampled items, every series this guard
-    // accepted with FEWER than 24 in-window buckets was bit-identical to the per-item endpoint, down to a
-    // series with ONE in-window bucket (plus older out-of-window points — a literally single-POINT series
-    // cannot pass: `earliest == latest == anchor > from` fails the back-end test, so the earlier phrase
-    // "down to a single-bucket series" was unreachable as written).
-    // The mechanism was verified directly rather than assumed: across sampled items, ZERO returned points
-    // had both volumes zero, with up to 350 non-contiguous hour steps inside a 365-point series — so the
-    // endpoint genuinely OMITS empty hours rather than zero-filling them. A `buckets === 24` requirement
-    // would be strictly worse: it would reject correct sparse (thin-item) series wholesale.
-    // ⚠ Known cost — the earlier version of this note UNDERSTATED it. It said the fallback "is currently
-    // correct at every call site, so no live number moves". That is FALSE: the per-item endpoint is a
-    // UTC-DAY aggregate, not the trailing window (see the ONE HOME block), so falling back DOES move the
-    // number — measured up to −10.2% on a fresh out-of-window probe. A false rejection is a real
-    // degradation, not a free one.
-    // ⚠ And the back-end test `earliest <= from` almost never binds: /timeseries returns up to 365 points
-    // (~15 days), so only a brand-new item fails it. Measured n=30: back-end failed 0, front-end failed 6.
-    // "Coverage must hold at BOTH ends" is honest about intent, but one end does all the work.
+    // Coverage must hold at BOTH ends. `earliest <= from` alone left an END-OF-WINDOW hole: a series
+    // reaching far enough back but stopping short of the anchor summed a PARTIAL window while still
+    // reporting volSrc:'rolling'. `latest >= anchor` closes it. Pinned by vol24.test.mjs.
+    // In practice only the FRONT end binds: /timeseries returns up to 365 points, so `earliest <= from`
+    // fails only for a brand-new item (measured n=30: back-end failed 0, front-end 6).
+    // DO NOT strengthen to `buckets === 24`. /timeseries OMITS no-trade hours (verified: zero returned
+    // points have both volumes 0; up to 350 non-contiguous hour steps in a 365-point series), so a
+    // missing interior bucket carries zero volume and the sum is still complete. Every series this guard
+    // accepted with <24 in-window buckets was bit-identical to the endpoint, down to one in-window
+    // bucket. `buckets === 24` would reject correct sparse thin-item series wholesale.
+    // Cost of a false reject is REAL, not free: the fallback is a UTC-day aggregate, measured to -10.2%.
     if (earliest <= from && latest >= anchor) {
       const r = rolling24FromTs1h(ts1h, now);
       if (r && ((r.highPriceVolume || 0) > 0 || (r.lowPriceVolume || 0) > 0)) return { vol24: r, volSrc: 'rolling', buckets };

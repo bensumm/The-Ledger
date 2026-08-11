@@ -192,54 +192,23 @@ export function ratingParts(it, staleRisk){
    rather than the console's 2h band pair. So a Finder rank is a COARSE pre-filter that differs from the
    band-precise rank the per-item `quote`/Trends read produces; the UI labels it so and the quote button
    is the precise read.
-   ⚠ KNOWN BUG, FOUND 2026-08-10, NOT YET FIXED — `volDay` here is an HOURLY figure fed into
-   DAILY-anchored scoring. This line used to claim it was "the limiting side (min hpv/lpv), matching the
-   console's liquidity basis"; that is FALSE. `STATE.VOL` is loaded from `/1h` (see the snapshot fetch at
-   the top of this file), so `desirabilityOf`'s `volDay` is ONE HOUR of two-sided volume — but every
-   consumer reads it as per-day: `js/estimators/families.mjs` `TTF_REF_VOL = 1000` in
-   `sqrt(TTF_REF_VOL/volDay)`, `js/rating.mjs` `liqFactor` (`F0=50/F1=5000`, whose own header says
-   "limiting-side DAILY volume"), and `js/ui.js` renders the result as "≈ N/day".
-   Effect: an item trading 24k/day arrives as ~1000/hour, giving a TTF factor of 1.0 where the truth is
-   ~0.25. The `thin = volDay < 50` test below is measuring an hour against a daily floor that itself
-   moved to 3500 (see `js/rating.mjs`). The rank (`net × P(fill) ÷ TTF`) is understated — but ⚠ THE
-   MAGNITUDE AND POPULATION FIRST WRITTEN HERE ("roughly 4× on liquid items") WERE BOTH WRONG, corrected
-   2026-08-11 by calling the real `estimateRank` twice per row, once with the hourly figure the Finder
-   actually passes and once with the true daily one. The TTF-factor half is exact, but `rankScore`
-   SATURATES (`net·p/(days + TTF_SAT_DAYS)`), so the rank ratio is a curve, not a constant:
-
-     daily      1200   2400   6000  24000  120000  600000
-     understated 4.10× 4.45×  4.24×  3.25×   1.59×   1.00×
-
-   The RATIOS above are robust — verified invariant across spread 1%→60%, price 5 gp→30m, and
-   limit ∈ {1, 5000, null}, because `net` enters `rankScore` linearly and cancels in the ratio while
-   the intraday family's pFill/ttf never read price. But ⚠ THE TWO SENTENCES THAT USED TO SUMMARISE
-   THEM WERE BOTH WRONG (corrected 2026-08-11 — the third correction to this comment). They described
-   SAMPLED POINTS as if they were the curve's landmarks. Both landmarks have closed forms:
-     • the peak is 4.54× at volDay = 1,500 — that is 24·TTF_REF_VOL/TTF_VEL_MAX² — NOT "~4.45× around
-       2.4k/day"; the table above simply steps over the maximum between its 1200 and 2400 samples.
-     • unity begins at volDay = 384,000 — that is 24·TTF_REF_VOL/TTF_VEL_MIN² — NOT "above ~600k/day",
-       which is off by 56% and is merely the first sampled point past the knee.
-   So: the distortion is concentrated on LOW/MID liquidity, peaks just under 2k/day, and is gone by
-   384k/day. "on liquid items" named the region where the bug does the LEAST.
-   It still drives the visible Grade column and the default sort — the error is in how it was described,
-   not in whether it matters.
-   ⚠ SECOND, SEPARATE BUG IN THE SAME LINE (found 2026-08-11, also NOT fixed) — `volDay` below is
-   `Math.min(hpv,lpv) || it.volume || 0`, and `it.volume` is `hpv + lpv` (set at the universe build,
-   ~line 146). So when the limiting side is exactly **0** — a ONE-SIDED book, no trades on one side —
-   the `||` falls through and substitutes the SUM OF BOTH SIDES. An item with `lpv = 0` and
-   `hpv = 37,876` is scored as if it traded 37,876/day two-sided, when its real two-sided volume is
-   ZERO. That is not a degraded estimate, it is the maximum possible value standing in for the minimum.
-   The comment on that line claims the "console basis"; the console basis
-   (`gatecandidates.mjs` `eachLiquidCandidate`) EXCLUDES one-sided items outright — `hpv<=0 || lpv<=0`
-   is its NON-NEGOTIABLE first gate — so this is the opposite of what it says it mirrors. Orthogonal to
-   the hourly/daily unit bug above: fixing one leaves the other. Same reason for not fixing it here (it
-   changes visible grades), and the two should be fixed together with a single review + version bump.
-   Proof it is a bug and not a convention: the LEGACY scorer in this same file feeds the same
-   `STATE.VOL` into `RATE_VOL_MAX`, which `js/state.js` annotates "// hourly volume". Two scorers, one
-   source, opposite unit assumptions — and the daily-anchored one is the newer.
-   Deliberately NOT fixed in the 2026-08-10 doc pass: the fix changes Ben's visible Finder grades and
-   ordering, and `STATE.VOL` is shared with the legacy path that correctly wants hourly, so it needs its
-   own change + review rather than riding a documentation commit.
+   ⚠ TWO KNOWN BUGS in `volDay` below (found 2026-08-10/11, NEITHER FIXED — both change visible grades,
+   so they need one reviewed change + APP_VERSION bump. Fixing one leaves the other.)
+   BUG 1 — UNIT. `STATE.VOL` is loaded from /1h, so `volDay` is ONE HOUR of volume, but every consumer
+   is daily-anchored: `families.mjs` TTF_REF_VOL=1000 in sqrt(TTF_REF_VOL/volDay), `rating.mjs`
+   liqFactor (F0=50/F1=5000, header says "DAILY"), `ui.js` renders "≈ N/day". Not a convention: the
+   LEGACY scorer here feeds the same STATE.VOL into RATE_VOL_MAX, annotated "// hourly volume" in
+   state.js — two scorers, one source, opposite assumptions.
+   Rank understatement is a CURVE (rankScore saturates), verified invariant across spread/price/limit
+   since `net` cancels in the ratio. Landmarks have closed forms — use these, not sampled points:
+       peak  4.54× at volDay 1,500    = 24·TTF_REF_VOL/TTF_VEL_MAX²
+       unity 1.00× at volDay 384,000  = 24·TTF_REF_VOL/TTF_VEL_MIN²
+       (3.25× at 24k, 1.59× at 120k.)  Bites LOW/MID liquidity, NOT "liquid items".
+   BUG 2 — ONE-SIDED BOOKS. `Math.min(hpv,lpv) || it.volume` and `it.volume` is hpv+lpv (~line 146),
+   so a limiting side of exactly 0 falls through to the SUM: lpv=0, hpv=37,876 scores as 37,876/day
+   when true two-sided volume is 0 — max substituted for min. The "console basis" it claims to mirror
+   (`gatecandidates.mjs` eachLiquidCandidate) EXCLUDES one-sided items as its first non-negotiable gate.
+   Also stale: `thin = volDay < 50` below measures an hour against a floor that moved to 3500.
    No confirmable multi-day regime here ⇒ the uniform 0.85 regime haircut applies to every row (a constant
    — it shifts all grades, not the ordering). Bond rides its tax-exempt retrade-fee opts so it can't grade
    off a phantom spread. */
@@ -252,14 +221,10 @@ export function desirabilityOf(it){
     regime:null, rising:false, falling:false, volDay, mid:(it.low+it.high)/2, limit:it.limit,
     bond:!!(bo&&bo.bond), guide:bo?bo.guide:null };
   const er=estimateRank(FINDER_SPEC, row);
-  // thin = below the practical two-sided exit floor (~50/day limiting side) — mirrors the console's
-  // THIN_GRADE_CAP so an illiquid big-ticket can't headline S+ off a fat per-unit net it can't move fast.
-  // ⚠ STALE, FOUND 2026-08-11, NOT YET CHANGED — and it contradicts the ⚠ block ~50 lines above in this
-  // same function, which records that the daily floor moved to 3,500 (PLAN-VOL24 Step 2). This 50 is the
-  // PRE-recalibration scale, so on the console's current basis almost nothing trips it. Same stale value
-  // in `pipeline/lib/render/suggestlog.mjs` (NY2.4) and, until this pass, in `js/rating.mjs`'s thin-cap
-  // note. Left alone for the same reason as the two bugs above: it changes visible grades, so it belongs
-  // in the single reviewed Finder-scoring change, not in a documentation pass.
+  // thin = mirrors the console's THIN_GRADE_CAP so an illiquid big-ticket can't headline S+.
+  // ⚠ 50 is the PRE-recalibration floor (moved to 3500, PLAN-VOL24 §2) AND volDay here is hourly
+  // (BUG 1 above) — two compounding staleness errors, so almost nothing trips this. Same stale 50 in
+  // suggestlog.mjs NY2.4. Fix with the two bugs above, not separately.
   const thin=volDay>0 && volDay<50;
   const rt=rateItem({ row, rank:er.rank, thin });
   return { rank:er.rank, grade:rt.grade, score:rt.score, thin, ttfSec:er.ttf&&er.ttf.value };

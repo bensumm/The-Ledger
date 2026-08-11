@@ -467,16 +467,11 @@ PUBLISH = refusePublishIfNonNeutral({
 // 2026-08-08: now 250k, paired with the expUnits 6→2 refill haircut. See the MIN_GPD declaration.
 const VOL_SOURCE = resolve('volSource', { flag: A['vol-source'] != null && A['vol-source'] !== true ? String(A['vol-source']).toLowerCase() : undefined, config: CONFIG.volSource, fallback: 'rolling' }).active;
 if (!['legacy', 'rolling'].includes(VOL_SOURCE)) { console.error(`! unknown --vol-source "${A['vol-source']}". Use rolling (default) or legacy.`); process.exit(1); }
-// The `volSrc` provenance label logged on EVERY suggestion row this script writes — ONE home, derived
-// from VOL_SOURCE rather than hardcoded. ⚠ FIXED 2026-08-11: all FOUR emit sites (band, value,
-// amplitude, watchlist) had `volSrc: 'bulk'` written literally, with comments asserting "screen's
-// volDay is bulk /24h (v24)". That stopped being true on 2026-07-13 when VOL_SOURCE's fallback became
-// 'rolling' and `v24` became loadAll24hRolling(), so ~1,940 of the last 2,000 ledger rows carry a
-// provenance label contradicting their own `params.volSource:'rolling'` — F1 would bucket
-// rolling-sourced rows as bulk. Rows written BEFORE this date are mislabelled at rest: treat a
-// pre-2026-08-11 `volSrc:'bulk'` from this script as UNKNOWN, not as bulk.
-// (Note suggestlog.mjs's classAndSource() legitimately tags 'bulk' — it reads the raw all24h.json warm
-// file. An earlier version of this line named a function `warmClass()`, which does not exist.)
+// The `volSrc` provenance label for EVERY suggestion row this script writes — ONE home. Derive it from
+// VOL_SOURCE; do NOT hardcode at the emit sites (all four — band, value, amplitude, watchlist — were
+// hardcoded 'bulk' from 2026-07-13 to 2026-08-11 while running rolling, mislabelling ~1,940 of 2,000
+// rows). suggestlog.mjs's classAndSource() separately tags 'bulk' and is CORRECT — it reads raw
+// all24h.json.
 const VOL_SRC_LABEL = VOL_SOURCE === 'rolling' ? 'rolling' : 'bulk';
 // --- PLAN-OUTPUT-TABLE (2026-07-13): the DEFAULT niche-table stdout view is the reconciliation-
 // estimator pair — Est. buy / Est. sell / Net/u (ROI) / BE with confidence riding in the price cells
@@ -1714,7 +1709,6 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       // 'rolling' (:468) and v24 became loadAll24hRolling() (:2827) — so ~1,940 of the last 2,000 ledger
       // rows carry a provenance label contradicting their OWN run params (`volSource:'rolling'`), and F1
       // would bucket rolling-sourced rows as bulk. It now follows VOL_SOURCE. Rows written before this
-      // (the volSrc label above is VOL_SRC_LABEL — see its definition for the provenance-bug note)
       volDayRolling: rollShadow(series1h, r.id),   // AZ-forward: grade = the rendered letter (verdict keeps it too — legacy readers)
       // PLAN-CAPITAL-THROUGHPUT shadow pair: the ACTIVE (capital-aware, default) expGpDay + the legacy
       // capital-blind expGpDayLegacy, so --stats/analyze/F1 can diff old-vs-new surfacing on real rows.

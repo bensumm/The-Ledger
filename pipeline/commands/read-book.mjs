@@ -108,13 +108,9 @@ async function main() {
     // COVERAGE LIMIT, stated plainly: only the sizer target fetches a 1h series (`wantTs1h`, Risk 3), and
     // vol24FromInputs DEGRADES to the raw /24h value without one. So for every other id this is a no-op
     // and `row.volDay` stays the raw PER-ITEM /24h read — which the reverse-flip thin read below consumes.
-    // ⚠ CORRECTED 2026-08-11 — this said "the PER-ITEM /24h?id= endpoint measures as the true
-    // trailing-24h (22/24 bit-identical to the composed value), so no number here is currently wrong,"
-    // and called the reorder consistency-only. That conclusion rested on a measurement taken inside the
-    // one UTC hour where the composed window coincides with the served day. The per-item endpoint is a
-    // UTC-DAY aggregate (30/30 exact against its own day, 4/30 against the trailing window), so the raw
-    // and corrected values DIFFER for most of the day and this reorder fixes a real figure, not just an
-    // ordering smell. See the loadAll24hRolling header — the ONE HOME — before restating any of this.
+    // The raw and corrected values DIFFER for most of the day (the per-item endpoint is a UTC-DAY
+    // aggregate, not a trailing window), so this reorder fixes a real figure, not just an ordering
+    // smell. Do NOT restate it as consistency-only — see the loadAll24hRolling ONE HOME block.
     inp.vol24 = vol24FromInputs(inp, now).vol24;
     const row = computeQuote({ ...inp, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, now, id });
     quoteById.set(id, row);
