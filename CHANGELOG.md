@@ -10,6 +10,50 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### pipeline — the F1 retro stops bucketing history by today's liquidity (2026-08-11)
+
+No `APP_VERSION` bump: `pipeline/`-only, the deployed app is untouched.
+
+**Closes the bug recorded-but-not-fixed in the 0.74.0 entry below** ("every F1 cell segments campaigns by
+an item's liquidity today rather than when the suggestion was made"). `join-outcomes.mjs` recomputed each
+campaign's liquidity class from a live `/24h` map at report time, so a fill from days ago was filed under
+the item's liquidity *now*. An item that was thin when the bid was placed and is liquid today landed in the
+`liquid` column — and its slow fill was then read as evidence that liquid items fill slowly.
+
+`liqClass` is now resolved by `liquidityAtPlacement` (`suggestlog.mjs`, next to the `liqClassOf` vocabulary
+it defends), preferring: the logged `volDay` scalar → the logged `class` → a present-day recompute. The
+basis rides each campaign as `liqBasis`, with `liqClassCurrent`/`volDayAtPlacement` alongside, so the
+choice is auditable and F1 can segment on it or exclude the fallback. `outcomes.json` goes to schema v3.
+`f1-calibrate.mjs`'s `ttfByVolume` — the study that would anchor `TTF_REF_VOL` — prefers the placement
+volume the same way and reports a per-bucket `volAtPlacement` count.
+
+**The trap, which is why this wasn't the one-token fix it looked like.** `class` in `suggestions.jsonl` is
+not one vocabulary: `watch-positions.mjs` deliberately logs its richer `classify()` taxonomy
+(`STABLE_LIQUID`, `FALLING`, `THIN_BIG_TICKET_VOLATILE`, …) into the same field, because for that script
+that genuinely is "the label as computed then". Joining on `class` naively would have emitted classes no
+table has a column for — **102 of 459 joinable filled campaigns, 22% of the sample, silently dropped from
+the report with no error**. The vocabulary gate (`LIQ_CLASSES`) is the load-bearing part; the pin asserts
+each foreign label falls back rather than being trusted, and both mutants (drop the gate; ignore the logged
+scalar) were confirmed to turn the suite red.
+
+**Measured effect** (913 campaigns, 775 filled, same cached fetch before and after): 67 campaigns changed
+column — 43 `liquid`→`mid`, 22 `mid`→`thin`, 2 `liquid`→`thin`. The `thin` column went from **2 filled
+campaigns to 26**, i.e. it had been all but invisible. In `f1-calibrate`, thin's fill rate at the 0.20 buy
+bucket went from `0% (n=1)` to `41% (n=27)` — the standing "thin under-fills, propose shallower"
+recommendation had been resting on a **single campaign**, and survives on real (if still directional)
+evidence. A new thin sell cell appears at ~151m median time-to-first-fill against ~25m for liquid.
+
+**Be honest about what this does NOT do.** Cells clearing the F1 floor went **7 → 6** — correcting the
+buckets *shrinks* the apparent evidence base, because previously-pooled incomparable rows were inflating
+it. That is the right direction, not a regression. Coverage of the exact basis is currently **zero**: only
+153 of 17,041 ledger rows carry a `volDay` (all written today), and none fall inside a joinable placement
+window yet, so every row today resolves via the coarse logged class or the present-day fallback — 357
+logged-class, 418 fallback. The fallback share shrinks on its own as the log fills; archived rows can never
+be repaired. And `f1-calibrate`'s verdict that `TTF_REF_VOL` is "not reliably fittable — the sqrt scaling
+is too steep regardless of the anchor" is **unchanged by this work**; it was already true beforehand
+(verified by re-running the study against the pre-change artifact), and it bears on the still-open plan to
+re-anchor that constant.
+
 ### 0.74.2 — a measured zero stops reading as "no information" (2026-08-11)
 
 **`APP_VERSION` 0.74.1 → 0.74.2.**

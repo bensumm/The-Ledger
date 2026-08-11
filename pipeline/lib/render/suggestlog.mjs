@@ -111,11 +111,10 @@
  *     volDayRolling?,  (PLAN-VOL24 — the TRUE trailing-24h volume {hpv,lpv} composed from /1h; neither
  *               /24h endpoint is a trailing source, see the marketfetch.mjs loadAll24hRolling header.
  *               Lean-included; absent when no 1h series was in hand — e.g. watchlist rows.
- *               ⚠ Built as a "shadow beside the active volDay" but it shadows NOTHING: suggestionEntry
- *               has never written a `volDay` field (0 of 7,290 rows); only the coarse `class` is stored.
- *               And with `rolling` as the screen default it now duplicates the GATING quantity rather
- *               than offering an alternative to it. It is the only per-row volume in the ledger, so keep
- *               it — just don't read it as an A/B.)
+ *               ⚠ Built as a "shadow beside the active volDay" but for most of its life it shadowed
+ *               NOTHING — `volDay` only started being written 2026-08-11 (153 of 17,041 rows at the time
+ *               join-outcomes began preferring it). And with `rolling` as the screen default it duplicates
+ *               the GATING quantity rather than offering an alternative to it — still don't read it as an A/B.)
  *     grade?,  (AZ-forward 2026-07-12 — the rating LETTER as rendered then ('S+'…'D', incl. any
  *               thin/sub-floor cap), so the grade-clumping audit can segment without parsing
  *               `verdict` (which watch-positions.mjs uses for action verdicts); lean-included, screen supplies
@@ -267,8 +266,9 @@ export function readSuggestionLines({ ledger = LEDGER, archiveDir = ARCHIVE_DIR 
 // as computed then" for that script.
 // liqClassOf(volDay) is the raw-number core; liqClass(row) is the row convenience wrapper. ONE threshold
 // set (X1 dedup — was copied as liqClassOf in join-outcomes.mjs).
-// ⚠ join-outcomes.mjs does NOT join on a stored volDay (there is none — see the volDayRolling note).
-// It RECOMPUTES from a live v24 map as `volDayCurrent` — a present-day read, not point-in-time.
+// join-outcomes.mjs resolves a campaign's class through liquidityAtPlacement() below (2026-08-11) — it
+// prefers what was MEASURED at placement over a present-day recompute. It still keeps the present-day
+// read as `volDayCurrent`/`liqClassCurrent` so the two bases stay comparable.
 // NY2.4: this 'thin' (volDay < 100) is DISTINCT from the screen's grade-capping `thin` (gp-flow-only
 // admission, limitVol < FLOOR = 3500). ⚠ A [50,100)/day item IS gp-flow-thin under the live FLOOR, so
 // the cap applies — an earlier note argued the reverse from the stale FLOOR=50 and treated a
@@ -280,6 +280,27 @@ export function liqClassOf(volDay) {
   return 'liquid';
 }
 export function liqClass(row) { return liqClassOf(row && row.volDay); }
+
+// The liqClassOf vocabulary. Load-bearing: `class` in suggestions.jsonl is NOT single-vocabulary —
+// watch-positions.mjs logs its richer classify() taxonomy (FALLING / STABLE_LIQUID / …) into the SAME
+// field (see the note above liqClassOf). Bucket `class` into thin/mid/liquid columns WITHOUT filtering on
+// this set and those rows match no column and vanish silently — 102 of 459 joinable campaigns, 2026-08-11.
+export const LIQ_CLASSES = new Set(['thin', 'mid', 'liquid', 'unknown']);
+
+// Point-in-time liquidity for a reconstructed campaign (2026-08-11). Bucketing a HISTORICAL fill by
+// TODAY's volume asks the wrong question — an item thin at placement and liquid now lands in `liquid`,
+// and its slow fill then reads as evidence that liquid items fill slowly. Basis, best first:
+//   'logged-volday'  the scalar logged at emit — exact + reproducible. Rows since 2026-08-11 only.
+//   'logged-class'   the coarse bucket logged at emit — point-in-time, not reproducible, vocabulary-gated.
+//   'current'        today's recompute. Wrong in principle, kept so a row is never DROPPED.
+// `basis` rides the row so F1 can segment on it. Pure — no fetch, no clock.
+export function liquidityAtPlacement(sug, volDayCurrent) {
+  if (sug && sug.volDay != null)
+    return { cls: liqClassOf(sug.volDay), basis: 'logged-volday', volDay: sug.volDay };
+  if (sug && LIQ_CLASSES.has(sug.class))
+    return { cls: sug.class, basis: 'logged-class', volDay: null };
+  return { cls: liqClassOf(volDayCurrent), basis: 'current', volDay: null };
+}
 
 // SF-3 — decide the logged liquidity `class` AND its volume SOURCE, deterministically and WITHOUT any
 // fetch. Problem: quote-items.mjs's per-item /24h and screen-flip-niches.mjs's bulk /24h are different snapshots, so the

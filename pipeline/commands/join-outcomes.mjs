@@ -42,7 +42,7 @@ import { loadHistState, bandPercentile } from '../lib/signal/range-position.mjs'
 import { velocityClass } from '../lib/timing/velocity.mjs';
 import { parkedStats } from '../lib/capital/capital-utilization.mjs';
 import { parseArgs, median } from '../lib/render/cli.mjs';
-import { liqClassOf, readSuggestionLines } from '../lib/render/suggestlog.mjs';
+import { liqClassOf, liquidityAtPlacement, readSuggestionLines } from '../lib/render/suggestlog.mjs';
 import { fmt, fmtTurn } from '../../js/money-format.js';   // chunk 6: dropped unused fmtP
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -106,6 +106,7 @@ function joinSuggestion(sugByItem, itemId, placementTs) {
   return { ts: best.ts, script: best.script, mode: best.mode ?? null, verdict: best.verdict ?? null,
     quickBuy: best.quickBuy ?? null, optBuy: best.optBuy ?? null, quickSell: best.quickSell ?? null,
     optSell: best.optSell ?? null, mom: best.mom ?? null, regime: best.regime ?? null, class: best.class ?? null,
+    volDay: best.volDay ?? null,   // the scalar behind `class`; liquidityAtPlacement prefers it. Post-2026-08-11 rows only.
     // YS2 forward-enrichment fields (null on legacy rows that predate the enrichment - never fabricated):
     posture: best.posture ?? null, tripwire: best.tripwire ?? null, fillWindowHrs: best.fillWindowHrs ?? null,
     thesis: best.thesis ?? null,
@@ -233,6 +234,7 @@ async function build() {
     }
     const st = states ? states[idx] : null;
     const sug = joinSuggestion(sugByItem, c.itemId, placementTs);
+    const liq = liquidityAtPlacement(sug, volDay);
     return {
       itemId: c.itemId, name: map.byId[c.itemId]?.name || ('#' + c.itemId), side: c.type, manual,
       placementTs, placementPrice, targetQty, filledUnits, filledFraction, terminalState,
@@ -241,7 +243,10 @@ async function build() {
       everFilled: filledUnits > 0,
       repriceCount: reprices.length, reprices,
       bandLo, bandHi, bandPct, bandCovered, spread2h, limitVol2h,
-      volDayCurrent: volDay, liqClass: liqClassOf(volDay),
+      // liqClass is point-in-time-preferring (2026-08-11, liquidityAtPlacement); the present-day read is
+      // kept alongside, never overwritten, so the shift stays auditable.
+      volDayCurrent: volDay, liqClassCurrent: liqClassOf(volDay),
+      volDayAtPlacement: liq.volDay, liqClass: liq.cls, liqBasis: liq.basis,
       realised,
       // YS1 additions (schema v2):
       stateAtFill: st ? { atTs: firstFillTs ?? placementTs, bandPct: st.bandPct, regime: st.regime,
@@ -253,7 +258,8 @@ async function build() {
     };
   });
 
-  return { app: 'the-coffer-outcomes', version: 2, generatedAt: new Date().toISOString(),
+  // v3 (2026-08-11): liqClass became point-in-time-preferring; +liqBasis, +liqClassCurrent, +volDayAtPlacement.
+  return { app: 'the-coffer-outcomes', version: 3, generatedAt: new Date().toISOString(),
     params: { bandHours: BAND_HOURS, repriceGapMin: REPRICE_GAP / 60, suggestWindowMin: SUGGEST_WINDOW / 60, noBands: NO_BANDS },
     campaigns: out };
 }
@@ -282,7 +288,12 @@ function report(o) {
   const PCTS = ['0-20', '20-40', '40-60', '60-80', '80-100', 'unknown'];
   const CLASSES = ['thin', 'mid', 'liquid', 'unknown'];
   console.log(`\n# --report — fill-time distributions (median time-to-first-fill · n per cell; cells with n<${MIN_N} suppressed)`);
-  console.log(`Bucketing: band percentile at placement (rows) × current liquidity class (cols). Only FILLED campaigns count toward time; a low cell n is the expected first-read result (the dataset must accrue calendar time — that is why O1 starts now).`);
+  console.log(`Bucketing: band percentile at placement (rows) × liquidity class AT PLACEMENT (cols). Only FILLED campaigns count toward time; a low cell n is the expected first-read result (the dataset must accrue calendar time — that is why O1 starts now).`);
+  // The class column mixes three bases — print the mix so the table can't imply one clean source.
+  const fc = o.campaigns.filter(x => x.everFilled && x.timeToFirstFill != null);
+  const nb = b => fc.filter(x => x.liqBasis === b).length;
+  const moved = fc.filter(x => x.liqBasis !== 'current' && x.liqClass !== x.liqClassCurrent).length;
+  console.log(`Class basis over the ${fc.length} filled campaigns: ${nb('logged-volday')} logged-volDay (exact) · ${nb('logged-class')} logged-class (coarse) · ${nb('current')} present-day fallback (no usable logged class — pre-2026-08-11 rows, unjoined placements, or watch-positions' richer taxonomy). ${moved} campaign(s) sit in a DIFFERENT column than a present-day read would have put them.`);
 
   for (const side of ['buy', 'sell']) {
     const rows = o.campaigns.filter(x => x.side === side && x.everFilled && x.timeToFirstFill != null);

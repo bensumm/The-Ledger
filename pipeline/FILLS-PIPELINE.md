@@ -504,11 +504,16 @@ Repo-root, committed. `quote-items.mjs` (per-item **and** `--positions`), `scree
 niche row), and `watch-positions.mjs` (each held/target read) append every emitted recommendation **at
 emit time, unconditionally**, via the shared `pipeline/lib/suggestlog.mjs`. One JSON object per line:
 ```
-{ ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict, volSrc?, grade?, depth? }
+{ ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict, volSrc?, volDay?, grade?, depth? }
 ```
 `ts` = unix seconds. `class` = the item-type/liquidity label **as computed then** (the logic
 evolves; recomputing later would rewrite history, so it is snapshotted — coarse `liqClass()` for
-quote/screen, `watch-positions.mjs`'s richer `classify()` taxonomy for watch). `verdict` = the emitted
+quote/screen, `watch-positions.mjs`'s richer `classify()` taxonomy for watch). **Two vocabularies in
+one field**: any consumer bucketing `class` into thin/mid/liquid must filter on `LIQ_CLASSES` first or
+the watch rows match no bucket and vanish (`liquidityAtPlacement`, 2026-08-11). **`volDay?`** = the raw
+limiting-side scalar behind `class` (2026-08-11), so the class is reproducible from the record;
+`join-outcomes.mjs` prefers it, then `class`, then a present-day recompute — recorded per campaign as
+`liqBasis`. Absent on older rows. `verdict` = the emitted
 action string where the script produces one (position verdict / grade / watch action), else null.
 **`grade` (AZ-forward 2026-07-12, lean-included):** the rating LETTER as rendered then (`'S+'…'D'`,
 incl. any thin/sub-floor cap) — only `screen-flip-niches.mjs` computes one, so quote/watch rows omit it; absent on

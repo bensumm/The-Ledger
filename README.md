@@ -1294,7 +1294,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `trigger-alerts.mjs` (N1 push-notification trigger
     engine — behind the standard `import.meta.url === pathToFileURL(argv[1])` invocation guard
     (TD2) so importing it for tests never runs/fetches; exports `positionSignal`/`quietSuppresses`),
-    `join-outcomes.mjs` (derived campaign/outcomes join — gitignored output; schema v2 (YS1) adds per-campaign
+    `join-outcomes.mjs` (derived campaign/outcomes join — gitignored output; **schema v3 (2026-08-11)** makes
+    `liqClass` POINT-IN-TIME-preferring via `suggestlog.mjs`'s `liquidityAtPlacement` — the logged `volDay`
+    scalar, else the logged `class` (vocabulary-gated: `watch-positions.mjs` logs a different taxonomy into
+    the same field), else a present-day recompute — and adds `liqBasis` / `liqClassCurrent` /
+    `volDayAtPlacement` so the basis is auditable and F1 can segment on it. Bucketing a historical fill by
+    TODAY's liquidity was putting thin-at-placement items in the `liquid` column; correcting it surfaced a
+    `thin` column that had been all but empty (2 rows → 26). schema v2 (YS1) adds per-campaign
     `stateAtFill` (band-pctl+regime+phase AS OF the fill via `lib/range-position.mjs`, for EVERY fill),
     measured `holdTimeSec`/`parkedSec`/`velocityClass`, and `predicted` (copied from the joined
     suggestion, null on pre-YS2 rows); reconstruction routes through `dedupeSnapshots`. COD-3: `--report`

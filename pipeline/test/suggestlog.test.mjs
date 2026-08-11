@@ -20,7 +20,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { LEDGER, suggestionEntry, liqClassOf, rotateLedger, readSuggestionLines, currentMonthKey, reachableShadow, depthExitShadow, windowExitShadow, excludedShadow } from '../lib/render/suggestlog.mjs';
+import { LEDGER, suggestionEntry, liqClassOf, liquidityAtPlacement, LIQ_CLASSES, rotateLedger, readSuggestionLines, currentMonthKey, reachableShadow, depthExitShadow, windowExitShadow, excludedShadow } from '../lib/render/suggestlog.mjs';
 
 let n = 0;
 function ok(name, fn) { fn(); n++; console.log('  ✓ ' + name); }
@@ -254,6 +254,30 @@ ok('liqClassOf thresholds', () => {
   assert.equal(liqClassOf(100), 'mid');
   assert.equal(liqClassOf(999), 'mid');
   assert.equal(liqClassOf(1000), 'liquid');
+});
+
+// The retro must bucket a fill by the liquidity MEASURED then, not by today's — and must not swallow
+// watch-positions' foreign taxonomy while doing it.
+ok('liquidityAtPlacement prefers the logged basis, and rejects a foreign taxonomy', () => {
+  // 1. logged scalar wins over today's map, even when they disagree
+  assert.deepEqual(liquidityAtPlacement({ volDay: 40, class: 'thin' }, 50_000),
+    { cls: 'thin', basis: 'logged-volday', volDay: 40 },
+    'an item thin AT PLACEMENT stays thin even though it is liquid today');
+  // 2. no scalar → the logged class, still point-in-time
+  assert.deepEqual(liquidityAtPlacement({ class: 'thin' }, 50_000),
+    { cls: 'thin', basis: 'logged-class', volDay: null });
+  // 3. THE TRAP: watch-positions logs classify() into the same field. Must fall back, never emit a
+  //    column no table has — that silently dropped 102 of 459 campaigns in the naive version.
+  for (const foreign of ['STABLE_LIQUID', 'FALLING', 'THIN_BIG_TICKET_VOLATILE', 'LIQUID_RANGING_WIDE']) {
+    const r = liquidityAtPlacement({ class: foreign }, 50_000);
+    assert.equal(r.basis, 'current', `${foreign} is not the liqClass vocabulary — must not be trusted as a class`);
+    assert.ok(LIQ_CLASSES.has(r.cls), `${foreign} must resolve to a real column, got ${r.cls}`);
+  }
+  // 4. no suggestion at all → present-day fallback, never a dropped row
+  assert.deepEqual(liquidityAtPlacement(null, 50_000), { cls: 'liquid', basis: 'current', volDay: null });
+  assert.deepEqual(liquidityAtPlacement(null, null), { cls: 'unknown', basis: 'current', volDay: null });
+  // 5. volDay 0 is MEASURED thin, not missing — the 0.74.2 lesson, same trap one layer down
+  assert.equal(liquidityAtPlacement({ volDay: 0 }, 50_000).cls, 'thin', 'a measured zero is thin, not unknown');
 });
 
 // ---- SR1 rotation/compaction ---------------------------------------------------------------

@@ -126,14 +126,19 @@ export function fillCurves(campaigns) {
 
 // TTF-vs-volume read (for TTF_INTRADAY_PRIOR_SEC / TTF_REF_VOL): median first-fill time of FILLED buys
 // bucketed by daily volume. Buys are the speculative side where fill timing actually varies.
+// Volume basis (2026-08-11): prefer the volume logged AT PLACEMENT — bucketing a historical fill by
+// today's volume mis-buckets it whenever liquidity has moved. `volAtPlacement` counts the rows per bucket
+// on that honest basis; 0 means the bucket is entirely present-day.
 export function ttfByVolume(campaigns) {
   const BUCKETS = [[0, 100], [100, 500], [500, 1000], [1000, 5000], [5000, Infinity]];
-  const fb = campaigns.filter(x => x.side === 'buy' && x.everFilled && x.timeToFirstFill != null && x.volDayCurrent != null);
+  const volOf = x => (x.volDayAtPlacement != null ? x.volDayAtPlacement : x.volDayCurrent);
+  const fb = campaigns.filter(x => x.side === 'buy' && x.everFilled && x.timeToFirstFill != null && volOf(x) != null);
   return BUCKETS.map(([lo, hi]) => {
-    const b = fb.filter(x => x.volDayCurrent >= lo && x.volDayCurrent < hi);
+    const b = fb.filter(x => volOf(x) >= lo && volOf(x) < hi);
     return { lo, hi: hi === Infinity ? null : hi, n: b.length,
       medTtfSec: b.length ? median(b.map(x => x.timeToFirstFill)) : null,
-      medVol: b.length ? median(b.map(x => x.volDayCurrent)) : null };
+      medVol: b.length ? median(b.map(volOf)) : null,
+      volAtPlacement: b.filter(x => x.volDayAtPlacement != null).length };
   }).filter(x => x.n > 0);
 }
 
