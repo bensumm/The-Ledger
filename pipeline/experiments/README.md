@@ -130,6 +130,85 @@ of that window, not predictive. Nothing in them has been encoded into a gate or 
   INFORM-ONLY, n=8, one night — it establishes that the measurement question is real, not that the wall
   exists.
 
+## The 2026-08-11 floor-strategy re-measurement
+
+- **`floor-strategy-study.mjs` → `FLOOR-STRATEGY-FINDINGS.md`** — is "this item is at its N-day low"
+  (N ∈ 1/3/7/14/30) a buy signal? **No.** A RE-MEASUREMENT, not a fresh investigation: Ben asked a
+  near-identical question one day after `plans/PLAN-DAY-LOW-SURFACING.md` closed it as a measured
+  negative, so this was run under a different construction to see whether that closure survived a
+  second look. It does, cell-for-cell. `--section a|b|c|d`, `--json <path>`; read-only over the `/1h`
+  SQLite archive via `pipeline/lib/market/archive.mjs`, tax from `js/money-math.js`; writes nothing
+  the pipeline reads. **Not runnable on a clean checkout** — it needs the local archive and a
+  populated `mapping.cache.json` (it now fails loudly on a missing mapping rather than degrading
+  silently).
+
+  **The finding:** an N-day low is a real, robust, *relative* signal — deeper and longer lows predict
+  better forward drift than the same day's cross-section, monotonically in N (+0.31pp at 1d →
+  +1.26pp at 30d for the "printed a new low" form), surviving an entry-lag control — **and it is not
+  a trade.** The best absolute after-tax round trip, under the most generous execution assumption
+  available, is **+0.26% over a 7-day hold** ≈ 15k gp/day on a 40m position, against the scan's
+  250k gp/day attention floor. The prior art is already shipped: `termStructure` computes
+  `pctInRange` at exactly 1/3/7/14/28d, so the gap was only presentational. **Don't build it.**
+
+  **Read the retraction banner before quoting anything from §3 or §4.** An adversarial review found
+  25 defects and overturned two of the three headline claims. Retracted: "a falling floor pays
+  better" was one cherry-picked cell of six (the sign flips with the signal definition — rising wins
+  4 of 6, falling 2 of 6), so **slope is unavailable as a discount-vs-knife discriminator**, neither
+  supporting nor refuting the knife hypothesis. Partially retracted: the §4 drawdown-depth
+  "refutation" rested on a test whose confirming outcome was algebraically guaranteed
+  (`netPatient ≈ (1+spread)(1+drift)(1−tax)−1`, so any spread-sorted bucketing must show net
+  tracking spread — the exact failure rule 11 names), and on a silent weighting switch: on per-ITEM
+  medians the directional gradient *survives* monotonically (+0.17% → +1.96%). §4 now ends
+  **unresolved**. The verdict is unchanged because it rests on §1/§2 (absolute magnitude), not on
+  any discriminator.
+
+  **Sample honesty:** 5 non-overlapping 7-day windows, ~2.4 non-overlapping 30-day trailing windows
+  per item, one regime. Consecutive item-days at a 30-day low are not independent, and `new30` flips
+  sign once de-overlapped. Under the shipped liquidity gate the sample holds **0 items priced
+  1m–10m** and 1 above 10m — ~80% is 1k–10k commodities — so it **cannot speak to the big-ticket
+  class Ben actually trades**. The review also found `LIQ_TWOSIDED_FRAC` is dead code that can never
+  bind, and that 3,500 is PLAN-VOL24's `FLOOR`, not "the S1 gate".
+
+## The 2026-08-11 range-persistence study
+
+- **`range-persistence-study.mjs` → `RANGE-PERSISTENCE-FINDINGS.md`** — Ben's ask: *"if an item
+  typically oscillates between two ranges and then is at the bottom, isn't it reasonable to suspect
+  that it will rise again?"*, framed by him as "the value strategy but with less speculation".
+  **Answer: DON'T BUILD.** Read-only over the `/1h` SQLite archive; canonical tax from
+  `js/money-math.js`, `breakEven`/`quantileSorted` from `js/quotecore.js`, the same q15/q85
+  `js/termstructure.mjs` ships, and the REAL `valueGate`/`valueTier` for the comparison arm. Writes
+  nothing the pipeline reads. **Not runnable on a clean checkout.**
+
+  **Design:** rolling-origin walk-forward (fit [T−28, T−1] → read T → enter T+1 → exit T+1+H) chosen
+  over a 50/50 split-half, which 74 days cannot support. Six arms; **arm F (same ≥6% amplitude,
+  repetition condition removed) is the load-bearing control** — arm A bundles two conditions and A−F
+  is the study's actual question. Section D1 reproduces the in-sample circularity defect deliberately
+  (46.2% vs 99.8% reach).
+
+  **Findings:** the traversal criterion IS selective (26.2% of item-origins vs `oscillationVsKnife`'s
+  98.4% at the same window) and still buys nothing — within-item A−F is null in 6 of 6 cells (max
+  |t|=1.2), the amplitude-matched persistence lift is 0.70–0.83 (it *anti*-selects), and a 2-day entry
+  lag turns the excess negative. It does not beat the shipped value lane (+0.55%, t=0.3). `netPatient`
+  is ~59% spread; use `excessNet`/`driftLo`. **Big-ticket is absent** — zero arm-A items above 100k gp
+  under the shipped units gate, 3 above 10m under a deliberately loose one — so Ben's multi-week
+  oscillator question is left UNMEASURED, not refuted. Honest n: 41 non-overlapping entries across 36
+  items (strict gate), one regime, cross-item dependence not handled — every t is an upper bound.
+
+  **The incidental finding is the durable one:** `oscillationVsKnife`'s OSC label is a function of
+  series LENGTH (`OSC_MIN_LEGS` is an absolute count) — 59.5% at 14d → 99.9% at 60d on the archive,
+  and independently 63% → 100% by 30d on a synthetic driftless random walk with no cycle at all,
+  identical across 3%/6%/12% per-step amplitude. Recorded as a don't-rebuild note in the function
+  header, README's `js/forecast.mjs` entry, and `plans/PLAN-OSCILLATION-CYCLE.md`'s F-H row (whose
+  "feed it a deeper archive series" follow-up is the live trap).
+
+  **Read the correction banner first.** Two adversarial passes overturned seven headline claims (a
+  false cross-study reconciliation with the floor study — same archive/window/feed, not independent; a
+  ratio-of-medians "decomposition"; a placebo answering a different estimand; a paired control
+  distorted by disjointification; a population error; an over-strong monotonicity claim) and found two
+  real script bugs (a 15-day window called 14-day; leg lengths measured from the wrong anchor). The
+  **verdict survived**; the numbers were re-derived. **The archive is LIVE** — counts move between
+  runs; the script header is the authority, not the doc.
+
 ## `amp-cycle-reproduction.mjs` — did the DT1 amplitude study actually hold up? (2026-08-09)
 
 A REPRODUCTION harness, not a study. Runs THREE columns on the same items and the same 1h

@@ -232,7 +232,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   feeds the detector its OWN longer trailing `windowStats(...).days` window (off the same in-hand series, NO
   fetch) so it sees the ≥1.5 cycles / ≥3 legs it needs WITHOUT widening the gate's `AMP_NIGHTS` daily-range/
   reach/recency read — a sample-size fix BOUNDED by the ~16-day `/timeseries?timestep=1h` endpoint, not a
-  calibration.
+  calibration. **⚠ That endpoint bound is now load-bearing, not incidental (2026-08-11):** `OSC_MIN_LEGS` is
+  an ABSOLUTE leg count with no length normalisation, so the label is a function of WINDOW LENGTH — measured
+  59.5% OSC at 14d → 99.9% at 60d on the real archive, and 63% at 14d → 100% at 30d on a synthetic DRIFTLESS
+  RANDOM WALK containing no cycle at all (identical across 3%/6%/12% per-step amplitude — length is the only
+  free variable). The ~15d cap is the only reason the knife temper still discriminates; feeding the detector a
+  deeper `archive.mjs` series (F-H calls this a noted-not-built follow-up, and `renderAmplitudeMode` already
+  has that archive open) would take it to ~100% and silently delete the guard. Normalise the criterion BEFORE
+  widening the window — full note in the function header; measured in `RANGE-PERSISTENCE-FINDINGS.md`.
   INFORM-ONLY, wired into NO gate in Chunk 1 (gating is Chunk 3); pinned by `pipeline/test/oscillation-cycle.test.mjs`. Chunk 2 adds
   `driftExitFrom(profile, days, ctx, opts)` — the ONE slope-sourcing + drift-adjusted-exit COMPOSITION (imports
   `floorCeilingTrack` from windowread to pull the ceiling/floor slope off an in-hand `windowStats().days`, NO
@@ -600,6 +607,31 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (realized-P&L-vs-characteristics · liquidity-gate placement + the subsampling artifact test · the
   volume→band lead/lag null · the price×volume exclusion map, strike-checked against our own lots;
   `--section a|b|c|d`, panel cached to the gitignored `pipeline/.cache/edge-map-panel.jsonl`). Plus
+  **`floor-strategy-study.mjs` → `FLOOR-STRATEGY-FINDINGS.md`** (2026-08-11) — is "at its N-day low"
+  (1/3/7/14/30) a buy signal? **No, and this was already closed** as a measured negative one day
+  earlier in `plans/PLAN-DAY-LOW-SURFACING.md`; this is a re-measurement under a different
+  construction that reproduces the closure cell-for-cell. A real *relative* signal (monotone in N,
+  survives an entry-lag control) that is **not a trade**: best after-tax round trip +0.26%/7d ≈ 15k
+  gp/day on 40m vs the 250k gp/day attention floor. `termStructure` already ships `pctInRange` at
+  1/3/7/14/28d, so the gap was presentational only. `--section a|b|c|d`, `--json`; needs the local
+  archive + `mapping.cache.json`, so it does NOT run on a clean checkout. **Carries a retraction
+  banner** — an adversarial review overturned two of three headline claims (floor slope is NOT a
+  discount-vs-knife discriminator; the drawdown-depth section is unresolved, not refuted). Quote §1/§2
+  only. Plus **`range-persistence-study.mjs` → `RANGE-PERSISTENCE-FINDINGS.md`** (2026-08-11) — if an
+  item has a DEMONSTRATED, repeatedly-traversed range and is sitting at the bottom of it, is that a buy
+  ("the value strategy with less speculation")? **No — DON'T BUILD.** Rolling-origin walk-forward over
+  74 full days: range fitted strictly on days T−28…T−1, read day T, enter T+1, exit T+1+H (H ∈ 4/7/14).
+  Six arms including the load-bearing **amplitude-matched control** (same ≥6% band, repetition condition
+  removed) and the real `valueGate`/`valueTier`. Within item, A−F is not significantly positive in any of
+  6 cells; the amplitude-matched persistence lift is 0.70–0.83 (the criterion *anti*-selects); a 2-day
+  entry lag turns the excess negative. **~59% of the raw round trip is bid-ask spread**, so
+  `excessNet`/`driftLo` (spread-free) are the only trustworthy columns. **Zero arm-A items above 100k gp
+  under the shipped units gate** — it cannot speak to the big-ticket class, which leaves Ben's original
+  multi-week-oscillator question unmeasured rather than answered. Incidental but load-bearing:
+  **`oscillationVsKnife` fires as a function of series LENGTH** (see its entry under `js/forecast.mjs`).
+  `--section a|b|c|d|e`, `--json`; needs the local archive + `mapping.cache.json`, so it does NOT run on
+  a clean checkout. **Carries a correction banner** — two adversarial passes overturned seven headline
+  claims and found two script bugs; the verdict survived, the numbers were re-derived. Plus
   **`amp-cycle-reproduction.mjs`** (2026-08-09, DT1b) — the head-to-head that settled which of two
   round-trip measurements was broken: the in-sample day-grain `cycleCompletion` vs the DT1 study's
   out-of-sample hour-grain design. The study reproduces exactly (Saturated heart 0.0% @96h n=41; Masori

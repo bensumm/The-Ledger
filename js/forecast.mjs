@@ -427,6 +427,28 @@ export function driftExitFrom(profile, days, ctx = {}, { holdHorizonDays } = {})
  * Direction-agnostic by construction: nothing here branches on the sign of `slope` or of any leg's
  * direction — only leg COUNT and amplitude feed `oscillating`.
  *
+ * ── ⚠ DON'T-REBUILD: `minLegs` is an ABSOLUTE COUNT, so the label is a function of WINDOW LENGTH ──
+ * `oscillating` is `legs >= OSC_MIN_LEGS` with NO normalisation by series length. Legs accumulate as
+ * the window grows, so a LONGER series of the SAME process crosses the threshold regardless of whether
+ * it oscillates. Measured 2026-08-11 two independent ways: over the real archive, 59.5% OSC at 14d →
+ * 88.9% at 21d → 99.9% at 60d; and over a synthetic DRIFTLESS RANDOM WALK with no cycle in the
+ * generating process at all, 63% at 14d → 94% at 21d → 100% at 30d and beyond, IDENTICAL across
+ * per-step amplitudes 3%/6%/12% (the noise floor scales with amplitude, so length is the ONLY free
+ * variable). i.e. at ≥30 days this returns `oscillating` for pure noise.
+ *
+ * WHY IT IS SURVIVABLE TODAY: the shipped caller is bounded by the wiki `/timeseries?timestep=1h`
+ * endpoint at ~15–16 calendar days (F-H below caps `OSC_DETECTOR_NIGHTS=21` against a series that
+ * never gets that deep), so it fires ~63% and the knife reject still does real work (3–4% of rows).
+ * THE TRAP: F-H's own note calls "a deeper `archive.mjs` series" a noted-not-built follow-up, and
+ * `renderAmplitudeMode` already has that archive open in the same function. Feeding it one is a
+ * one-line change that takes this to ~100% OSC and SILENTLY DELETES the Chunk-3B knife temper's
+ * discriminating power — no error, no test failure, the gate just stops rejecting. **If you widen this
+ * window, you MUST first normalise the criterion (legs per unit time, or a period-regularity /
+ * repeated-level-traversal test) — do not simply pass a longer series.** Context: this is also why
+ * `plans/PLAN-MULTIWEEK-OSCILLATOR.md` measured 22 of 23 unrelated big-tickets as OSCILLATING; the
+ * detector was never selective, and that plan's open question now has its mechanism.
+ * Full study: `pipeline/experiments/RANGE-PERSISTENCE-FINDINGS.md` (the finding is incidental to it).
+ *
  * @param {Array} days   a windowStats().days series — [[key, {low, hi}], …] oldest→newest
  * @param {object} opts { minDays = OSC_MIN_DAYS, minLegDays = OSC_MIN_LEG_DAYS,
  *                        ampNoiseMult = OSC_AMP_NOISE_MULT, minLegs = OSC_MIN_LEGS }

@@ -173,6 +173,18 @@ question:
   common OR rare. This is worth a note in `PLAN-OSCILLATION-CYCLE.md`'s own honesty section (or a
   small follow-up chunk) rather than a new plan, since the fix (if pursued) is a metric refinement
   on an existing detector, not new infrastructure.
+  - **MECHANISM FOUND, 2026-08-11 — this is no longer an open puzzle.** `OSC_MIN_LEGS` is an
+    ABSOLUTE leg count over a variable-length window with no normalisation, so the label tracks
+    SERIES LENGTH, not shape: 59.5% OSC at 14d → 88.9% at 21d → 99.9% at 60d on the real archive,
+    and 63% → 100% by 30d on a synthetic DRIFTLESS RANDOM WALK with no cycle in the generating
+    process at all. The 22-of-23 result above is that artifact, not a statement about big-tickets.
+    Two consequences for this plan: (1) the "is the fang shape common?" question is still
+    **unanswered** — nothing here measured it; and (2) a selective criterion WAS built and measured
+    (repeated traversals of the same two levels + leg-regularity, firing on 26.2% of item-origins
+    vs the detector's 98.4%) and **conditioning on it bought nothing** — the amplitude-matched
+    persistence lift came out 0.70–0.83, i.e. it anti-selects. So a metric refinement alone does not
+    unlock a lane. Full study + the caveat that it has ZERO big-ticket coverage (so the fang-class
+    case remains genuinely unmeasured, not refuted): `pipeline/experiments/RANGE-PERSISTENCE-FINDINGS.md`.
 - **Administrative**: `PLAN-OSCILLATION-CYCLE.md` should be folded into `PLAN.md` and deleted per
   the standing convention once Wave 3's deferred phases (W3-3, Phase 2) get a decision — flagging
   this since it's the reason the blindspot audit didn't find the existing work.

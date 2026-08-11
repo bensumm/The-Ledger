@@ -500,8 +500,20 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   `suggestlog.mjs`'s header warns about). NOT taken unilaterally because it **changes which fills the
   retro attributes**, which moves every historical amplitude number `/analyze` reports.
 
-- **PROXIMITY-TO-EXTREMES AS A PRIMARY SCREEN — Ben's idea, 2026-08-09, FLAGGED FOR INVESTIGATION,
-  not scheduled.** "I wonder if we're just looking too deep — what if we just look for items based on
+- **PROXIMITY-TO-EXTREMES AS A PRIMARY SCREEN — Ben's idea, 2026-08-09. LOW SIDE: ANSWERED,
+  MEASURED NEGATIVE (2026-08-10, re-measured 2026-08-11). HIGH SIDE: still open, unmeasured.**
+  _Reconciliation, 2026-08-11:_ the LOW half of this entry was answered twice and both times the
+  answer was no. `plans/PLAN-DAY-LOW-SURFACING.md` closed it as a measured negative on 2026-08-10
+  (chunks 0a–0d), and `pipeline/experiments/FLOOR-STRATEGY-FINDINGS.md` re-measured it on 2026-08-11
+  under a different construction and reproduced the closure cell-for-cell. The finding: proximity to
+  an N-day low IS a real relative signal — monotone in N, surviving an entry-lag control — and it is
+  **not a trade**, because the best absolute after-tax round trip under the most generous execution
+  assumption available is **+0.26% over 7 days** (~15k gp/day on 40m, against the scan's 250k gp/day
+  attention floor). No discriminator (floor slope, drawdown depth) survived review as a way to
+  separate a discount from a knife. **Don't re-open the low side without a NEW mechanism** — two
+  independent passes is enough. The HIGH side (proximity to N-day highs, and the low↔high *pair* as a
+  single range-position rank) has never been measured and remains genuinely open; the original text
+  follows. "I wonder if we're just looking too deep — what if we just look for items based on
   their proximity to 1/3/7/14/30-day lows and highs?" A deliberately SHALLOW screen: rank/gate on
   where live sits inside each of the 1d/3d/7d/14d/30d low→high ranges, and nothing else. The context
   it came out of: the per-hour drift column was measured and found anti-predictive (two independent
@@ -516,6 +528,55 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   is whether multi-horizon proximity carries decision value the existing single-horizon reads don't,
   and whether it beats them as a primary rank rather than as context.** Test forward, out of sample,
   against realized outcomes — the same discipline the validator sweep used. UNSCHEDULED, n=0.
+
+- **"AT THE BOTTOM OF A RANGE IT HAS TRAVERSED BEFORE" — Ben's follow-up, 2026-08-11. ANSWERED FOR
+  COMMODITIES: DON'T BUILD. STILL UNMEASURED FOR BIG-TICKET.** Ben's objection to the floor-strategy
+  closure above was methodological and correct: a pooled cross-sectional average is the wrong
+  estimator for a hypothesis that is explicitly CONDITIONAL on an item having an established
+  oscillating range. He framed the conditional version as "the value strategy but with less
+  speculation" — the shipped Invest lane bets an item *will* recover (one-shot, speculative), whereas
+  conditioning on demonstrated persistence bets that an item which has already recovered N times will
+  recover again. Measured in `pipeline/experiments/RANGE-PERSISTENCE-FINDINGS.md` (rolling-origin
+  walk-forward, 74 days, six arms, real `valueGate`/`valueTier` as the comparison arm). **Result:
+  no.** Within item and amplitude-matched, the excess is null in 6 of 6 cells (max |t|=1.2); the
+  persistence lift is 0.70–0.83, i.e. the criterion *anti*-selects; a 2-day entry lag turns it
+  negative; and it does not beat the value lane (+0.55%, t=0.3). A genuinely selective criterion WAS
+  built (repeated traversals of the same two levels + leg-regularity, 26.2% firing vs
+  `oscillationVsKnife`'s 98.4%) and bought nothing, so "refine the detector" is not the unlock.
+  **The caveat is load-bearing and this entry must not be cited as a full closure:** zero arm-A items
+  above 100k gp under the shipped units gate (3 above 10m under a loose one), so the fang-class /
+  multi-week-oscillator case Ben was actually describing is UNMEASURED, not refuted — the same
+  price-tier censoring that limited the floor study. Re-opening it needs a sample that reaches the
+  big-ticket tier, not a new estimator on this one. See also `plans/PLAN-MULTIWEEK-OSCILLATOR.md`,
+  whose 22-of-23 OSCILLATING result is now explained as a detector artifact (next entry).
+
+- **`oscillationVsKnife`'s OSC LABEL IS A FUNCTION OF SERIES LENGTH — a live trap, one refactor away
+  from silently deleting a shipped guard (2026-08-11).** `OSC_MIN_LEGS` is an ABSOLUTE leg count over
+  a variable-length window with no normalisation, so legs accumulate as the window grows: 59.5% OSC at
+  14d → 88.9% at 21d → 99.9% at 60d on the real archive, and independently 63% at 14d → 100% by 30d on
+  a synthetic DRIFTLESS RANDOM WALK with no cycle in the generating process at all (identical across
+  3%/6%/12% per-step amplitude — the noise floor scales with amplitude, so LENGTH is the only free
+  variable). Survivable today only because the wiki `/timeseries?timestep=1h` endpoint caps the series
+  at ~15d, so it fires ~63% and the Chunk-3B knife temper still rejects 3–4% of rows. **The trap:**
+  F-H's own note calls "feed it a deeper `archive.mjs` series" a noted-not-built follow-up, and
+  `renderAmplitudeMode` already has that archive open in the same function — a one-line change takes
+  it to ~100% OSC and deletes the guard with no error and no failing test. Recorded as a don't-rebuild
+  note in the `oscillationVsKnife` header (the invariant's home), README's `js/forecast.mjs` entry, and
+  PLAN-OSCILLATION-CYCLE's F-H row. **If pursued, normalise the criterion (legs per unit time, or
+  period-regularity) BEFORE widening the window.** Also worth noting `docs/SIGNAL-AUDIT.md` has no row
+  for this signal at all. UNSCHEDULED.
+
+- **FOUR SMALLER DEFECTS FOUND ALONGSIDE THE RANGE-PERSISTENCE STUDY (2026-08-11) — not yet fixed.**
+  (1) **`pFillValue`'s n is structurally 0** — it reads `vr.coverageDays`, but `valueRanges`
+  (`js/valuescreen.mjs`) *gates* on `ts.coverageDays` (line ~120) and never puts it in its return
+  object, so `num(vr.coverageDays) ?? 0` is always 0 for every value row. Worse, `pipeline/test/
+  estimators.test.mjs` passes green by hand-constructing a `valueRanges` shape the producer never
+  emits — a test asserting against a fiction, the same class as the fail-open forecast guard.
+  VERIFIED directly, not taken on report. (2) `/scan` SKILL.md quotes the value liquidity floor as
+  **50** where the code says **3,500**. (3) The superseded **500k gp/d** floor survives in
+  `EDGE-MAP-FINDINGS.md` and `VOLUME-VS-BAND-FINDINGS.md`, and no `lint-docs` rule covers it (the
+  same stale-constant class that turned up in eleven places on 2026-08-09). (4) Two `gate` validators
+  declared on the value niche never execute. Items 2–4 are reported-not-verified.
 
 - **THE VALIDATOR STACK HAD NEVER BEEN SCORED AGAINST OUTCOMES — TWO OF THE FIRST THREE MEASURED
   FAILED (2026-08-08).** Forward-scored every level-based validator against the 5m archive over the
