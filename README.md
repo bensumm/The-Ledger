@@ -943,12 +943,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   aggregate too — just one day fresher (30/30 exact against its own day, 4/30 against the trailing
   window); the 22/24 was measured inside the single UTC hour where the two coincide. So step 3 was aimed
   at a REAL problem after all, merely a smaller one than first written: the app's per-item volume is a
-  day-aggregate, not a trailing window. The other app defect found the same day still stands: the Finder
-  loads `/1h` into `STATE.VOL` and feeds it to daily-anchored scoring as `volDay` (`js/market.js`
-  `desirabilityOf`) — a ~24× unit error understating rank up to 4.54× (peak at 1,500/day, gone by
-  384k/day; the "~4× on liquid items" first published here named the region where it does the LEAST),
-  plus a second bug in the same line that substitutes `hpv+lpv` for a one-sided book. See the ⚠ blocks at
-  `desirabilityOf`. Still APP_VERSION-bumping when fixed.
+  day-aggregate, not a trailing window. **Both app defects are now FIXED in 0.74.0** — do not re-open
+  them: the Finder reads `STATE.VOL24` (`/24h`) rather than `/1h`, the `|| it.volume` one-sided
+  fallback is gone, and the `volDay > 0` cap escape (which was 100% of the app's S+ grades) is closed.
+  Pinned by `smoke-test.mjs`'s paired volDay assertion. See the header at `desirabilityOf`.
 - `PLAN-ESTIMATOR-FIDELITY.md` — per-topic plan (2026-08-01): the discovery
   estimator understates both legs against the daily distribution (the 2h-band basis + the
   clamp-to-bandTop blend make a verified daily-basis ask/dip structurally unquotable), the rank
@@ -2091,7 +2089,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     fix list. Cheapness constraint: judgment is scoped to the wave diff, never a cold repo-wide
     re-audit. Boundary with `/analyze`: `/cleanup` owns implementation integrity, `/analyze` owns the
     trading-record retro. Linted by `lint-skills.mjs`),
-  - `smoke-test.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
+  - `smoke-test.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed;
+    `/1h` and `/24h` carry DELIBERATELY different fixture volumes so the 0.74.0 volDay pin can
+    discriminate — a zero-daily-volume item must hit `THIN_GRADE_CAP`, mutation-proven against both
+    reverting the Finder to `STATE.VOL` and reverting `thin` to the `volDay > 0` test),
     `quotecore.test.mjs` (verdict-tree fixtures + the P4a lotCtx.path byte-identity pin),
     `held-item-strategy.test.mjs` (P4a — the path-engine acceptance: decay-knife held ranks the hold-family below
     the exit-family, the genuine-dip counter-fixture, enteredUnder→migration, and the

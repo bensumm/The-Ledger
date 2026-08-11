@@ -2519,7 +2519,12 @@ async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
     const row = qcache.get(id) || prefetched.get(id);      // niche pool first, else this pass's prefetch
     const d = v24[id], limit = map.byId[id]?.limit ?? null;
     const limitVol = d ? Math.min(d.highPriceVolume || 0, d.lowPriceVolume || 0) : 0;
-    const thin = d ? (limitVol > 0 && limitVol < FLOOR) : false;
+    // "thin OR UNVERIFIED" — the same fail-closed rule as the app's desirabilityOf (js/market.js).
+    // Both `> 0` and the old `: false` were CAP ESCAPES: a one-sided book, a zero-volume item, and an
+    // item absent from v24 all read NOT-thin and skipped THIN_GRADE_CAP entirely. Watchlist rows are
+    // gate-exempt by design, so this cap is the ONLY thing standing between an unverifiable book and
+    // an S+ letter. Unknown liquidity must not headline.
+    const thin = d ? (limitVol < FLOOR) : true;
     // P6b: a watchlist row has no niche context, so rank it under the neutral band thesis (intraday
     // estimator, patient 2h-band pair) — a standard flip read. Same rank basis as the niche tables.
     const er = estimateRank(FLIP_NICHES.band, row);

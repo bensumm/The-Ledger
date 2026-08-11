@@ -1,4 +1,4 @@
-import { API, RATE_W, RATE_ROI_MAX, RATE_VOL_MAX, RATE_TURN_FAST, RATE_TURN_SLOW, MAXPART, DIV_FULL, Z_BAND, UP_RISK, MIN_PRICE, MIN_VOL, FRESH_S, STALE_S, STRAT, MARKET_TTL, GUIDE_TTL, GUIDE_DUMP, GUIDE_MODULE, GUIDE_HIST, STATE, sGet, sSet, logEvent, setHealth } from './state.js';
+import { API, RATE_W, RATE_ROI_MAX, RATE_VOL_MAX, RATE_TURN_FAST, RATE_TURN_SLOW, MAXPART, DIV_FULL, Z_BAND, UP_RISK, MIN_PRICE, MIN_VOL, FRESH_S, STALE_S, STRAT, MARKET_TTL, VOL24_TTL, VOL24_MIN_ITEMS, VOL24_STALE_MAX, GUIDE_TTL, GUIDE_DUMP, GUIDE_MODULE, GUIDE_HIST, STATE, sGet, sSet, logEvent, setHealth } from './state.js';
 import { jget, cached } from './marketfetch.js';
 import { netMargin, clamp, now, isBond } from './money-math.js';
 import { estimateRank } from './estimators.mjs';   // AP4: the SAME per-thesis rank the console uses
@@ -21,17 +21,56 @@ export async function getMapping(force){
 // for the bond ONLY; every other item gets undefined → the normal after-tax margin (byte-identical).
 const bondMarginOpts = id => isBond(id) ? { bond: true, guide: (STATE.GUIDE[id] && STATE.GUIDE[id].price) || 0 } : undefined;
 
+/* DAILY two-sided volume for desirabilityOf. Its own cache/TTL because /24h is a UTC-DAY aggregate
+   that only rolls at 00:00Z — MARKET_TTL's 180s would re-pull 381 KB for nothing.
+   `?id=` is IGNORED by the endpoint: it returns the WHOLE market, one UTC day fresher than bare /24h
+   (see pipeline/lib/market/marketfetch.mjs loadAll24hRolling — the ONE HOME). That is undocumented
+   behaviour, hence VOL24_MIN_ITEMS: if it ever starts honouring the id we degrade to null (wide,
+   honest) instead of silently grading the whole board off a 1-item map.
+   On a fetch failure a STALE cached map beats null — but only up to VOL24_STALE_MAX; past that it
+   degrades to null so a permanently-dead endpoint cannot serve an ancient map behind normal-looking
+   uncapped grades. Every degrade sets health 'vol24' so the banner shows it; without that the failure
+   is invisible (identical grade, identical tooltip, and loadAll stamps market:'ok' right after). */
+async function loadVol24(force){
+  const t=await sGet('snap_vol24_ts');
+  if(!force && t && (now()-t)<VOL24_TTL){ const V=await sGet('snap_vol24'); if(V){ STATE.VOL24=V; return; } }
+  // A stale map beats null, but NOT indefinitely: past VOL24_STALE_MAX it degrades to null (→ every
+  // grade capped). Without a max age a permanently-dead endpoint would serve an ancient map forever
+  // with normal-looking uncapped grades — fail-OPEN, the opposite of the null branch's fail-closed.
+  const fallback=async(why)=>{
+    const cached=await sGet('snap_vol24');
+    const age=t?(now()-t):Infinity;
+    if(cached && age<VOL24_STALE_MAX){
+      STATE.VOL24=cached;
+      setHealth('vol24','warn','Daily volume is '+Math.round(age/3600)+'h stale — grades may lag. '+why);
+    }else{
+      STATE.VOL24=null;
+      setHealth('vol24','warn','Daily volume unavailable — every grade is capped at A- until it returns. '+why);
+    }
+    logEvent('warn','market','/24h '+why+' — '+(STATE.VOL24?'using cached map ('+Math.round(age/3600)+'h old)':'no usable map; grades capped'));
+  };
+  try{
+    const r=await jget(API+'/24h?id=2');
+    const d=r&&r.data;
+    const n=d?Object.keys(d).length:0;
+    if(n<VOL24_MIN_ITEMS) return fallback('returned '+n+' items, expected the whole market');
+    STATE.VOL24=d; await sSet('snap_vol24',d); await sSet('snap_vol24_ts',now());
+    setHealth('vol24','ok','');
+  }catch(e){ return fallback('fetch failed ('+(e&&e.message||e)+')'); }
+}
+
 export async function loadMarket(force){
   if(!force){
     const snapTs=await sGet('snap_ts');
     if(snapTs && (now()-snapTs)<MARKET_TTL){
       const L=await sGet('snap_latest'), V=await sGet('snap_vol');
-      if(L && V){ STATE.LATEST=L; STATE.VOL=V; return {fresh:false, ts:snapTs}; }
+      if(L && V){ STATE.LATEST=L; STATE.VOL=V; await loadVol24(force); return {fresh:false, ts:snapTs}; }
     }
   }
   const [r1,r2]=await Promise.all([jget(API+'/latest'), jget(API+'/1h')]);
   STATE.LATEST=r1.data; STATE.VOL=r2.data;
   const ts=now(); await sSet('snap_latest',STATE.LATEST); await sSet('snap_vol',STATE.VOL); await sSet('snap_ts',ts);
+  await loadVol24(force);
   return {fresh:true, ts};
 }
 
@@ -192,42 +231,54 @@ export function ratingParts(it, staleRisk){
    rather than the console's 2h band pair. So a Finder rank is a COARSE pre-filter that differs from the
    band-precise rank the per-item `quote`/Trends read produces; the UI labels it so and the quote button
    is the precise read.
-   ⚠ TWO KNOWN BUGS in `volDay` below (found 2026-08-10/11, NEITHER FIXED — both change visible grades,
-   so they need one reviewed change + APP_VERSION bump. Fixing one leaves the other.)
-   BUG 1 — UNIT. `STATE.VOL` is loaded from /1h, so `volDay` is ONE HOUR of volume, but its consumers
-   are daily-anchored: `families.mjs` TTF_REF_VOL=1000 in sqrt(TTF_REF_VOL/volDay), and `rating.mjs`
-   liqFactor (F0=50/F1=5000, header says "DAILY"). Not a convention: the LEGACY scorer here feeds the
-   same STATE.VOL into RATE_VOL_MAX, annotated "// hourly volume" in state.js — two scorers, one source,
-   opposite assumptions.
-   (Do NOT cite ui.js's "≈ N/day" as a third leg — that string is the RANK, not volume. The Finder has
-   no volume column; trends.js is the only volume render and labels it "/hr traded" correctly.)
-   Rank understatement is a CURVE (rankScore saturates), verified invariant across spread/price/limit
-   since `net` cancels in the ratio. Landmarks have closed forms — use these, not sampled points:
-       peak  4.54× at volDay 1,500    = 24·TTF_REF_VOL/TTF_VEL_MAX²
-       unity 1.00× at volDay 384,000  = 24·TTF_REF_VOL/TTF_VEL_MIN²
-       (3.25× at 24k, 1.59× at 120k.)  Bites LOW/MID liquidity, NOT "liquid items".
-   BUG 2 — ONE-SIDED BOOKS. `Math.min(hpv,lpv) || it.volume` and `it.volume` is hpv+lpv (~line 146),
-   so a limiting side of exactly 0 falls through to the SUM: lpv=0, hpv=37,876 scores as 37,876/day
-   when true two-sided volume is 0 — max substituted for min. The "console basis" it claims to mirror
-   (`gatecandidates.mjs` eachLiquidCandidate) EXCLUDES one-sided items as its first non-negotiable gate.
-   Also stale: `thin = volDay < 50` below measures an hour against a floor that moved to 3500.
+   `volDay` MUST be the DAILY two-sided limiting side, from STATE.VOL24 (/24h) — NOT STATE.VOL (/1h).
+   Three bugs were fixed here together in 0.74.0; each would re-appear if the source were reverted:
+     · UNIT — /1h made volDay ONE HOUR against daily-anchored consumers (families.mjs TTF_REF_VOL,
+       rating.mjs liqFactor F0/F1). ×24 is NOT an acceptable substitute: measured over 1.25M
+       item-hours, hourly-MIN×24 lands at median 0.10 of a true daily figure with 44% zeros (diurnal
+       shape alone gives 0.68 — so most of the damage is taking min() of a sparse hour).
+       ⚠ Do NOT justify /24h by "accuracy". It is bit-exact the /1h sum over the day it labels
+       (4152/4152 items), so any ratio against a /1h-composed truth measures WINDOW OFFSET, not
+       endpoint error — the endpoint has none by construction. The real argument is simpler: /24h IS
+       a true daily two-sided figure for a day 0–24h back, and ×24 is a bad estimator of any day.
+     · ONE-SIDED BOOKS — `Math.min(hpv,lpv) || it.volume` fell through to `it.volume` (= hpv+lpv) when
+       the limiting side was 0, substituting the MAX for the MIN. Never reintroduce an `||` fallback
+       here; 0 is the correct answer and must survive.
+     · CAP ESCAPE — `thin = volDay>0 && …` let a zero-volume item skip THIN_GRADE_CAP entirely, which
+       was 100% of the app's S+ grades (89/89 at one read; the COUNT drifts 66–95 by hour, the RATIO
+       does not), median true daily volume 1–2 units. Note the scope: every one of them FAILS the
+       browse `liquid` gate, so they surface only via explicit search, never on the default board.
+       `volDay == null || …` is load-bearing, not style.
+   THIN_VOL_DAY stays 50 — do NOT "recalibrate" it to the console's 3,500. On a daily basis 3,500 caps
+   64% of the pool and 74 of the visible top 80, re-creating the flat wall of A- this fix removed. The
+   console's 3,500 is an ADMISSION floor paired with a gp-flow escape hatch; the Finder has no admission
+   gate, so they are not interchangeable. Fixing the unit is what makes 50 correct for the first time.
+   Null volDay (fetch degraded / item absent) flows honestly: liqFactor → 0.5, ttfIntraday → its 12h
+   prior. Wide, not fabricated.
    No confirmable multi-day regime here ⇒ the uniform 0.85 regime haircut applies to every row (a constant
    — it shifts all grades, not the ordering). Bond rides its tax-exempt retrade-fee opts so it can't grade
    off a phantom spread. */
 const FINDER_SPEC = { estimator: 'intraday', priceBasis: 'quick' };
+const THIN_VOL_DAY = 50;   // daily limiting-side floor for the grade cap — see the header on why NOT 3,500
 export function desirabilityOf(it){
-  const v=STATE.VOL[it.id]||{}; const hpv=v.highPriceVolume||0, lpv=v.lowPriceVolume||0;
-  const volDay=Math.min(hpv,lpv)||it.volume||0;                             // limiting side (console basis)
+  // DAILY two-sided limiting side. No `||` fallback: 0 is a real answer (one-sided book) and null is a
+  // real answer (no daily data) — both must survive to the cap and to liqFactor.
+  const v=(STATE.VOL24 && STATE.VOL24[it.id])||null;
+  const volDay=v?Math.min(v.highPriceVolume||0, v.lowPriceVolume||0):null;
   const bo=bondMarginOpts(it.id);
   const row={ quickBuy:it.low, quickSell:it.high, optBuy:null, optSell:null, band:null, mom:null,
     regime:null, rising:false, falling:false, volDay, mid:(it.low+it.high)/2, limit:it.limit,
     bond:!!(bo&&bo.bond), guide:bo?bo.guide:null };
   const er=estimateRank(FINDER_SPEC, row);
   // thin = mirrors the console's THIN_GRADE_CAP so an illiquid big-ticket can't headline S+.
-  // ⚠ 50 is the PRE-recalibration floor (moved to 3500, PLAN-VOL24 §2) AND volDay here is hourly
-  // (BUG 1 above) — two compounding staleness errors, so almost nothing trips this. Same stale 50 in
-  // suggestlog.mjs NY2.4. Fix with the two bugs above, not separately.
-  const thin=volDay>0 && volDay<50;
+  // Reads "thin OR UNVERIFIED", and both halves are load-bearing:
+  //   · ZERO is thin. The old `volDay>0` guard let a no-trade item skip the cap — that was all 77 of
+  //     the app's S+ grades, median 2 units/day.
+  //   · NULL is thin. If the /24h map is unavailable (fetch failed, cold cache) every volDay is null,
+  //     and a `!= null` test would leave the WHOLE board uncapped — re-opening the same hole on the
+  //     degrade path. Unknown liquidity must not headline; failing closed costs a letter, failing
+  //     open costs the fix.
+  const thin=volDay==null || volDay<THIN_VOL_DAY;
   const rt=rateItem({ row, rank:er.rank, thin });
   return { rank:er.rank, grade:rt.grade, score:rt.score, thin, ttfSec:er.ttf&&er.ttf.value };
 }

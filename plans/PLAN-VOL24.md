@@ -257,13 +257,25 @@ live: Soul rune Vol/d 477k(broken) → **9.82m** rolling, pressure recomputed, r
 book computes its real small volume and degrades sanely. Also landed the **CI import-resolution guard**
 (`pipeline/import-check.mjs` → `checks.yml`) that closes the gap which let a missing export ride onto main.
 
-### Step 3 — REMAINING: fix the browser app (deferred, APP_VERSION-bumping)
-Every NODE surface (screen + quote + watch) now reads corrected volume; the ONE remaining broken consumer
-is the browser app's `js/marketfetch.js` (`fetch24h`, feeding the Finder Grade/sort, Watch tab, Trends
-Vol/d). So the published `screen.json` Scan tab + every node CLI are now MORE correct than the live app
-until this lands. Per-item the app can sum its own 1h series; the Finder's bulk read needs a design decision
-(24 bulk `/1h` fetches per Finder load, or read a published rolling snapshot). This is the `APP_VERSION`-
-bumping change; the pipeline fix is not.
+### Step 3 — SHIPPED 2026-08-11 in APP_VERSION 0.74.0
+Originally scoped as "the app's `/24h` read is broken". ⚠ **That framing was wrong twice and the record
+should show both.** (1) The app's per-item read was never the *broken* endpoint — both `/24h` variants
+serve complete UTC-DAY aggregates and per-item is the fresher one (see the ONE HOME block in
+`marketfetch.mjs`). (2) The real app defect was elsewhere entirely: the **Finder** read `/1h` into
+`STATE.VOL` and fed it to daily-anchored scoring as `volDay`.
+
+What shipped: `desirabilityOf` now reads a new `STATE.VOL24` map. The design decision this step called
+for resolved itself — `/24h?id=<anything>` ignores the id and returns the whole market one UTC day
+fresher than bulk, so it is ONE request, not the 24 bulk `/1h` fetches feared here. Two further bugs in
+the same expression went with it: an `|| it.volume` fallback that substituted `hpv+lpv` for a one-sided
+book, and a `volDay > 0` guard that disabled the grade cap for zero-volume items — which was **100% of
+the app's S+ grades** (count drifts 66–95 by hour; the ratio does not), all of them search-only rows
+that fail the browse liquidity gate. Pinned by `smoke-test.mjs`'s paired volDay assertion.
+
+Still open, deliberately NOT in that change: `estimateRank` treats `volDay === 0` as *unknown* rather
+than *worst*, so a zero-volume item ranks at parity with a 1,000/day one — the LETTER is capped but the
+Finder sorts on rank. That is a shared-module change (`js/estimators/families.mjs`) and needs its own
+commit and its own pin.
 
 ### Combined-effect verification (2026-07-13, applied config: rolling + new floors + MIN_GPD 500k)
 `node pipeline/screen.mjs --mode all --stats` on the EXACT applied config:

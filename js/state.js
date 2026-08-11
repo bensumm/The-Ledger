@@ -20,7 +20,7 @@ import { pad2 } from './money-format.js';
  */
 
 export const API='https://prices.runescape.wiki/api/v1/osrs';
-export const APP_VERSION='0.73.0';
+export const APP_VERSION='0.74.0';
 // LW2: true only when the app is served from a local dev host (serve.cmd → localhost). Used to
 // gate the local live-refresh poll + freshness stamp; on the deployed origin (bensumm.github.io)
 // it's false and every LW2 behavior stays off (M1 banner + Refresh button remain the mechanism).
@@ -42,6 +42,9 @@ export const MIN_PRICE=1000, MIN_VOL=30;
 export const FRESH_S=900, STALE_S=21600;
 export const STRAT={conservative:{damp:0.85}, balanced:{damp:0.6}, aggressive:{damp:0.35}};
 export const MARKET_TTL=180;          // s · reuse stored /latest+/1h snapshot if newer (cold-start throttle)
+export const VOL24_TTL=3600;          // s · /24h is a UTC-DAY aggregate that only rolls at 00:00Z, so MARKET_TTL's 180s would re-pull 381 KB for nothing
+export const VOL24_STALE_MAX=86400*3;  // s · a cached /24h map older than this degrades to null (every grade capped) rather than being served as if current — the fail-closed counterpart to the stale-beats-null fallback
+export const VOL24_MIN_ITEMS=3000;    // sanity floor: /24h?id= currently ignores the id and returns the whole market (measured 4,152). A short map must degrade to null rather than silently null-cap most of the board. 3000 is ~72% of the real size — 1000 was only ~24%, which caught a total collapse but let a 60-75% truncation through
 export const ARCHIVE_MIN_GAP=55*60;   // s · skip watchlist archiving if done within the hour (/1h gains a point hourly)
 export const GUIDE_TTL=6*3600;        // s · official guide updates ~daily; cache the parsed map this long
 export const GUIDE_DUMP='https://chisel.weirdgloop.org/gazproj/gazbot/os_dump.json';
@@ -49,7 +52,10 @@ export const GUIDE_MODULE='https://oldschool.runescape.wiki/w/Module:GEPricesByI
 export const GUIDE_HIST='https://api.weirdgloop.org/exchange/history/osrs/last90d?id=';
 
 export const STATE = {
-  MAP: null, LATEST: null, VOL: null, ITEMS: [], byId: {}, byName: {},
+  // VOL is the /1h map (HOURLY — the legacy scorer's RATE_VOL_MAX correctly wants it).
+  // VOL24 is the /24h map (DAILY two-sided) used by desirabilityOf's volDay. Two maps because the
+  // two scorers genuinely want different units; do not collapse them.
+  MAP: null, LATEST: null, VOL: null, VOL24: null, ITEMS: [], byId: {}, byName: {},
   GUIDE: {},
   watchlist: [], trades: [], pinned: [], bankroll: 300_000_000, slots: 6, strategy: 'balanced',
   ignored: [], ignoredMeta: { _doc: null, greenlisted: [] },   // MERCH-book quarantine editor: {id,name,reason}[]; meta preserves the file's _doc + greenlisted on write-back (pipeline applies the filter)
@@ -90,7 +96,9 @@ export const idb=(()=>{
   }));
   return { get:k=>req('readonly',s=>s.get(k)), set:(k,v)=>req('readwrite',s=>s.put(v,k)), keys:()=>req('readonly',s=>s.getAllKeys()) };
 })();
-export const isBulk=k=>k.indexOf('tsa:')===0 || k==='snap_latest' || k==='snap_vol';
+// snap_vol24 belongs here because the other two whole-market maps do — measured 372 KB, which a 5 MB
+// localStorage origin would survive, so "it would blow the quota" (the original reason given) is false.
+export const isBulk=k=>k.indexOf('tsa:')===0 || k==='snap_latest' || k==='snap_vol' || k==='snap_vol24';
 export async function sGet(k){
   if(hasStore){ try{ const r=await window.storage.get(k); return r?JSON.parse(r.value):null; }catch(e){ return null; } }
   if(isBulk(k)){ if(idb){ try{ const v=await idb.get(k); if(v!==undefined) return v; }catch(e){} } }

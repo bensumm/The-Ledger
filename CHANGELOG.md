@@ -10,6 +10,80 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.74.0 — the Finder grades off DAILY two-sided volume, and the S+ tier stops being a bug (2026-08-11)
+
+Three defects in one expression, fixed together because fixing any one alone leaves the others and
+because measuring them apart gives wrong answers. **`APP_VERSION` 0.73.0 → 0.74.0.**
+
+**The one that matters: every S+ grade the app produced was a zero-volume item.** `thin = volDay > 0 &&
+volDay < 50` — that `> 0` is an escape hatch, so an item that traded *nothing* was not "thin" and
+`THIN_GRADE_CAP` switched **off**. Measured **100% of S+ rows**, on 26 of 26 hourly samples and on an
+independent re-derivation (89/89 at one read); their median true daily two-sided volume is **1–2 units**.
+The COUNT drifts 66–95 with the hour — treat it as a ratio, not a point. **Scope, which the first draft
+of this entry got wrong:** every one of those rows FAILS the browse liquidity gate, so they surface only
+via explicit search, never on the default Finder board.
+
+**The unit.** `STATE.VOL` is `/1h`, so `volDay` was ONE HOUR against daily-anchored consumers
+(`TTF_REF_VOL`, `liqFactor`). ×24 is **not** an acceptable substitute: over 1.25M item-hours, hourly-MIN
+×24 lands at **median 0.10** of a true daily figure with 44% zeros — and diurnal shape alone accounts for
+only 0.68 of that, so most of the damage is taking `min()` of a sparse hour. The fix uses `/24h?id=2`:
+the `?id=` is ignored and it returns the whole market **one UTC day fresher than bulk** for a single
+381 KB request. New `STATE.VOL24` + `VOL24_TTL` (3600s — the aggregate only rolls at 00:00Z) +
+`snap_vol24` routed to IndexedDB via `isBulk`.
+
+⚠ **Two justifications in the first draft of this entry were withdrawn under review.** "median 0.97 of
+truth, 69% within 2×" is **circular** — `/24h` is bit-exact the `/1h` sum over the day it labels
+(4,152/4,152 items), so any ratio against a `/1h`-composed truth measures WINDOW OFFSET, not endpoint
+error; the endpoint has none by construction. The honest argument is narrower and still sufficient:
+`/24h` **is** a true daily two-sided figure for a day 0–24h back, and ×24 is a bad estimator of any day.
+And "swings 0.31→1.17 by hour of day" does not reproduce — the true range is **0.000→0.309**.
+
+**One-sided books.** `Math.min(hpv,lpv) || it.volume` fell through to `it.volume` (= `hpv+lpv`) when the
+limiting side was 0 — substituting the MAX for the MIN. (The first draft illustrated this with Arrow
+shaft at 4,566,512/0; that item is 1 gp, below `MIN_PRICE`, so the Finder never scores it — a real
+pathology, the wrong example.) The console basis it claimed to mirror excludes one-sided items as its
+first non-negotiable gate. **The identical bug was found unfixed on the CONSOLE watchlist** and is fixed
+in the same commit (`screen-flip-niches.mjs`) — there `d ? (limitVol > 0 && …) : false` let a one-sided
+book, a zero-volume item, AND an item absent from the volume map all escape the cap.
+
+**A hole found while verifying, not before.** The first cut used `volDay != null` for `thin`. If the
+`/24h` fetch fails, *every* volDay is null and a `!= null` test leaves the **whole board uncapped** —
+re-opening the same hole on the degrade path. It now reads `volDay == null || volDay < THIN_VOL_DAY`:
+unknown liquidity must not headline. Failing closed costs a letter; failing open costs the fix.
+
+**`THIN_VOL_DAY` stays 50 — deliberately NOT the console's 3,500.** On a daily basis 3,500 would cap 64%
+of the pool and 74 of the visible top 80, re-creating the flat wall of `A-` this fix removes. The
+console's 3,500 is an *admission* floor paired with a gp-flow escape hatch; the Finder has no admission
+gate. Fixing the unit is what makes 50 correct for the first time — it was always written as a daily number.
+
+**Blast radius — and every figure here is hour-dependent, so it carries its population and its range.**
+The visible board barely reorders: **75–76 of 80** and **19 of 20** retained. What changes is the Grade
+column, because the hourly figure was reading as sub-50 "thin" and clamping a large share of the board
+to `A-`. The measured improvement is in DISCRIMINATION: across 26 hourly samples the visible top-80 went
+from a median of **5 distinct letters with a 42-row single-letter clump** to **7 letters with a 22-row
+clump** — before the fix, more than half the board typically carried one letter.
+
+It is **not** grade inflation. On the scored pool (1,541 rows, invariant), grades strictly above `A-` go
+**241 → 125** and the `S+` share falls **5.2% → 0.5%**. The "270 rows grade upward" figure from the first
+draft is a browse-pool artifact of releasing an artificial cap. ⚠ Also withdrawn: "204 of 394 capped"
+mislabelled the quantity and cited a pool size (394) above the observed maximum (263–388, median 346);
+and "S+ goes 78 → 45" is wrong — three independent re-derivations give 8, 27 and 45, so the post-fix
+count is unstable and a point estimate should never have been published. What IS stable is the direction
+and the ratio.
+
+**Calibration is untouched and is not claimed.** `GRADE_CUTOFFS` remain un-tuned placeholders, so `S+`
+still means only "rank ≥ 150,000". This change restores a correct INPUT; it does not calibrate the scale.
+
+**Pinned, and the first version of the pin was worthless.** `smoke-test.mjs` stubs `/1h` and `/24h` with
+different volumes and carries a PAIR of fixtures — one zero on a daily side (must be capped) and one
+healthy (must NOT be). The pair is required: a missing map caps *everything* by design, so the capped
+case alone cannot distinguish "correctly capped" from "no data". ⚠ The original single-fixture pin was
+inert — `VOL24_MIN_ITEMS` rejected the 3-item fixture map, so `STATE.VOL24` was null for the whole run
+and the assertion exercised the unknown-volume branch while claiming to test the zero-volume one. Under
+it, `THIN_VOL_DAY → 0`, reading the wrong map, and deleting `loadVol24()` entirely all passed green.
+Now mutation-proven against seven mutations, all caught: revert to `/1h`, revert `thin` to `volDay > 0`,
+reintroduce `|| it.volume`, `THIN_VOL_DAY → 0`, wrong map, no `loadVol24()`, guard rejects the real map.
+
 ### Four subagent investigations: three of the four "obvious fixes" should not ship (2026-08-11)
 
 Investigated the open items from the vol24 wave with four parallel read-only agents. The useful result
