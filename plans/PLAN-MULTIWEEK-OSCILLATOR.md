@@ -176,7 +176,7 @@ question:
   - **MECHANISM FOUND, 2026-08-11 — this is no longer an open puzzle.** `OSC_MIN_LEGS` is an
     ABSOLUTE leg count over a variable-length window with no normalisation, so the label tracks
     SERIES LENGTH, not shape: 59.5% OSC at 14d → 88.9% at 21d → 99.9% at 60d on the real archive,
-    and 63% → 100% by 30d on a synthetic DRIFTLESS RANDOM WALK with no cycle in the generating
+    and ~66% → ~100% by 30d on a synthetic DRIFTLESS RANDOM WALK with no cycle in the generating
     process at all. The 22-of-23 result above is that artifact, not a statement about big-tickets.
     Two consequences for this plan: (1) the "is the fang shape common?" question is still
     **unanswered** — nothing here measured it; and (2) a selective criterion WAS built and measured

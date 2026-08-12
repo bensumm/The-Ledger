@@ -432,9 +432,16 @@ export function driftExitFrom(profile, days, ctx = {}, { holdHorizonDays } = {})
  * the window grows, so a LONGER series of the SAME process crosses the threshold regardless of whether
  * it oscillates. Measured 2026-08-11 two independent ways: over the real archive, 59.5% OSC at 14d →
  * 88.9% at 21d → 99.9% at 60d; and over a synthetic DRIFTLESS RANDOM WALK with no cycle in the
- * generating process at all, 63% at 14d → 94% at 21d → 100% at 30d and beyond, IDENTICAL across
- * per-step amplitudes 3%/6%/12% (the noise floor scales with amplitude, so length is the ONLY free
- * variable). i.e. at ≥30 days this returns `oscillating` for pure noise.
+ * generating process at all, ~66% at 14d → ~95% at 21d → ~100% at 30d and beyond. i.e. at ≥30 days
+ * this returns `oscillating` for pure noise. Amplitude cannot matter: every threshold here
+ * (`ampNoiseMult × noiseFloor`, leg peak-to-trough, the detrend residual) is homogeneous of degree 1
+ * in price, so the criterion is SCALE-FREE BY CONSTRUCTION — length is the only free variable.
+ * _(An earlier version of this note offered "IDENTICAL across per-step amplitudes 3%/6%/12%" as
+ * corroborating evidence. It is not evidence: on an additive walk that identity cannot fail, and on
+ * the multiplicative process the words described the rates are NOT identical but mildly monotone in
+ * amplitude — vacuous in one reading, false in the other. The 14d figure also read 63% on the first
+ * pass and 66–68% on re-measurement; the generator was never recorded, so treat 14d as ~2/3 and the
+ * ≥30d saturation as the load-bearing part.)_
  *
  * WHY IT IS SURVIVABLE TODAY: the shipped caller is bounded by the wiki `/timeseries?timestep=1h`
  * endpoint at ~15–16 calendar days (F-H below caps `OSC_DETECTOR_NIGHTS=21` against a series that

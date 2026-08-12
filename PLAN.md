@@ -553,11 +553,17 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 - **`oscillationVsKnife`'s OSC LABEL IS A FUNCTION OF SERIES LENGTH — a live trap, one refactor away
   from silently deleting a shipped guard (2026-08-11).** `OSC_MIN_LEGS` is an ABSOLUTE leg count over
   a variable-length window with no normalisation, so legs accumulate as the window grows: 59.5% OSC at
-  14d → 88.9% at 21d → 99.9% at 60d on the real archive, and independently 63% at 14d → 100% by 30d on
-  a synthetic DRIFTLESS RANDOM WALK with no cycle in the generating process at all (identical across
-  3%/6%/12% per-step amplitude — the noise floor scales with amplitude, so LENGTH is the only free
-  variable). Survivable today only because the wiki `/timeseries?timestep=1h` endpoint caps the series
-  at ~15d, so it fires ~63% and the Chunk-3B knife temper still rejects 3–4% of rows. **The trap:**
+  14d → 88.9% at 21d → 99.9% at 60d on the real archive, and independently ~66% at 14d → ~100% by 30d on
+  a synthetic DRIFTLESS RANDOM WALK with no cycle in the generating process at all. Amplitude cannot
+  matter: every threshold is homogeneous of degree 1 in price, so the criterion is SCALE-FREE BY
+  CONSTRUCTION and LENGTH is the only free variable. _(Corrected on adversarial review: the first
+  version of this entry offered "identical across 3%/6%/12% per-step amplitude" as corroborating
+  measurement. It is an algebraic identity that cannot fail on an additive walk, and on the
+  multiplicative process the words described the rates are NOT identical but mildly monotone — vacuous
+  in one reading, false in the other. The 14d figure also moved 63% → 66–68% on re-measurement and the
+  generator was never recorded; the ≥30d saturation is the load-bearing part.)_ Survivable today only
+  because the wiki `/timeseries?timestep=1h` endpoint caps the series
+  at ~15d, so it fires ~2/3 of the time and the Chunk-3B knife temper still rejects 3–4% of rows. **The trap:**
   F-H's own note calls "feed it a deeper `archive.mjs` series" a noted-not-built follow-up, and
   `renderAmplitudeMode` already has that archive open in the same function — a one-line change takes
   it to ~100% OSC and deletes the guard with no error and no failing test. Recorded as a don't-rebuild
@@ -572,11 +578,49 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   object, so `num(vr.coverageDays) ?? 0` is always 0 for every value row. Worse, `pipeline/test/
   estimators.test.mjs` passes green by hand-constructing a `valueRanges` shape the producer never
   emits — a test asserting against a fiction, the same class as the fail-open forecast guard.
-  VERIFIED directly, not taken on report. (2) `/scan` SKILL.md quotes the value liquidity floor as
-  **50** where the code says **3,500**. (3) The superseded **500k gp/d** floor survives in
-  `EDGE-MAP-FINDINGS.md` and `VOLUME-VS-BAND-FINDINGS.md`, and no `lint-docs` rule covers it (the
-  same stale-constant class that turned up in eleven places on 2026-08-09). (4) Two `gate` validators
-  declared on the value niche never execute. Items 2–4 are reported-not-verified.
+  VERIFIED directly, not taken on report — re-confirmed by execution on adversarial review
+  (`valueRanges` returns 16 keys, none of them `coverageDays`; `pFillValue` → `n: 0`), and the green
+  test is `pipeline/test/estimators.test.mjs:157–159`, whose own title asserts the thing that is false
+  in production. (2) ~~`/scan` SKILL.md quotes the value liquidity floor as 50 where code says
+  3,500~~ — **SOFTENED on review: this was overstated.** The `50` sits inside a DATED historical
+  bullet ("Artifact/liquidity hardening, Ben 2026-07-09") narrating a 20→50 change, and the SAME file
+  states the current 3,500 about 80 lines later. It is stale narration missing a forward pointer, not
+  a live contradiction. Fix = add "(later re-based to 3,500)" to the dated bullet. (3) The superseded
+  **500k gp/d** floor survives in `EDGE-MAP-FINDINGS.md` (×2) and `VOLUME-VS-BAND-FINDINGS.md` (×1) in
+  LIVE voice, and no `lint-docs` rule covers it — confirmed twice over: no rule contains the string
+  `500`, and `experiments` appears nowhere in `lint-docs.mjs`, so no rule's `files` list could reach
+  those paths (CHECK 2 is scoped to `POINTER_DOCS = CLAUDE.md + README.md`). Both files are now
+  tracked, so a rule would bite. (4) ~~Two `gate` validators declared on the value niche never
+  execute~~ — **SOFTENED on review: true but INTENTIONAL and already documented.** `js/flip-niches.mjs`
+  says so explicitly in the amplitude spec ("like value's floor/limit — these sit dormant in the
+  console path"). The real (minor) gap is that the VALUE spec's own validator block carries no such
+  note, so a reader of that block alone would believe they gate. Doc-locality, not a defect.
+
+- **`quote-items.mjs --positions` COMPUTES THE DEPTH READ AND THROWS IT AWAY (2026-08-11).** Found by
+  adversarial review while auditing why `depthExit` is sparse in `suggestions.jsonl`. The
+  `--positions` path is separate from the per-item quote loop, and its `suggestionEntry` call
+  (`quote-items.mjs:934`) passes `verdict`/`validators`/`windowExit` but **no `depthExit`** (nor
+  `reachable`/`asym`/`estBuy`/`estSell`). Measured: **0 of 81** `--positions` held-lot rows carry it,
+  against 3 of 3 on `watch-positions.mjs`. Worse, `clearableAsk` there sits inside the
+  `if (PRESSURE_EXIT)` branch (`:818`), so on a DEFAULT `/positions` run the depth read is not even
+  computed. `/positions` is the primary held-lot surface, so this is where the depth evidence should
+  have been accruing all along. **A correction to my own earlier note:** README initially explained the
+  sparseness as "the shadow only rides lots held while a watch/quote ran" — that causal claim was
+  false; 81 qualifying reads ran and logged nothing because of a missing argument. UNSCHEDULED.
+
+- **THE DEPTH MODEL DOES NOT BEAT A ONE-LINE NULL MODEL — measured 2026-08-11, negative.** Built
+  `pipeline/commands/join-depth-outcomes.mjs` to score `clearableAsk` against realized sells (277 sell
+  episodes / 77 items, predictions recomputed per episode with no look-ahead). Findings: (a) it is not
+  distinguishable from "use the window's MEDIAN hourly high" — median residual **+0.81% vs +0.83%**;
+  (b) `predictedAsk` sits at the **~52nd percentile** of the window's hourly highs, so the "strictly-
+  conservative FLOOR" language in `clearableLevel`'s own header is wrong — it is a central estimate;
+  (c) the residual is **TREND-DOMINATED** (corr ≈0.61 with 14d drift; −0.19% falling / +0.00% flat /
+  +3.39% rising) because the model averages complete days ending at the previous midnight and that
+  window lags a trending item; (d) `DEPTH_COMPETITION_MULT` is **not calibratable from this book** —
+  sweeping 0.5→16 moves the median residual 0.20pp and 4→8 leaves ~71% of predictions bit-identical.
+  Within the flat-trend arm the size gradient's item-cluster bootstrap CI straddles zero, so no size
+  effect is supportable yet either. **Do not tune the constant off this; the honest next step is
+  either a trend-corrected formulation or accepting the null model.** UNSCHEDULED.
 
 - **THE VALIDATOR STACK HAD NEVER BEEN SCORED AGAINST OUTCOMES — TWO OF THE FIRST THREE MEASURED
   FAILED (2026-08-08).** Forward-scored every level-based validator against the 5m archive over the
