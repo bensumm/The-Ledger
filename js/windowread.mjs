@@ -831,6 +831,11 @@ export function asymPair(stats, { pLo = ASYM_P_LO, pHi = ASYM_P_HI, minDays = AS
     pAsk: reachedDays(stats.his, highReachAsk) / stats.his.length,
     pBid: touchedDays(stats.lows, deepBid) / stats.lows.length,
     nDays,
+    // pAsk/pBid's OWN denominators. windowStats drops days with no print, so his/lows can be SHORTER
+    // than nDays — rendering `pAsk × nDays` then prints a count over days the fraction never scored
+    // (pAsk 10/12 → "12/14d"). Callers that display a tally must use these, not nDays (2026-08-12).
+    nAsk: stats.his.length,
+    nBid: stats.lows.length,
   };
 }
 

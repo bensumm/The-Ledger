@@ -93,8 +93,13 @@
  *     subFloor?,   (P6c — 'min-gpd' | 'liquidity': the row was surfaced by the empty-result
  *     sub-floor fallback under THAT relaxed floor; lean-included, absent on floor-qualified rows)
  *     asym?,   (PART II PLAN-GRADE-REACH 2026-07-12 — the SHADOW asymmetric-fill estimate
- *               { bid, ask, pAsk, pBid, n, rank }: the deep-bid → high-reach-ask pair (js/windowread.mjs
- *               asymPair, guarded), its exit/entry reach fractions, and the asymmetric rank
+ *               { bid, ask, pAsk, pBid, pAskAt, pBidAt, n, rank }: the deep-bid → high-reach-ask pair
+ *               (js/windowread.mjs asymPair, guarded), its exit/entry reach fractions, and the asymmetric rank
+ *               — pAskAt/pBidAt (added 2026-08-12) are the LEVELS pAsk/pBid were measured at, which the
+ *               min/max ordering guards can move bid/ask away from. WITHOUT them a row's (ask, pAsk) pair
+ *               mixes two levels and the join cannot tell a guarded row from an unguarded one, so the two
+ *               cases can never be scored apart; guarded ≈ 2 of 7 asym rows measured live. Null on a pair
+ *               that predates the field.
  *               (net × P_ask ÷ TTF — js/estimators.mjs asymEstimate). The row's plain `rank` field is
  *               the SYMMETRIC rank, so old-vs-new ride the SAME row for the F1 A/B (graduate the sort
  *               flip only if asym.rank predicts realized exit-safe edge better). Lean-included:
@@ -418,7 +423,12 @@ export function excludedShadow(excluded) {
 export function asymShadow(ae) {
   if (!ae || ae.ask == null) return null;
   const r2 = x => x == null ? null : Math.round(x * 100) / 100;
-  return { bid: ae.bid, ask: ae.ask, pAsk: r2(ae.pAsk), pBid: r2(ae.pBid), n: ae.nDays, rank: ae.rank == null ? null : Math.round(ae.rank) };
+  // pAskAt/pBidAt ride along so the join can separate GUARDED rows (bid/ask moved off the measured
+  // level by asymEstimate's min/max ordering guards) from unguarded ones. Without them the pair
+  // (ask, pAsk) mixes two levels with no way to recover which — see asymEstimate (2026-08-12).
+  return { bid: ae.bid, ask: ae.ask, pAsk: r2(ae.pAsk), pBid: r2(ae.pBid),
+    pAskAt: ae.pAskAt ?? null, pBidAt: ae.pBidAt ?? null,
+    n: ae.nDays, rank: ae.rank == null ? null : Math.round(ae.rank) };
 }
 
 // WC1 (PLAN-WINDOW-CLEAR-OUTCOMES) — the window-clear ask-rung FORWARD record. A big-ticket held lot is

@@ -713,7 +713,15 @@ placeholder cutoffs.
   symmetric p10/p90 pair is 50/50. A `◆ asym fill` line shows the day-level deep-bid → high-reach-ask
   pair (`asymPair`) with `P_ask` (the rank weight) and `P_bid` as "rest as optionality" (never a rank
   multiplier). `--asym` flips the whole objective but is F1-gated OFF (it silently downgrades the
-  default-on publish; an explicit `--publish --asym` hard-refuses). Doctrine:
+  default-on publish; an explicit `--publish --asym` hard-refuses). **Reading the counts (2026-08-12):**
+  they are PAST TENSE and IN-SAMPLE — `printed 12/14d` is a tally over the days that fitted the quantile,
+  not a forward fill rate. When an ordering guard binds (the live instabuy/instasell has already passed
+  the patient level) the clause names the quoted price and the measured level separately —
+  `ask 220,200 (= live instabuy, above the 218,500 level that printed 12/14d)` — because the count
+  belongs to 218,500, not to 220,200. It deliberately makes NO execution claim about the guarded price:
+  whether `P_ask` is a floor there (the leg transacts now) or a mild overstatement is unresolved, and on
+  a bound row the `⊙ reach/placement` note prints reach at the quoted price on the same basis — read that
+  number rather than transferring this one. Doctrine:
   the `asymEstimate` header in `js/estimators/reach.mjs`.
 - **Path-A gp/day is the CONSOLE PRIMARY sort; the grade is a shown BACKUP + live A/B (PLAN-LANE-ADMISSION
   Chunks D+E, owner decision H4).** On the band/churn console + last-report tables the surviving rows are

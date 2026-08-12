@@ -244,3 +244,61 @@ export function formatBasePosition(bp) {
   if (!bp) return null;
   return `base p${bp.pct} of the ${bp.days}d range · ${bp.label}`;
 }
+
+/**
+ * formatAsymFill(ae, ap, { fmt }) → { bidTxt, askTxt } | null — the shared clause pair for the
+ * ◆ asym fill inform line. Both quote-items.mjs and screen-flip-niches.mjs emit that line, so the
+ * wording lives HERE (one home) rather than being written twice and drifting apart.
+ *
+ * WHY THE MEASURED LEVEL IS NAMED SEPARATELY (2026-08-12). asymEstimate's ordering guards set
+ * bid = min(quickBuy, deepBid) and ask = max(quickSell, highReachAsk), so a BOUND guard moves the
+ * quoted price OFF the quantile level pAsk/pBid were counted at (asymEstimate header §II.2). The old
+ * wording — `ask 871 (prints ~12/14d)` — read as "871 printed on 12 of 14 days" when 12/14 was
+ * measured at 846. So when a guard binds, name the quoted price and the measured level SEPARATELY.
+ *
+ * WHY NO EXECUTION VERB. An earlier draft of this clause said "live instabuy — clears now", on the
+ * argument that a bound guard means the leg transacts immediately and the count is therefore a floor.
+ * That verb was REMOVED after review, for two reasons, and must not come back without new evidence:
+ *   (1) quotecore.js's own header (lines ~17-33) records Ben running five real 1-unit round trips —
+ *       the model's quickBuy/quickSell came out REVERSED against the true fill order, round-trip loss
+ *       3-5x worse than quoted. `latest.high` is the price recent BUYERS paid; selling there is a
+ *       passive limit ask, not a click. So "clears now" is an execution claim the repo already
+ *       measured as false, and the freshness caveat (QUICK_FRESH_MIN, quickStale.sell) makes it worse
+ *       rather than rescuing it — this clause has no staleness input at all.
+ *   (2) It was unnecessary. On a bound row the ⊙ reach/placement note one line below ALREADY prints
+ *       reach at the guarded price on the same 1h daily-high basis (Dragon boots 2026-08-12: this
+ *       clause said 218.5k printed 12/14d; the next line said ask 220.2k reached 11/14d). Whether
+ *       pAsk is a floor or an overstatement at the quoted price is UNRESOLVED — so this clause states
+ *       only what is measured and leaves the reader the adjacent number, rather than asserting either.
+ *
+ * PAST TENSE is deliberate (Ben, 2026-08-12): every count is IN-SAMPLE over the days that fitted the
+ * quantiles — backward-looking, never a forward fill rate. DENOMINATORS come from asymPair's nAsk/nBid
+ * (pAsk's own denominator), NOT nDays: windowStats drops days with no print, so pAsk 10/12 rendered
+ * against nDays printed "12/14d" — a tally over days the fraction never scored. fmtP (full gp), never
+ * fmt: a guard binding by less than fmt's bucket rendered both prices identically ("ask 5.2k … 5.2k
+ * printed 12/14d"), the same resolution bug d37e818 fixed for offer prices. Null-degrades like the
+ * rest of this module (no pair / no days ⇒ null ⇒ the caller prints nothing, never a fabricated count).
+ */
+export function formatAsymFill(ae, ap, { fmt: fmtFn = fmtP } = {}) {
+  if (!ae || !ap || ae.bid == null || ae.ask == null) return null;
+  const nA = ap.nAsk ?? ap.nDays, nB = ap.nBid ?? ap.nDays;
+  if (!nA || !nB) return null;                                  // no denominator ⇒ no honest tally
+  const hB = Math.round((ae.pBid ?? 0) * nB), hA = Math.round((ae.pAsk ?? 0) * nA);
+  // A guard only gets NAMED when the two prices actually RENDER differently. fmtP is full-gp under
+  // 100k but falls back to fmt's 0.1k buckets above it, so a big-ticket guard binding by a few gp
+  // would otherwise print "ask 219.9k (= live instabuy, above the 219.9k level …)" — nonsense. When
+  // they collapse at display resolution they ARE the same level as shown, so the plain form is honest.
+  const px = (price, level, guarded) => {
+    const p = fmtFn(price);
+    return { p, named: guarded && level != null && fmtFn(level) !== p ? fmtFn(level) : null };
+  };
+  const b = px(ae.bid, ap.deepBid, ap.deepBid != null && ae.bid < ap.deepBid);
+  const a = px(ae.ask, ap.highReachAsk, ap.highReachAsk != null && ae.ask > ap.highReachAsk);
+  const bidTxt = b.named
+    ? `deep-bid ${b.p} (= live instasell, below the ${b.named} level that touched ${hB}/${nB}d — rest as optionality)`
+    : `deep-bid ${b.p} (touched ${hB}/${nB}d — rest as optionality)`;
+  const askTxt = a.named
+    ? `ask ${a.p} (= live instabuy, above the ${a.named} level that printed ${hA}/${nA}d)`
+    : `ask ${a.p} (printed ${hA}/${nA}d)`;
+  return { bidTxt, askTxt };
+}

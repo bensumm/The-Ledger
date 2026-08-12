@@ -10,6 +10,52 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.74.3 — the `◆ asym fill` line stops attaching a reach count to a price it never measured (2026-08-12)
+
+`APP_VERSION` bumped: `js/windowread.mjs` (`asymPair` now returns `nAsk`/`nBid`) and
+`js/estimators/reach.mjs` (`asymEstimate` now returns `pAskAt`/`pBidAt`) are deployed modules. Both
+additions are pure passthrough — no existing number changes.
+
+**The display was wrong; the estimator was left alone on purpose.** The note printed
+`ask 871 (prints ~12/14d)` where the 12/14 had been measured at 846: `asymEstimate`'s ordering guards set
+`ask = max(quickSell, highReachAsk)`, so when the guard binds the quoted price moves off the quantile level
+`pAsk` was counted at. The sentence asserted a reach for 871 that nothing had measured.
+
+**Whether `pAsk` is a floor or an overstatement at the guarded price is left UNRESOLVED, and the header now
+says so.** The pre-existing rationale was that a bound guard means a transact-now exit, so `pAsk` understates.
+That is not established: `quotecore.js`'s own header records five real 1-unit round trips in which the
+model's quick legs came out reversed against the true fill order (3–5× worse than quoted), so `latest.high`
+is a passive ask rather than a click price. And on a bound row the adjacent `⊙ reach/placement` note already
+prints reach at the guarded price on the same 1h daily-high basis, coming in *below* `pAsk` (Dragon boots:
+`pAsk` 12/14 at 218.5k, reach 11/14 at the quoted 220.2k). Recomputing `pAsk` at the guarded price was
+considered and rejected — it would swap a documented ambiguity for a number whose own basis is contested,
+and F1 owns that calibration.
+
+**What shipped.** `formatAsymFill` (`pipeline/lib/render/emit.mjs`) is now the ONE home for the clause pair
+`quote-items.mjs` and `screen-flip-niches.mjs` both emit (the wording had been written twice). When a guard
+binds it names the quoted price and the measured level separately and makes **no execution claim** —
+`ask 220,200 (= live instabuy, above the 218,500 level that printed 12/14d)`. Three things the first draft
+got wrong and review caught: it said "clears now" (an execution verb the n=4 evidence contradicts, with no
+staleness input to gate it); it rendered with `fmt`, whose 0.1k buckets collapsed a sub-bucket guard gap
+into `ask 5.2k … 5.2k printed 12/14d` — now `fmtP`, the same resolution fix as `d37e818`; and it tallied
+`pAsk × nDays` when `pAsk`'s denominator is `his.length`, which drops days with no print, so 10/12 rendered
+as "12/14d" — hence `nAsk`/`nBid`. Counts are past tense and exact (Ben's call).
+
+**`asymShadow` now logs `pAskAt`/`pBidAt`.** This is independent of the floor question: the F1 log stored
+`(ask, pAsk)` drawn from two different levels with no way to recover which rows were guarded, so the two
+cases could never be scored apart. Measured live, 2 of 7 asym lines bind the ask guard — not a rare corner.
+
+Pinned by seven checks in `emit.test.mjs`, including asserts that the guarded price is never printed
+against the count, that no execution verb returns, and that a sub-bucket gap renders as two distinct prices.
+
+**Anchor for the class (rule 11).** The original report claimed a 3× overstatement (871 reaching 4/14 vs a
+claimed 12/14). That number came from counting a *live tick* against *1h-averaged* daily highs — two price
+bases — and at 5m grain the gap narrows but does not close (Ruby 4/14 → 7/14 at 871, vs 12/14 at 846), so
+grain explains part of it and the price level explains the rest. Both the original claim and the first
+rebuttal to it were argued from the wrong comparison; the honest number was sitting in the adjacent note the
+whole time. Check whether the number you are citing shares a basis with the number you are attacking, and
+look for an existing surface that already answers the question before constructing one.
+
 ### pipeline — the F1 retro stops bucketing history by today's liquidity (2026-08-11)
 
 No `APP_VERSION` bump: `pipeline/`-only, the deployed app is untouched.

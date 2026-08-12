@@ -53,7 +53,7 @@ import { buysByItem, limitWindow } from '../lib/capital/limits.mjs';   // LM1 �
 import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/market/guideanchor.mjs';   // YP1 advisory
 import { buildItemContext, renderHeldVerdict, renderPathLine, staleBookBanner } from '../lib/market/item-context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line; COD-4 — the shared positions.json-age banner
-import { depthReachClause, formatTimedLap } from '../lib/render/emit.mjs';   // PB4 — the shared two-lens depth-floor/pressure clause (rendered beside the pressure prices); PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site)
+import { depthReachClause, formatTimedLap, formatAsymFill } from '../lib/render/emit.mjs';   // PB4 — the shared two-lens depth-floor/pressure clause (rendered beside the pressure prices); PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site); formatAsymFill — the shared ◆ asym fill clause pair (screen emits the same line)
 import { loadState, ALERT_PERSIST_MS } from '../lib/thesis/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/thesis/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 additive reverse-flip pending block (read-only)
@@ -462,9 +462,9 @@ async function runItems() {
     const ap = ast ? asymPair(ast) : null;
     const ae = ap ? asymEstimate(FLIP_NICHES.band, row, ap) : null;
     if (ae) {
-      const hB = Math.round(ae.pBid * ap.nDays), hA = Math.round(ae.pAsk * ap.nDays);
       const roi = ae.bid > 0 ? (ae.net / ae.bid * 100).toFixed(1) : null;
-      notes.push({ kind: 'asym', itemId: id, text: `asym fill: deep-bid ${fmt(ae.bid)} (fills ~${hB}/${ap.nDays}d — rest as optionality) → ask ${fmt(ae.ask)} (prints ~${hA}/${ap.nDays}d) · net ${fmt(ae.net)}/u${roi != null ? ` (${roi}%)` : ''} (placeholder quantiles, n≈${ap.nDays})` });
+      const af = formatAsymFill(ae, ap);   // ONE home for the clause wording (lib/render/emit.mjs); defaults to fmtP — full gp on a price an offer is placed at
+      if (af) notes.push({ kind: 'asym', itemId: id, text: `asym fill: ${af.bidTxt} → ${af.askTxt} · net ${fmt(ae.net)}/u${roi != null ? ` (${roi}%)` : ''} (placeholder quantiles, n≈${ap.nDays})` });
     }
     // PLAN-OUTPUT-TABLE: the reconciliation estimate off the SAME in-hand reads (windowStats touch/
     // reach at the patient pair, the diurnal dip/peak levels, the asym high-reach ask) — zero new

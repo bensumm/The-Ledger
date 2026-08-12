@@ -138,14 +138,28 @@ export function askReachFactor(askReach, relief = 0, { prefer = 'full' } = {}) {
        asymRank = net(deepBid → highReachAsk) × P_ask ÷ TTF
    THE KEY NUANCE — P_bid NEVER multiplies the rank. A rare deep fill is a FEATURE (deeper entry =
    larger net, and the bigger net already carries that value); punishing a low bid-reach would re-punish
-   exactly the entry the shape wants. P_bid is returned as an annotation ("fills ~N/14 — rest it as
+   exactly the entry the shape wants. P_bid is returned as an annotation ("touched N/14d — rest as
    optionality", the patience-on-cancel-and-cut doctrine), never a weight. P_ask IS the fill weight —
    the exit is the flip's big assumption (Part I's whole diagnosis).
    ORDERING GUARDS (§II.2): the pair returned keeps bid ≤ quickBuy and ask ≥ quickSell (the min/max
    guards), so a quoted asym pair can never break optBuy ≤ quickBuy ≤ quickSell ≤ optSell. When the ask
    guard BINDS (live instabuy above the high-reach level) the exit is a transact-now sell, so the
    reported pAsk (measured at the unguarded quantile) is a floor, not exact — documented, not patched
-   (F1 calibrates). The momentum tell (rawBandLo/rawBandHi) is quotecore's and is untouched here.
+   (F1 calibrates). RE-EXAMINED 2026-08-12 — and the "floor" claim in the sentence above is NOT
+   ESTABLISHED; treat it as an open question, not a settled rationale. Two things count against it.
+   (1) It rests on the bound leg being transact-now, but quotecore.js's header (~lines 17-33) records
+   Ben running five real 1-unit round trips in which the model's quickBuy/quickSell came out REVERSED
+   against the true fill order, round-trip loss 3-5x worse than quoted: `latest.high` is what recent
+   BUYERS paid, so selling there is a passive ask, not a click. (2) On a bound row the ⊙ reach/placement
+   note already prints reach AT the guarded price on the same 1h daily-high basis, and it comes in
+   BELOW pAsk (Dragon boots 2026-08-12: pAsk 12/14 at 218.5k, reach 11/14 at the quoted 220.2k) — i.e.
+   on the tool's own basis it reads as a mild OVERSTATEMENT at the quoted price, not a floor.
+   NOT PATCHED HERE, deliberately: recomputing pAsk at the guarded price would swap a documented
+   ambiguity for a number whose own basis is contested, and F1 owns the calibration. What WAS fixed is
+   the DISPLAY, which printed the count against the guarded price as if measured there — see
+   `formatAsymFill` (pipeline/lib/render/emit.mjs), which now names price and level separately and
+   makes no execution claim. pAskAt/pBidAt (returned below) let the F1 join separate guarded rows from
+   unguarded ones, which is what settling this actually needs. The momentum tell (rawBandLo/rawBandHi) is quotecore's and is untouched here.
    STATUS (§II.3): SHIP-SAFE half = display + shadow-log this estimate (screen/quote inform lines +
    the suggestions.jsonl `asym` field). The repricing/sort flip is F1-GATED behind screen-flip-niches.mjs --asym
    (OFF by default). ASYM_P_LO/ASYM_P_HI (windowread) are PLACEHOLDERS, n≈14 (rule 4). */
@@ -158,5 +172,9 @@ export function asymEstimate(spec, row = {}, asym = null) {
   const ttf = estimatorFor(spec).ttf({ volDay: row.volDay ?? null });
   const pAsk = clamp01(num(asym.pAsk) ?? 0);
   const pBid = clamp01(num(asym.pBid) ?? 0);
-  return { bid, ask, net, pAsk, pBid, nDays: asym.nDays ?? null, ttf, rank: rankScore({ net, pFill: pAsk, ttfSec: ttf.value }) };
+  // pAskAt/pBidAt — the LEVELS pAsk/pBid were measured at. When an ordering guard binds these differ
+  // from bid/ask, and without them a logged (price, probability) pair is unreadable: F1 cannot tell a
+  // guarded row from an unguarded one, so it cannot score the two cases separately (2026-08-12).
+  return { bid, ask, net, pAsk, pBid, pAskAt: asym.highReachAsk, pBidAt: asym.deepBid,
+    nDays: asym.nDays ?? null, ttf, rank: rankScore({ net, pFill: pAsk, ttfSec: ttf.value }) };
 }

@@ -1881,6 +1881,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `watch-positions.mjs`'s two direct `hourProfile`+`deriveDiurnalRange` call sites (the shadow-log
     bid/ask co-log, the `diurnalAsk` cycle-fallback exit) for `diurnalTimedLap` — those are VALUE
     consumers, not note-render sites, so only the computation moved, not the output shape).
+    **`formatAsymFill(ae, ap, {fmt})` (2026-08-12)** is the ONE home for the `◆ asym fill` clause pair —
+    `quote-items.mjs` and `screen-flip-niches.mjs` both emit that line and had written the wording twice.
+    Returns `{bidTxt, askTxt}`; it exists so a reach COUNT is never printed against a price it was not
+    measured at. `asymEstimate`'s ordering guards can move bid/ask off the quantile levels `pAsk`/`pBid`
+    were counted at, so when a guard binds the clause names the quoted price and the measured level
+    separately — `ask 220,200 (= live instabuy, above the 218,500 level that printed 12/14d)` — and makes
+    **no execution claim**: an earlier draft said "clears now", which `js/quotecore.js`'s own header
+    contradicts (n=4 real round trips, the quick legs reversed against the true fill order). Whether `pAsk`
+    is a floor or a mild overstatement at the guarded price is UNRESOLVED — on a bound row the adjacent
+    `⊙ reach/placement` note prints reach at that price on the same basis and comes in below `pAsk`, so
+    this clause states only what was measured and leaves the reader the neighbouring number. Counts are
+    past tense (in-sample tallies, never forward rates) and use `pAsk`'s OWN denominator via `asymPair`'s
+    `nAsk`/`nBid` — `nDays` includes days with no print, which rendered 10/12 as "12/14d". `fmtP`, not
+    `fmt`: bucketed rendering collapsed a sub-bucket guard gap into two identical prices. Null-degrades.
     **DT6** (2026-07-23) adds `formatBasePosition(bp)` — a one-liner over `js/termstructure.mjs`
     `basePosition()`'s already-computed `{pct,days,n,label}`: `"base pXX of the <N>d range · <label>"`,
     or null on a degraded read (never a fabricated percentile). `screen-flip-niches.mjs` calls it for

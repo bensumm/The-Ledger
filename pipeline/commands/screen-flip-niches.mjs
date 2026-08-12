@@ -119,7 +119,7 @@ import { resolve, loadPipelineConfig, refusePublishIfNonNeutral, shadowModelsOf 
 import { open as openArchive } from '../lib/market/archive.mjs';   // AF5b — READONLY handle for --archive-regime's 6h read (open() runs schema DDL unless readonly; never take that path on the live DB)
 import { sixHourReader, archiveSeries, LIVE_TS6H_BUCKETS, REGIME_MIN_6H_BUCKETS } from '../lib/market/archive-series.mjs';   // DT1b: archiveSeries = the ts→timestamp adapter the amplitude walk-forward reads its long 1h history through   // AF5b — the ONE 6h seam, the /timeseries 365-bucket pin that keeps phase() depth-stable, and the depth floor below which the seam serves live instead
 import { renderReport, renderHtmlTable } from '../lib/render/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer; a niche's table + footer notes build a screen-report printed via renderReport (byte-identical to the prior console.log sequence); renderHtmlTable (2026-07-16) — the Stage-2 HTML twin published into screen.json for the app's Scan tab
-import { formatTimedLap, formatBasePosition } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT2 — the ONE shared diurnalTimedLap renderer (also DT3's future quote/watch call site); DT6 — the base-position note renderer
+import { formatTimedLap, formatBasePosition, formatAsymFill } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT2 — the ONE shared diurnalTimedLap renderer (also DT3's future quote/watch call site); DT6 — the base-position note renderer; formatAsymFill — the shared ◆ asym fill clause pair (quote emits the same line)
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
 // here: gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
 // renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen-flip-niches.mjs passes its CLI
@@ -1473,10 +1473,9 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // asymmetric pair + both reach fractions; the deep bid is FREE OPTIONALITY (rest it, expect ~pBid×n
     // fills), the ask is the near-certain exit. Under --asym these ARE the quoted numbers (say so).
     if (asymEr) {
-      const nD = asymRead.nDays;
-      const hB = Math.round(asymEr.pBid * nD), hA = Math.round(asymEr.pAsk * nD);
       const roi = asymEr.bid > 0 ? (asymEr.net / asymEr.bid * 100).toFixed(1) : null;
-      asymNotes.push(`${name}: deep-bid ${fmt(asymEr.bid)} (fills ~${hB}/${nD}d — rest as optionality) → ask ${fmt(asymEr.ask)} (prints ~${hA}/${nD}d) · net ${fmt(asymEr.net)}/u${roi != null ? ` (${roi}%)` : ''} · asym-rank ${fmtP(Math.round(asymEr.rank))}${ASYM ? ' — QUOTED (--asym)' : ''}`);
+      const af = formatAsymFill(asymEr, asymRead);   // ONE home for the clause wording (lib/render/emit.mjs); defaults to fmtP — full gp on a price an offer is placed at
+      if (af) asymNotes.push(`${name}: ${af.bidTxt} → ${af.askTxt} · net ${fmt(asymEr.net)}/u${roi != null ? ` (${roi}%)` : ''} · asym-rank ${fmtP(Math.round(asymEr.rank))}${ASYM ? ' — QUOTED (--asym)' : ''}`);
     }
     // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2 (2026-07-22): the DC3 demand-tilt inform note was REMOVED
     // with `demandRegime` (narrow removal — Extension-B demand-cycle read, never a rank/gate input).
