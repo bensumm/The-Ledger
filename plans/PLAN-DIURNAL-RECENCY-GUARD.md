@@ -1,11 +1,25 @@
 # PLAN-DIURNAL-RECENCY-GUARD — flag/de-contaminate the diurnal PROFILE peak & dip levels
 
-**Status:** HARDENED + VALIDATED (Fable, 2026-07-24) — see §7/§8. GO. Awaiting Opus implementation
-of Chunks 1+2 (Chunk 3 stays deferred).
-**Owner surface:** `js/windowread.mjs` `hourProfile` (level emit) + its three render surfaces.
-**Bump:** pipeline/js — `APP_VERSION` only if the app's screen/positions render path changes
-(the diurnal notes DO reach the app via `screen.json`/quote render, so a bump is likely — confirm
-at implementation).
+**Status:** Chunks 1+2 SHIPPED (2026-07-24). **Chunk 2b SHIPPED 2026-08-12** — see §10; it closes a
+coverage gap Chunk 2's own surface list left open. Chunk 3 stays deferred. This plan stays in
+`plans/` only until Chunk 3 is resolved (kept or dropped).
+**Owner surface:** `js/windowread.mjs` `hourProfile` (level emit) + its render surfaces — **five since
+Chunk 2b** (`--profile` window headers, `--profile`'s `→ BID/ASK` recommendation, `formatTimedLap`,
+positions `windowExit`, `/schedule`'s Level column), not the three Chunk 2 enumerated.
+**Bump — SETTLED: Chunk 2b DOES bump (`APP_VERSION` 0.74.3 → 0.74.4).** R5 puts a new returned field
+and two extra `computeReality` calls into `js/windowread.mjs`, which is an **APP-IMPORTED deployed
+module** (`js/trends.js` imports `hourProfile`/`deriveDiurnalRange`), and `js/trends.js` itself is
+edited — there is no build step, so those bytes ship. The precedent is one CHANGELOG entry away and
+identical in every input: **0.74.3 bumped for `js/windowread.mjs` (`asymPair` now returns
+`nAsk`/`nBid`) on the stated grounds that these "are deployed modules … pure passthrough — no
+existing number changes."** Chunk 2b is the same file, the same passthrough shape, the same day.
+
+_An earlier draft of this line asserted the opposite — "the rule keys on whether the DEPLOYED app's
+RENDER changed; it has not" — and that test is invented. CLAUDE.md rule 5 says "on every shipped
+change **to the deployed app**", not to what the app renders. The rewrite happened because R5 moved
+the change into `js/` and keeping the old "no bump" conclusion then required a new rule. Redefining a
+rule inside a plan file to preserve a conclusion is the failure this plan exists to guard against,
+committed while documenting it._
 
 ## 1. The problem (live anchor, 2026-07-24)
 
@@ -314,6 +328,11 @@ for `typicalLevel`) — all three are now pinned in §3 with the data that justi
 
 ## 9. Dispatch
 
+**HISTORICAL — Chunks 1+2 shipped 2026-07-24 and Chunk 2b shipped 2026-08-12 (§10); this section is
+the original dispatch note, kept for the reasoning.** Its touched-files list predates Chunk 2b and
+omits `read-schedule.mjs` (where 2b's headline change lives) and `js/windowread.mjs`'s secondary-window
+`reality`. Only Chunk 3 remains open.
+
 Scope (this doc, hardened) → **Opus** implements Chunks 1+2 (Chunk 3 still deferred — the flag+
 typicalLevel fix is sufficient per the validation above; no evidence surfaced that the level
 computation itself needs to change). Single lane; touches `windowread.mjs` + `emit.mjs` +
@@ -321,3 +340,93 @@ computation itself needs to change). Single lane; touches `windowread.mjs` + `em
 extended per §6's invariant spec, plus the §5 Layer-A synthetic fixtures still owed) + docs
 (README inventory unchanged — no new file; `docs/MARKET-ANALYSIS.md` §timing gets a line, and the
 `js/windowread.mjs` `hourProfile` header documents `reality`).
+
+## 10. Chunk 2b — the surface-coverage gap (SHIPPED 2026-08-12)
+
+**What Chunk 2 missed, and why no test saw it.** Chunk 2 enumerated three surfaces. On the screen
+surface it tagged the RECOMMENDATION (`formatTimedLap`'s `ASK …`/`BID …` bits). On
+`read-window-range --profile` it tagged the WINDOW HEADER (`PEAK window … ⚠ spike-top`). That left
+two levels bare, both of which a reader quotes from:
+
+1. `read-window-range.mjs`'s own `→ BID … · ASK …` recommendation line — the surface's actual
+   "here is the price" line, printing two lines under the tagged window header. It fell between
+   Chunk 2's items 1 and 2.
+2. `read-schedule.mjs`'s **Level** column — the `/schedule` agenda, whose column `d37e818` defines
+   as *"a price you place an offer at"*. Chunk 2 never listed this surface at all.
+
+**Live cost (2026-08-12).** A Green dragon leather exit of **1,904** was quoted off the bare lines
+while the profile block already tagged 1,904 `⚠ spike-top (reached 3/14d · p86 · typical ~1,828)`.
+The ask never printed; the lot went underwater and the exit was repriced to 1,869.
+
+**Shipped:**
+- **R1** — `realityClause(style:'short')` on the `→ BID/ASK` line. The ASK clause is
+  unconditional; **the BID clause is gated on `bidBasis !== 'live'`** because `deriveDiurnalRange`
+  reprices the bid to the live instasell when the dip is not below live (`js/windowread.mjs:1367-1372`)
+  while the ask passes through verbatim (`:1376`). Tagging a repriced bid with `profile.dip.reality`
+  would label one price with another's conditions — the defect this plan exists to prevent. Do not
+  "simplify" that gate.
+- **R2** — a `*` mark on `/schedule`'s Level column, skipped on repriced dips for the same reason,
+  with the legend naming each flagged row **and its typical** (the number must travel with the
+  condition; a bare mark just relocates the problem).
+- **R3** — the `⚠⚠` cushion+pace composite is now **side-aware**. It runs on both legs but its text
+  was hardcoded to the ask reading, and `reachMargin`'s cushion is side-flipped (`:756`), so it was
+  shipping a *price-to-sell-EARLY* instruction under a `--bid`. **Wording only — the AND threshold
+  is deliberately unchanged** (see below).
+- **R4** — the `BID side —`/`ASK side —` menu lines tag the **recent-N level only**. The `~50% of
+  days` / `~75%` / `every day` levels ARE quantiles of the same distribution (`quantHigh` header,
+  `:31-32`), so annotating them would restate their own labels; the recent-N level is fitted over a
+  different window and can be a spike-top against the full one — which is the level that was misquoted.
+- **R5 (added after review) — `reality` on the SECONDARY windows.** `hourProfile` attached it only to
+  the primary peak/dip, so every `·2` row was structurally unflaggable. Harmless while nothing marked
+  levels; actively harmful the moment R2 did — `/schedule` printed `SELL peak·2 1,916` bare beside
+  `SELL peak 1,904 *` under a legend teaching that flagged levels get named, while 1,916 is ALSO a
+  spike-top (3/14 · p79 · typical ~1,879). **A partial mark is worse than no mark: it converts
+  "unknown" into "checked and fine."** `read-schedule.mjs:128-131` had already warned about exactly
+  this split for the Ghrazi guard — "the obvious partial fix … would have left ·2 unguarded and
+  recreated the same split one level down" — and the first cut of Chunk 2b did it anyway.
+- **Coverage guard** — `pipeline/test/reality-render-coverage.test.mjs`. Because the failure mode is
+  a MISSED CALL SITE, the guard is a source-level scan over the call sites (same philosophy as
+  `check-daemon-safety.mjs`), plus behavioural pins built from the REAL 14 daily highs of the miss
+  (they reproduce the shipped `reached 3/14 · p86 · typical ~1,828` exactly; the first cut used a
+  synthetic ramp that flagged for a similar reason rather than the real one, with typical at 1,860).
+  **Non-vacuity, scoped precisely:** every §A assertion that targets a NEW call site fails against `git show HEAD:` copies of the four files §A scans; exactly three §A assertions are before/after invariants guarding a FUTURE deletion, named rather than counted (the `→ BID/ASK` line existing at all, the ASK-leg ⚠⚠ wording surviving the BID-leg fix, and Chunk 2's own `formatTimedLap` clauses); §B pins `computeReality`, which the diff does not touch. _A hard-coded COUNT was wrong here three review rounds running — it was re-derived by hand each time §A changed and drifted every time (latest: "ten … three" when §A held fourteen assertions, of which eleven fail pre-fix). The count is gone; naming the exceptions is stable because adding an assertion cannot silently invalidate it._ Superseded text follows for the record: the ten §A assertions targeting the NEW call sites fail against
+  `git show HEAD:` copies of the pre-fix files. Three further §A assertions are before-and-after
+  invariants that exist to catch a future deletion, and §B exercises `computeReality`, which this diff
+  does not modify. The guard is a fixed regex set over four named files — it **cannot enumerate**
+  surfaces and does not prove full coverage. _(The first draft of this bullet, and of the CHANGELOG and
+  README entries, claimed "all 10 of its assertions fail against the pre-fix files" — the file has 23
+  `assert.` calls in 10 blocks, so that number described an ad-hoc mutation script, not the guard.
+  Corrected; it is the same class of unearned verification claim rule 10 names.)_
+
+**Measured and REJECTED — widening the `⚠⚠` trigger.** The obvious "fix" for R3 was to fire on
+either signal alone rather than both. Measured over 25 scored legs: cushion-only **56%**,
+fading-only **44%**, union **60%**, against the current AND at 16%. A ~40% fire rate is wallpaper
+(cf. `b499608`), so the threshold was left alone and only the wording corrected. Honesty: 25 legs is
+a small, self-selected sample from one session — enough to reject a 60% trigger, not enough to
+calibrate one.
+
+**Still bare (logged, not silently dropped):**
+- `emit.mjs:112`'s `sell: list @ X · break-even Y` — the most-repeated price line in the tool and
+  mandated on every item by the `state-sell-price-in-loop` rule. It is a held-lot exit rather than a
+  diurnal level, so `reality` does not apply **on the default path** (`heldListAt` resolves
+  `mv.listAt` → `row.optSell` → instabuy → BE, none diurnal). Under the opt-in `--pressure-exit`,
+  `watch-positions.mjs` overrides it with `estimatePair`'s result, which IS fed
+  `diurnal:{bid,ask}` — i.e. `profile.peak.level` — so the exemption is path-scoped, not absolute.
+  Needs `askExitRead` data; separate chunk.
+- `emit.mjs:203-204`'s `also ASK …`/`also BID …` secondary-window clause. **NOT a render-only append,
+  despite an earlier draft of this bullet saying so.** It does not read `peaks[1]`/`dips[1]`; it reads
+  `lap.askReaches[1]`, which `diurnalTimedLap` builds with a fixed four-key shape
+  (`level`/`window`/`reach`/`pool`, `js/windowread.mjs:2065-2066`) that drops `reality`, and the lap
+  carries `peakReality`/`dipReality` for the PRIMARIES only (`:2087`). R5 made the data exist; it did
+  not make it arrive. Fixing this site needs a transport change in `diurnalTimedLap` first.
+  _(The retracted claim assumed a value was in scope at an emit site because it existed upstream —
+  the same assumption that caused the original Chunk 2 defect, written into the plan while
+  documenting that defect.)_
+- `watch-positions.mjs`'s `HOLD — per thesis: exit X` / `FLUSH … list @` / `LIST-TO-CLEAR … @`, and
+  `quote-items.mjs:826`'s pressure-exit pair.
+- **The deployed app.** `js/trends.js:317-325` plots `deriveDiurnalRange`'s bid/ask as chart reference
+  lines with no clause, so the Trends tab still shows an unqualified 1,904. Its readout comment
+  asserted parity with the console's Diurnal block — true before Chunk 2b, false after — and has been
+  corrected in place rather than left standing (rule 8). This is the one still-bare site that reaches
+  a non-console surface, so it is the highest-priority follow-up and it WOULD carry an `APP_VERSION`
+  bump when it ships.

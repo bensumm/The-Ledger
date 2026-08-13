@@ -35,8 +35,22 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping, fetchTs, fetchLatest } from '../lib/market/marketfetch.mjs';   // fetchLatest (2026-08-10): the live leg the dip-not-below-live guard needs — without it deriveDiurnalRange's reprice cannot fire
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot } from '../lib/reconstruct/offers.mjs';
-import { hourProfile, displayFitNights, WINDOW_RELIABLE_R, deriveDiurnalRange } from '../../js/windowread.mjs';   // deriveDiurnalRange = the ONE home for the Ghrazi level guard; this file used to bypass it and shipped raw hourProfile levels
+import { hourProfile, displayFitNights, WINDOW_RELIABLE_R, deriveDiurnalRange, realityClause } from '../../js/windowread.mjs';   // deriveDiurnalRange = the ONE home for the Ghrazi level guard; this file used to bypass it and shipped raw hourProfile levels. realityClause = the ONE renderer for the spike-top/stale flag (Chunk 2b) — do not re-implement the wording here
 import { fmt, fmtP, fmtHour, fmtHourRange, localTzAbbrev } from '../../js/money-format.js';   // fmtP for the Level column: it is a PRICE to place an offer at, and fmt()'s 1-decimal k-range collapsed 1,051 and 1,109 onto the same "1.1k" (Ben, 2026-08-05). fmtP keeps full gp under 100k and stays compact above it — the same convention the scan's Est. buy/sell price cells use.
+
+// levelFlagged (Chunk 2b) — TRUE exactly when this row's Level cell renders a `*`, so the cell and the
+// legend are the same predicate by construction. Two suppressions, and they are NOT symmetric:
+//   !r.repriced   — on a repriced dip the printed number is the live instasell, NOT profile.dip.level,
+//                   so `reality` describes a different price (js/windowread.mjs:1367-1372). Tagging it
+//                   would label one price with another's conditions — the defect this guard prevents.
+//   !r.degenerate — `⚠` already says the pair does not make money as printed, which moots the level.
+// `unguarded` (`?`) is deliberately NOT suppressed. It reports a MISSING INPUT ("no live price this
+// pass, so the dip guard could not run"); a spike-bottom bid level is a known fact about the level
+// itself. Those are orthogonal, so ranking them would show the reader only the weaker one — hence the
+// `?*` combined mark below rather than a precedence chain. (An earlier cut did rank them; review
+// caught that it silently dropped the stronger signal on exactly the rows least verified.)
+const levelFlagged = r => !!(r.reality && !r.repriced && !r.degenerate
+  && (r.reality.spikeTop || r.reality.staleOptimistic));
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 surfaces the in-flight cycle into the agenda
 import { reverseFlipCycleNotes } from '../../js/reverseflip.mjs';   // RF4/RF6 shared inform-only cycle notes (thin strand + drift + REBUY_STALE_DAYS nudge)
 
@@ -148,6 +162,11 @@ export function agendaRowsForItem({ name, tags = [], profile, now = new Date(), 
                                                // reader (and the test) can see when the guard bit
       repriced: !!(dr && side === 'dip' && dr.bidBasis === 'live'),
       degenerate,
+      // Chunk 2b (2026-08-12) — the level-reality read (spike-top / stale) that PLAN-DIURNAL-RECENCY-GUARD
+      // Chunk 1 attaches to every cluster window. Chunk 2 rendered it on three surfaces and this one was
+      // not among them, so /schedule — the surface whose Level column d37e818 defines as "a price you
+      // place an offer at" — printed a spike-top level with nothing attached.
+      reality: w.reality ?? null,
       unguarded: liveLo == null,               // no live this pass ⇒ the dip guard could not run
       reliable,
       tags: [...tags],
@@ -432,18 +451,36 @@ async function main() {
     //   ⚠ = this pair is degenerate (peak level not above dip level): the plan as printed does not make
     //       money, and that must be visible in the table, not inferable by comparing two rows by eye.
     //   ? = no live price this pass, so the dip guard could not run — the level is the old unguarded one.
-    const lvlMark = r.degenerate ? ' ⚠' : r.repriced ? ' ↧' : (r.unguarded && r.action.startsWith('BUY')) ? ' ?' : '';
+    //   * = the level-reality read flagged it (spike-top / stale) — the legend names each one WITH its
+    //       typical level, because the whole point is that the number travels with its condition; a
+    //       bare mark in a cell would just relocate the problem. SKIPPED when the dip was repriced to
+    //       live (`↧`), since `reality` describes profile.dip.level and the printed level is no longer
+    //       that number (js/windowread.mjs:1367-1372) — tagging it would mislabel one price with
+    //       another's conditions, the exact defect this guard prevents.
+    const unver = r.unguarded && r.action.startsWith('BUY');
+    const lvlMark = r.degenerate ? ' ⚠' : r.repriced ? ' ↧'
+      : (unver && levelFlagged(r)) ? ' ?*'          // BOTH apply: unverified input AND a flagged level
+      : unver ? ' ?' : levelFlagged(r) ? ' *' : '';
+    // `levelFlagged` encodes the WHOLE precedence chain above, not just the reality flag, so the cell
+    // and the legend can never disagree. An earlier cut tested only `reality && !repriced`, which let a
+    // degenerate-and-flagged row render `⚠` in the cell while still being named under `* N level(s)
+    // flagged…` — a legend announcing a mark that appears nowhere in the table. A ⚠/↧/? row already
+    // carries a louder, more specific warning; losing the `*` on it costs nothing.
     console.log(`| ${inTxt} | ${winTxt} | ${r.item} | ${r.action} | ${fmtP(r.level)}${lvlMark} | ${r.tags.join('/')} |`);
   }
   // LEVEL-GUARD legend — same discipline as the DT4 one: printed only when a mark actually appears.
-  if (rows.some(r => r.degenerate || r.repriced || (r.unguarded && r.action.startsWith('BUY')))) {
+  if (rows.some(r => r.degenerate || r.repriced || (r.unguarded && r.action.startsWith('BUY')) || levelFlagged(r))) {
     const deg = rows.filter(r => r.degenerate).length;
     const rep = rows.filter(r => r.repriced).length;
     const ung = rows.filter(r => r.unguarded && r.action.startsWith('BUY')).length;
+    const flagged = rows.filter(levelFlagged);
     const bits = [];
     if (rep) bits.push(`↧ ${rep} dip level(s) repriced to the live instasell (the dip was not below live — a resting bid at the raw dip would not fill)`);
     if (deg) bits.push(`⚠ ${deg} row(s) DEGENERATE: the peak level is not above the dip level, so this pair does not make money as printed — do not read it as a plan`);
     if (ung) bits.push(`? ${ung} buy row(s) had no live price this pass, so the dip guard could not run — treat the level as unverified`);
+    // Each flagged level is named WITH its typical, so the condition travels with the number rather
+    // than being a mark the reader has to go look up (Chunk 2b).
+    if (flagged.length) bits.push(`* ${flagged.length} level(s) flagged by the reality read — quote the typical, not the level: ${flagged.map(r => `${r.item} ${r.action} ${fmtP(r.level)} ${realityClause(r.reality, { side: r.action.startsWith('BUY') ? 'bid' : 'ask', fmt: fmtP, style: 'short' })}`).join(' · ')}`);
     console.log(`\n${bits.join('\n')}`);
   }
   // DT4 legend — printed only when at least one row is marked, so a fully-reliable agenda is unchanged.

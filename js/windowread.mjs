@@ -1330,7 +1330,15 @@ export function hourProfile(series, { nights = 14, now = new Date(), recentN = R
         ? (x => devFn(x) != null && devFn(x) <= seedDev + pad && !primaryCluster.has(x.h))
         : (x => devFn(x) != null && devFn(x) >= seedDev - pad && !primaryCluster.has(x.h));
       const c = cluster(cand.h, within, levelFn);
-      return { ...spanOf(c.set), hours: c.hours, level: c.level, atHour: cand.h, prominenceFrac: cand.prominenceFrac };
+      // Chunk 2b (2026-08-12) — the SECONDARY window carries its own `reality` too. It was omitted when
+      // the guard landed (only peakObj/dipObj got one), which made every `·2` row structurally
+      // UNFLAGGABLE. That went unnoticed until a consumer started marking flagged levels: /schedule then
+      // printed `SELL peak·2 1,916` bare beside `SELL peak 1,904 *` under a legend that teaches "flagged
+      // levels are named" — while 1,916 is ALSO a spike-top (3/14 · p79 · typical ~1,879). A partial mark
+      // is worse than no mark: it certifies the unmarked row as clean. This is the split
+      // read-schedule.mjs:128-131 already warned about for the Ghrazi guard, one level down.
+      return { ...spanOf(c.set), hours: c.hours, level: c.level, atHour: cand.h, prominenceFrac: cand.prominenceFrac,
+        reality: computeReality(clusterDays(c.set), c.level, side === 'dip' ? 'bid' : 'ask') };
     }
     return null;
   };

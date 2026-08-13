@@ -10,6 +10,86 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.74.4 — a price never travels without its conditions (PLAN-DIURNAL-RECENCY-GUARD Chunk 2b, 2026-08-12)
+
+**PLAN-DIURNAL-RECENCY-GUARD Chunk 2b.** Chunk 2 (2026-07-24) shipped `realityClause` and named three
+surfaces to render it on. That enumeration was incomplete, and the gap was invisible to every test
+because the defect is a MISSED CALL SITE, not wrong logic: on the screen surface Chunk 2 tagged the
+*recommendation* (`formatTimedLap`'s ASK/BID bits), while on `read-window-range --profile` it tagged
+the *window header*. Two lines a reader actually quotes from were left bare —
+`read-window-range.mjs`'s own `→ BID … · ASK …` line, and `/schedule`'s **Level** column, the one
+`d37e818` defines as "a price you place an offer at" and which Chunk 2 never listed at all.
+
+**The live cost.** On 2026-08-12 a Green dragon leather exit of **1,904** was quoted off those bare
+lines while the profile block two screens up already read `1,904 ⚠ spike-top (reached 3/14d · p86 ·
+typical ~1,828)`. The ask never printed, the lot went underwater, and the exit was repriced to 1,869.
+The same session produced two sibling misses on the same mechanism — a `cushion ⚠ FADING` relayed as
+"buy at live" on Halibut, and an ask-reach claim quoted past a contradicting adjacent line.
+
+**Shipped.** `→ BID/ASK` and `/schedule`'s Level now carry the clause; the `BID side —`/`ASK side —`
+menus tag the recent-N level. The other three menu levels are deliberately NOT tagged: `~50% of days`
+/ `~75%` / `every day` *are* quantiles of the distribution they would be scored against (`quantHigh`
+header, `js/windowread.mjs:31-32`), so a reach/placement annotation would restate the label — the
+first draft of this change would have printed six tautologies plus one level-INDEPENDENT `pace` value
+repeated verbatim on every line.
+
+**Two gates that must not be "simplified".** The BID clause is gated on `bidBasis !== 'live'`, because
+`deriveDiurnalRange` reprices the bid to the live instasell when the dip is not below live
+(`js/windowread.mjs:1367-1372`) while the ask passes through verbatim (`:1376`) — tagging a repriced
+bid with `profile.dip.reality` would label one price with another's conditions, i.e. commit the exact
+defect the guard prevents. `/schedule`'s `*` mark skips repriced dips for the same reason.
+
+**A live bug found on the way.** The `⚠⚠ cushion + pace` composite runs on both legs but its text was
+hardcoded to the ask reading, and `reachMargin`'s cushion is side-flipped (`:756`) — so it was
+shipping a *price-to-sell-EARLY* instruction under a `--bid`. Now side-aware. **Wording only: the AND
+threshold is unchanged.** Widening it to fire on either signal alone measured 56% (cushion-only) /
+44% (fading-only) / **60% union** across 25 scored legs against 16% today — wallpaper by the standard
+`b499608` set — so it was rejected. Honesty: 25 legs from one session is enough to reject a 60%
+trigger, not to calibrate one.
+
+**A second blocker, found by review after the first cut.** `hourProfile` attached `reality` only to
+the PRIMARY peak/dip, so every `·2` secondary row was structurally unflaggable. That was invisible
+until a consumer started marking flagged levels — `/schedule` then printed `SELL peak·2 1,916` bare
+beside `SELL peak 1,904 *`, under a legend teaching that flagged levels are named, while 1,916 is
+ALSO a spike-top (3/14 · p79 · typical ~1,879). **A partial mark is worse than no mark: it converts
+"unknown" into "checked and fine."** `read-schedule.mjs:128-131` had already warned about this exact
+split for the Ghrazi guard. Secondary windows now carry their own `reality`.
+
+**Guard.** `pipeline/test/reality-render-coverage.test.mjs` — a source-level call-site scan (the
+`check-daemon-safety.mjs` philosophy) plus behavioural pins built from the REAL 14 daily highs of the
+miss (they reproduce the shipped `reached 3/14 · p86 · typical ~1,828` exactly; an earlier cut used a
+synthetic ramp that flagged for a similar reason rather than the real one). Non-vacuity, stated
+precisely: **every §A assertion targeting a new call site** fails against `git show HEAD:`
+copies of the pre-fix files. Three further §A assertions are invariants that hold before and after by
+design, and §B exercises `computeReality`, which this diff does not modify. The guard is a fixed set
+of regexes over four named files — it cannot enumerate surfaces and does not prove full coverage.
+
+**Still bare, logged not dropped.** `emit.mjs:112`'s `sell: list @ X · break-even Y` — the
+most-repeated price line in the tool, mandated on every item by `state-sell-price-in-loop`. It is a
+held-lot exit rather than a diurnal level, so `reality` does not apply **on the default path**; under
+the opt-in `--pressure-exit` it resolves through `estimatePair`'s `diurnal:{bid,ask}` and does trace
+back to `profile.peak.level`. It needs `askExitRead` data and is a separate chunk. Likewise
+`watch-positions.mjs`'s `HOLD — per thesis: exit X` / `LIST-TO-CLEAR … @`, `quote-items.mjs:826`'s
+pressure-exit pair, and `emit.mjs:203-204`'s `also ASK`/`also BID` secondary clause.
+
+**And the deployed app.** `js/trends.js:317-325` plots `deriveDiurnalRange`'s bid/ask as reference
+lines with no reality clause, so the Trends tab still shows an unqualified 1,904. Its readout comment
+claimed parity with the console's Diurnal block; that claim was true before this change and false
+after, so it has been corrected in place (rule 8) rather than left standing.
+
+**`APP_VERSION` bumped 0.74.3 → 0.74.4.** `js/windowread.mjs` is an APP-IMPORTED deployed module
+(`js/trends.js` imports `hourProfile`/`deriveDiurnalRange`), `hourProfile` now returns an additional
+field and runs two extra `computeReality` calls per call, and `js/trends.js` itself is edited — with
+no build step those bytes ship. This is the same test 0.74.3 applied one entry below, to the same
+file, on the same day: *"are deployed modules … pure passthrough — no existing number changes."*
+
+_Two drafts of this paragraph said "no bump". The first was correct — Chunk 2b was `pipeline/`-only.
+The second was written after review forced the secondary-window fix into `js/`, and it kept the old
+conclusion by asserting a new rule ("the bump keys on whether the app's RENDER changed"), which
+CLAUDE.md rule 5 does not say. Redefining a rule to preserve a conclusion is the exact failure class
+this entry is about; recording it here rather than quietly correcting it._
+
+
 ### 0.74.3 — the `◆ asym fill` line stops attaching a reach count to a price it never measured (2026-08-12)
 
 `APP_VERSION` bumped: `js/windowread.mjs` (`asymPair` now returns `nAsk`/`nBid`) and

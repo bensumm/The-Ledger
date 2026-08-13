@@ -326,7 +326,12 @@ function renderDiurnal(profSeries, qrow, it, showAnalysis){
     const markers=[{t:new Date().getHours(), cls:'nowmark', label:'now'}];
     diurnalChart=createChart(chartEl, {series, refs, markers, kind:'bars', spans:false,
       xFmt:h=>fmtHour(((Math.round(h)%24)+24)%24)});
-    // readout — the SAME framing as the console's Diurnal block (deriveDiurnalRange + the ★ formula)
+    // readout — the same deriveDiurnalRange + ★ formula the console's Diurnal block uses, but NO LONGER
+    // the same framing: since Chunk 2b (2026-08-12) the console appends the level-reality clause
+    // (`⚠ spike-top ~X`) to its BID/ASK recommendation and this surface does not, so a spike-inflated
+    // peak plots here as an unqualified `ask` reference line. `prof.peak.reality`/`prof.dip.reality` are
+    // in scope on `prof` — the gap is render-only. Tracked in plans/PLAN-DIURNAL-RECENCY-GUARD.md §10
+    // "Still bare"; do not restate this parity as achieved until that ships.
     if(dr&&dr.bid!=null&&dr.ask!=null){
       const win=w=>fmtHour(w.startH)+'–'+fmtHour(w.endH);
       const net=Math.round(dr.ask-tax(dr.ask)-dr.bid), roi=dr.bid?net/dr.bid*100:null;

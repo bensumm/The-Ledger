@@ -63,7 +63,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadMapping, fetchTs, fetchLatest, rolling24FromTs1h } from '../lib/market/marketfetch.mjs';   // rolling24FromTs1h: the TRUE trailing-24h units/d composed from the IN-HAND 1h series (never the broken /24h) — feeds the avg-bound deep/thin split at zero new fetch
 import { parseArgs, parseGp } from '../lib/render/cli.mjs';
-import { windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, fmtHoldHorizon, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, demandPressure, reachableBand, askExitRead, reachMargin, realityClause, avgBoundRead, formatAvgBound, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read printed under the --profile trajectory block; DE2: --depth reads the percentile-depth "BOOK AT ≤X" (clearableAsk); PB2: --pressure reads the demand-balance band; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home (depthDays/clearableBid/demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
+import { windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, fmtHoldHorizon, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, demandPressure, reachableBand, askExitRead, reachMargin, realityClause, computeReality, avgBoundRead, formatAvgBound, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read printed under the --profile trajectory block; DE2: --depth reads the percentile-depth "BOOK AT ≤X" (clearableAsk); PB2: --pressure reads the demand-balance band; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home (depthDays/clearableBid/demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
 import { maxBuyForExit, breakEven, QUICK_FRESH_MIN, phase } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask; QUICK_FRESH_MIN gates the stale-live pace guard; `phase` (2026-08-06) feeds diurnalForecast's post-shock-shape REFUSAL through driftExitFrom's ctx — see the FORECAST-GUARD note below
 import { netMargin } from '../../js/money-math.js';   // PLAN-ESTIMATOR-HONEST-SELL E3: the HONEST best-case margin at the raw exit (never BE-clamped) for the three-part fold line
 import { open as openArchive } from '../lib/market/archive.mjs';   // AC4a: read-only 5m-grain reach where the Tier-1 archive has coverage (degrades to 1h-only when it doesn't)
@@ -316,7 +316,21 @@ for (const want of positionals) {
         const relSuffix = rel.reliable === true ? ''
           : rel.reliable === false ? '  ⚠ hours not reliable — take the LEVELS, not the timing'
           : '  ⚠ hours unverified — take the LEVELS, not the timing';
-        log(`  → BID ${fmt(dr.bid)} (${dr.bidBasis}, ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (${win(dr.peakWindow)})${relSuffix}`);
+        // PLAN-DIURNAL-RECENCY-GUARD Chunk 2b (2026-08-12) — Chunk 2 tagged the WINDOW HEADER on this
+        // surface (:303/:305) and the RECOMMENDATION on the screen surface (formatTimedLap, emit.mjs
+        // :182-185). This line — the recommendation on THIS surface — fell in the gap between those two
+        // items, so the block printed "PEAK window … 1,904 ⚠ spike-top" and then "→ ASK 1,904" bare two
+        // lines later. Real cost: 1,904 was quoted off it as a Green dragon leather exit, never printed,
+        // and the lot went underwater (2026-08-12).
+        // ASK is safe unconditionally — deriveDiurnalRange returns `ask = profile.peak.level` verbatim
+        // (js/windowread.mjs:1376). BID is NOT: it is REPRICED to the live instasell when the dip is not
+        // below live (:1367-1372, bidBasis 'live'), and `dipReality` describes profile.dip.level. Tagging
+        // a repriced bid with the dip level's reality would label one number with another's conditions —
+        // the exact defect this guard exists to prevent. Hence the bidBasis gate; do not "simplify" it.
+        const askRCShort = realityClause(prof.peak.reality, { side: 'ask', fmt, style: 'short' });
+        const bidRCShort = dr.bidBasis === 'live' ? ''
+          : realityClause(prof.dip.reality, { side: 'bid', fmt, style: 'short' });
+        log(`  → BID ${fmt(dr.bid)} (${dr.bidBasis}, ${win(dr.dipWindow)})${bidRCShort ? ' ' + bidRCShort : ''} · ASK ${fmt(dr.ask)} (${win(dr.peakWindow)})${askRCShort ? ' ' + askRCShort : ''}${relSuffix}`);
         for (const n of dr.notes) log(`    ⓘ ${n}`);
       }
       log(`  (hour-of-day medians, small sample — a guide, not a guarantee)`);
@@ -491,7 +505,18 @@ for (const want of positionals) {
     // never gates and the named-tripwire override pattern is unchanged.
     const paceBad = rm.pace && !rm.pace.stale && !rm.pace.onPace;
     if ((rm.trend === 'fading' || (rm.cushionNow != null && rm.cushionNow < 0)) && paceBad) {
-      log(`    ⚠⚠ ${rm.trend === 'fading' ? 'cushion FADING' : 'cushion NEGATIVE'} + pace lagging today — this is the price-to-sell-EARLY trigger ("ACT on the fade"), not two separate cautions`);
+      // Chunk 2b (2026-08-12) — this composite runs on BOTH legs, but its text was hardcoded to the
+      // ASK reading. reachMargin's cushion is SIDE-FLIPPED (js/windowread.mjs:756 —
+      // `side === 'bid' ? level - e : e - level`), so on a bid a negative cushion means THE DAY'S LOW
+      // NEVER CAME DOWN TO YOUR BID (a fill-side fact), not "sell early". It was shipping a
+      // price-to-sell-EARLY instruction under `--bid 2,291`. Wording only — the AND threshold is
+      // deliberately UNCHANGED: widening it to fire on either signal alone was measured at a 60%
+      // fire-rate over 25 scored legs (56% cushion-only / 44% fading-only) against a ~40% wallpaper
+      // bar, so it was dropped. See plans/PLAN-DIURNAL-RECENCY-GUARD.md Chunk 2b §3.
+      const cushWord = rm.trend === 'fading' ? 'cushion FADING' : 'cushion NEGATIVE';
+      log(rm.side === 'bid'
+        ? `    ⚠⚠ ${cushWord} + pace lagging today — the market is pulling AWAY from this bid: it is not filling at this level, and the level is drifting further out of reach. Re-price to live or accept it rests unfilled — this is a FILL-side warning, not a sell trigger`
+        : `    ⚠⚠ ${cushWord} + pace lagging today — this is the price-to-sell-EARLY trigger ("ACT on the fade"), not two separate cautions`);
     }
     const t = rm.trend
       ? `cushion ${rm.trend === 'fading' ? '⚠ ' : ''}${rm.trend.toUpperCase()} ${sgm(rm.cushionFrom)}→${sgm(rm.cushionTo)} (last ${rm.nRecent}d)`
@@ -537,7 +562,19 @@ for (const want of positionals) {
   }
 
   log(`  ---`);
-  const rq = (side, p) => { const v = recentQuant(scored, side, p, RECENT_NIGHTS); return v == null ? '' : ` · recent-${RECENT_NIGHTS} ~50%: ${fmt(v)}`; };
+  // Chunk 2b (2026-08-12) — the recent-N level is the ONLY level on these two menu lines that carries
+  // information not already implied by its own label. `~50% of days` / `~75%` / `every day` ARE quantiles
+  // of this very distribution (quantHigh's header, js/windowread.mjs:31-32: `ask ≤ (1−p)-quantile ⇔
+  // reached on ≥p of days`), so annotating them with reach/placement would restate the label. The
+  // recent-N level is fitted over a DIFFERENT (recent) window, so it can be a spike-top against the full
+  // one — which is exactly what happened: `recent-3 ~50%: 1,904` was quoted as a Green dragon leather
+  // exit off this line while the profile block two screens up already tagged 1,904 `⚠ spike-top`.
+  const rq = (side, p) => {
+    const v = recentQuant(scored, side, p, RECENT_NIGHTS);
+    if (v == null) return '';
+    const rc = realityClause(computeReality(scored, v, side), { side, fmt, style: 'short' });
+    return ` · recent-${RECENT_NIGHTS} ~50%: ${fmt(v)}${rc ? ' ' + rc : ''}`;
+  };
   if (lows.length) {
     log(`  BID side — touched on ~50% of days: ${fmt(quantLow(lows, 0.5))} · ~75%: ${fmt(quantLow(lows, 0.75))} · every day: ${fmt(lows[lows.length - 1])}${rq('bid', 0.5)}`);
     log(`    median instasell volume IN ${winLabel}: ${fmt(medVolLo)} u (the pool a resting bid competes for)`);
@@ -545,7 +582,11 @@ for (const want of positionals) {
   }
   if (aer) {
     const as = aer.askSide;
-    const rqa = as.recent50 == null ? '' : ` · recent-${RECENT_NIGHTS} ~50%: ${fmt(as.recent50)}`;
+    // Same Chunk 2b treatment as the BID line's `rq` above — the ask side builds its recent-N off
+    // askExitRead's precomputed askSide.recent50 rather than the `rq` helper, so the clause is applied
+    // here too. Both menu lines must behave identically; this asymmetry is why it is spelled out twice.
+    const rqaRC = as.recent50 == null ? '' : realityClause(computeReality(scored, as.recent50, 'ask'), { side: 'ask', fmt, style: 'short' });
+    const rqa = as.recent50 == null ? '' : ` · recent-${RECENT_NIGHTS} ~50%: ${fmt(as.recent50)}${rqaRC ? ' ' + rqaRC : ''}`;
     log(`  ASK side — reached on ~50% of days: ${fmt(as.q50)} · ~75%: ${fmt(as.q75)} · every day: ${fmt(as.everyDay)}${rqa}`);
     log(`    median instabuy volume IN ${winLabel}: ${fmt(as.medVol)} u (the pool a resting ask competes for)`);
     result.askSide = { q50: as.q50, q75: as.q75, everyDay: as.everyDay, recent50: as.recent50, medVol: as.medVol, nDays: aer.nDays };
