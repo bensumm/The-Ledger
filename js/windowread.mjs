@@ -2057,19 +2057,51 @@ export function diurnalTimedLap(series, {
   // scores that window's OWN level via the SAME recencySplit primitive over its OWN window-scoped
   // windowStats slice — the exact peakStats/askReach pattern, one window over. Never fabricates a read off
   // an absent window (a length-1 peaks/dips ⇒ a length-1 reaches array). INFORM-only, n≈0 — nothing gates.
-  const askReaches = [{ level: dr.ask, window: dr.peakWindow, reach: askReach, pool: peakPool }];
-  const bidReaches = [{ level: dr.bid, window: dr.dipWindow, reach: bidReach, pool: dipPool }];
+  // PLAN-DIURNAL-RECENCY-GUARD Chunk 2c — reaches transport (2026-08-12) — each entry also carries the `reality` of ITS OWN
+  // level. The arrays shipped with a fixed four-key shape (level/window/reach/pool) that dropped it, and
+  // that omission — not the renderer — is why `emit.mjs`'s `also ASK …` clause printed a secondary level
+  // bare: the emit site reads `lap.askReaches[1]`, and the lap carried `peakReality`/`dipReality` for the
+  // PRIMARIES only (the return statement below), so there was nothing at the emit site to render. R5 made
+  // the reality EXIST on profile.peaks[1]/dips[1]; this makes it ARRIVE. Nothing is recomputed here —
+  // index 0 reuses profile.peak/dip.reality (the same objects that return exposes, by identity) and
+  // index 1 reuses the reality `buildSecondary` already attached in hourProfile.
+  //
+  // THE ONE INVARIANT, and the reason the bid side is asymmetric: **a non-null `reality` on a reaches
+  // entry always describes THAT ENTRY'S OWN `level`.** `deriveDiurnalRange` REPRICES `bid` to the live
+  // instasell when the dip is not below live (its `bid >= liveLo` branch, bidBasis 'live') while `ask`
+  // passes through verbatim (`const ask = profile.peak.level`). On a repriced row `dr.bid` is the live
+  // price and `profile.dip.reality` describes `profile.dip.level` — a different number — so index 0's
+  // reality is SUPPRESSED there rather than shipped alongside a level it does not describe. That is the
+  // same gate R1 spells out at read-window-range.mjs's `→ BID` line and R2 at /schedule's `!r.repriced`,
+  // moved up to the producer so a consumer cannot forget it. A SECONDARY dip (`dp.level`) is NOT repriced
+  // — deriveDiurnalRange never sees it — so it is clausable unconditionally, like both ask entries.
+  //
+  // The gate is DELIBERATELY conservative, and the converse of the invariant does NOT hold: `bid >= liveLo`
+  // is INCLUSIVE, so a row where live sits exactly ON the dip level is flagged 'live' while `dr.bid` is
+  // still numerically the dip level — reality would have described it, and the clause is dropped anyway.
+  // Measured at ~1.4% of laps in a 2026-08-12 sweep, and it fails in the safe direction (a missing clause,
+  // never a wrong one). The exact predicate is `dr.bid !== profile.dip.level`; it is NOT used here because
+  // all three sites (this one, R1's `→ BID`, R2's `!r.repriced`) must agree, and tightening one alone
+  // would leave three gates with two meanings. Tighten them together or not at all — pinned in
+  // pipeline/test/dt4-timedlap-coverage.test.mjs so the boundary is documented, not accidental.
+  // INFORM-only; nothing gates.
+  const askReaches = [{ level: dr.ask, window: dr.peakWindow, reach: askReach, pool: peakPool,
+    reality: profile.peak.reality }];
+  const bidReaches = [{ level: dr.bid, window: dr.dipWindow, reach: bidReach, pool: dipPool,
+    reality: dr.bidBasis === 'live' ? null : profile.dip.reality }];
   if (profile.peaks.length > 1) {
     const pk = profile.peaks[1];
     const st = windowStats(series, { wStart: pk.startH, wEnd: pk.endH, nights: fitNights, now });
     askReaches.push({ level: pk.level, window: { startH: pk.startH, endH: pk.endH },
-      reach: st ? recencySplit(st.days, 'ask', pk.level, recentN) : null, pool: st ? st.medVolHi : null });
+      reach: st ? recencySplit(st.days, 'ask', pk.level, recentN) : null, pool: st ? st.medVolHi : null,
+      reality: pk.reality ?? null });
   }
   if (profile.dips.length > 1) {
     const dp = profile.dips[1];
     const st = windowStats(series, { wStart: dp.startH, wEnd: dp.endH, nights: fitNights, now });
     bidReaches.push({ level: dp.level, window: { startH: dp.startH, endH: dp.endH },
-      reach: st ? recencySplit(st.days, 'bid', dp.level, recentN) : null, pool: st ? st.medVolLo : null });
+      reach: st ? recencySplit(st.days, 'bid', dp.level, recentN) : null, pool: st ? st.medVolLo : null,
+      reality: dp.reality ?? null });
   }
 
   // §4: retuned tranche sizing — the volDay-percentage term usually binds tightest, but a caller with a

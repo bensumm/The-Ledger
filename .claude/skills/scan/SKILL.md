@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 2.6
+version: 2.7
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -514,6 +514,11 @@ This is the tribal layer the script can't do — apply ALL of these:
   and the funnel-widening pass (running this on gate-EXCLUDED items to test "are we hiding winners?") is
   a planned fast-follow, not yet built — so this reorders SURVIVORS, it doesn't yet surface the excluded
   universe.
+- **A flagged diurnal level travels WITH its clause — never relay the bare number.** _(enforced:
+  `js/windowread.mjs` `realityClause`, the ONE renderer — it appends `⚠ spike-top …` / `⚠ stale …`,
+  always ending in the typical level (rendered `~X` in the compact `short` style the console bits use, and spelled out as `typical ~X` in the `exit`/`full` styles — do NOT grep relayed output for the word "typical"), to the Diurnal timing BID/ASK bits, the context notes and every
+  `read-window-range.mjs` read)_ The flag NEVER reprices the level, so an unrelayed clause hands Ben a
+  few-days-only print as a list price: quote the typical instead, or carry the clause beside the number.
 - **WINDOW-CLEAR PRICING — the canonical peak-timing step (Ben 2026-07-14; encodes memory
   `peak-timing-default-for-pricing`).** _(judgment: the pricing method every churn/scalp bid+ask routes through; the reach/diurnal/asym reads below are its INPUTS)_
   A churn/scalp lap is a WITHIN-WINDOW round trip — buy the tranche, sell it inside the same 4h

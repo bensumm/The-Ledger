@@ -941,8 +941,11 @@ simultaneous independent rungs on one item.
   `reality` level-check** (PLAN-DIURNAL-RECENCY-GUARD, `js/windowread.mjs` `computeReality`): when the quoted
   level was inflated by a recent 1–2 day spike over-generalised into "typical" it appends `⚠ spike-top`, and
   when it's an old high the recent regime no longer reaches it appends `⚠ stale`, each trailing a
-  recency-honest `typical ~X` (the recent-window q55 to quote instead). Inform-only, n≈0 (PLACEHOLDER
-  thresholds), console-only — it flags the level, never rewrites it or gates. Each line still carries the **`⏲`
+  recency-honest `typical ~X` (the recent-window q55 to quote instead — note the COMPACT `short` style
+  actually prints `⚠ spike-top ~1,828`; only the `exit`/`full` styles spell out the word "typical").
+  Inform-only, n≈0 (PLACEHOLDER thresholds) — it flags the level, never rewrites it or gates.
+  **No longer console-only** (Chunk 2c, 2026-08-13): the flag now also rides the WRITE side into
+  `suggestions.jsonl` and `verify.json`, which is what makes it measurable at all. Each line still carries the **`⏲`
   diurnal-PHASE entry-timing token** (`js/windowread.mjs` `diurnalPhase`, preserved from the pre-DT2
   block) — where NOW sits in today's cycle vs the peak window: `in-peak (closes ~Xh)` /
   `pre-peak (opens ~Xh)` / `post-peak — cooling, next peak ~Yh → starter size` (only the cooling case

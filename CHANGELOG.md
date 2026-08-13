@@ -10,6 +10,101 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.74.5 — the consumer sweep: the clause reaches the surfaces that quote the price (PLAN-DIURNAL-RECENCY-GUARD Chunk 2c, 2026-08-12)
+
+Chunk 2b fixed five sites in the file where the Green-dragon-leather miss happened. This chunk asked the
+question 2b did not: **where else does a diurnal level get quoted as a price?** The plan's own list said
+four sites. An independent enumeration found twelve, and §10 of the plan had already logged eight of them —
+the narrower list was written by scoping to the region the previous review named, which is the failure mode
+that list was supposed to catch.
+
+Four lanes, one chunk (three of them independently labelled their work "Chunk 2c"; they are not three
+chunks, and the plan resolves the label rather than renumbering):
+
+**The held-lot exit price.** `HOLD — per thesis: exit X` renders on `/positions`, `/morning` and every
+watch tick. When the thesis declares no `exitPrice` it falls back to the derived diurnal peak — and quoted
+it bare. `watch-positions.mjs` had `lap.peakReality` in hand at the call site and discarded it. The clause
+now rides the fallback and **never** a declared `exitPrice`: that number is the operator's own, `reality`
+does not describe it, and tagging it would label Ben's plan with a level's conditions.
+
+**The non-`--profile` `diurnal:` summary.** Missed by Chunks 2 AND 2b because their fixes live in
+`A.profile !== undefined` and this line renders only when `A.profile === undefined` — mutually exclusive
+branches. "The surface is covered" was true of a branch nobody checked was the same branch. Deliberately
+NOT `bidBasis`-gated: this line prints `profMargin.dip.level` verbatim, the exact level the reality was
+computed against, so gating would have suppressed a CORRECT clause. The brief said to gate it; the lane
+checked the code and declined, which was right.
+
+**The reaches transport.** `diurnalTimedLap` built its `askReaches`/`bidReaches` entries with a fixed
+four-key shape that dropped `reality`, which is why the `also ASK`/`also BID` secondary clause was bare.
+Earlier drafts filed that render site as the problem; it was the symptom. All four entries now carry it.
+
+**A defect the guard itself shipped.** `emit.mjs`'s PRIMARY bid clause was ungated, so on a repriced row it
+printed `BID 1.9k (live, …) ⚠ spike-top ~2.9k` — a "typical" 53% ABOVE the bid it qualified. One number
+wearing another's conditions: precisely the defect this guard exists to prevent, shipped by the guard, two
+lines from the site under repair. Found only because a lane treated the bid-side rule as a general
+invariant rather than as an instruction about one line.
+
+**The write side — `suggestions.jsonl` only.** `timedLapShadow` genuinely dropped the reality objects, so
+the retro log recorded the recommended level stripped of its condition while copying every sibling
+qualifier. It now carries `peakReality`/`dipReality` **and `bidBasis`**, without which `dipReality` is
+uninterpretable: `bid` is repriced on a `'live'` row, so a join without that split silently mixes two
+populations. The rule: **the render gates, the record preserves** — a console clause sits textually
+against a number so it must be gated; a structured record names its field for the window and carries the
+discriminator, so a consumer keeps both facts instead of collapsing them.
+
+_A draft of this entry, and a code comment, also claimed `verify.json` was stripped and that "nobody can
+ever measure whether this guard is worth anything." **Review refuted it by running the writer:**
+`result.profile.peak.reality` was already serialised, one field above `diurnalRange`, at HEAD. The extra
+keys the draft added to `diurnalRange` were a literal duplicate of the same object in the same payload —
+the two-homes bug class this repo names repeatedly — and have been removed. The overreach is instructive:
+the chunk's whole thesis is "a level must travel with its condition," which made "the record was stripped"
+feel true everywhere without being checked anywhere._
+
+**The relay layer.** `grep realityClause .claude/skills/` returned zero while five skills instruct relaying
+a diurnal level — so a correctly-marked console level still reached Ben unmarked. Five SKILL.md files now
+carry the rule; `/schedule`'s legend documents the `*`/`?*` marks its renderer already emitted. _(Those
+five blocks first asserted the clause "always ends in `typical ~X`". It does not: the compact `short`
+style the console bits use prints `⚠ spike-top ~1,828`, and only `exit`/`full` spell the word out — so an
+agent grepping relayed output for "typical" would conclude the flag never fired. Corrected. A draft also
+added `fetch-depth: 0` to CI; it was reverted, because nothing in the repo consumes it and a full-history
+clone on every job is a real cost for a speculative capability. Land it with its guard, not before.)_
+
+**`APP_VERSION` 0.74.4 → 0.74.5 — conservative, and the honest reasoning is narrower than the first draft
+claimed.** That draft said "an app-imported deployed module gained a returned field" and dismissed the
+counter-test as the invented one repudiated at 0.74.4. Two different tests were being conflated. The
+repudiated test was *"did the app's RENDER change"*; the live precedent is the `liveAgeTag` entry, which
+declined a bump on the ground that *the browser does not consume the changed symbol at all* — and that
+applies here: only `diurnalTimedLap` changed, and no `js/**` module imports it (`js/trends.js` takes
+`hourProfile`/`deriveDiurnalRange`/`windowStats`/`windowReliability`/`fitWindowMismatchNote`). So the
+precedent points at NO bump. It is bumped anyway because the bytes of a deployed module changed and there
+is no build step, which is the conservative reading of rule 5 — but the precedent deserved answering
+rather than waving through.
+
+**Verification.** Beyond 112 suites and 8 guards: the watch-loop lines were forced to execute via a
+temporary null-`exitPrice` thesis on a held lot, rendering `exit 15,447` — bare, and confirmed CORRECT
+rather than a dead clause by checking that level is `spikeTop:false` **and `staleOptimistic:false`**
+(either flag alone triggers the clause, so the first check was necessary but not sufficient — review
+caught the gap in the reasoning, not in the conclusion).
+
+_A differential-render figure quoted here in draft — "641 diffs = 192 repriced-primary + 427 secondary-ask
++ 22 secondary-bid, so nothing outside the three intended categories moved" — is **withdrawn**. Both
+secondary clauses are gated on `reliable === true`, which passes for ~0.8–0.9% of items, so 427/6,976
+(6.1%) is 6.5× the entire eligible population and cannot describe the shipped renderer. An independent
+sweep measured 2 secondary-ask and 0 secondary-bid clauses over 3,671 laps. The primary-bid figure
+replicates and stands. The harness was never committed, so the number was unauditable — which is the
+actual lesson: a verification number that cannot be re-run is not verification, and it was repeated into
+this entry on trust._
+
+**Accepted, not fixed:** the reprice test is inclusive (`bid >= liveLo`), so a row where live sits exactly
+ON the dip level loses a clause that would have been correct (~1.4% of laps). The precise predicate is
+`dr.bid !== profile.dip.level`, unused because this gate, R1's `→ BID` and R2's `!r.repriced` must mean one
+thing — tighten all three or none. It fails safe, and a test says so.
+
+**Not reachable by this method, and logged as such:** `reach-fold.mjs` AVERAGES the diurnal level into
+`Est. buy`/`Est. sell`, the console default columns. There is no number left to qualify. The `bandTop`
+clamp bounds the distortion, but no render-site sweep reaches it — that is the honest argument for a
+`QualifiedPrice` value type later, not something to paper over with a clause it cannot carry.
+
 ### 0.74.4 — a price never travels without its conditions (PLAN-DIURNAL-RECENCY-GUARD Chunk 2b, 2026-08-12)
 
 **PLAN-DIURNAL-RECENCY-GUARD Chunk 2b.** Chunk 2 (2026-07-24) shipped `realityClause` and named three
@@ -35,7 +130,7 @@ repeated verbatim on every line.
 
 **Two gates that must not be "simplified".** The BID clause is gated on `bidBasis !== 'live'`, because
 `deriveDiurnalRange` reprices the bid to the live instasell when the dip is not below live
-(`js/windowread.mjs:1367-1372`) while the ask passes through verbatim (`:1376`) — tagging a repriced
+(`js/windowread.mjs `deriveDiurnalRange`'s `bid >= liveLo` reprice branch`) while the ask passes through verbatim (`deriveDiurnalRange`'s `const ask = profile.peak.level` passthrough) — tagging a repriced
 bid with `profile.dip.reality` would label one price with another's conditions, i.e. commit the exact
 defect the guard prevents. `/schedule`'s `*` mark skips repriced dips for the same reason.
 

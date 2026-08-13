@@ -501,6 +501,68 @@ ok('formatTimedLap: BOTH a second elevated AND a second depressed window append 
   assert.equal(text.split(' · ').length, base + 2, 'both clauses are bits on the SAME join, not a new line');
 });
 
+/* --- PLAN-DIURNAL-RECENCY-GUARD Chunk 2c — reaches transport: the secondary clause carries its level's REALITY, and the
+   PRIMARY bid clause is gated on repricing. The producer (js/windowread.mjs diurnalTimedLap) now ships
+   `reality` per reaches entry; these pin what this renderer does with it. A `reality` object is built by
+   hand here (computeReality is pinned in reality-render-coverage.test.mjs / windowread.test.mjs — this
+   file's job is the RENDER, so it feeds the renderer the shape the producer emits). -------------- */
+const flaggedReality = { reachedDays: 3, nDays: 14, recentHit: 1, recentDays: 3, placement: 0.86,
+  staleOptimistic: false, spikeTop: true, typicalLevel: 2900 };
+
+ok('formatTimedLap: a FLAGGED secondary ask level renders its reality clause inline, before the "second elevated window" trailer', () => {
+  const lap = { ...secondaryAskLap,
+    askReaches: [secondaryAskLap.askReaches[0], { ...secondaryAskLap.askReaches[1], reality: flaggedReality }] };
+  const text = formatTimedLap(lap);
+  assert.ok(text.includes('also ASK'), `sanity: the secondary clause still renders (got: ${text})`);
+  assert.ok(/also ASK [^·]*⚠ spike-top ~2\.9k/.test(text),
+    `the secondary level must carry its spike-top + typical, not print bare (got: ${text})`);
+  assert.ok(text.indexOf('⚠ spike-top') < text.indexOf('— second elevated window'),
+    'the clause sits with the NUMBER it qualifies, ahead of the inform trailer');
+  assert.ok(text.includes('— second elevated window (n≈0, inform)'), 'the inform trailer survives');
+  assert.ok(!text.includes('\n'), 'still ONE line');
+});
+
+ok('formatTimedLap: a FLAGGED secondary BID level renders too — a secondary dip is never repriced, so it needs no gate', () => {
+  const lap = { ...bothSecondaryLap,
+    bidReaches: [bothSecondaryLap.bidReaches[0], { ...bothSecondaryLap.bidReaches[1], reality: { ...flaggedReality, spikeTop: false, staleOptimistic: true, typicalLevel: 2700 } }] };
+  const text = formatTimedLap(lap);
+  assert.ok(/also BID [^·]*⚠ stale ~2\.7k/.test(text), `the secondary dip carries its clause (got: ${text})`);
+  assert.ok(text.includes('— second depressed window (n≈0, inform)'));
+});
+
+ok('formatTimedLap: a CLEAN (or absent) secondary reality renders byte-identically to the pre-Chunk-2c line', () => {
+  // NON-VACUITY, stated because it is the exception: this block PASSES against HEAD too, and trivially so
+  // (HEAD renders no clause at any input, so both sides are equal there). It is a FUTURE-regression guard
+  // — it catches the day someone makes the clause render on a clean level — not a test of this diff. The
+  // three blocks around it do fail on HEAD. The whole design leans on realityClause self-suppressing:
+  // every entry appends unconditionally.
+  const clean = { ...flaggedReality, spikeTop: false, staleOptimistic: false };
+  const withClean = { ...secondaryAskLap,
+    askReaches: [secondaryAskLap.askReaches[0], { ...secondaryAskLap.askReaches[1], reality: clean }] };
+  assert.equal(formatTimedLap(withClean), formatTimedLap(secondaryAskLap),
+    'a clean secondary reality changes NOTHING');
+  const withNull = { ...secondaryAskLap,
+    askReaches: [secondaryAskLap.askReaches[0], { ...secondaryAskLap.askReaches[1], reality: null }] };
+  assert.equal(formatTimedLap(withNull), formatTimedLap(secondaryAskLap),
+    'an explicitly-null reality (the repriced/absent case) changes NOTHING either');
+});
+
+ok('formatTimedLap: the PRIMARY bid clause is SUPPRESSED when the bid was repriced to live, and kept when it was not', () => {
+  // deriveDiurnalRange reprices `bid` to the live instasell (bidBasis 'live', js/windowread.mjs
+  // :1376-1380) while dipReality describes profile.dip.level. Rendering the clause there labels the LIVE
+  // price with the DIP level's reach/typical. The ask is never repriced and keeps its clause in both rows.
+  const patient = { ...boltsLap, dipReality: flaggedReality, peakReality: flaggedReality };
+  const patientText = formatTimedLap(patient);
+  assert.ok(/BID 2\.8k \(patient-dip[^)]*\) ⚠ spike-top/.test(patientText),
+    `an un-repriced bid still shows its clause (got: ${patientText})`);
+  const repriced = { ...patient, bidBasis: 'live' };
+  const repricedText = formatTimedLap(repriced);
+  assert.ok(!/BID [^·]*⚠/.test(repricedText),
+    `a repriced bid must NOT wear the dip level's reality (got: ${repricedText})`);
+  assert.ok(/ASK 3k[^·]*⚠ spike-top/.test(repricedText),
+    'the ASK clause is unaffected by the bid-side gate — ask passes through deriveDiurnalRange verbatim');
+});
+
 ok('formatTimedLap: NO secondary windows ⇒ byte-identical to today (the no-regression pin)', () => {
   assert.equal(formatTimedLap(boltsLap).includes('also ASK'), false, 'base bolts lap has no askReaches[1] ⇒ no clause');
   assert.equal(formatTimedLap(boltsLap).includes('also BID'), false);

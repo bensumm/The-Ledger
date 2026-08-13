@@ -323,8 +323,8 @@ for (const want of positionals) {
         // lines later. Real cost: 1,904 was quoted off it as a Green dragon leather exit, never printed,
         // and the lot went underwater (2026-08-12).
         // ASK is safe unconditionally — deriveDiurnalRange returns `ask = profile.peak.level` verbatim
-        // (js/windowread.mjs:1376). BID is NOT: it is REPRICED to the live instasell when the dip is not
-        // below live (:1367-1372, bidBasis 'live'), and `dipReality` describes profile.dip.level. Tagging
+        // (js/windowread.mjs `deriveDiurnalRange`'s `const ask = profile.peak.level` passthrough). BID is NOT: it is REPRICED to the live instasell when the dip is not
+        // below live ( — `deriveDiurnalRange`'s `bid >= liveLo` reprice branch, bidBasis 'live'), and `dipReality` describes profile.dip.level. Tagging
         // a repriced bid with the dip level's reality would label one number with another's conditions —
         // the exact defect this guard exists to prevent. Hence the bidBasis gate; do not "simplify" it.
         const askRCShort = realityClause(prof.peak.reality, { side: 'ask', fmt, style: 'short' });
@@ -335,6 +335,20 @@ for (const want of positionals) {
       }
       log(`  (hour-of-day medians, small sample — a guide, not a guarantee)`);
       result.profile = { nights: prof.nights, dip: prof.dip, peak: prof.peak, amplitude: prof.amplitude, amplitudePct: prof.amplitudePct, trendPerDay: prof.trendPerDay, trendDominates: prof.trendDominates };
+      // Chunk 2c (2026-08-13) — this payload ALREADY carries the reality objects, one field up:
+      // `result.profile.peak.reality` / `.dip.reality` (hourProfile attaches them; `prof.peak`/`prof.dip`
+      // are serialised verbatim above). A draft of this chunk added `peakReality`/`dipReality` to
+      // `diurnalRange` too, justified as "the recommended levels were serialised stripped of their
+      // condition — nobody can ever measure whether this guard is worth anything." **That was false for
+      // THIS file** and the duplicate keys were a second home for one object in one payload — the bug
+      // class this repo names repeatedly. Removed by review. The claim IS true of `suggestions.jsonl`,
+      // whose `timedLapShadow` genuinely dropped them; that is where the write-side fix belongs and
+      // where it stayed.
+      //
+      // A consumer joining reality→level here reads `profile.*.reality` and pairs it with `bidBasis`
+      // below: `ask` is `profile.peak.level` verbatim, but `bid` is REPRICED to the live instasell when
+      // the dip is not below live (js/windowread.mjs, `deriveDiurnalRange`'s `bid >= liveLo` branch),
+      // so on a `bidBasis: 'live'` row `bid` is NOT the level `dip.reality` describes.
       result.diurnalRange = dr ? { bid: dr.bid, ask: dr.ask, bidBasis: dr.bidBasis, notes: dr.notes } : null;
     }
     // compose: only short-circuit the rest of the per-item loop (window-range table + ask/bid/exit/depth
@@ -557,7 +571,27 @@ for (const want of positionals) {
     // diurnal dip/peak summary — ONLY when --profile didn't already print the full profile block above.
     if (A.profile === undefined && profMargin) {
       const tr = profMargin.trendPerDay;
-      log(`    diurnal: dip ${fmtHourRange(profMargin.dip.startH, profMargin.dip.endH)} ${fmt(profMargin.dip.level)} · peak ${fmtHourRange(profMargin.peak.startH, profMargin.peak.endH)} ${fmt(profMargin.peak.level)} · amp ${profMargin.amplitudePct != null ? (profMargin.amplitudePct * 100).toFixed(1) + '%' : '—'} · trend ${tr == null ? '—' : (tr >= 0 ? '+' : '') + fmt(Math.round(tr)) + '/day'}`);
+      // PLAN-DIURNAL-RECENCY-GUARD Chunk 2c (2026-08-12) — the LAST bare diurnal level on this surface.
+      // Chunk 2 tagged the --profile block's window headers (:303/:305) and Chunk 2b the `→ BID/ASK`
+      // recommendation (:333) — but BOTH of those live inside `if (A.profile !== undefined)`, and this
+      // line only renders when `A.profile === undefined`. The two are mutually exclusive by
+      // construction, so every fix so far missed the branch a plain `--ask`/`--bid`/`--exit` run takes:
+      // this was the ONLY diurnal read a scored (non---profile) run printed, and it printed both levels
+      // bare. That is the branch the Green dragon leather 1,904 exit was read off.
+      //
+      // BID-SIDE GATE — why there is no `bidBasis` test here, and what would make one REQUIRED. The
+      // number on this line is `profMargin.dip.level` VERBATIM, which is exactly the level
+      // `hourProfile` computed `dip.reality` against (js/windowread.mjs:1312 —
+      // `dipObj.reality = computeReality(clusterDays(dipC.set), dipObj.level, 'bid')`). No
+      // `deriveDiurnalRange` result is rendered here, so the stale-to-live reprice ( — `deriveDiurnalRange`'s `bid >= liveLo` reprice branch, which
+      // is what makes `dr.bid` stop being the dip level) cannot have happened to this number — the
+      // clause describes the printed price, which is the whole rule. If this line is ever changed to
+      // print `dr.bid` instead, the `dr.bidBasis === 'live' ? '' : …` gate from :331 MUST come with it
+      // in the same edit; without it a repriced live price would be labelled with the dip level's
+      // conditions. The ask has no such hazard on either line (peak.level passes through untouched).
+      const dipRCShort = realityClause(profMargin.dip.reality, { side: 'bid', fmt, style: 'short' });
+      const peakRCShort = realityClause(profMargin.peak.reality, { side: 'ask', fmt, style: 'short' });
+      log(`    diurnal: dip ${fmtHourRange(profMargin.dip.startH, profMargin.dip.endH)} ${fmt(profMargin.dip.level)}${dipRCShort ? ' ' + dipRCShort : ''} · peak ${fmtHourRange(profMargin.peak.startH, profMargin.peak.endH)} ${fmt(profMargin.peak.level)}${peakRCShort ? ' ' + peakRCShort : ''} · amp ${profMargin.amplitudePct != null ? (profMargin.amplitudePct * 100).toFixed(1) + '%' : '—'} · trend ${tr == null ? '—' : (tr >= 0 ? '+' : '') + fmt(Math.round(tr)) + '/day'}`);
     }
   }
 

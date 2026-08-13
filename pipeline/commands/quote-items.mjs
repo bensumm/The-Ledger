@@ -880,7 +880,7 @@ async function runPositions() {
         if (!aer) {
           notes.push({ kind: 'windowExit', itemId, text: `${name}: window read unavailable — no 1h series this pass` });
         } else {
-          const peakTxt = (drH && drH.peakWindow) ? ` · peak window ${fmtHourRange(drH.peakWindow.startH, drH.peakWindow.endH)}` : '';
+          const peakWinTxt = (drH && drH.peakWindow) ? ` · peak window ${fmtHourRange(drH.peakWindow.startH, drH.peakWindow.endH)}` : '';
           const as = aer.askSide;
           const parts = [];
           if (aer.ask) {
@@ -905,8 +905,19 @@ async function runPositions() {
           }
           // PLAN-DIURNAL-RECENCY-GUARD — flag when the profile's PEAK level is spike-inflated/stale, so a
           // held-lot exit anchored to an unreachable peak (the leather 4,375 anchor) shows its typical.
+          //
+          // Chunk 2c fix (2026-08-13): this clause is rendered WITH the peak level it describes, in the
+          // peak-window bit — it must never dangle at the end of `parts`. The line's headline number is
+          // `list` (`thesisEntry.exitPrice ?? row.optSell`), and `aer.ask.level` IS that `list`; the clause
+          // is computed from `profH.peak.reality`, which describes `profile.peak.level` — a DIFFERENT
+          // number whenever a thesis declares an exit or the band top isn't the peak. Appended bare it
+          // read as `list 4,375 … ⚠ spike-top — typical ~1,828`, i.e. a typical for a price not on the
+          // line: the exact "one number wearing another's conditions" defect this guard exists to prevent,
+          // and the one `item-context.mjs` refuses by never clausing a DECLARED exitPrice. Found by review,
+          // shipped by Chunk 2, missed by the 2c sweep that was meant to catch it.
+          const peakLvl = profH && profH.peak ? profH.peak.level : null;
           const exitRC = realityClause(profH && profH.peak && profH.peak.reality, { side: 'ask', fmt, style: 'exit' });
-          if (exitRC) parts.push(exitRC);
+          const peakTxt = `${peakWinTxt}${peakWinTxt && peakLvl != null ? ` · peak level ${fmt(peakLvl)}${exitRC ? ' ' + exitRC : ''}` : ''}`;
           notes.push({ kind: 'windowExit', itemId, text: `${name}: window-clear — ${parts.join(' · ')}${peakTxt}  (touched ≠ filled, ~${aer.nDays}d — a guide)`,
             data: { list, live: row.quickSell ?? null, peakWindow: (drH && drH.peakWindow) ? drH.peakWindow : null, ...aer } });
           // WC1: the lean forward record for F1 — the surfaced rung + both reach signals off the SAME aer.

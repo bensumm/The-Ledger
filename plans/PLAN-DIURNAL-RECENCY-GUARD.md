@@ -1,11 +1,16 @@
 # PLAN-DIURNAL-RECENCY-GUARD — flag/de-contaminate the diurnal PROFILE peak & dip levels
 
 **Status:** Chunks 1+2 SHIPPED (2026-07-24). **Chunk 2b SHIPPED 2026-08-12** — see §10; it closes a
-coverage gap Chunk 2's own surface list left open. Chunk 3 stays deferred. This plan stays in
-`plans/` only until Chunk 3 is resolved (kept or dropped).
-**Owner surface:** `js/windowread.mjs` `hourProfile` (level emit) + its render surfaces — **five since
-Chunk 2b** (`--profile` window headers, `--profile`'s `→ BID/ASK` recommendation, `formatTimedLap`,
-positions `windowExit`, `/schedule`'s Level column), not the three Chunk 2 enumerated.
+coverage gap Chunk 2's own surface list left open. **Chunk 2c SHIPPED 2026-08-13** (§10a) — the consumer
+sweep across four lanes, plus the write side and the relay layer. Chunk 3 stays deferred. This plan stays
+in `plans/` only until Chunk 3 is resolved (kept or dropped).
+**Owner surface:** `js/windowread.mjs` `hourProfile` (level emit) + its render surfaces — **nine since
+Chunk 2c**: `--profile` window headers, `--profile`'s `→ BID/ASK` recommendation, the non-`--profile`
+`diurnal:` summary, `formatTimedLap`'s primary BID/ASK **and** its `also ASK`/`also BID` secondaries,
+positions `windowExit` (peak-level bit), the held-lot thesis-frame `exit`, and `/schedule`'s Level column.
+_(Chunk 2 enumerated three; 2b said five; each count was the enumeration of the moment and each was
+short. Treat any number here as a floor — the standing lesson of this plan is that hand-enumerated
+surface lists have been incomplete every single time, three times running.)_
 **Bump — SETTLED: Chunk 2b DOES bump (`APP_VERSION` 0.74.3 → 0.74.4).** R5 puts a new returned field
 and two extra `computeReality` calls into `js/windowread.mjs`, which is an **APP-IMPORTED deployed
 module** (`js/trends.js` imports `hourProfile`/`deriveDiurnalRange`), and `js/trends.js` itself is
@@ -361,8 +366,8 @@ The ask never printed; the lot went underwater and the exit was repriced to 1,86
 **Shipped:**
 - **R1** — `realityClause(style:'short')` on the `→ BID/ASK` line. The ASK clause is
   unconditional; **the BID clause is gated on `bidBasis !== 'live'`** because `deriveDiurnalRange`
-  reprices the bid to the live instasell when the dip is not below live (`js/windowread.mjs:1367-1372`)
-  while the ask passes through verbatim (`:1376`). Tagging a repriced bid with `profile.dip.reality`
+  reprices the bid to the live instasell when the dip is not below live (`js/windowread.mjs `deriveDiurnalRange`'s `bid >= liveLo` reprice branch`)
+  while the ask passes through verbatim (`deriveDiurnalRange`'s `const ask = profile.peak.level` passthrough). Tagging a repriced bid with `profile.dip.reality`
   would label one price with another's conditions — the defect this plan exists to prevent. Do not
   "simplify" that gate.
 - **R2** — a `*` mark on `/schedule`'s Level column, skipped on repriced dips for the same reason,
@@ -405,7 +410,83 @@ fading-only **44%**, union **60%**, against the current AND at 16%. A ~40% fire 
 a small, self-selected sample from one session — enough to reject a 60% trigger, not enough to
 calibrate one.
 
+## 10a. Chunk 2c — the consumer sweep (2026-08-13, four parallel lanes, ONE chunk)
+
+Three lanes independently labelled their work "Chunk 2c"; they are not three chunks but one, shipped
+together, and the label is resolved here rather than renumbered. What landed:
+
+- **Held-lot exit price** (`item-context.mjs` `heldDisplay` + `watch-positions.mjs`). The thesis frame's
+  `exit` renders the clause **only when the exit is the derived `diurnalAsk` fallback** — a DECLARED
+  `thesis.exitPrice` is the operator's own number, `reality` does not describe it, and tagging it would
+  label Ben's plan with a level's conditions. `positionStage` gained a matching pass-through that **no
+  current caller exercises** (`quote-items.mjs`'s `buildItemContext` omits `diurnalAsk`, so that branch is
+  unreachable): not bare, but not live either — recorded rather than counted as coverage.
+- **The non-`--profile` `diurnal:` summary** (`read-window-range.mjs`). Missed by Chunks 2 AND 2b because
+  their fixes and this line sit on **mutually exclusive branches** of `A.profile === undefined` — "the
+  surface is covered" was true of a branch nobody checked was the same branch. No `bidBasis` gate here,
+  deliberately: the line prints `profMargin.dip.level` verbatim, the exact level `dip.reality` was computed
+  against, so gating would suppress a CORRECT clause. Pinned by an assertion that fails if the printed
+  level is ever swapped to `dr.bid` without bringing the gate along.
+- **The reaches transport** (`js/windowread.mjs` → `emit.mjs`). All four `askReaches`/`bidReaches` entries
+  now carry `reality`, bid-side primary gated on the reprice. This was the CAUSE of the `also ASK`/`also
+  BID` bareness that earlier drafts logged as a separate site.
+- **A pre-existing defect the guard itself shipped**: `emit.mjs`'s PRIMARY bid clause was ungated, so on a
+  repriced row it printed `BID 1.9k (live, …) ⚠ spike-top ~2.9k` — a "typical" 53% ABOVE the bid it
+  qualified, one number wearing another's conditions. Fixed. Found only because a lane treated the
+  bid-side rule as general rather than as an instruction about one line.
+- **Write side — `suggestlog.mjs` `timedLapShadow` ONLY.** `peakReality`/`dipReality` **plus `bidBasis`**,
+  without which `dipReality` is uninterpretable in a retro. The rule: **the render gates, the record
+  preserves.** _(A draft also added these keys to `read-window-range.mjs`'s `result.diurnalRange`, claiming
+  `verify.json` was stripped and the guard was therefore "unanswerable by construction". Review ran the
+  writer and refuted it: `result.profile.peak.reality` was ALREADY serialised one field above, at HEAD. The
+  added keys were a duplicate of the same object in the same payload — two homes — and were removed. The
+  chunk's own thesis made "the record was stripped" feel true everywhere without being checked anywhere.)_
+- **Relay layer** — five SKILL.md files now state that a flagged level travels WITH its clause, and
+  `/schedule`'s legend documents the `*`/`?*` marks its renderer already emitted. A correctly-marked
+  console level was still reaching Ben unmarked because no skill said the mark existed. _(All five first
+  asserted the clause "always ends in `typical ~X`"; the compact `short` style prints `~1,828` and only
+  `exit`/`full` spell it out. Corrected — an agent grepping for "typical" would have concluded the flag
+  never fired.)_
+- **NOT shipped:** a draft added `fetch-depth: 0` to both CI jobs to un-block a future `git show HEAD~1:`
+  guard. Reverted — nothing consumes it, and a full-history clone on every push/PR/merge_group is a real
+  cost for a speculative capability. Land it with its guard.
+
+Verification beyond the suites: the forced-gate run (a temporary null-`exitPrice` thesis on a held lot)
+executed the watch-loop lines and rendered `exit 15,447` bare — confirmed CORRECT, not a dead clause, by
+checking that level is `spikeTop:false` **and `staleOptimistic:false`** (either flag alone renders a
+clause, so checking only `spikeTop` was necessary but not sufficient — review caught the gap in the
+reasoning, not the conclusion).
+
+**A differential figure quoted in draft is WITHDRAWN:** "6,976 laps → 641 diffs = 192 repriced-primary +
+427 secondary-ask + 22 secondary-bid, so nothing outside the three intended categories moved." Both
+secondary clauses are gated on `reliable === true`, which passes for ~0.8–0.9% of items, so 427/6,976 =
+6.1% is 6.5× the entire eligible population. An independent sweep measured **2** secondary-ask and **0**
+secondary-bid over 3,671 laps; the real blast radius of that fix is ~0.05% of items. The primary-bid
+figure (192) replicates and stands. The harness was never committed, so the claim was unauditable — **a
+verification number that cannot be re-run is not verification**, and it was carried into the CHANGELOG on
+trust before review caught it.
+
+`APP_VERSION` 0.74.4 → 0.74.5 — conservative. The draft justified it as "an app-imported module gained a
+returned field" and dismissed the counter-test as the one repudiated above; that conflated two tests. The
+repudiated test is *"did the RENDER change"*; the live `liveAgeTag` precedent is *"does the browser consume
+the changed symbol at all"* — and it does not (only `diurnalTimedLap` changed; no `js/**` module imports
+it). That precedent points at NO bump. Bumped anyway on the plain reading of rule 5 (deployed-module bytes
+changed, no build step), but the precedent deserved an answer rather than a wave-through.
+
+**Known conservative boundary, accepted with a pin, not fixed:** the reprice test is inclusive
+(`bid >= liveLo`), so a row where live sits exactly ON the dip level is stamped `'live'` while `dr.bid` is
+still the dip level — the gate drops a clause that would have been correct (~1.4% of laps). The precise
+predicate is `dr.bid !== profile.dip.level`, unused because this gate, R1's `→ BID` and R2's `!r.repriced`
+must mean ONE thing: tighten all three or none. It fails in the safe direction and a test says so.
+
 **Still bare (logged, not silently dropped):**
+- **The estimator-laundered path — structurally unreachable by this plan's method.**
+  `js/estimators/sell-models/reach-fold.mjs` pushes the diurnal bid/ask into candidate arrays and
+  **averages** them into `Est. buy`/`Est. sell`, the console default column pair on `screen-flip-niches`
+  and `quote-items`. There is no number left to attach a clause to. The `dAsk` clamp to `bandTop` bounds
+  the distortion, so this is a pull-toward-unreachable within the band rather than a blowout — but no
+  amount of render-site sweeping reaches it. This is the honest argument for revisiting a `QualifiedPrice`
+  value type later; do NOT paper over it with a clause it cannot carry.
 - `emit.mjs:112`'s `sell: list @ X · break-even Y` — the most-repeated price line in the tool and
   mandated on every item by the `state-sell-price-in-loop` rule. It is a held-lot exit rather than a
   diurnal level, so `reality` does not apply **on the default path** (`heldListAt` resolves
@@ -413,20 +494,30 @@ calibrate one.
   `watch-positions.mjs` overrides it with `estimatePair`'s result, which IS fed
   `diurnal:{bid,ask}` — i.e. `profile.peak.level` — so the exemption is path-scoped, not absolute.
   Needs `askExitRead` data; separate chunk.
-- `emit.mjs:203-204`'s `also ASK …`/`also BID …` secondary-window clause. **NOT a render-only append,
-  despite an earlier draft of this bullet saying so.** It does not read `peaks[1]`/`dips[1]`; it reads
-  `lap.askReaches[1]`, which `diurnalTimedLap` builds with a fixed four-key shape
-  (`level`/`window`/`reach`/`pool`, `js/windowread.mjs:2065-2066`) that drops `reality`, and the lap
-  carries `peakReality`/`dipReality` for the PRIMARIES only (`:2087`). R5 made the data exist; it did
-  not make it arrive. Fixing this site needs a transport change in `diurnalTimedLap` first.
-  _(The retracted claim assumed a value was in scope at an emit site because it existed upstream —
-  the same assumption that caused the original Chunk 2 defect, written into the plan while
+- ~~`emit.mjs`'s `also ASK …`/`also BID …` secondary-window clause~~ — **FIXED in Chunk 2c.** This bullet
+  previously said the fix "needs a transport change in `diurnalTimedLap` first"; that transport shipped,
+  and the site renders. _(Kept as a struck record rather than deleted: an earlier draft of this same
+  bullet claimed the site read `peaks[1]` and was a render-only append — it read `lap.askReaches[1]`,
+  a four-key shape. Assuming a value is in scope at an emit site because it exists upstream is the
+  assumption that caused the original Chunk 2 defect, and it was written into the plan while
   documenting that defect.)_
-- `watch-positions.mjs`'s `HOLD — per thesis: exit X` / `FLUSH … list @` / `LIST-TO-CLEAR … @`, and
-  `quote-items.mjs:826`'s pressure-exit pair.
-- **The deployed app.** `js/trends.js:317-325` plots `deriveDiurnalRange`'s bid/ask as chart reference
-  lines with no clause, so the Trends tab still shows an unqualified 1,904. Its readout comment
-  asserted parity with the console's Diurnal block — true before Chunk 2b, false after — and has been
-  corrected in place rather than left standing (rule 8). This is the one still-bare site that reaches
-  a non-console surface, so it is the highest-priority follow-up and it WOULD carry an `APP_VERSION`
-  bump when it ships.
+- `watch-positions.mjs`'s `FLUSH … list @` / `LIST-TO-CLEAR … @`, and `quote-items.mjs:826`'s
+  pressure-exit pair. _(`HOLD — per thesis: exit X` came off this list in Chunk 2c.)_
+- **The deployed app — five sites, not one.** The earlier single-site framing was wrong:
+  `js/trends.js` renders `deriveDiurnalRange`'s bid/ask as chart reference lines (`refs.push`), AND a
+  separate `BID … → ASK …` plan line, AND `diurnalForecast`'s Next trough / Next peak levels, AND the
+  drift-adjusted exit peak/trough. Each is bare. They are **not four equivalent clause-appends**:
+  - the plan line is a straightforward append;
+  - the ★ badge gate (`paysOk`, computed off `dr.bid`/`dr.ask`) is a **decision**, not a render — should a
+    spike-top ask be able to earn a ★? Appending text does not address it;
+  - the forecast and drift-adjusted levels come from a **different producer** (`diurnalForecast` /
+    `driftExitFrom`) and are PROJECTIONS. `reality` describes a fitted cluster level; it may not be the
+    right qualifier for a projected one at all, and forcing it there would be the same category error as
+    tagging a declared `exitPrice`.
+  Also bare: `js/ui.js`'s `analysisEl.innerHTML = scan.analysis`, which reaches the app via `screen.json`.
+  This cluster is the highest-priority follow-up and carries an `APP_VERSION` bump — but the ★-badge and
+  forecast questions should be separated from the plain appends before any of it is scheduled.
+- **Before adding more marks, test whether the mark predicts anything.** Firing rate ranges 0% → 24% →
+  7.7% across `nDays`, and 13.5% → 6.0% across cluster width at fixed `nDays`. Nobody has shown `spikeTop`
+  predicts non-fill. Propagating an unvalidated mark to a dozen surfaces may be the larger risk, and the
+  write-side capture that shipped in 2c is what finally makes the question answerable.

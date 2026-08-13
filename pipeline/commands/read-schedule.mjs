@@ -41,7 +41,7 @@ import { fmt, fmtP, fmtHour, fmtHourRange, localTzAbbrev } from '../../js/money-
 // levelFlagged (Chunk 2b) — TRUE exactly when this row's Level cell renders a `*`, so the cell and the
 // legend are the same predicate by construction. Two suppressions, and they are NOT symmetric:
 //   !r.repriced   — on a repriced dip the printed number is the live instasell, NOT profile.dip.level,
-//                   so `reality` describes a different price (js/windowread.mjs:1367-1372). Tagging it
+//                   so `reality` describes a different price (js/windowread.mjs `deriveDiurnalRange`'s `bid >= liveLo` reprice branch). Tagging it
 //                   would label one price with another's conditions — the defect this guard prevents.
 //   !r.degenerate — `⚠` already says the pair does not make money as printed, which moots the level.
 // `unguarded` (`?`) is deliberately NOT suppressed. It reports a MISSING INPUT ("no live price this
@@ -455,7 +455,7 @@ async function main() {
     //       typical level, because the whole point is that the number travels with its condition; a
     //       bare mark in a cell would just relocate the problem. SKIPPED when the dip was repriced to
     //       live (`↧`), since `reality` describes profile.dip.level and the printed level is no longer
-    //       that number (js/windowread.mjs:1367-1372) — tagging it would mislabel one price with
+    //       that number (js/windowread.mjs `deriveDiurnalRange`'s `bid >= liveLo` reprice branch) — tagging it would mislabel one price with
     //       another's conditions, the exact defect this guard prevents.
     const unver = r.unguarded && r.action.startsWith('BUY');
     const lvlMark = r.degenerate ? ' ⚠' : r.repriced ? ' ↧'

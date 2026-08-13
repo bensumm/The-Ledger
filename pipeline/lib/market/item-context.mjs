@@ -41,6 +41,7 @@
  */
 import { computeQuote, momVerdict, breakEven, phase, askIsFilling, BIG_TICKET_GP, FRESH_HOURS } from '../../../js/quotecore.js';
 import { fmtP } from '../../../js/money-format.js';
+import { realityClause } from '../../../js/windowread.mjs';   // PLAN-DIURNAL-RECENCY-GUARD 2c — the ONE reality-flag renderer; '' on a clean/absent read, so a clean row stays byte-identical
 import { computeDeltas, advanceState, convictionGate, pathPersistence,
   verdictPersistence, VERDICT_PERSIST_MS } from '../thesis/watchstate.mjs';
 import { enumeratePaths, weighPaths } from '../../../js/held-item-strategy.mjs';
@@ -139,11 +140,17 @@ export function parkedDeadband(row, be) {
    - `mvDisplay` is what renderHeldVerdict consumes: the RAW mv (possibly null) when nothing
      diverges — so rendering is byte-identical to pre-VN-1 — or a `{ synthetic:true, verdict:label,
      raw }` wrapper when the displayed label differs from the raw read.
+   - `peakReality` (2c) is the computeReality read for the DERIVED `diurnalAsk` level (js/windowread.mjs —
+     watch-positions.mjs takes it off the SAME `diurnalTimedLap` result the ask comes from). It is
+     rendered ONLY on the diurnalAsk fallback, never on a declared `thesis.exitPrice`. PAIRING RULE:
+     any caller that passes `diurnalAsk` must pass the `peakReality` from the same lap, or the exit
+     renders bare again.
    - `state` rides the newStateEntry ADDITIVELY (only watch-positions.mjs persists it; quote reads-only —
      with no watch loop running the prior is stale/absent, so this degrades to the instantaneous
      verdict: an honest degrade, documented in MONITORING.md step 4). */
 export function heldDisplay({ row = null, be = null, mv = null, prior = null,
-  nowMs = Date.now(), persistMs = VERDICT_PERSIST_MS, thesis = null, diurnalAsk = null } = {}) {
+  nowMs = Date.now(), persistMs = VERDICT_PERSIST_MS, thesis = null, diurnalAsk = null,
+  peakReality = null } = {}) {
   const raw = rawHeldToken(row, be, mv);
   const immediate = !!(mv && mv.action === 'CUT' && mv.gate === 2);   // the Gate-2 breakdown CUT invariant
   // VN-2 THESIS RENDER FRAME (RC7): a lot with a DECLARED plan whose live price still holds ABOVE
@@ -163,8 +170,17 @@ export function heldDisplay({ row = null, be = null, mv = null, prior = null,
   const frameActive = !immediate && thesis && thesis.tripwire != null && live != null && live > thesis.tripwire;
   let frameLabel = null;
   if (frameActive) {
+    // PLAN-DIURNAL-RECENCY-GUARD 2c: the exit price this frame prints is a HELD-LOT EXIT. When it comes
+    // from the DERIVED diurnal peak (`diurnalAsk`), that level can be a spike-top/stale artifact — the
+    // Green-dragon-leather shape, where the same run tagged the level two screens up and this line quoted
+    // it bare. So the reality clause rides the fallback. It NEVER rides a DECLARED `thesis.exitPrice`:
+    // that number is the operator's own, `peakReality` does not describe it, and tagging it would label
+    // Ben's plan with a level's conditions (the same defect read-window-range's repriced-bid gate avoids).
+    const declaredExit = thesis.exitPrice != null;
     const exit = thesis.exitPrice ?? diurnalAsk ?? null;
-    const exitBit = exit != null ? `exit ${fmtP(exit)}` : 'exit per plan';
+    const exitRC = (!declaredExit && exit != null)
+      ? realityClause(peakReality, { side: 'ask', fmt: fmtP, style: 'exit' }) : '';
+    const exitBit = exit != null ? `exit ${fmtP(exit)}${exitRC ? ` ${exitRC}` : ''}` : 'exit per plan';
     const winBit = thesis.window != null ? ` @ ${thesis.window}h local` : '';
     const pathBit = thesis.path != null ? ` (${thesis.path})` : '';
     frameLabel = `HOLD — per thesis${pathBit}: ${exitBit}${winBit} · abort < ${fmtP(thesis.tripwire)}`;
@@ -219,6 +235,7 @@ export function positionStage(ctx, {
   held = false, qty = null, avgCost = null, buyTs = null,
   ask = null, bid = null, support = null, cutTrigger = null,
   watchStatePrior = null, nowMs = Date.now(), thesisEntry = null, diurnalAsk = null,
+  peakReality = null,
 } = {}) {
   const row = ctx.market ? ctx.market.row : null;
   const ts5m = ctx.intraday ? ctx.intraday.ts5m : null;
@@ -257,7 +274,7 @@ export function positionStage(ctx, {
   if (held && row) {
     const freshD = deltas ? (deltas.firstSeen || deltas.reset) : true;
     display = heldDisplay({ row, be, mv, prior: freshD ? null : watchStatePrior, nowMs,
-      thesis: thesisEntry, diurnalAsk });   // VN-2: declared plan → render frame (quote passes the declared plan verbatim; watch adds the diurnal-ask fallback)
+      thesis: thesisEntry, diurnalAsk, peakReality });   // VN-2: declared plan → render frame (quote passes the declared plan verbatim; watch adds the diurnal-ask fallback). 2c: `peakReality` is a PASS-THROUGH here — no current caller of this stage supplies `diurnalAsk` (quote-items.mjs's buildItemContext omits it, so the fallback branch is unreachable on that surface and nothing renders bare); it exists so the pair travels together the moment one does.
     if (newStateEntry) {
       newStateEntry.displayVerdict = display.state.displayVerdict;
       newStateEntry.verdictArmedKey = display.state.verdictArmedKey;

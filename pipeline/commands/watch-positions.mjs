@@ -830,7 +830,7 @@ async function main() {
       // newState[key] ADDITIVELY (this loop stays the ONE writer of the state file).
       // VN-2: the declared thesis activates the render frame; when the plan declares no exitPrice,
       // the diurnal ASK off the already-in-hand 1h series is the fallback exit (zero extra fetch).
-      let diurnalAsk = null;
+      let diurnalAsk = null, peakReality = null;
       if (it._thesis && it._thesis.tripwire != null && it._thesis.exitPrice == null) {
         try {
           // PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the hourProfile+deriveDiurnalRange pair.
@@ -844,11 +844,16 @@ async function main() {
           // of the row does — but it must not go unrecorded at the site it actually changes.
           const lap = diurnalTimedLap(it.ts1h, { nights: 7, liveLo: it.row.quickBuy ?? null, liveHi: it.row.quickSell ?? null });
           diurnalAsk = (!lap.degraded && lap.ask != null) ? lap.ask : null;
+          // PLAN-DIURNAL-RECENCY-GUARD 2c: `lap.peakReality` is the computeReality read for THIS ask level,
+          // already computed by the same lap and previously discarded here — so the exit price this line
+          // renders was quoted bare even when the rest of the run tagged the level ⚠ spike-top. It travels
+          // WITH the ask (heldDisplay renders it only on this derived fallback, never on a declared exit).
+          peakReality = diurnalAsk != null ? (lap.peakReality ?? null) : null;
         } catch { /* fallback only — the frame degrades to "exit per plan" */ }
       }
       it._display = heldDisplay({ row: it.row, be: it.be, mv,
         prior: (d.firstSeen || d.reset) ? null : priorState[key], nowMs,
-        thesis: it._thesis, diurnalAsk });
+        thesis: it._thesis, diurnalAsk, peakReality });
       newState[key].displayVerdict = it._display.state.displayVerdict;
       newState[key].verdictArmedKey = it._display.state.verdictArmedKey;
       newState[key].verdictArmedSince = it._display.state.verdictArmedSince;

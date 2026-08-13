@@ -162,12 +162,55 @@ function twoWindowSeries(days = 14) {
   return s;
 }
 
-ok('askReaches[0]/bidReaches[0] are the index-0 PARITY of the existing scalar reads (same level/window/reach/pool)', () => {
+ok('askReaches[0]/bidReaches[0] are the index-0 PARITY of the existing scalar reads (same level/window/reach/pool/reality)', () => {
   const lap = diurnalTimedLap(healthySeries(14), { nights: 14, now: dtNow, buyLimit: 11000, volDay: 858000 });
-  assert.deepEqual(lap.askReaches[0], { level: lap.ask, window: lap.peakWindow, reach: lap.askReach, pool: lap.peakPool },
+  // `reality` joined the shape in Chunk 2c — reaches transport (2026-08-12): the four-key entry dropped the level's own
+  // reality read, which is why emit.mjs's `also ASK …` clause could only ever print a bare secondary
+  // level. Index 0 must be the SAME object the lap exposes as peakReality/dipReality — not a recompute —
+  // so `equal` (identity) here, not `deepEqual`; a second computeReality call would deep-equal and still
+  // be a two-homes bug. This fixture passes no liveLo, so the bid is NOT repriced (bidBasis
+  // 'patient-dip') and dipReality rides through; the repriced case is pinned separately below.
+  assert.equal(lap.bidBasis, 'patient-dip', 'fixture premise: no liveLo ⇒ no repricing on this lap');
+  assert.deepEqual(lap.askReaches[0], { level: lap.ask, window: lap.peakWindow, reach: lap.askReach, pool: lap.peakPool, reality: lap.peakReality },
     'askReaches[0] reuses the scalar ask read exactly (byte-identical, incl. dr.ask)');
-  assert.deepEqual(lap.bidReaches[0], { level: lap.bid, window: lap.dipWindow, reach: lap.bidReach, pool: lap.dipPool },
+  assert.deepEqual(lap.bidReaches[0], { level: lap.bid, window: lap.dipWindow, reach: lap.bidReach, pool: lap.dipPool, reality: lap.dipReality },
     'bidReaches[0] reuses the scalar bid read exactly (incl. the stale-to-live dr.bid guard)');
+  assert.equal(lap.askReaches[0].reality, lap.peakReality, 'index-0 ask reality is the SAME object, not a recompute');
+  assert.equal(lap.bidReaches[0].reality, lap.dipReality, 'index-0 bid reality is the SAME object, not a recompute');
+  assert.ok(lap.peakReality && typeof lap.peakReality.reachedDays === 'number', 'sanity: the reality read is populated, so the pins above are not comparing undefined to undefined');
+});
+
+ok('a REPRICED bid (bidBasis "live") ships NO reality on bidReaches[0] — the printed number is not the one reality describes', () => {
+  // The subtlest rule in the arrays. deriveDiurnalRange reprices `bid` to liveLo when the dip is not
+  // below live (js/windowread.mjs :1376-1380); `profile.dip.reality` still describes profile.dip.level.
+  // Shipping it on the repriced entry would label one price with another's conditions — the defect the
+  // whole reality guard exists to prevent. The ASK is untouched by repricing and keeps its clause.
+  const series = healthySeries(14);
+  const bare = diurnalTimedLap(series, { nights: 14, now: dtNow });
+  const dipLevel = bare.bid;                       // the un-repriced patient-dip level
+  const lap = diurnalTimedLap(series, { nights: 14, now: dtNow, liveLo: dipLevel - 1 });
+  assert.equal(lap.bidBasis, 'live', 'fixture premise: a liveLo under the dip level forces the reprice');
+  assert.equal(lap.bid, dipLevel - 1, 'the printed bid IS the live instasell, not the dip level');
+  assert.equal(lap.bidReaches[0].reality, null, 'a repriced bid carries NO reality — suppressed at the producer');
+  assert.ok(lap.dipReality, 'the lap still exposes dipReality for the dip LEVEL (unchanged) — only the reaches entry is gated');
+  assert.equal(lap.askReaches[0].reality, lap.peakReality, 'the ask side is never repriced, so its reality is unaffected');
+});
+
+ok('the reprice gate is CONSERVATIVE at the equality boundary — pinned deliberately, not by accident', () => {
+  // deriveDiurnalRange's reprice test is INCLUSIVE (`bid >= liveLo`), so when live sits exactly ON the dip
+  // level the row is stamped bidBasis 'live' while `bid` is still numerically the dip level — the number
+  // `dipReality` describes. The gate suppresses anyway. That is a real (small) loss: an adversarial sweep
+  // on 2026-08-12 found ~1.4% of laps at this boundary, every one of them dropping a clause that would
+  // have been correct. It is accepted because the alternative — the precise `dr.bid !== profile.dip.level`
+  // — would leave this gate, read-window-range's `→ BID` gate and /schedule's `!r.repriced` with two
+  // different meanings for one rule. Tighten all three together or none. This test exists so the next
+  // reader knows the boundary was measured and chosen, and fails loudly if someone changes it silently.
+  const series = healthySeries(14);
+  const bare = diurnalTimedLap(series, { nights: 14, now: dtNow });
+  const lap = diurnalTimedLap(series, { nights: 14, now: dtNow, liveLo: bare.bid });   // live EXACTLY on the dip
+  assert.equal(lap.bidBasis, 'live', 'the inclusive >= means equality still counts as a reprice');
+  assert.equal(lap.bid, bare.bid, 'and the printed bid is unchanged — the same number reality describes');
+  assert.equal(lap.bidReaches[0].reality, null, 'suppressed anyway: conservative by choice, see the comment');
 });
 
 ok('a single-window profile fabricates NO secondary read (askReaches/bidReaches stay length 1)', () => {
@@ -182,7 +225,7 @@ ok('a two-window profile scores the SECONDARY window with the same recencySplit 
   assert.equal(lap.askReaches.length, 2, 'the second elevated window gets its own reach read');
   assert.equal(lap.bidReaches.length, 2, 'the second depressed window gets its own reach read');
   // index-0 still parity even when a secondary exists
-  assert.deepEqual(lap.askReaches[0], { level: lap.ask, window: lap.peakWindow, reach: lap.askReach, pool: lap.peakPool });
+  assert.deepEqual(lap.askReaches[0], { level: lap.ask, window: lap.peakWindow, reach: lap.askReach, pool: lap.peakPool, reality: lap.peakReality });
   // the secondary carries its OWN window bounds, level, and a populated recencySplit reach (byte-identical
   // use of recencySplit — just a different window's bounds), not a copy of the primary's.
   assert.deepEqual(lap.askReaches[1].window, { startH: 12, endH: 17 }, 'secondary ask window is the 12–17 span');
@@ -190,6 +233,19 @@ ok('a two-window profile scores the SECONDARY window with the same recencySplit 
   assert.ok(lap.askReaches[1].reach && typeof lap.askReaches[1].reach.fullN === 'number', 'secondary ask reach populates like the primary');
   assert.ok(lap.bidReaches[1].reach && typeof lap.bidReaches[1].reach.fullN === 'number', 'secondary bid reach populates like the primary');
   assert.ok(lap.askReaches[1].pool != null && lap.bidReaches[1].pool != null, 'secondary pools read off the secondary window');
+  // Chunk 2c — the SECONDARY entries carry the reality buildSecondary already attached to
+  // profile.peaks[1]/dips[1] (hourProfile :1340-1341), by identity: recomputing it here would be a
+  // second home for the same read. Without this transport emit.mjs's `also ASK` clause has nothing to
+  // render, which is exactly why that line shipped bare.
+  // These two `notEqual`s pass on HEAD as well (undefined !== an object) — named rather than counted, per
+  // the convention reality-render-coverage.test.mjs settled: they guard a FUTURE aliasing mistake, they
+  // are not what proves this diff. The two `ok(...reality...)` assertions below are what fails pre-fix.
+  assert.notEqual(lap.askReaches[1].reality, lap.peakReality, "the secondary's reality is its OWN read, never the primary's object");
+  assert.notEqual(lap.bidReaches[1].reality, lap.dipReality, "same on the bid side");
+  assert.ok(lap.askReaches[1].reality && typeof lap.askReaches[1].reality.spikeTop === 'boolean',
+    'secondary ask entry carries a populated reality — otherwise every ·2 level renders unflaggable');
+  assert.ok(lap.bidReaches[1].reality && typeof lap.bidReaches[1].reality.spikeTop === 'boolean',
+    'secondary bid entry carries a populated reality');
 });
 
 console.log(`\n${n} dt4-timedlap-coverage assertions passed.`);

@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.25
+version: 1.26
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -144,6 +144,10 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
      (~75%+), never off a single night's dip (the 176 death-rune bid was one night's
      anomaly — the other 13 nights never went below 184). "Touched" ≠ limit filled —
      pair it with the volume line — and ~14 nights is a small sample (process rule 4).
+   - **A level that comes back flagged goes to Ben WITH its clause (`js/windowread.mjs` `realityClause`).**
+     A `⚠ spike-top …` / `⚠ stale …` tag on a dip/peak level always names the typical level (rendered `~X` in the compact `short` style the console bits use, and spelled out as `typical ~X` in the `exit`/`full` styles — do NOT grep relayed output for the word "typical") and never
+     reprices the level itself — so an overnight bid or ask quoted off it is stated with the clause, or
+     priced at the typical; a clause dropped on the way into the plan is the flag never having fired.
 6. **Accumulation-and-capital table — the SCRIPT prints it (COD-2, 2026-07-10).** Ben's exact
    ask ("how many can I accumulate in 8h and how much capital does that require") is now an
    ENCODED output of `screen-flip-niches.mjs --posture overnight`: an **Overnight accumulation & capital**

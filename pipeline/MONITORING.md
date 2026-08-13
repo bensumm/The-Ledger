@@ -541,7 +541,12 @@ of the numbered signals, in more detail:
        in-hand 1h series on watch-positions.mjs, else "exit per plan"> @ <window>h local · abort < <tripwire>` —
        via the shared display layer (`heldDisplay`), with the raw band-flip read demoted to the note.
        The frame exit is the DECLARED/diurnal level, never the 2h band top (the band top under-priced
-       the diurnal exit — the 43.60m-vs-44.22m Masori leak). Declare it at entry:
+       the diurnal exit — the 43.60m-vs-44.22m Masori leak).
+       **Chunk 2c (2026-08-12): when the exit is the DIURNAL fallback it can now carry the level-reality
+       clause** — `exit 1,904 ⚠ spike-top — typical ~1,828` — because that level can be a few-days-only
+       artifact and this line is a price to sell at. A **declared** `exitPrice` is NEVER annotated:
+       `reality` describes the derived cluster level, not the operator's own number. A clean or absent
+       reality renders byte-identically to before. Declare it at entry:
        `node pipeline/commands/declare-thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h> --path <key>`.
        **Invariants:** the Gate-2 breakdown `CUT` is checked FIRST, so a real breakdown is NEVER
        silenced (or frame-masked) by a thesis — it still fires, headlines, and escalates unchanged.

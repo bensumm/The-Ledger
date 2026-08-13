@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.58
+version: 1.59
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -37,6 +37,11 @@ sections plus your own prose:
   that note; a manual `read-window-range.mjs --ask` is only needed for a NON-big-ticket lot, a different
   window/level, or the bid side. (A null 1h series this pass degrades the note to `window read
   unavailable` — the table/verdict is unaffected.)
+- **A diurnal level that carries a reality clause is relayed WITH it — the clause is not formatting.**
+  _(enforced: `js/windowread.mjs` `realityClause`, the ONE renderer across the `↗ windowExit` note, the
+  thesis-frame `exit` when it falls back to the derived diurnal peak, and the Diurnal timing bits)_ `⚠ spike-top …` / `⚠ stale …` always names a
+  the typical level (rendered `~X` in the compact `short` style the console bits use, and spelled out as `typical ~X` in the `exit`/`full` styles — do NOT grep relayed output for the word "typical") and leaves the level itself UNCHANGED, so relaying the price alone (in your own prose,
+  where the clause is easiest to lose) turns a flagged extreme into a plain list-at.
 
 - **Read the floor/ceiling trajectory note on EVERY held lot, not just the verdict (2026-07-21, the fang
   under-read fix; R6 folded it into ONE note, 2026-07-22).** _(judgment: interpretation discipline)_ Each

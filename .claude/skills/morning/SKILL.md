@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.17
+version: 1.18
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -75,6 +75,11 @@ For each still-open offer: `node pipeline/commands/quote-items.mjs "<item>"` (or
 `--positions` if held) → fresh gate-tree verdict → recommend **keep / reprice / cancel**.
 Never frame a sell-side reprice-down as "outrunning a drop" — it's controlled loss-taking
 or it's realizing the band, and you say which (MONITORING.md's sell-side framing).
+
+**A reprice level that prints a reality clause keeps it in the relay.** When a quoted diurnal level
+comes back tagged `⚠ spike-top …` / `⚠ stale …` naming the typical level (rendered `~X` in the compact `short` style the console bits use, and spelled out as `typical ~X` in the `exit`/`full` styles — do NOT grep relayed output for the word "typical") (`js/windowread.mjs`
+`realityClause` — the flag informs, it never moves the level), hand Ben the clause with the number or
+reprice to the typical; a bare level is the one relay step that can undo the guard.
 
 ## 3. Review new positions
 

@@ -81,7 +81,16 @@
  *                 recentDays, diverges }), dipPool, peakPool, trancheComfort, trancheCeiling, fitNights
  *                 (DT4b — the window the LEVEL fields above were fitted over: 14 on a gate-passer, the
  *                 caller's `nights` otherwise. Rows written before 2026-08-10 lack it and are all
- *                 caller-basis; do NOT join level fields across that boundary without splitting on it) }. PLACEHOLDER,
+ *                 caller-basis; do NOT join level fields across that boundary without splitting on it),
+ *                 peakReality/dipReality (Chunk 2c, PLAN-DIURNAL-RECENCY-GUARD 2026-08-12 — each
+ *                 { spikeTop, staleOptimistic, typicalLevel, reachedDays, nDays, recentHit, recentDays,
+ *                 placement } | null, off js/windowread.mjs computeReality: the CONDITION attached to the
+ *                 level on the same row. Recorded so a retro can segment flagged levels out of the
+ *                 recommended-level population — until 2026-08-12 the flag was rendered but never written,
+ *                 so the guard was unmeasurable by construction. Rows before that date lack both fields;
+ *                 absent ≠ clean), bidBasis ('patient-dip' | 'live' — REQUIRED to read dipReality against
+ *                 `bid`: on a 'live' row the dip was repriced to the live instasell and `bid` is no longer
+ *                 the level dipReality describes. Also absent before 2026-08-12) }. PLACEHOLDER,
  *                 n≈0 — shadow-logged for the eventual F1 retro-join, NEVER a gate/rank/screen.json input.
  *                 Lean-included (YS2 pattern): screen-flip-niches.mjs's renderMode survivors always supply
  *                 it (DT2 computes diurnalTimedLap for every survivor); quote/watch don't pass it yet
@@ -478,8 +487,39 @@ export function timedLapShadow(lap) {
   if (lap.degraded) return { degraded: true, reason: lap.reason };
   const r2 = x => x == null ? null : Math.round(x * 100) / 100;
   const reach = rc => rc ? { fullHit: rc.fullHit, fullN: rc.fullN, recentHit: rc.recentHit, recentDays: rc.recentDays, diverges: rc.diverges } : null;
+  // PLAN-DIURNAL-RECENCY-GUARD Chunk 2c (2026-08-12) — the level-reality read, reshaped the same lean
+  // way `reach` reshapes a recencySplit: scalars only, `placement` rounded like every other percentile
+  // on this row. Both FLAGS ride (they are orthogonal — spikeTop is "an anomalous recent print
+  // over-generalised", staleOptimistic is "an old high the current regime no longer reaches"), and so
+  // does `typicalLevel`, because the flag without the honest alternative level is a warning a retro
+  // cannot score: the question is "was the flagged level worse than the typical it named?", which
+  // needs the number, not the boolean. recentHit/recentDays are the EVIDENCE for staleOptimistic and
+  // are kept for the same reason — they are what realityClause's 'full' style prints.
+  const reality = rl => rl ? {
+    spikeTop: rl.spikeTop, staleOptimistic: rl.staleOptimistic, typicalLevel: rl.typicalLevel,
+    reachedDays: rl.reachedDays, nDays: rl.nDays,
+    recentHit: rl.recentHit ?? null, recentDays: rl.recentDays ?? null,
+    placement: r2(rl.placement),
+  } : null;
   return {
     bid: lap.bid, ask: lap.ask,
+    // Chunk 2c: the recommended levels stopped travelling stripped of their conditions. `peakReality`
+    // qualifies `ask`, which deriveDiurnalRange passes through verbatim (js/windowread.mjs,
+    // `deriveDiurnalRange`'s `const ask = profile.peak.level` — no reprice on the ask side).
+    // `dipReality` describes `profile.dip.level` — which is `bid` only when the bid was NOT repriced;
+    // read it with `bidBasis` below. Same rule as read-window-range.mjs's `result.diurnalRange`
+    // (stated in full there): the RENDER gates the dip clause on a repriced bid, the RECORD preserves
+    // both sides un-gated and records the discriminator, so a retro keeps both facts.
+    peakReality: reality(lap.peakReality), dipReality: reality(lap.dipReality),
+    // `bidBasis` rides because without it `dipReality` is UNINTERPRETABLE on this row.
+    // deriveDiurnalRange reprices `bid` to the live instasell when the dip is not below live
+    // (js/windowread.mjs, `deriveDiurnalRange`'s `bid >= liveLo` branch that sets
+    // `bidBasis = 'live'`); on such a row `bid` is the live price, not the dip level. Every
+    // RENDER site already gates on exactly this fact (read-window-range.mjs:331, read-schedule.mjs's
+    // `!r.repriced`) — the record was the one consumer that had no way to tell, because `...dr` puts
+    // `bidBasis` on the lap object and this reshaper dropped it. A retro that joins dipReality→bid
+    // without it silently mixes two populations.
+    bidBasis: lap.bidBasis ?? null,
     dipWindow: lap.dipWindow ? [lap.dipWindow.startH, lap.dipWindow.endH] : null,
     peakWindow: lap.peakWindow ? [lap.peakWindow.startH, lap.peakWindow.endH] : null,
     net: lap.net == null ? null : Math.round(lap.net), roi: r2(lap.roi),

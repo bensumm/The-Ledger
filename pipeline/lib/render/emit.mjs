@@ -179,7 +179,20 @@ export function formatTimedLap(lap, { fmt: fmtFn = fmt } = {}) {
   const hoursOk = reliable === true;
   // PLAN-DIURNAL-RECENCY-GUARD — append the compact spike-top/stale clause (empty string ⇒
   // byte-identical) so a recent-spike-inflated peak/dip level shows its typical alongside.
-  const bidRC = realityClause(lap.dipReality, { side: 'bid', fmt: fmtFn, style: 'short' });
+  // Chunk 2c — reaches transport (2026-08-12) — the BID clause is GATED on `bidBasis`, the ASK clause is
+  // not. The BID bit below prints `lap.bid`, which `deriveDiurnalRange` REPRICES to the live instasell
+  // when the dip is not below live — while `lap.dipReality` describes `profile.dip.level`. On a repriced
+  // row the ungated form labelled the LIVE price with the DIP level's reach/typical, i.e. one number
+  // wearing another's conditions: the exact defect this guard exists to prevent, shipped by the guard
+  // itself. Rendered against HEAD it printed `BID 1.9k (live, …) ⚠ spike-top ~2.9k` — a "typical" 53%
+  // ABOVE the bid it qualified. Chunk 2b fixed this shape on read-window-range's `→ BID` line and on
+  // /schedule's Level column (`!r.repriced`) but not here, because this site was believed already covered.
+  // The ask needs no gate: `ask` passes through deriveDiurnalRange verbatim.
+  // Same conservative-boundary caveat as the producer's (js/windowread.mjs, the askReaches/bidReaches
+  // block): the reprice test is inclusive, so the rare row where live sits exactly ON the dip level also
+  // loses a clause that would have been correct. Read that comment before "fixing" it here alone.
+  const bidRC = lap.bidBasis === 'live' ? ''
+    : realityClause(lap.dipReality, { side: 'bid', fmt: fmtFn, style: 'short' });
   const askRC = realityClause(lap.peakReality, { side: 'ask', fmt: fmtFn, style: 'short' });
   bits.push(`BID ${fmtFn(lap.bid)} (${lap.bidBasis}${hoursOk ? `, dip ${win(lap.dipWindow)}` : ''})${bidRC ? ' ' + bidRC : ''}`);
   bits.push(`ASK ${fmtFn(lap.ask)}${hoursOk ? ` (peak ${win(lap.peakWindow)})` : ''}${askRC ? ' ' + askRC : ''}`);
@@ -200,8 +213,19 @@ export function formatTimedLap(lap, { fmt: fmtFn = fmt } = {}) {
   // secondary one certainly hasn't, so these ride the same gate rather than sneaking hours back in.
   const ar2 = hoursOk && lap.askReaches && lap.askReaches[1];
   const br2 = hoursOk && lap.bidReaches && lap.bidReaches[1];
-  if (ar2) bits.push(`also ASK ${fmtFn(ar2.level)} (peak ${win(ar2.window)}, reach ${reachTxt(ar2.reach)}) — second elevated window (n≈0, inform)`);
-  if (br2) bits.push(`also BID ${fmtFn(br2.level)} (dip ${win(br2.window)}, reach ${reachTxt(br2.reach)}) — second depressed window (n≈0, inform)`);
+  // PLAN-DIURNAL-RECENCY-GUARD Chunk 2c — reaches transport (2026-08-12) — the secondary levels carry their reality clause
+  // too. These two lines were the last diurnal-LEVEL renders in this file with no clause, and the reason
+  // was upstream: `diurnalTimedLap` built the reaches entries with a fixed four-key shape that dropped
+  // `reality`, so there was nothing here to render (logged as "still bare" while that was true). The
+  // producer now ships it per entry (js/windowread.mjs, `diurnalTimedLap`'s askReaches/bidReaches block —
+  // ALL FOUR entries, both primaries and both secondaries), gated on the bid side so a repriced
+  // level never wears another level's conditions — read that invariant before touching either end. No
+  // gate is needed HERE: a secondary dip is never repriced, and `realityClause` self-suppresses to ''
+  // (absent OR clean reality), so a lap without the field renders byte-identically to before.
+  const ar2RC = ar2 ? realityClause(ar2.reality, { side: 'ask', fmt: fmtFn, style: 'short' }) : '';
+  const br2RC = br2 ? realityClause(br2.reality, { side: 'bid', fmt: fmtFn, style: 'short' }) : '';
+  if (ar2) bits.push(`also ASK ${fmtFn(ar2.level)} (peak ${win(ar2.window)}, reach ${reachTxt(ar2.reach)})${ar2RC ? ' ' + ar2RC : ''} — second elevated window (n≈0, inform)`);
+  if (br2) bits.push(`also BID ${fmtFn(br2.level)} (dip ${win(br2.window)}, reach ${reachTxt(br2.reach)})${br2RC ? ' ' + br2RC : ''} — second depressed window (n≈0, inform)`);
 
   // liquidity/sizing segment — only when the caller merged volDay onto the lap (see doc comment).
   if (lap.volDay != null) {
