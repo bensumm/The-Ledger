@@ -868,7 +868,7 @@ ok('RB-3 askReachFactor: the DEFAULT ignores recent fields (every pre-RB-3 call 
   const mirage = { reachedDays: 12, nDays: 14, recentHit: 0, recentDays: 3 };   // full says 12/14, recent says 0/3
   const recover = { reachedDays: 2, nDays: 14, recentHit: 3, recentDays: 3 };   // full says 2/14, recent says 3/3
   // the default must be UNMOVED by the presence of recent fields — this is the byte-identity guarantee that
-  // makes families.mjs:332 (the rank) and every other existing call safe without being touched.
+  // makes families.mjs:389 (the rank) and every other existing call safe without being touched.
   assert.equal(askReachFactor(mirage), askReachFactor({ reachedDays: 12, nDays: 14 }), 'default ignores recent counts entirely');
   assert.equal(askReachFactor(recover), askReachFactor({ reachedDays: 2, nDays: 14 }));
   assert.equal(askReachFactor(mirage), askReachFactor(mirage, 0), 'default relief arg still 0');

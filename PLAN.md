@@ -488,6 +488,44 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 
 ## Discovered
 
+- **THE `sell unreliable` TAG LOSES TO NOT GATING AT ALL — measured 2026-08-13, the pre-registered
+  DON'T-BUILD branch fired. Code left UNCHANGED; the open question moved from the basis to the tag.**
+  `join-reach-basis.mjs` (PLAN-REACH-BASIS-DECISION, now folded here) settled the recent-3 vs
+  full-window ask-reach split that `screen-flip-niches.mjs:800-816` had flagged as KNOWN, UNDECIDED
+  and forbidden to "fix" either way without a measurement. Forward-scored 7,904 deduped rows / 635
+  items from `estConfidence` on the suggestion ledger against the 1h archive.
+  **Result, at the pre-registered decisive spec (24h, `askDays ≥ 7`, `askRecDays == 3`):** recent-3 is
+  cheaper than full-window — M(1) = **+2.3pp**, item-clustered 95% CI **[0.8, 3.8]**, sign stable
+  across all four horizons, both fold-flip eras, and band-only. **BUT both bases lose to the
+  never-gate null at equal error costs** (never 2950 · recent 3493 · full 3668 · gate-all 4542).
+  §3.3 of the plan pre-committed that outcome to the DON'T-BUILD branch *before* the run, so it is
+  reported as such rather than reframed: **the finding is about the TAG, not the basis.** The full map is
+  **FOUR regimes** in the cost ratio r = cost(falseGreen)/cost(falseGate):
+  `never-gate < 1.29 · recent-3 < 1.76 · full-window < 2.05 · gate-all above` — so the shipped basis is
+  optimal only in the narrow `1.29 < r < 1.76`, and past r ≈ 2.05 the right move is to gate everything,
+  which no basis choice reaches. State the tension honestly: r\* = 1.76 sits INSIDE the window where the
+  gate beats both nulls, so "both bases lose to never-gate" is true only at the r=1 the analysis disowns.
+  **Quote r\*, never M(1)**: M(1) swings +0.2pp→+3.7pp across horizons purely through class imbalance
+  (base rate 43.9%→73.2%), so an accuracy headline is an artifact.
+  **Two method notes worth keeping.** (1) The first estimator was WRONG — Δ, the outcome-rate gap
+  between the discordant cells, never sees the cell WEIGHTS and picks the losing basis on a worked
+  counterexample; the shipped `mcnemarCost` is a paired contrast where concordant rows cancel exactly.
+  (2) The precedent this replaces ("+9.8pp within-item, p=0.0001, n=6,016") is **unreproducible** —
+  quoted in ten files, method recorded in none, no script ever committed. Treated as context, not a
+  baseline. Full result + the honesty limits: README's `join-reach-basis.mjs` entry.
+  **Open follow-ups this leaves:** whether `REACH_GRADE_CAP_FRAC` (0.5) is the right threshold at all
+  belongs to F1, not hand-tuning; and the true `r` is unmeasured — it is misdirected operator
+  attention on an inform-only triage surface, not a stuck slot, so nobody should assume r > 1.29
+  without evidence. **Five pre-registered items were specified and NOT implemented** (recorded here so
+  the omission is visible rather than lost with the folded plan): the `askDays ≥ 10` sensitivity row;
+  time-of-day stratification for the 8h row (pre-registered *because* dedup keep-first biases 8h
+  toward whichever hour the day's first scan ran); a CI on the null-model clearance; the disjoint
+  `older11 + recent3` regression that would separate the two windows' information content from the
+  two deployed configurations; and the paired Brier calibration secondary. None changes the decision;
+  all four horizons and both eras already agree in sign. **Also unmeasured:** `watch-positions.mjs:267`,
+  the other recent-preferring surface — its case was always display-coherence with the adjacent
+  `⚠stale` marker, not prediction, so it was deliberately left alone.
+
 - **RETRO-JOIN'S AMPLITUDE CLAIM WINDOW IS SHORTER THAN THE THESIS IT MEASURES — found 2026-08-09
   (audit round 3), DELIBERATELY UNRESOLVED, one-line fix awaiting an owner call.**
   `HORIZON_AMPLITUDE_SEC` (`pipeline/lib/render/retrojoin.mjs`) is **2 days**. It was set when the

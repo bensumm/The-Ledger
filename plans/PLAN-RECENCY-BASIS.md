@@ -13,8 +13,10 @@ de-duplication. RB-1, RB-2 (Fix 1) and RB-4 (Fix 2's rank half) are NOT started.
 > display/rank split that no longer exists (both are full-window now); a future study would be arguing to
 > move BOTH to recent, which is a different chunk. The tables below that describe display sites as
 > "recent-3 preferred" are HISTORY, not current state — the only recent-preferring surfaces left are the
-> `--digest` reach column and `watch-positions`' size-relief note, both flagged pending their own
-> measurement. Current state lives in `js/estimators/pair.mjs`'s `reachRead` header and CHANGELOG 0.71.3.
+> `--digest` reach column and `watch-positions`' size-relief note. ✅ The digest column's measurement
+> LANDED 2026-08-13 (`join-reach-basis.mjs`, PLAN.md Discovered): recent-3 is the cheaper basis there
+> and stays; the tag itself loses to not gating at all below r≈1.29. The size-relief note remains
+> unmeasured — its case was always display-coherence with `⚠stale`, not prediction. Current state lives in `js/estimators/pair.mjs`'s `reachRead` header and CHANGELOG 0.71.3.
 
 | Chunk | State | Notes |
 |---|---|---|
@@ -160,7 +162,7 @@ the full count says," which is real information on a falling item. It is rendere
 |---|---|---|---|
 | 1 | the fold **price** (`Est. sell`, `recency-fold`) | **recent-3 preferred**, full as backstop | `js/estimators/pair.mjs:103` (`const frac = rec ? rec.frac : full.frac`), consumed at `js/estimators/sell-models/reach-fold.mjs:133` |
 | 2 | the **`P(fill)` printed beside that price** | **full window, flat** | `js/estimators/reach.mjs:94` (`clamp01(a.reachedDays / a.nDays)`) via `askReachFactor`, wired at `js/estimators/pair.mjs:225`, printed at `pipeline/commands/read-window-range.mjs:598` and rendered at `:603` |
-| 3 | the **rank** `net × P ÷ TTF` | **full window, flat** | `js/estimators/families.mjs:332` → `:341` `rankScore(...)` |
+| 3 | the **rank** `net × P ÷ TTF` | **full window, flat** | `js/estimators/families.mjs:389` → `:343` `rankScore(...)` |
 | 4 | the digest **reach ✓/✗ column + mirage verdict** | **recent-3 preferred** | `pipeline/commands/screen-flip-niches.mjs:658-662` (`digestReachFrac`) |
 
 **Finding the brief did not have: #4.** `screen-flip-niches.mjs:660` already reads
@@ -177,7 +179,7 @@ rank, but NOT via `pair.mjs:225`. There are **three independent `askReachFactor`
 | Call site | Role | Ordering blast radius | Chunk |
 |---|---|---|---|
 | `js/estimators/pair.mjs:225` | **display only** — `pFill` is returned and printed; nothing ranks, sorts, gates or grades on it | **zero** | RB-3 |
-| `js/estimators/families.mjs:332` | **the rank** — feeds `rankScore` (`:341`), the screen sort, the grade letter (`rateItem`/`REACH_GRADE_CAP`), the digest `rankKey`, and `screen.json` | **primary ordering** | RB-4 |
+| `js/estimators/families.mjs:389` | **the rank** — feeds `rankScore` (`:343`), the screen sort, the grade letter (`rateItem`/`REACH_GRADE_CAP`), the digest `rankKey`, and `screen.json` | **primary ordering** | RB-4 |
 | `pipeline/commands/watch-positions.mjs:252` | **held-lot relief note** — called TWICE (`askReachFactor(aR, 0)` and `askReachFactor(aR, rel)`) purely to decide whether size relief moved the factor enough to print a `size-relieved fill ~N%` clause | **zero** (note visibility only) | RB-3 |
 
 That distinction is what makes this shippable in graded risk steps rather than one scary swap
@@ -654,7 +656,7 @@ console-only overlays are visible together rather than one hiding behind the oth
 — if it is missing, a later refactor silently publishes the unvalidated basis.
 
 **Change:**
-- `js/estimators/families.mjs:332`: take the basis from `extra.pBasis` (default `undefined` ⇒
+- `js/estimators/families.mjs:389`: take the basis from `extra.pBasis` (default `undefined` ⇒
   today's full-window call ⇒ byte-identical for every existing caller, including the app's
   `js/market.js:206`). Update the `:314-328` doctrine comment in place.
 - `pipeline/commands/screen-flip-niches.mjs` — the visible comparison, copying EF1(b)

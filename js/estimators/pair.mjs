@@ -257,7 +257,7 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
   // for keeping the RANK full-window applies just as much to the display — a probability multiplier is
   // four-valued at n=3, so recent-3 hands the estimator its noisiest input. Forward-scoring backs it:
   // the full-window read is the one that discriminates (within-item AUC 0.639–0.670).
-  // WHAT THIS RETIRES: the RB-3-era caveat that this display P and the rank's P (families.mjs:332) are
+  // WHAT THIS RETIRES: the RB-3-era caveat that this display P and the rank's P (families.mjs:389) are
   // deliberately different numbers. They are now the same basis, so that split — and the standing
   // explanation for it — is GONE. PLAN-RECENCY-BASIS RB-4 (the rank-basis swap, gated on a fills join)
   // is moot in the direction it was written; a future study would be arguing to move BOTH to recent.

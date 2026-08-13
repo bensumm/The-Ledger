@@ -113,15 +113,22 @@ export function reachFraction(askReach, { prefer = 'full' } = {}) {
 // consumers are the est-view price fold (estimatePair) + the stdout reach notes only.
 // RB-3 (PLAN-RECENCY-BASIS): the recency basis is an EXPLICIT OPT-IN, `{ prefer }`, defaulting to 'full'.
 // Why an option and not a behavior change: this function has three call sites with different roles — the
-// RANK (families.mjs:332, whose blast radius is screen.json's ordering; DEFERRED, see below), the DISPLAY
+// RANK (families.mjs:389, whose blast radius is screen.json's ordering; DEFERRED, see below), the DISPLAY
 // pFill (pair.mjs), and watch-positions' size-relief note. Keeping the default 'full' makes every call
 // byte-identical by construction and makes the opt-in sites grep-able. The presence/absence guard below is
 // the FULL window's on purpose — an ask-reach read with no full counts is still "no read" → 1.
-// ⚠ THE RANK CALL SITE IS DELIBERATELY STILL 'full' (families.mjs:332). A measurement pass (2026-08-03/04)
+// ⚠ THE RANK CALL SITE IS DELIBERATELY STILL 'full' (families.mjs:389). A measurement pass (2026-08-03/04)
 // found the rank-basis swap moves the composite rank by >33% on ~23% of item-days — a four-valued n=3
-// probability MULTIPLIER is not the same risk as a continuous, band-bounded price. So the display moved and
-// the rank did not: the two disagree BY DESIGN and by decision, not by drift. Do not "fix" this by flipping
-// families.mjs:332 without the fills-joined evidence (that is PLAN-RECENCY-BASIS RB-4, deferred).
+// probability MULTIPLIER is not the same risk as a continuous, band-bounded price.
+// ⚠ UPDATED 2026-08-13 — this paragraph used to end "so the display moved and the rank did not: the two
+// disagree BY DESIGN." That is STALE and was contradicting `pair.mjs:260-263` one file over: the DISPLAY
+// flipped BACK to 'full' on 2026-08-09, so display and rank now AGREE and there is no display-vs-rank
+// split left to defend. RB-4 (the rank-basis swap, gated on a fills join) is therefore moot IN THE
+// DIRECTION IT WAS WRITTEN — a future study would be arguing to move BOTH to recent, not the rank alone.
+// The only recent-preferring surfaces left are the digest reach column (MEASURED 2026-08-13 by
+// `join-reach-basis.mjs` — recent-3 is the cheaper basis there and it stays) and watch-positions'
+// size-relief note (still unmeasured; its case is display-coherence with `⚠stale`, not prediction).
+// Still: do not flip families.mjs:389 without fills-joined evidence.
 export function askReachFactor(askReach, relief = 0, { prefer = 'full' } = {}) {
   const a = askReach || null;
   if (!a || !(num(a.nDays) > 0) || num(a.reachedDays) == null) return 1;

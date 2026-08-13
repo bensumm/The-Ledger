@@ -96,8 +96,11 @@ reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Oper
   unchanged and the `fold:` line prints the recent-3 value beside the full-window one whenever they differ.
   Rule 4: full-window is not KNOWN to predict FILLS better (n=0 — no fills-to-basis join exists; the
   measurement is against PRINTS). ⚠ **Two display surfaces did NOT flip** and remain recent-preferring —
-  the `--digest` reach ✓/✗ column (`digestReachFrac`) and `watch-positions`' size-relief note. That is a
-  real remaining split, flagged rather than silently reconciled; deciding it is its own change. When the
+  the `--digest` reach ✓/✗ column (`digestReachFrac`) and `watch-positions`' size-relief note. ✅ **That
+  split is now DECIDED for the digest column** — `join-reach-basis.mjs` (2026-08-13) measured recent-3 as
+  the cheaper basis there (M(1)=+2.3pp, item-clustered CI [0.8,3.8]) and left it recent-preferring, so the
+  disagreement with the fold is deliberate and measured. The same run's bigger result is about the TAG:
+  below r≈1.29 both bases lose to not gating at all, so never read that column as a filter. When the
   fold sits below break-even the cell **ANNOTATES**
   it (`reach-fold floored to BE X — nothing to price above break-even`) rather than substituting the
   number; `estSellFloorBind` carries that BE as a display fact. A **forward "list at X"** rides alongside —

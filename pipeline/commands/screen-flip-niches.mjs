@@ -803,16 +803,23 @@ const DIGEST_ROWS = [];
 // reachedDays/nDays in askReachFactor). RB-5 collapsed this one onto the shared `reachFraction`, so the
 // rule now has ONE home. A future reader WILL notice the digest column disagreeing with `screen.json`'s
 // rank/grade — that is EXPECTED and decided, not drift: the RANK is full-window on purpose
-// (js/estimators/families.mjs:332, deferred pending a fills-joined study).
+// (js/estimators/families.mjs:389, deferred pending a fills-joined study).
 // ⚠ UPDATED 2026-08-09 — the claim "every DISPLAY surface is recent-preferring" WAS true and is NOT any
 // more. The fold price + its pFill (js/estimators/pair.mjs) flipped BACK to the full window: recent-3 is
 // four-valued at n=3, and forward-scoring found the full-window read is what discriminates (+9.8pp
 // within-item, p=0.0001, n=6,016). So this digest column and watch-positions' size-relief note are now
 // the ONLY recent-preferring surfaces left, and they disagree with the fold as well as the rank.
-// That is a KNOWN, FLAGGED split — not a decided one. It was left alone deliberately rather than swept
-// along with the fold flip, because this column drives a triage verdict (`sell unreliable`) on its own
-// and deserves its own measurement. Do not "fix" it in either direction without one; if it does flip,
-// flip it here (one shared `reachFraction` call), never by re-forking a local implementation.
+// That WAS a KNOWN, FLAGGED split. ✅ MEASURED 2026-08-13 — `pipeline/commands/join-reach-basis.mjs`
+// (PLAN-REACH-BASIS-DECISION, folded into PLAN.md Discovered). 7,904 deduped rows / 635 items forward-
+// scored against the 1h archive. recent-3 IS the cheaper basis here — M(1)=+2.3pp, item-clustered 95%
+// CI [0.8, 3.8], sign stable across four horizons and both fold-flip eras — so THIS COLUMN STAYS
+// RECENT and the split with the fold/rank is now a measured, deliberate disagreement rather than an
+// unexamined one. ⚠ BUT THE BIGGER RESULT IS ABOUT THIS TAG, NOT THE BASIS: at equal error costs BOTH
+// bases lose to never gating at all (never 2950 · recent 3493 · full 3668), so `sell unreliable` only
+// pays for itself when a false green-light costs ≥ ~1.29× a false gate, and recent-3 only wins below
+// r*=1.76 — a narrow 1.29<r<1.76 window. Do not read this column as a filter. Whether 0.5 is the right
+// cut at all is F1's, not a hand-tune. If it ever does flip, flip it HERE (one shared `reachFraction`
+// call), never by re-forking a local implementation.
 function digestReachFrac(askReachExtra) {
   return reachFraction(askReachExtra, { prefer: 'recent' });
 }
