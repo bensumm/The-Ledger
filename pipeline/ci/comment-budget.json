@@ -1,0 +1,604 @@
+{
+  "files": {
+    "js/amplitudescreen.mjs": {
+      "dated": 10,
+      "block": 60
+    },
+    "js/backup.js": {
+      "dated": 0,
+      "block": 40
+    },
+    "js/charts-interactive.js": {
+      "dated": 0,
+      "block": 44
+    },
+    "js/charts-static.js": {
+      "dated": 0,
+      "block": 40
+    },
+    "js/desk-cadence.mjs": {
+      "dated": 3,
+      "block": 40
+    },
+    "js/estimators.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "js/estimators/cells.mjs": {
+      "dated": 3,
+      "block": 40
+    },
+    "js/estimators/families.mjs": {
+      "dated": 12,
+      "block": 57
+    },
+    "js/estimators/pair.mjs": {
+      "dated": 4,
+      "block": 40
+    },
+    "js/estimators/reach.mjs": {
+      "dated": 7,
+      "block": 40
+    },
+    "js/estimators/sell-models/index.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "js/estimators/sell-models/pressure.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "js/estimators/sell-models/reach-fold.mjs": {
+      "dated": 1,
+      "block": 48
+    },
+    "js/fillslog.js": {
+      "dated": 0,
+      "block": 40
+    },
+    "js/flip-niches.mjs": {
+      "dated": 10,
+      "block": 40
+    },
+    "js/forecast.mjs": {
+      "dated": 10,
+      "block": 75
+    },
+    "js/github.js": {
+      "dated": 0,
+      "block": 40
+    },
+    "js/held-item-strategy.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "js/ledger.js": {
+      "dated": 1,
+      "block": 40
+    },
+    "js/ledgercore.js": {
+      "dated": 0,
+      "block": 40
+    },
+    "js/main.js": {
+      "dated": 1,
+      "block": 40
+    },
+    "js/market.js": {
+      "dated": 0,
+      "block": 40
+    },
+    "js/marketfetch.js": {
+      "dated": 0,
+      "block": 40
+    },
+    "js/money-format.js": {
+      "dated": 0,
+      "block": 40
+    },
+    "js/money-math.js": {
+      "dated": 2,
+      "block": 40
+    },
+    "js/quote.js": {
+      "dated": 0,
+      "block": 40
+    },
+    "js/quotecore.js": {
+      "dated": 12,
+      "block": 40
+    },
+    "js/rating.mjs": {
+      "dated": 9,
+      "block": 41
+    },
+    "js/reverseflip.mjs": {
+      "dated": 3,
+      "block": 40
+    },
+    "js/state.js": {
+      "dated": 0,
+      "block": 40
+    },
+    "js/table.js": {
+      "dated": 0,
+      "block": 40
+    },
+    "js/termstructure.mjs": {
+      "dated": 2,
+      "block": 40
+    },
+    "js/trendcore.js": {
+      "dated": 0,
+      "block": 40
+    },
+    "js/trends.js": {
+      "dated": 8,
+      "block": 40
+    },
+    "js/ui.js": {
+      "dated": 4,
+      "block": 40
+    },
+    "js/validate.mjs": {
+      "dated": 24,
+      "block": 40
+    },
+    "js/valuescreen.mjs": {
+      "dated": 8,
+      "block": 40
+    },
+    "js/watch.js": {
+      "dated": 0,
+      "block": 40
+    },
+    "js/watchcore.js": {
+      "dated": 1,
+      "block": 40
+    },
+    "js/windowread.mjs": {
+      "dated": 43,
+      "block": 93
+    },
+    "pipeline/ci/check-daemon-safety.mjs": {
+      "dated": 0,
+      "block": 42
+    },
+    "pipeline/ci/check-dead-exports.mjs": {
+      "dated": 4,
+      "block": 40
+    },
+    "pipeline/ci/check-forecast-guards.mjs": {
+      "dated": 3,
+      "block": 48
+    },
+    "pipeline/ci/check-imports.mjs": {
+      "dated": 7,
+      "block": 40
+    },
+    "pipeline/ci/check-verdict-guards.mjs": {
+      "dated": 2,
+      "block": 40
+    },
+    "pipeline/ci/lint-arch.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/ci/lint-comments.mjs": {
+      "dated": 0,
+      "block": 49
+    },
+    "pipeline/ci/lint-docs.mjs": {
+      "dated": 10,
+      "block": 40
+    },
+    "pipeline/ci/lint-plan-lifecycle.mjs": {
+      "dated": 2,
+      "block": 40
+    },
+    "pipeline/ci/lint-skills.mjs": {
+      "dated": 2,
+      "block": 40
+    },
+    "pipeline/ci/move-lib-cluster.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/ci/report-branches.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/ci/run-tests.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/ci/smoke-test.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/commands/add-manual-fill.mjs": {
+      "dated": 4,
+      "block": 53
+    },
+    "pipeline/commands/analyze-fill-placement.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/commands/analyze-record.mjs": {
+      "dated": 2,
+      "block": 40
+    },
+    "pipeline/commands/backfill-archive.mjs": {
+      "dated": 3,
+      "block": 40
+    },
+    "pipeline/commands/build-fill-surface.mjs": {
+      "dated": 0,
+      "block": 46
+    },
+    "pipeline/commands/declare-owned.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/commands/declare-reverse-flip.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/commands/declare-thesis.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/commands/derive-cash.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/commands/dev-server.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/commands/ensure-server.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/commands/f1-calibrate.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/commands/join-amplitude-outcomes.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/commands/join-depth-outcomes.mjs": {
+      "dated": 1,
+      "block": 62
+    },
+    "pipeline/commands/join-outcomes.mjs": {
+      "dated": 5,
+      "block": 40
+    },
+    "pipeline/commands/join-reach-basis.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/commands/join-window-clears.mjs": {
+      "dated": 0,
+      "block": 48
+    },
+    "pipeline/commands/monitor-offers.mjs": {
+      "dated": 2,
+      "block": 40
+    },
+    "pipeline/commands/quote-items.mjs": {
+      "dated": 23,
+      "block": 40
+    },
+    "pipeline/commands/read-book.mjs": {
+      "dated": 3,
+      "block": 40
+    },
+    "pipeline/commands/read-buy-limits.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/commands/read-daemons.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/commands/read-schedule.mjs": {
+      "dated": 13,
+      "block": 40
+    },
+    "pipeline/commands/read-trajectory.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/commands/read-window-range.mjs": {
+      "dated": 25,
+      "block": 60
+    },
+    "pipeline/commands/reconcile-reverse-flip.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/commands/report-archive-gate.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/commands/report-retro.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/commands/run-loop.mjs": {
+      "dated": 4,
+      "block": 43
+    },
+    "pipeline/commands/screen-flip-niches.mjs": {
+      "dated": 87,
+      "block": 104
+    },
+    "pipeline/commands/set-scan-analysis.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/commands/sync-fills.mjs": {
+      "dated": 7,
+      "block": 49
+    },
+    "pipeline/commands/trigger-alerts.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/commands/watch-log.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/commands/watch-positions.mjs": {
+      "dated": 20,
+      "block": 55
+    },
+    "pipeline/daemons/cache-warm.mjs": {
+      "dated": 3,
+      "block": 47
+    },
+    "pipeline/daemons/health.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/daemons/manager.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/daemons/registry.mjs": {
+      "dated": 0,
+      "block": 49
+    },
+    "pipeline/lib/capital/book-model.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/lib/capital/capital-utilization.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/lib/capital/cash-anchor.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/capital/derive-cash-tiers.mjs": {
+      "dated": 1,
+      "block": 72
+    },
+    "pipeline/lib/capital/freed-capital.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/lib/capital/limits.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/capital/ownedledger.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/ignored.mjs": {
+      "dated": 2,
+      "block": 40
+    },
+    "pipeline/lib/market/archive-series.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/lib/market/archive.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/market/compose.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/market/fill-surface.mjs": {
+      "dated": 5,
+      "block": 48
+    },
+    "pipeline/lib/market/guideanchor.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/market/hourly-lmh.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/lib/market/item-context.mjs": {
+      "dated": 0,
+      "block": 41
+    },
+    "pipeline/lib/market/marketfetch.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/lib/market/printed-at.mjs": {
+      "dated": 0,
+      "block": 47
+    },
+    "pipeline/lib/market/probes.mjs": {
+      "dated": 0,
+      "block": 80
+    },
+    "pipeline/lib/market/warm-term-structure.mjs": {
+      "dated": 2,
+      "block": 40
+    },
+    "pipeline/lib/paths.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/reconstruct/campaigns.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/reconstruct/fill-placement.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/reconstruct/logblind.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/lib/reconstruct/offers.mjs": {
+      "dated": 3,
+      "block": 40
+    },
+    "pipeline/lib/reconstruct/positions.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/reconstruct/reconstruct.mjs": {
+      "dated": 10,
+      "block": 40
+    },
+    "pipeline/lib/reconstruct/sync-invoke.mjs": {
+      "dated": 2,
+      "block": 40
+    },
+    "pipeline/lib/render/analyze.mjs": {
+      "dated": 3,
+      "block": 40
+    },
+    "pipeline/lib/render/cli.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/lib/render/emit.mjs": {
+      "dated": 11,
+      "block": 45
+    },
+    "pipeline/lib/render/render.mjs": {
+      "dated": 1,
+      "block": 54
+    },
+    "pipeline/lib/render/replay.mjs": {
+      "dated": 3,
+      "block": 40
+    },
+    "pipeline/lib/render/retrojoin.mjs": {
+      "dated": 4,
+      "block": 40
+    },
+    "pipeline/lib/render/suggestlog.mjs": {
+      "dated": 32,
+      "block": 158
+    },
+    "pipeline/lib/signal/admission.mjs": {
+      "dated": 8,
+      "block": 40
+    },
+    "pipeline/lib/signal/estimators.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/lib/signal/gatecandidates.mjs": {
+      "dated": 19,
+      "block": 40
+    },
+    "pipeline/lib/signal/levels.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/lib/signal/patha.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/signal/range-position.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/signal/rating.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/lib/signal/recovery.mjs": {
+      "dated": 2,
+      "block": 40
+    },
+    "pipeline/lib/signal/structural-admission.mjs": {
+      "dated": 1,
+      "block": 48
+    },
+    "pipeline/lib/thesis/holdthesis.mjs": {
+      "dated": 1,
+      "block": 57
+    },
+    "pipeline/lib/thesis/reverseflipstate.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/thesis/sessionthesis.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/thesis/watchstate.mjs": {
+      "dated": 1,
+      "block": 40
+    },
+    "pipeline/lib/timing/cyclewatch.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/timing/staleexit.mjs": {
+      "dated": 3,
+      "block": 40
+    },
+    "pipeline/lib/timing/statetransition.mjs": {
+      "dated": 2,
+      "block": 40
+    },
+    "pipeline/lib/timing/velocity.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/timing/velocitytag.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/lib/version.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/probes/anchor.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/probes/decant.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/probes/dip.mjs": {
+      "dated": 0,
+      "block": 40
+    },
+    "pipeline/probes/froth.mjs": {
+      "dated": 0,
+      "block": 40
+    }
+  }
+}

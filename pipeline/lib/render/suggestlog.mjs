@@ -1,168 +1,160 @@
-/* suggestlog.mjs — the append-only SUGGESTIONS LEDGER (PLAN O1 step 1).
+/* suggestlog.mjs — the append-only SUGGESTIONS LEDGER.
  *
  * Every recommendation the analysis scripts emit — quote-items.mjs (per-item + --positions),
- * screen-flip-niches.mjs (each rated niche row), watch-positions.mjs (each held/target read) — is logged HERE at
- * emit time, unconditionally, one JSON object per line, to repo-root suggestions.jsonl. This
- * is the "what the tool SAID" half of the outcomes dataset; pipeline/commands/join-outcomes.mjs joins it to
- * "what actually FILLED" (fills.json). The ledger is TRACKED in git (append-only; ids / prices
- * / timestamps only — NO PII; the repo is public). sync-fills.mjs adds it to its commit set
- * when present.
+ * screen-flip-niches.mjs (each rated niche row), watch-positions.mjs (each held/target read) — is
+ * logged HERE at emit time, unconditionally, one JSON object per line, to repo-root
+ * suggestions.jsonl. This is the "what the tool SAID" half of the outcomes dataset;
+ * join-outcomes.mjs joins it to "what actually FILLED" (fills.json). TRACKED in git (append-only;
+ * ids / prices / timestamps only — NO PII, the repo is public); sync-fills.mjs commits it when present.
  *
- * Line schema (the O1 contract, + YS2 forward fields — lean-included, present only when supplied):
- *   { ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict,
- *     guide?,    (BD-LOG 2026-08-09 — the GE guide price at emit time, the anchor the in-game −5%/+5%
- *                 offer buttons compute off. Rides off row.guide (computeQuote), so zero call-site
- *                 changes. NOT reconstructable after the fact: no archive column, .cache/guide.json is
- *                 a 10-min snapshot, .guide-history.jsonl holds only CHANGES. The live side needs no
- *                 field — quickBuy IS the live instasell, quickSell IS the live instabuy — so this one
- *                 field makes both depth-vs-guide and depth-vs-live computable. Lean-included.)
- *     volSrc?,   (SF-3 — 'bulk' | 'peritem' | 'rolling': volume source behind `class`. Lean-included;
- *                 quote/screen supply it, watch-positions omits it. No consumer switches on the string
- *                 (analyze.mjs tests presence only). ⚠ DATA CAVEAT: the screen hardcoded 'bulk' while
- *                 running rolling from 2026-07-13 to 2026-08-11, so ~1,940 of the 2,000 rows before that
- *                 date are mislabelled at rest — treat a pre-2026-08-11 screen 'bulk' as UNKNOWN.)
- *     posture?, tripwire?, fillWindowHrs?, thesis?, validators?, path?,
- *     bid?, ask?, pFill?, ttfSec?, rank?, estBasis?, estN?,   (P6b rank estimate — the quoted pair +
- *     net×P÷TTF components; lean-included, absent on older rows)
- *     via?, preRank?, prePool?,   (EF-0a 2026-08-01, the PLAN.md Discovered `via`+rank logging — the
- *                 ADMISSION PROVENANCE: via = how the row won its fetch slot ('reserve' — value/gear/
- *                 mid-tier reserve | 'explore' — the rotating exploration lottery; ABSENT = ranked-in/
- *                 held, the baseline), preRank/prePool = the candidate's 1-based position in its
- *                 niche's pre-fetch ordering and that pool's size ("would have ranked 12th of 178"),
- *                 stamped by admission.mjs pickFetchPool (band/churn: the unified expGpDay ×
- *                 softFactor × trackBoost score; value: valueScore; amplitude: ampProxy). The rank is
- *                 NOT reconstructable after the fact (it depends on that pass's market snapshot) —
- *                 this is the reserve-retirement evidence. Lean-included; absent under
- *                 `--admission legacy` (rankAndSlice stamps nothing) and on quote/watch rows.)
- *     askPlacement?,   (EF-0a — the quoted ask's placement percentile (0–1) in the 14-day daily-HIGH
- *                 distribution, the SAME digestReachAndPlacement number the --digest verdicts read
- *                 (stale-live-guarded; computed for symmetric/churn rows too — since EF1(b) it also
- *                 BOUNDS their ask-reach exemption; null only when no daily-high history is in hand).
- *                 Was computed every pass and discarded; logged so EF0 can segment rank outcomes by
- *                 placement. Lean-included; screen renderMode rows only.)
- *     repriced?, exemptionBounded?, rankPre?,   (EF1, PLAN-ESTIMATOR-FIDELITY 2026-08-01 — rank-leg
- *                 honesty shadows. repriced = the EF1(a) dead-bid REPRICED-ENTRY alternative
- *                 { bid, ask, net, pFill, rank } (entry at the live crossable level, sell unchanged) —
- *                 a labeled alternative; the row's headline rank/pFill stay the untouched dead-bid
- *                 numbers (R-1) until EF0(c) scores the class. exemptionBounded = true when the EF1(b)
- *                 placement bound dropped a symmetric (churn) row's ask-reach exemption (ask above
- *                 the daily-high distribution) — the logged pFill/rank are the DISCOUNTED numbers;
- *                 rankPre rides beside it (the pre-bound rank, the R-1 visible-swap pair). All
- *                 lean-included; screen renderMode rows only, PLACEHOLDER bounds n≈0.)
- *     depthExit?,  (PLAN-DEPTH-EXIT DE3 2026-07-15 — the held-lot percentile-DEPTH shadow:
- *                 { qty, competition, liqClass, ask?, clearFrac?, collapse? }. `ask`/`clearFrac` =
- *                 the clearableAsk "book at" read when non-null; `collapse` = the null-read REASON
- *                 ('insufficient-depth' | 'thin-history' | 'no-prints'). liqClass rides EVERY row so
- *                 F1 can measure whether the flat ×4 competition bar systematically nulls a
- *                 liquidity class we'd want to price (the predicted bias). Lean-included; watch-positions.mjs
- *                 held rows only.)
- *     reachable?,  (PLAN-DEPTH-EXIT Extension A (PB shadow, DE3-folded) — the pressure-driven
- *                 reachable band { ask, bid, pressure, reliability, bandLow, bandHigh } off
- *                 js/windowread.mjs reachableBand, so F1 scores the pressure-priced levels against
- *                 realized fills BESIDE the depth floor + reach/relief alternatives on the SAME row.
- *                 Lean-included; absent when the pressure read degrades (thin days/volume).)
- *     windowExit?,  (WC1 PLAN-WINDOW-CLEAR-OUTCOMES 2026-07-20 — the window-clear ask-RUNG forward record on a
- *                 big-ticket held lot: { list, live, peakWindow:[startH,endH], hiReach:{reached,n,recentHit,
- *                 recentDays,placement}, fiveReach:{reached,n,placement}|null, reachMargin:{trend,cushionNow,
- *                 cushionFrom,cushionTo,reachedRecent,nRecent,pace:{gap,onPace,hour,n}|null}|null } off js/windowread.mjs
- *                 askExitRead. Records the surfaced list level + the diurnal peak window it targets + the TWO
- *                 competing reach signals (daily-HIGH 1h reach AND the less-smoothed 5m-grain reach) side-by-
- *                 side, so WC2 can join it against fills.json and score which signal predicts a resting-ask
- *                 fill. Lean-included; quote --positions / watch big-ticket held rows only. fiveReach null when
- *                 the 5m archive is thin — never faked.)
- *     (demandRegime? — REMOVED 2026-07-22, PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2. The DC3 demand-cycle
- *                 read was deleted; historical rows keep the field, new rows don't emit it. Revive from git.)
- *     timedLap?,  (DT4, PLAN-DIURNAL-TIMING 2026-07-23 — the diurnal timed-lap shadow: js/windowread.mjs
- *                 diurnalTimedLap's result, reshaped by timedLapShadow. Either `{ degraded: true, reason:
- *                 'thin-history' | 'no-window' }` (never faked) or { bid, ask, dipWindow:[startH,endH],
- *                 peakWindow:[startH,endH], net, roi, instantNet, instantRoi, holdHrs, clean, lowTrend,
- *                 hiTrend (both just the trend DIRECTION string — the full projectTrajectory detail is
- *                 dropped, SR1 lean discipline), bidReach, askReach (each { fullHit, fullN, recentHit,
- *                 recentDays, diverges }), dipPool, peakPool, trancheComfort, trancheCeiling, fitNights
- *                 (DT4b — the window the LEVEL fields above were fitted over: 14 on a gate-passer, the
- *                 caller's `nights` otherwise. Rows written before 2026-08-10 lack it and are all
- *                 caller-basis; do NOT join level fields across that boundary without splitting on it),
- *                 peakReality/dipReality (Chunk 2c, PLAN-DIURNAL-RECENCY-GUARD 2026-08-12 — each
- *                 { spikeTop, staleOptimistic, typicalLevel, reachedDays, nDays, recentHit, recentDays,
- *                 placement } | null, off js/windowread.mjs computeReality: the CONDITION attached to the
- *                 level on the same row. Recorded so a retro can segment flagged levels out of the
- *                 recommended-level population — until 2026-08-12 the flag was rendered but never written,
- *                 so the guard was unmeasurable by construction. Rows before that date lack both fields;
- *                 absent ≠ clean), bidBasis ('patient-dip' | 'live' — REQUIRED to read dipReality against
- *                 `bid`: on a 'live' row the dip was repriced to the live instasell and `bid` is no longer
- *                 the level dipReality describes. Also absent before 2026-08-12) }. PLACEHOLDER,
- *                 n≈0 — shadow-logged for the eventual F1 retro-join, NEVER a gate/rank/screen.json input.
- *                 Lean-included (YS2 pattern): screen-flip-niches.mjs's renderMode survivors always supply
- *                 it (DT2 computes diurnalTimedLap for every survivor); quote/watch don't pass it yet
- *                 (not wired at DT4) → absent → byte-identical shape on those rows.)
- *     dipLoop?,  (DL2 — a flush-SIGNAL component object {volDay,price,limit,depthPct,bucketVol,quickBuy,
- *                 optSell,afterTaxMargin,dipScore,alerted,gatedReason}; lean-included, present on watch
- *                 --dip flush rows (alerted=true → headline FLUSH · alerted=false → SIGNAL-ONLY, gated out
- *                 by gatedReason); joinable against fills.json via itemId+ts)
- *     subFloor?,   (P6c — 'min-gpd' | 'liquidity': the row was surfaced by the empty-result
- *     sub-floor fallback under THAT relaxed floor; lean-included, absent on floor-qualified rows)
- *     asym?,   (PART II PLAN-GRADE-REACH 2026-07-12 — the SHADOW asymmetric-fill estimate
- *               { bid, ask, pAsk, pBid, pAskAt, pBidAt, n, rank }: the deep-bid → high-reach-ask pair
- *               (js/windowread.mjs asymPair, guarded), its exit/entry reach fractions, and the asymmetric rank
- *               — pAskAt/pBidAt (added 2026-08-12) are the LEVELS pAsk/pBid were measured at, which the
- *               min/max ordering guards can move bid/ask away from. WITHOUT them a row's (ask, pAsk) pair
- *               mixes two levels and the join cannot tell a guarded row from an unguarded one, so the two
- *               cases can never be scored apart; guarded ≈ 2 of 7 asym rows measured live. Null on a pair
- *               that predates the field.
- *               (net × P_ask ÷ TTF — js/estimators.mjs asymEstimate). The row's plain `rank` field is
- *               the SYMMETRIC rank, so old-vs-new ride the SAME row for the F1 A/B (graduate the sort
- *               flip only if asym.rank predicts realized exit-safe edge better). Lean-included:
- *               band/scalp screen rows with an in-hand 1h series only; PLACEHOLDER quantiles, n≈14.)
- *     estBuy?, estSell?, estConfidence?,   (PLAN-OUTPUT-TABLE 2026-07-13 + REVISIONS — the reconciliation-
- *               estimator shadow pair (js/estimators.mjs estimatePair: strategy-aware entry + declared-
- *               exit-anchored, reach-folded, BE-floored Est. buy/sell) + its lean evidence
- *               { askRecHit?, askRecDays?, askHit?, askDays?, bidRecHit?…, declaredAnchored?, beFloored?,
- *               doctrine? } — recent-3 (RC1) AND full-window reach counts, the entry doctrine, and the
- *               declared/BE flags; the F1 join scores estSell against the realized sell. Lean-included;
- *               PLACEHOLDER model n≈3–14.)
- *     volDay?,   (2026-08-11 — the RAW limiting-side scalar behind `class`, so `class` is reproducible
- *                 from the record. Absent on pre-2026-08-11 rows, which are therefore unrepairable.)
- *     volDayRolling?,  (PLAN-VOL24 — the TRUE trailing-24h volume {hpv,lpv} composed from /1h; neither
- *               /24h endpoint is a trailing source, see the marketfetch.mjs loadAll24hRolling header.
- *               Lean-included; absent when no 1h series was in hand — e.g. watchlist rows.
- *               ⚠ Built as a "shadow beside the active volDay" but for most of its life it shadowed
- *               NOTHING — `volDay` only started being written 2026-08-11 (153 of 17,041 rows at the time
- *               join-outcomes began preferring it). And with `rolling` as the screen default it duplicates
- *               the GATING quantity rather than offering an alternative to it — still don't read it as an A/B.)
- *     grade?,  (AZ-forward 2026-07-12 — the rating LETTER as rendered then ('S+'…'D', incl. any
- *               thin/sub-floor cap), so the grade-clumping audit can segment without parsing
- *               `verdict` (which watch-positions.mjs uses for action verdicts); lean-included, screen supplies
- *               it, quote/watch have no grade → absent. Absent on all pre-2026-07-12 rows.)
- *     cappedBy?, (R7, PLAN-SIGNAL-RECENCY — which grade CEILING bound the printed letter:
- *               'thin' | 'phase-basing' | 'sub-floor' | 'reach', last-binder-wins; absent when the
- *               raw grade stood. Lets the retro segment which cap most often clamps a would-be-higher
- *               letter. Lean-included — an uncapped row is byte-identical.)
- *     depth?,  (AZ-forward 2026-07-12 — the realized 24h book-depth snapshot at emit:
- *               {hpv, lpv} straight off computeQuote's `row.pressure` (units traded at the instabuy /
- *               instasell sides, trailing 24h — a FLOW PROXY, not an order book; same shortcomings as
- *               the pressure token). Derived off `row`, no call-site change; lean-included, absent
- *               when the /24h read was missing. NOTE: the live SPREAD snapshot is already on every
- *               row as quickBuy/quickSell (spread = quickSell − quickBuy) — deliberately NOT
- *               duplicated as its own field (SR1 lean discipline).)
- *     ts      — unix SECONDS at emit time
- *     script  — 'quote' | 'screen' | 'watch'
- *     mode    — the mode/niche as computed then (screen niche name, or null)
- *     params  — the run's params object (screen flags, positions:true, …) or null
- *     class   — the item-type / liquidity label AS COMPUTED THEN. The classification logic
- *               evolves; recomputing it later would REWRITE history, so it's snapshotted here.
- *     verdict — the emitted action verdict where the script produces one (else null)
- *   Prices are whatever the computeQuote row held (may be null) — we never fabricate a number.
+ * LEAN-INCLUDED is the convention for every `?` field: written only when the caller supplies it, so
+ * a row that doesn't carry one is byte-identical to a row from before the field existed. Absence
+ * therefore never means "measured and empty" — see DATA CAVEATS.
  *
- * ADMISSION-EXCLUSION AGGREGATE ROWS (EF-0a, 2026-08-01). Besides per-item suggestion rows, each
- * screen pass appends ONE aggregate line per niche recording the CROWDED-OUT set — every gated
- * candidate that never got a fetch slot (the pickFetchPool `excluded` report, incl. any
- * 'total-fetch-max' trims): `{ ts, script:'screen', mode, params, prePool,
- * excluded:[{ id, reason, preRank?, expGpDay? }, …] }` (shaped by excludedShadow below). These are
- * ADMISSION TELEMETRY, NOT suggestions: they deliberately carry NO `itemId`, so every existing
- * joiner (retroJoin, join-outcomes, join-window-clears, report-retro) skips them by its
- * itemId-null guard — analyze-record.mjs additionally skips them BEFORE its noKey health counter so
- * they never read as malformed rows. EF0's counterfactual ("would the buried row have been good?")
- * is their one intended reader; without them the excluded set is unrecoverable after the pass.
+ * Prices are whatever the computeQuote row held (may be null) — a number is never fabricated.
+ *
+ * PER-ITEM ROW CORE (present on every row emitted for an item; see the AGGREGATE ROWS section for
+ * the one row class that carries almost none of this)
+ *   ts        unix SECONDS at emit time
+ *   script    'quote' | 'screen' | 'watch'
+ *   mode      the niche/mode as computed then (screen niche name, or null)
+ *   params    the run's params object (screen flags, positions:true, …) or null
+ *   itemId    the item; the joiners' key
+ *   class     item-type / liquidity label AS COMPUTED THEN. Snapshotted because the classification
+ *             logic evolves and recomputing it later would rewrite history.
+ *   verdict   the emitted action verdict where the script produces one (else null)
+ *   quickBuy  the LIVE INSTASELL (what you can buy into right now)
+ *   quickSell the LIVE INSTABUY  (what you can sell into right now)
+ *   optBuy/optSell   the patient 2h-band pair
+ *   mom, regime
+ *
+ * QUOTED PAIR + RANK  ·  bid?, ask?, pFill?, ttfSec?, rank?, estBasis?, estN? (net × P ÷ TTF components)
+ *   guide?            GE guide price at emit — the anchor the in-game −5%/+5% buttons compute off.
+ *                     NOT reconstructable later: no archive column, .cache/guide.json is a 10-min
+ *                     snapshot, .guide-history.jsonl holds only CHANGES.
+ *   volSrc?           'bulk' | 'peritem' | 'rolling' — volume source behind `class`. No consumer
+ *                     switches on it (analyze.mjs tests presence only).
+ *   volDay?           the RAW limiting-side scalar behind `class`, so `class` is reproducible.
+ *   volDayRolling?    TRUE trailing-24h {hpv,lpv} composed from /1h; neither /24h endpoint is a
+ *                     trailing source (see marketfetch.mjs loadAll24hRolling). With `rolling` as the
+ *                     screen default this DUPLICATES the gating quantity — never read it as an A/B.
+ *   depth?            realized 24h book-depth {hpv,lpv} off row.pressure — units traded at each side,
+ *                     a FLOW PROXY, not an order book. The live spread is already recoverable as
+ *                     quickSell − quickBuy and is deliberately not duplicated.
+ *   grade?            the rating LETTER as rendered ('S+'…'D', incl. any thin/sub-floor cap).
+ *   cappedBy?         which grade CEILING bound that letter: 'thin' | 'phase-basing' | 'sub-floor' |
+ *                     'reach' (last-binder-wins); absent when the raw grade stood.
+ *   subFloor?         'min-gpd' | 'liquidity' — surfaced by the empty-result sub-floor fallback.
+ *   posture?, tripwire?, fillWindowHrs?, thesis?, validators?, path?
+ *
+ * ESTIMATOR PAIR — NOT a shadow. `Est. buy`/`Est. sell` are the DEFAULT console column set (they
+ * replace Quick+Optimistic on the printed niche tables; `--raw` restores them), and under
+ * `--pressure-exit` the console re-sorts on estNet. They stay OUT of screen.json (that publish is
+ * refused under `--pressure-exit`), so the app still renders Quick/Optimistic.
+ *   estBuy?/estSell?/estConfidence?   reconciliation-estimator pair off estimatePair (strategy-aware
+ *                     entry, declared-exit-anchored, reach-folded, BE-floored), plus lean evidence
+ *                     { askRecHit?, askRecDays?, askHit?, askDays?, bidRecHit?…, declaredAnchored?,
+ *                     beFloored?, doctrine? } — recent-3 AND full-window reach counts, the entry
+ *                     doctrine, and the declared/BE flags. PLACEHOLDER model, n≈3–14.
+ *
+ * ADMISSION PROVENANCE (screen renderMode rows; absent under `--admission legacy` and on quote/watch)
+ *   via?              how the row won its fetch slot: 'reserve' (value/gear/mid-tier reserve) |
+ *                     'explore' (the rotating exploration lottery); ABSENT = ranked-in/held, the baseline.
+ *   preRank?/prePool? 1-based position in the niche's pre-fetch ordering and that pool's size
+ *                     ("would have ranked 12th of 178"), stamped by admission.mjs pickFetchPool.
+ *                     ⚠ The ORDERING SCORE differs per niche — band/churn: expGpDay × softFactor ×
+ *                     trackBoost; value: valueScore; amplitude: ampProxy — so preRank is NOT
+ *                     comparable across niches; pooling them is a misread. NOT reconstructable later
+ *                     (it depends on that pass's market snapshot).
+ *   askPlacement?     the quoted ask's placement percentile (0–1) in the 14-day daily-HIGH
+ *                     distribution (stale-live-guarded); also BOUNDS the churn ask-reach exemption.
+ *                     null when no daily-high history is in hand.
+ *
+ * SHADOW FIELDS — PLACEHOLDER, logged for the eventual F1 retro-join. Each is `null`/degraded rather
+ * than faked when its read is thin. Per-field scope and sample size are stated individually; do not
+ * generalise one field's caveat to the group.
+ *   repriced?         dead-bid REPRICED-ENTRY alternative { bid, ask, net, pFill, rank } (entry at the
+ *                     live crossable level, sell unchanged). A labeled alternative — the row's
+ *                     headline rank/pFill stay the untouched dead-bid numbers. Screen rows only.
+ *   exemptionBounded? true when the placement bound dropped a churn row's ask-reach exemption; the
+ *                     logged pFill/rank are then the DISCOUNTED numbers and rankPre? is the pre-bound
+ *                     rank riding beside it. Screen rows only; PLACEHOLDER bounds n≈0.
+ *   depthExit?        held-lot percentile-depth { qty, competition, liqClass, ask?, clearFrac?,
+ *                     collapse? }; collapse names the null-read reason ('insufficient-depth' |
+ *                     'thin-history' | 'no-prints'). liqClass rides EVERY row so F1 can test whether
+ *                     the flat ×4 competition bar systematically nulls one liquidity class.
+ *                     watch-positions held rows only.
+ *   reachable?        pressure-driven band { ask, bid, pressure, reliability, bandLow, bandHigh } off
+ *                     windowread.mjs reachableBand; absent when the pressure read degrades.
+ *   windowExit?       big-ticket window-clear ask rung off askExitRead:
+ *                     { list, live, peakWindow:[startH,endH],
+ *                       hiReach:{reached,n,recentHit,recentDays,placement},
+ *                       fiveReach:{reached,n,placement}|null,
+ *                       reachMargin:{trend,cushionNow,cushionFrom,cushionTo,reachedRecent,nRecent,
+ *                                    pace:{gap,onPace,hour,n}|null}|null }
+ *                     — the surfaced level, the diurnal peak window it targets, and the TWO competing
+ *                     reach signals (1h daily-HIGH and the less-smoothed 5m grain) side by side.
+ *                     fiveReach null when the 5m archive is thin. quote --positions / watch
+ *                     big-ticket held rows only.
+ *   timedLap?         diurnal timed-lap off diurnalTimedLap: either { degraded:true, reason:
+ *                     'thin-history'|'no-window' } or
+ *                     { bid, ask, dipWindow:[startH,endH], peakWindow:[startH,endH], net, roi,
+ *                       instantNet, instantRoi, holdHrs, clean, lowTrend, hiTrend,
+ *                       bidReach/askReach:{fullHit,fullN,recentHit,recentDays,diverges},
+ *                       dipPool, peakPool, trancheComfort, trancheCeiling, fitNights,
+ *                       peakReality/dipReality:{spikeTop,staleOptimistic,typicalLevel,reachedDays,
+ *                                               nDays,recentHit,recentDays,placement}|null,
+ *                       bidBasis }
+ *                     lowTrend/hiTrend are the trend DIRECTION STRING only — projectTrajectory's full
+ *                     detail is deliberately dropped. fitNights = the window the LEVEL fields were
+ *                     fitted over (14 on a gate-passer, else the caller's `nights`). bidBasis
+ *                     ('patient-dip' | 'live') is REQUIRED to read dipReality against `bid`: on a
+ *                     'live' row the dip was repriced to the live instasell, so `bid` is no longer the
+ *                     level dipReality describes. n≈0 and NEVER a gate/rank/screen.json input.
+ *                     Screen survivors supply it; quote/watch are NOT WIRED to (absence here is
+ *                     un-wired, not degraded).
+ *   asym?             asymmetric-fill estimate { bid, ask, pAsk, pBid, pAskAt, pBidAt, n, rank } — the
+ *                     deep-bid → high-reach-ask pair off asymPair (guarded), its exit/entry reach
+ *                     fractions, and the asymmetric rank (net × P_ask ÷ TTF, estimators.mjs
+ *                     asymEstimate). pAskAt/pBidAt are the LEVELS pAsk/pBid were measured at, which
+ *                     the min/max ordering guards can move bid/ask away from; without them a row's
+ *                     (ask, pAsk) pair mixes two levels and guarded rows cannot be told from
+ *                     unguarded. The row's plain `rank` stays the SYMMETRIC rank so old-vs-new ride
+ *                     the same row for the F1 A/B — graduate the sort flip ONLY if asym.rank predicts
+ *                     realized exit-safe edge better. band/scalp screen rows with an in-hand 1h
+ *                     series only; PLACEHOLDER quantiles, n≈14.
+ *   dipLoop?          flush-SIGNAL components { volDay, price, limit, depthPct, bucketVol, quickBuy,
+ *                     optSell, afterTaxMargin, dipScore, alerted, gatedReason }; alerted=true →
+ *                     headline FLUSH, false → SIGNAL-ONLY gated out by gatedReason. watch --dip rows
+ *                     only; joinable against fills.json via itemId+ts.
+ *
+ * ADMISSION-EXCLUSION AGGREGATE ROWS. Besides per-item rows, each screen pass appends ONE aggregate
+ * line per niche recording the CROWDED-OUT set — every gated candidate that never got a fetch slot
+ * (pickFetchPool's `excluded` report, incl. 'total-fetch-max' trims). The WHOLE row is:
+ *   { ts, script:'screen', mode, params, prePool, excluded:[{ id, reason, preRank?, expGpDay? }, …] }
+ * (shaped by excludedShadow below). These are ADMISSION TELEMETRY, NOT suggestions.
+ * ⚠ They carry NO `itemId` KEY AT ALL — the property is absent, not null, and so are `class`,
+ * `verdict`, `quickBuy`, `mom` and `regime`. Every joiner (retroJoin, join-outcomes,
+ * join-window-clears, report-retro) skips them via a LOOSE `== null` test, and analyze-record.mjs
+ * skips them before its noKey health counter so they never read as malformed. A new joiner MUST use
+ * `== null` (or an `in` check) — a strict `=== null` will NOT skip these rows. Without them the
+ * excluded set is unrecoverable after the pass.
+ *
+ * ⚠ DATA CAVEATS — properties of suggestions.jsonl AS IT EXISTS ON DISK. Read before any join;
+ * these are not fixable by re-running, only by splitting the sample.
+ *   · volSrc — the screen hardcoded 'bulk' while actually running rolling until 2026-08-11, so
+ *     ~1,940 of the first 2,000 rows are mislabelled at rest. Treat a pre-2026-08-11 screen
+ *     'bulk' as UNKNOWN.
+ *   · volDay — absent before 2026-08-11 (153 of 17,041 rows carried it when join-outcomes began
+ *     preferring it). Those rows are unrepairable: the scalar is not recoverable after the pass.
+ *   · timedLap.fitNights — absent before 2026-08-10; those rows are ALL caller-basis. Do not join
+ *     level fields across that boundary without splitting on it.
+ *   · timedLap.peakReality / dipReality / bidBasis — absent before 2026-08-12. The reality flag was
+ *     rendered but never written until then, so the guard is unmeasurable on older rows: absent ≠ clean.
+ *   · asym.pAskAt / pBidAt — null on pairs predating the field, so guarded and unguarded rows cannot
+ *     be told apart there (guarded ≈ 2 of 7 asym rows measured live).
+ *   · grade — absent on all rows before 2026-07-12.
+ *   · demandRegime — a REMOVED field. Historical rows still carry it; new rows never emit it.
  */
 import fs from 'node:fs';
 import path from 'node:path';

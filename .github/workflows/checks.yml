@@ -62,8 +62,14 @@ jobs:
       - name: skill-lint (every SKILL.md rule-block tagged, P7)
         run: node pipeline/ci/lint-skills.mjs
 
-      - name: doc-lint (denylist of superseded terms + single-source duplicate-phrase, DL1)
+      - name: doc-lint (denylist of superseded terms + single-source duplicate-phrase + constant drift, DL1)
         run: node pipeline/ci/lint-docs.mjs
+
+      - name: comment-doctrine (dated narrative + comment-block budget, ratcheted — history belongs in CHANGELOG)
+        run: node pipeline/ci/lint-comments.mjs
+
+      - name: plan-refs (no plan deleted while live source still points at it — plans/ has no other existence guard)
+        run: node pipeline/ci/lint-plan-refs.mjs
 
       - name: fills.json / positions.json parse
         run: |

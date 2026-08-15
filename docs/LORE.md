@@ -79,6 +79,13 @@ change, mapped in README "Map of the repo". Reconstruction detail: `FILLS-PIPELI
   script ran them — then whiplash hold/cut advice from the `quote.mjs`-vs-`watch.mjs` verdict fork.
   This is the anchor for the whole Pipeline-v2 wave (snapshot layer, one verdict home, validators on
   every surface).
+- **The impossible cash snapshot (the anchor for derived cash + the injection detector).** The book
+  reported a stated balance well below the value of a resting Dragon hunter lance bid — an amount the
+  GE would never have escrowed against that little coin, so the two numbers could not both be true,
+  and nothing in the tool reconciled them. Cash was a *stated* figure aging in place. The fix was to
+  stop stating it: `deriveCash` reconstructs the balance forward from an anchor plus the log's own
+  flow, and when resting offers exceed the derived balance it reports the shortfall as an inferred
+  injection rather than printing a number it can prove is wrong.
 
 ## Superseded / rejected approaches (don't rebuild these)
 

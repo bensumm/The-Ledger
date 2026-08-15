@@ -2095,7 +2095,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `lintText`/`lintFile`/`SKILL_FILES` for the test. Deliberately NOT a Markdown parser — a
     growth-visibility guard; the semantic dispositions live in `docs/SKILL-TRIAGE.md`),
   - `lint-docs.mjs` (DL1 — a STRUCTURAL, offline doc-drift linter run in CI's cheap `checks` job +
-    auto-discovered via `lint-docs.test.mjs`; the CI-encoded half of process rule 8. TWO checks:
+    auto-discovered via `lint-docs.test.mjs`; the CI-encoded half of process rule 8. THREE checks:
     (1) a maintained **DENYLIST** of superseded terms/commands × the operating docs they'd mislead
     (seeded: the deleted spread/rising flip-niches listed as live, an unqualified global falling-exclusion,
     and the removed per-flip-niche mode flags — see the `DENYLIST` table in the source for the exact patterns)
@@ -2104,11 +2104,32 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     Scan-intro = PLAN-APP-PARITY AP1) so CI stays green while the finding stays reported; and
     (2) a **single-source / duplicate-phrase** check that flags a distinctive 14-word shingle appearing
     verbatim in >1 doc on the CLAUDE.md ⇆ README.md axis (the copy-not-move failure), with a `DUP_ALLOWLIST`
-    for legit shared boilerplate + known pre-existing dups owned by DOC-2/DOC-3. **MUST stay a
+    for legit shared boilerplate + known pre-existing dups owned by DOC-2/DOC-3; and
+    (3) a **constant-drift** check — the stale-NUMBER class a denylist structurally cannot see, since it
+    only knows literals someone thought to add. Auto-discovers every SCREAMING_SNAKE numeric constant in
+    `js/` + `pipeline/` (excluding `pipeline/test/`, whose fixtures set synthetic thresholds), reads its
+    value from SOURCE (never a hand-maintained table, which would drift too), and compares it against
+    every literal a governed doc writes ADJACENT to that name. Anchor: the 2026-08-08 `MIN_GPD`
+    500k→250k move left the floor stale at 2× its value in eleven doc sites, found by human review
+    rather than by CI. The matcher is an adjacency grammar whose glue carries NO LETTERS, and that one
+    rule is what makes historical prose safe: "…, MEASURED 2026-08-08 — was 1.0" has words between, so
+    the old number is never read as a claim about the current one. Three further structural rules —
+    `A → B` is a transition record judged on B; a hyphen compound (`5m-grain`) is a unit label, not a
+    value; a non-magnitude attached unit (`30s` against a `_MS` constant) is DECLINED rather than
+    failed. A magnitude suffix is ambiguity-tolerant on purpose (`15m` reads as both 15 million and 15,
+    so a gp constant and a minutes constant can share the notation without a false alarm). Name
+    collisions are auto-skipped, `CONST_XFAIL` records a known live mismatch owned elsewhere, and the
+    CLI prints the count of gloss sites actually compared so a matcher narrowed into a no-op is visible.
+    Corpus split is the primary escape hatch: the DATED record (`CHANGELOG.md`, `docs/LORE.md`,
+    `PLAN.md` + `plans/`, `pipeline/experiments/`) is EXCLUDED because restating a superseded value is
+    its job. Known limit: a number stated in prose with no constant name attached is invisible to it —
+    most of the eleven-site incident, still a human-review class. **MUST stay a
     denylist + structural checker — never a semantic/LLM checker** (the skill-lint honesty note applies
-    verbatim: it catches recurrence of NAMED drift + novel COPY, NOT novel contradiction; the wave-start
+    verbatim: it catches recurrence of NAMED drift + novel COPY + a stale literal glossed onto a live
+    name, NOT novel contradiction; the wave-start
     semantic drift scan stays necessary). Exports `DENYLIST`/`runDenylist`/`normalizeWords`/
-    `findDuplicateShingles`/`runDuplicatePhrase` for the test),
+    `findDuplicateShingles`/`runDuplicatePhrase`/`scanSourceConstants`/`findConstantDrift`/
+    `runConstantDrift`/`constantCandidates` for the test),
   - `check-imports.mjs` (PLAN-VOL24 follow-up — TWO static binding guards run in the cheap `checks` job.
     **Part 1, import RESOLUTION:** STATICALLY parses each pipeline entrypoint's relative
     `import { … } from './x.mjs'` and verifies
@@ -2201,6 +2222,38 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     semantic/LLM check; it is the build-time backstop to the manager's runtime `!d.local` guard. `--dir <path>`
     scans a synthetic copy (used to prove the fail path without committing a fixture). Exits non-zero naming the
     offending file:line),
+  - `lint-comments.mjs` + `comment-budget.json` (the COMMENT-DOCTRINE ratchet, run in the cheap `checks` job —
+    the CI half of the owner ruling that a comment describes the code AS IT IS NOW plus the context an LLM
+    needs to interpret it, while historical narrative belongs in `CHANGELOG.md`. Two structural proxies per
+    source file: the count of `YYYY-MM-DD` refs in comments (leading AND trailing; dates inside quoted spans
+    are example data and excluded, as are dates under a `DATA CAVEATS` marker in the same block — those are
+    provenance about a data file's CURRENT contents, which a joiner needs at the schema and cannot move to
+    CHANGELOG), and the longest contiguous comment block. RATCHETS against `comment-budget.json`: every
+    scanned file is pinned at its current count and may only improve; a file ABSENT from the baseline is new
+    and must meet `NEW_FILE_CAPS` (2 dated, 40 block) outright. Scans `js/`, `pipeline/{lib,commands,ci,daemons,probes}`,
+    excluding `*.test.mjs`. `--report` ranks offenders without failing; `--bless` re-baselines after a genuine
+    cleanup and REFUSES to raise any ceiling without `--force`, so the instinctive response to a red build
+    cannot launder the regression that caused it. A magnitude budget, never a semantic check — it cannot tell
+    a good 39-line contract header from a bad one, only stop them growing; narrative carrying no date, and
+    blank-line block splitting, are disclosed evasions it does not catch. Consumes nothing; exit 1 + per-file
+    violations),
+  - `lint-plan-refs.mjs` + `plan-folded.json` (the plan-reference gate, run in the cheap `checks` job — the one
+    existence guard `plans/` has. `lint-arch.mjs` governs only ARCHITECTURE.md/GLOSSARY.md and explicitly SKIPS
+    every `PLAN-*.md` token as a transient working doc, so before this a plan could be removed while live
+    source still pointed at it and every check stayed green. Every `PLAN-<NAME>` token in scanned
+    source/docs must resolve to a file in `plans/` or appear in the `plan-folded.json` baseline. A RATCHET over
+    deletions, not a verdict on past ones: names already dangling when the baseline was seeded are
+    grandfathered (those plans shipped and folded; their names survive in code as commit-searchable provenance
+    tags), and what it stops is the NEXT one. NOT scanned: `CHANGELOG.md`/`docs/LORE.md` (the dated record,
+    where naming a folded plan is the job), `pipeline/{test,experiments}` (synthetic fixture names), and its
+    own source. Line-wrapped names are rejoined before matching — a comment header that breaks a long plan
+    name mid-token across two lines otherwise reads as two separate plans, which measured 2 of the first 33
+    hits. `--refs X` lists every file citing a plan and is the check
+    to run BEFORE deleting one; `--unused` shortlists plans nothing outside `plans/` points at; `--bless`
+    records folds and refuses to add a name without `--force`. A token match, not a link checker: it answers
+    "is anything still pointing here?", never "does this plan still matter?" — and chunk ids inside a plan
+    (AC1, DT3) are NOT checked, since they collide across plans. Consumes nothing; exit 1 + the referencing
+    file list per dangling name),
   - `lint-arch.mjs` (doc-reference guard, 2026-07-14 — enforces `docs/ARCHITECTURE.md` invariant E7 in the
     cheap `checks` job: every code-font FILE token the governed doc names must resolve on disk — a path from
     root, a bare basename against the source dirs; function/field names are skipped, `PLAN-*.md` working docs
@@ -2357,11 +2410,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `lint-skills.test.mjs` (P7 — the heuristic skill-linter's convention: `- **…**` rule-block
     detection, the two tag forms (code-pointer vs `judgment:`), frontmatter/fence exclusions, the
     counting, and the LIVE regression guard that all four committed SKILL.md files lint clean),
-    `lint-docs.test.mjs` (DL1 — the doc-drift linter's two checks: denylist pattern precision (live-flip-niche
+    `lint-docs.test.mjs` (DL1 — the doc-drift linter's three checks: denylist pattern precision (live-flip-niche
     form hits, deletion prose does NOT), the live corpus has no hard denylist violations + STILL catches
     the index.html AP1 drift as xfail, `normalizeWords`/`findDuplicateShingles` on synthetic docs
-    (≥14-word verbatim passage flags, short overlap + single-home + null-doc don't), and the live
-    CLAUDE.md ⇆ README axis is clean),
+    (≥14-word verbatim passage flags, short overlap + single-home + null-doc don't), the live
+    CLAUDE.md ⇆ README axis is clean, and — for the constant-drift check — that both source definition
+    shapes are read (module `const`, threshold-table property, with spread overrides NOT counted as a
+    second definition), that a stale gloss fires in either word order while historical prose / a date /
+    a hyphen compound / a comma-separated old→new list do NOT, that a cross-unit restatement is declined,
+    and a no-op tripwire pinning a floor under the number of gloss sites actually compared),
     `lint-plan-lifecycle.test.mjs` (PLAN-CLEANUP-SKILL C10+C11 — the plan-lifecycle report's
     `extractStatus`/`classifyStatus` (complete-word vs open-marker, incl. the PARTIALLY/open-work
     carve-outs) + `scanPlans`/`skillDrift` on deterministic tmp fixtures, never the live tree),

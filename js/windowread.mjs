@@ -380,7 +380,8 @@ export function trajectoryRead(days, { liveRef = null } = {}) {
 // thresholds are PLACEHOLDERS pending F1.
 export const FC_MIN_DAYS = 5;          // fewer COMPLETED days than this ⇒ null (can't fit a robust slope)
 export const FC_RECENT_N = 5;          // the recent completed-day window the slope is fit over
-export const FC_FLAT_FRAC = 0.005;     // |slope|/latest-level per day below this ⇒ 'flat' (0.5%/day; PLACEHOLDER, F1)
+export const FC_FLAT_FRAC = 0.005;     // |slope|/latest-level per day below this ⇒ 'flat' (0.5%/day; RELATIVE,
+                                       // so one threshold works across a 100k item and a 40m one; PLACEHOLDER, F1)
 export const FC_BREAK_LOOKBACK = 13;   // floor-break = latest low vs the min of the prior N lows (the rest of a 14-day window)
 export const FC_OSC_FRAC = 0.4;        // R6: daily-mid direction-flip fraction ≥ this on a 'ranging' item ⇒ 'oscillating' (PLACEHOLDER, F1; carried over from trajectoryRead's retired shape read — the one signal fc's slope-direction classifier can't express)
 export const PT_PROJECT_N = 1;         // forward-projection horizon in periods (days); 1 = "next period". PLACEHOLDER, F1

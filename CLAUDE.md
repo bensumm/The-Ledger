@@ -273,11 +273,20 @@ metadata, not a leak; the concern is content, not commit authorship.
   direction and the one that caught a shipped `ReferenceError`. **Coverage is the ENTRYPOINTS ⋃ `js/**` ⋃
   `pipeline/lib/**`** since 2026-08-10 (was entrypoints only — the rationale, the measurements and the
   browser-module shim live in README's `check-imports.mjs` entry, the ONE home)), `fills.json`/`positions.json` parse, `lint-skills.mjs`, and
-  `lint-docs.mjs` — DL1's structural doc-drift lint: a denylist of superseded terms/commands +
-  a single-source duplicate-phrase check on the CLAUDE.md ⇆ README axis; **must stay a denylist +
-  structural checker, never a semantic/LLM one**, and `check-daemon-safety.mjs` — the daemon zero-git
-  guard (fails if any local/auto-runnable daemon imports or shells `sync-fills --publish`;
-  same denylist philosophy), and `check-forecast-guards.mjs` — the FAIL-OPEN-refusal pin: every
+  `lint-docs.mjs` — DL1's structural doc-drift lint: a denylist of superseded terms/commands,
+  a single-source duplicate-phrase check on the CLAUDE.md ⇆ README axis, and a **constant-drift**
+  check (the stale-NUMBER class the denylist cannot see) that reads each SCREAMING_SNAKE value from
+  SOURCE and fails a governed doc quoting a different literal beside that name — the anchor is the
+  `MIN_GPD` floor left stale at 2× in eleven places; the dated record (CHANGELOG/LORE/plans) is
+  excluded because restating an old value is its job, and the design + limits live in README's
+  `lint-docs.mjs` entry, the ONE home; **must stay a denylist +
+  structural checker, never a semantic/LLM one**, and `lint-comments.mjs` — the comment-doctrine
+  ratchet, and `lint-plan-refs.mjs` — the plan-reference gate, the only existence guard `plans/` has.
+  **Run `lint-plan-refs.mjs --refs <NAME>` BEFORE deleting any plan** — it lists every referencing
+  file, and nothing else in CI will tell you. Both guards' design + limits live in their README
+  entries, the ONE home. And `check-daemon-safety.mjs`
+  — the daemon zero-git guard (fails if any local/auto-runnable daemon imports or shells `sync-fills
+  --publish`; same denylist philosophy), and `check-forecast-guards.mjs` — the FAIL-OPEN-refusal pin: every
   `diurnalForecast`/`driftExitFrom` call must pass `phase` **as a resolvable VALUE**, since an omitted
   OR undefined guard field silently disables the `post-shock-shape` refusal (the 2026-08-06 Snape grass
   miss — the verification trio projected a mid-decay item for a day; CHANGELOG 0.71.1). **The v1 guard

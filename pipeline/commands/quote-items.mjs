@@ -853,6 +853,10 @@ async function runPositions() {
     // single "window read unavailable" note — the table/verdict is the critical output, this is enrichment.
     // The ask-side placement is folded into this richer note, so reachPlacement drops its ASK clause here
     // (kept for non-big-ticket lots); the BID clause still rides on reachPlacement (ask-side-only per the plan).
+    // WHY the size bar exists, and why it is NOT a cost gate: the read is ZERO extra fetch, so nothing is
+    // saved by excluding a lot. The bar is purely OUTPUT NOISE — at ≥ BIG_TICKET_GP a stranded premium (or
+    // "which window does this clear?") costs real gp and earns the extra note; below it the note is noise.
+    // So don't narrow it to save fetches — there are none — and don't widen it for consistency either.
     const bigTicket = cost >= BIG_TICKET_GP || watchlistIds.has(itemId);
     let windowExitDone = false;
     if (bigTicket) {

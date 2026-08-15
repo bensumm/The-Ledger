@@ -2,35 +2,44 @@
 /**
  * lint-docs.mjs — a STRUCTURAL, offline doc-drift linter (DL1). The CI-encoded half of process
  * rule 8 ("grep the docs for statements the change now supersedes and fix them in place"), which
- * was itself only prose. Two deterministic checks, no semantics, no LLM, no network:
+ * was itself only prose. Three deterministic checks, no semantics, no LLM, no network:
  *
  *   CHECK 1 — DENYLIST (recurrence of NAMED drift). A maintained table of {pattern, files, reason}:
  *     superseded terms/commands banned in the operating docs where they'd mislead. When a ruling
- *     DELETES a concept, the executor adds a line here and CI then catches every future doc that
- *     resurrects it. `xfail` records a KNOWN live violation owned by another plan chunk (so CI stays
- *     green while the finding stays visible) — none currently outstanding (the index.html Scan-intro
- *     copy that PLAN-APP-PARITY AP1 owned has been fixed, so its xfails were retired; index.html now
- *     sits in the `files` list as an actively-guarded home, not an exception).
+ *     DELETES a concept, the executor adds a line here and CI catches every future doc that
+ *     resurrects it. `xfail` records a KNOWN live violation owned by another plan chunk, so CI stays
+ *     green while the finding stays visible; none is currently outstanding.
  *
  *   CHECK 2 — SINGLE-SOURCE / DUPLICATE-PHRASE (the copy-not-move failure on NOVEL rulings). Flags a
- *     distinctive normalized word-shingle that appears VERBATIM in more than one doc on the
- *     CLAUDE.md ⇆ README.md axis (where the "point, don't restate" rule is sharpest) — the "same ruling
- *     in 3-4 homes" pattern (Bar D/E, value rulings) the move-never-copy policy forbids. STRUCTURAL only
- *     (an n-gram fingerprint match),
- *     so it is deterministic with zero false-positive flakiness. `DUP_ALLOWLIST` exempts legitimately
- *     shared boilerplate + the KNOWN pre-existing duplications owned by the later DOC-2/DOC-3 diet
- *     chunks (with a pointer), so CI passes now while the check is LIVE for any new copy-not-move.
+ *     distinctive normalized word-shingle appearing VERBATIM in more than one doc on the
+ *     CLAUDE.md ⇆ README.md axis, where the "point, don't restate" rule is sharpest — the "same ruling
+ *     in 3-4 homes" pattern the move-never-copy policy forbids. An n-gram fingerprint match, so it is
+ *     deterministic with zero flakiness. `DUP_ALLOWLIST` exempts legitimately shared boilerplate plus
+ *     the known pre-existing duplications owned by the DOC-2/DOC-3 diet chunks (each with a pointer).
+ *
+ *   CHECK 3 — CONSTANT DRIFT (a NUMBER that went stale). The class CHECK 1 structurally cannot see: a
+ *     denylist only knows literals someone thought to add, so a threshold that MOVES leaves its old value
+ *     sitting in prose everywhere it was glossed — the `MIN_GPD` 500k→250k move left the tool-wide floor
+ *     stale at 2x its value in ELEVEN doc sites, found by human review and never by CI. This check reads
+ *     the value from SOURCE (never a hand-maintained table — that table would drift too) and compares it
+ *     to every literal a governed doc GLOSSES onto the constant's name. Fully auto-discovered: no
+ *     per-constant registration, so a new constant is guarded the day it is documented.
  *
  * HONEST LIMITS (rule 4 — do not oversell; this is a lint, not a semantic checker):
  *   - CHECK 1 catches only recurrence of drift its denylist NAMES; it prevents re-introducing a KNOWN
  *     superseded term, never a novel contradiction.
  *   - CHECK 2 catches a novel COPY (verbatim restatement across homes), NOT a novel CONTRADICTION
  *     (two homes that say opposite things in different words). Nothing here replaces the wave-start
- *     Sonnet semantic drift scan — it narrows what that scan must find, it doesn't retire it.
+ *     semantic drift scan — it narrows what that scan must find, it doesn't retire it.
+ *   - CHECK 3 only sees a literal written NEXT TO the constant's SCREAMING_SNAKE name. A doc stating
+ *     the number in pure prose with no name attached ("the 250k attention floor") is invisible to it —
+ *     that is the majority of the eleven-site incident, and it stays a human-review class. It also cannot
+ *     compare across units (`HEARTBEAT_MS` documented as "30s" is DECLINED, not judged), and it accepts a
+ *     magnitude-suffix ambiguity by design (see CONST_LITERAL below).
  *
  * Run: `node pipeline/ci/lint-docs.mjs`  (CI runs it in the cheap `checks` job; pinned by lint-docs.test.mjs).
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -341,6 +350,195 @@ export function runDuplicatePhrase(docs = POINTER_DOCS) {
   return findDuplicateShingles(docs.map(rel => ({ name: rel, text: read(rel) })));
 }
 
+/* ========================== CHECK 3 — CONSTANT DRIFT ================================== */
+// CORPUS SPLIT (the primary escape hatch, and the reason this check is usable at all).
+//
+// GOVERNED = the docs that describe the system AS IT IS NOW. A stale literal here is a lie a reader
+// acts on. EXCLUDED = the DATED/HISTORICAL record, where restating a superseded value is the file's
+// JOB and flagging it would be flatly wrong: CHANGELOG.md (an entry recording "500k → 250k" is
+// CORRECT and must stay), docs/LORE.md (narrative), PLAN.md + plans/** (planning records quote the
+// pre-change value they were written against), pipeline/experiments/** (dated captures — "all prints
+// were inside QUICK_FRESH_MIN ~15m" is a measurement, true at its timestamp), and this file.
+// Same corpus philosophy CHECK 1 already uses for its `files` lists.
+export const CONST_DOCS = [
+  'CLAUDE.md', 'README.md', 'index.html',
+  'docs/ARCHITECTURE.md', 'docs/FLOW.md', 'docs/GLOSSARY.md', 'docs/MARKET-ANALYSIS.md',
+  'docs/PLANNING.md', 'docs/SIGNAL-AUDIT.md', 'docs/SKILL-TRIAGE.md',
+  'pipeline/MONITORING.md', 'pipeline/FILLS-PIPELINE.md',
+  '.claude/skills/analyze/SKILL.md', '.claude/skills/book/SKILL.md',
+  '.claude/skills/cleanup/SKILL.md', '.claude/skills/morning/SKILL.md',
+  '.claude/skills/overnight/SKILL.md', '.claude/skills/positions/SKILL.md',
+  '.claude/skills/scan/SKILL.md', '.claude/skills/schedule/SKILL.md',
+  '.claude/skills/ship/SKILL.md',
+];
+
+// Source roots scanned for constant DEFINITIONS. `pipeline/test/**` is EXCLUDED on purpose: fixtures
+// deliberately set synthetic threshold values (`MIN_GPD: 1000`), which would collide with the real one
+// and silently disable the name (see the conflict rule below). experiments/ + suggestions-archive/ are
+// data, not source.
+export const CONST_SRC_DIRS = ['js', 'pipeline/commands', 'pipeline/lib', 'pipeline/daemons', 'pipeline/probes', 'pipeline/ci'];
+const SRC_SKIP = /(^|\/)(test)(\/|$)|lint-docs\.mjs$/;
+
+// KNOWN live mismatches owned elsewhere — reported but non-fatal, exactly like CHECK 1's `xfail`.
+// Key: `<relpath>::<CONST_NAME>`. Empty today; add a line (with the owner) rather than deleting a check.
+export const CONST_XFAIL = {};
+
+// Names never guarded — the deliberate opt-out for a name whose doc gloss is structurally ambiguous in
+// a way the matcher below can't resolve. Empty today; a NAME COLLISION (two modules, two values) is
+// already auto-skipped without needing an entry here.
+export const CONST_SKIP = new Set([]);
+
+const SNAKE = String.raw`[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+`;
+// A numeric literal must START and END on a digit — the trailing-digit anchor is LOAD-BEARING. `[\d_,]*`
+// alone lets "3500," (a list separator) be consumed as part of the number, which made a list of
+// `NAME old→new` pairs read each pair's value onto the NEXT pair's name.
+const NUM = String.raw`\d(?:[\d_,]*\d)?(?:\.\d+)?`;
+const DEF_RE  = new RegExp(String.raw`(?:^|[\s;{(])(?:export\s+)?const\s+(${SNAKE})\s*=\s*(${NUM})\s*[;,)\n]`, 'gm');
+const PROP_RE = new RegExp(String.raw`(?:^|[\s{,])(${SNAKE})\s*:\s*(${NUM})\s*[,}\n]`, 'gm');
+
+function walkSrc(rel, out = []) {
+  let ents; try { ents = readdirSync(join(ROOT, rel)); } catch { return out; }
+  for (const e of ents) {
+    const child = `${rel}/${e}`;
+    if (SRC_SKIP.test(child)) continue;
+    let st; try { st = statSync(join(ROOT, child)); } catch { continue; }   // broken symlink ⇒ skip, never crash CI
+    if (st.isDirectory()) walkSrc(child, out);
+    else if (/\.(mjs|js)$/.test(e)) out.push(child);
+  }
+  return out;
+}
+
+// Build name -> value from SOURCE. Two definition shapes, because the repo uses both: a module-level
+// `const NAME = <literal>` and a threshold-TABLE property (`{ MIN_GPD: 250_000, … }` in
+// gatecandidates.mjs). A property inside a SPREAD-override object (`{ ...t, MIN_GPD: 0 }` — the
+// relax-ladder) is NOT a definition and is skipped, or every laddered threshold would self-collide.
+// COLLISION RULE: a name defined with two different values anywhere in source is DROPPED entirely
+// (reported as skipped, never as a failure) — a false alarm gets a guard disabled, a miss does not.
+export function scanSourceConstants(dirs = CONST_SRC_DIRS) {
+  const seen = new Map();   // name -> Set(value)
+  const sites = new Map();  // name -> [ 'file:literal', … ]
+  const note = (name, lit, file) => {
+    const v = Number(String(lit).replace(/[_,]/g, ''));
+    if (!Number.isFinite(v)) return;
+    if (!seen.has(name)) { seen.set(name, new Set()); sites.set(name, []); }
+    seen.get(name).add(v); sites.get(name).push(`${file}:${lit}`);
+  };
+  for (const dir of dirs) for (const file of walkSrc(dir)) {
+    const text = read(file);
+    if (text == null) continue;
+    let m;
+    DEF_RE.lastIndex = 0;
+    while ((m = DEF_RE.exec(text))) note(m[1], m[2], file);
+    PROP_RE.lastIndex = 0;
+    while ((m = PROP_RE.exec(text))) {
+      const lineStart = text.lastIndexOf('\n', m.index) + 1;
+      const pre = text.slice(lineStart, m.index);
+      const brace = pre.lastIndexOf('{');
+      if (brace >= 0 && pre.slice(brace).includes('...')) continue;   // spread override, not a definition
+      note(m[1], m[2], file);
+    }
+  }
+  const values = new Map(), conflicts = [];
+  for (const [name, vs] of seen) {
+    if (CONST_SKIP.has(name)) continue;
+    if (vs.size > 1) { conflicts.push({ name, values: [...vs], sites: sites.get(name) }); continue; }
+    values.set(name, [...vs][0]);
+  }
+  return { values, conflicts };
+}
+
+// A literal + its ATTACHED suffix. Attached-only is deliberate: `15m` is a scale suffix, `100,000 gp`
+// (spaced) is prose the check ignores.
+export const CONST_LITERAL = String.raw`(${NUM})(%|[A-Za-z]{1,3})?`;
+const MAGNITUDE = { k: 1e3, m: 1e6, b: 1e9 };
+
+// Every value a doc literal could plausibly MEAN. Returns null = "cannot be judged, decline".
+// AMBIGUITY IS TOLERATED ON PURPOSE: `10m` is 10 MILLION next to BIG_TICKET_GP and 15 MINUTES next to
+// QUICK_FRESH_MIN, and a structural checker has no way to know a constant's unit. So a magnitude suffix
+// admits BOTH readings and a site passes if EITHER matches. The cost is a missed complaint about a
+// formatting slip; the benefit is that real drift is still caught (a stale "500k" against 250_000
+// yields {500000, 500} — neither matches — so the anchor incident still fires).
+export function constantCandidates(numStr, suffix) {
+  const base = Number(String(numStr).replace(/[_,]/g, ''));
+  if (!Number.isFinite(base)) return null;
+  if (!suffix) return [base];
+  if (suffix === '%') return [base, base / 100];
+  const scale = MAGNITUDE[suffix.toLowerCase()];
+  if (scale) return [base * scale, base];
+  return null;   // a non-magnitude unit (30s, 12h, 5x) — units are not comparable structurally
+}
+
+// PURE core: docs = [{ name, text }], values = Map(NAME -> number). Returns
+// { hits: [{ file, line, name, actual, quoted, snippet, xfail }], checked } — `checked` is the count of
+// gloss sites actually compared. It is REPORTED so a green run proves it did work: a matcher that has
+// been narrowed (or broken by a regex edit) into matching nothing shows up as `checked` collapsing to
+// ~0 rather than as a silent pass. lint-docs.test.mjs pins a floor under it for the same reason.
+//
+// THE MATCHER is an ADJACENCY grammar, and the tightness is the whole design. Only a literal in a
+// GLOSS position — directly attached to the name across whitespace / backticks / bold markers / one
+// relational or bracket character — is read as a restatement of the value. Crucially the glue carries
+// NO LETTERS, and that single rule is what makes historical prose safe INSIDE a governed doc: the
+// repo writes history as "`FLOOR_CAUTION_RANGES`, MEASURED 2026-08-08 — was 1.0", and the words
+// between break adjacency, so the old value is never read as a claim about the current one.
+// Three further structural rules, each earned against a real false positive in this corpus:
+//   (a) `A → B` (or `A -> B`) is a TRANSITION record; judge B, the current value. This is the repo's
+//       standard way of writing a threshold move ("`FLOOR_CAUTION_RANGES` 1.0 → 1.5").
+//   (b) a literal in a hyphen COMPOUND is a unit label, not a value ("`FIVE_MIN_MIN_DAYS` 5m-grain").
+//   (c) backward glue (literal BEFORE name, "the 250k `MIN_GPD` floor" — the anchor incident's own
+//       phrasing) allows no operator and no digit/word/hyphen immediately before the literal, so
+//       "chunk-6 `BIG_TICKET_GP`", "2026-08-08 — `FLOOR_CAUTION_RANGES`" and "`X`=21 > `Y`" don't bind.
+export function findConstantDrift(docs, values, xfail = CONST_XFAIL) {
+  const GLUE_FWD = String.raw`[\s\`*]{0,3}(?:[=≥≤><:—–-])?[\s\`*]{0,3}[(\[]?[ ]{0,2}[~≈]?[ ]{0,2}`;
+  const GLUE_BWD = String.raw`[\s\`*]{0,3}`;
+  const ARROW = String.raw`(?:[ ]{0,2}(?:→|->)[ ]{0,2}${CONST_LITERAL})?`;
+  const hits = [];
+  let checked = 0;
+  for (const { name: file, text } of docs) {
+    if (text == null) continue;
+    const lines = text.split('\n');
+    for (const [name, actual] of values) {
+      if (!text.includes(name)) continue;                                  // cheap reject
+      // IDENT boundaries are load-bearing: six real names in this repo are SUFFIXES of another
+      // (`TOP_DEFAULT` inside `VALUE_TOP_DEFAULT`=25, `MIN_ROI` inside `SCALP_MIN_ROI`=2, …). Without
+      // them, a doc correctly glossing the LONGER name would be flagged against the SHORTER one's value.
+      const ident = `(?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])`;
+      const fwd = new RegExp(ident + '`?' + GLUE_FWD + CONST_LITERAL + ARROW, 'g');
+      const bwd = new RegExp(String.raw`(?<![\w.-])` + CONST_LITERAL + GLUE_BWD + '`?' + ident, 'g');
+      lines.forEach((line, i) => {
+        for (const [dir, re] of [['after', fwd], ['before', bwd]]) {
+          re.lastIndex = 0;
+          let m;
+          while ((m = re.exec(line))) {
+            let numStr = m[1], suffix = m[2];
+            if (dir === 'after') {
+              if (m[3] != null) { numStr = m[3]; suffix = m[4]; }           // (a) transition: judge the RHS
+              if (/^-[A-Za-z]/.test(line.slice(m.index + m[0].length))) continue;   // (b) unit compound
+            }
+            const cands = constantCandidates(numStr, suffix);
+            if (cands == null) continue;                                    // unit-qualified: decline
+            checked++;
+            if (cands.some(v => Math.abs(v - actual) < 1e-9)) continue;     // agrees
+            hits.push({
+              file, line: i + 1, name, actual,
+              quoted: numStr + (suffix || ''),
+              snippet: m[0].trim(),
+              xfail: xfail[`${file}::${name}`] || null,
+            });
+          }
+        }
+      });
+    }
+  }
+  return { hits, checked };
+}
+
+// File-reading wrapper: read the governed docs + the source constant map, then delegate.
+export function runConstantDrift(docs = CONST_DOCS) {
+  const { values, conflicts } = scanSourceConstants();
+  const { hits, checked } = findConstantDrift(docs.map(rel => ({ name: rel, text: read(rel) })), values);
+  return { hits, checked, scanned: values.size, conflicts };
+}
+
 /* ================================== CLI / main ======================================= */
 function main() {
   let failed = 0;
@@ -360,12 +558,26 @@ function main() {
   for (const d of dups) console.error(`  ✗ DUP    in ${d.files.join(' + ')}: "${d.shingle}…"`);
   if (dups.length) failed += dups.length;
 
+  // CHECK 3
+  const { hits, checked, scanned, conflicts } = runConstantDrift();
+  const hardConst = hits.filter(h => !h.xfail);
+  const xfailConst = hits.filter(h => h.xfail);
+  console.log(`CHECK 3 — constant drift: ${scanned} source constant(s) vs ${CONST_DOCS.length} governed doc(s), ` +
+    `${checked} glossed site(s) compared, ${hits.length} stale literal(s) ` +
+    `(${xfailConst.length} xfail; ${conflicts.length} name(s) skipped as ambiguous).`);
+  for (const c of conflicts) console.log(`  ~ skip   ${c.name}: ${c.values.length} conflicting definitions (${c.sites.join(', ')})`);
+  for (const h of xfailConst) console.log(`  ~ xfail  ${h.file}:${h.line}: ${h.name} is ${h.actual}, doc says ${h.quoted}  (owned: ${h.xfail})`);
+  for (const h of hardConst) console.error(`  ✗ CONST  ${h.file}:${h.line}: ${h.name} is ${h.actual}, doc says ${h.quoted} — "${h.snippet}"`);
+  if (hardConst.length) failed += hardConst.length;
+
   if (failed) {
     console.error(`\n✗ doclint FAILED — ${failed} violation(s). Denylist: a deleted concept resurfaced; add the fix in place. ` +
-      `Duplicate: a spec was COPIED into >1 pointer doc — keep ONE home (the module header) + pointers, or allowlist legit shared boilerplate.`);
+      `Duplicate: a spec was COPIED into >1 pointer doc — keep ONE home (the module header) + pointers, or allowlist legit shared boilerplate. ` +
+      `Constant: a doc glosses a stale number onto a live constant — fix the doc to the SOURCE value (the source is truth), ` +
+      `or move the sentence to the historical record (CHANGELOG/LORE/plans, which are not governed).`);
     process.exit(1);
   }
-  console.log('\n✓ doclint passed — no resurrected drift, no copy-not-move duplication in the pointer docs.');
+  console.log('\n✓ doclint passed — no resurrected drift, no copy-not-move duplication, no stale constant literal.');
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

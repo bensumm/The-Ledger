@@ -42,9 +42,13 @@ export function readExchangeLog() {
   const logLines = rows.map(r => JSON.stringify(r)); // kept for callers that want the raw-line count
   const ep = l => Date.parse(l.date + 'T' + l.time);        // local wall-clock -> epoch
   const now = Date.now();                                    // real wall clock — detects a stalled log
-  // manual REMOVE tombstone lines carry no date/time → ep() is NaN; drop them before the max
+  // manual REMOVE tombstone lines carry no date/time → ep() is NaN; drop them before the max.
+  // reduce rather than Math.max(...spread), same reason read-buy-limits.mjs does: `rows` spans the
+  // whole retained log history and is unbounded, so a spread crashes past V8's ~65k argument
+  // ceiling; reduce has no ceiling.
   const validEps = rows.map(ep).filter(Number.isFinite);
-  const lastLog = validEps.length ? Math.max(...validEps) : now;
+  const lastLog = validEps.reduce((m, x) => (x > m ? x : m), -Infinity);
+  if (!Number.isFinite(lastLog)) return { logLines, rows, lastLog: now, staleMin: 0 };
   return { logLines, rows, lastLog, staleMin: Math.round((now - lastLog) / 60000) };
 }
 

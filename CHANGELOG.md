@@ -10,6 +10,57 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The plan-reference gate, and four plans folded off the back of it (2026-08-14)
+
+`plans/` was the one doc tree with no existence guard. `lint-arch.mjs` governs only ARCHITECTURE.md and
+GLOSSARY.md, and line 65 explicitly SKIPS every `PLAN-*.md` token as a transient working doc — so a plan
+could be deleted while live source still pointed at it and every check stayed green. Deleting a shipped plan
+is the routine end of its lifecycle (docs/PLANNING.md), which is exactly why the dangling pointer was easy to
+leave behind.
+
+**`pipeline/ci/lint-plan-refs.mjs` + `plan-folded.json`** closes it. Every plan token in scanned source/docs
+must resolve to a file in `plans/`, or appear in the folded baseline. It is a RATCHET over deletions, not a
+verdict on past ones: the 31 names already dangling when the baseline was seeded are grandfathered — those
+plans shipped and folded, and their names survive in code as commit-searchable provenance tags — and what it
+stops is the next one. `--refs <NAME>` is the check to run BEFORE deleting a plan; `--bless` refuses to add a
+name without `--force`, since the reflex fix for a red build is otherwise how a bad deletion gets laundered
+green.
+
+**It changed the deletion list on first run.** All four plans queued for deletion turned out to be referenced
+from live source — 5, 6, 6 and 7 files each. Reading those references showed they are provenance tags rather
+than "see the plan for the spec" pointers, so the deletes held; but that was a conclusion nobody had earned
+before. It also surfaced a false-positive class the first draft would have shipped: a comment header breaking
+a long plan name mid-token across two lines reads as two separate plans (2 of the first 33 hits), so names are
+rejoined before matching.
+
+Four plans folded, each audited against the code rather than its own header — and the headers were stale in
+BOTH directions:
+
+- **PLAN-DRIFT-VS-CRASH** — 100% shipped in the same commit that wrote it, and never given a Status line or a
+  scoreboard row. Spec verbatim in the `js/windowread.mjs` header; its four motivating cases survive as prose
+  AND as executable fixtures. Folded as FC1.
+- **PLAN-CASH-TRACKING** — header still read "do NOT implement from this doc" for work that shipped a month
+  earlier, and every file path in it was stale from the lib-subdirs reorg. Folded as CT1; the motivating
+  incident (a stated balance the resting escrow proved impossible) re-homed to `docs/LORE.md`.
+- **PLAN-POSITIONS-WINDOW-READ** — no Status line, future-tense prose over month-old code. Folded as WX1. One
+  re-homing: the big-ticket bar is an OUTPUT-NOISE bar, not a cost bar (the read is zero extra fetch), which
+  existed nowhere and invited an "optimization" in either direction off a false premise.
+- **PLAN-ARCHITECTURE-COHERENCE** — blocked its own deletion on chunks "preserved UNCOMMITTED" on a worktree
+  that no longer exists; both had since resolved. Folded as AR1–AR4. **AR2 was never built** — a sunset
+  condition for the `--admission legacy` `rankAndSlice` path — and is re-homed to `docs/ARCHITECTURE.md` as an
+  evidence-based trigger rather than dropped. Note that commit `4c8973a` is titled "AR2" but implements this
+  plan's AR3, and the in-tree comments inherit the wrong id; folding the plan removes the contradiction.
+
+Also in this pass: **`offers.mjs`'s `readExchangeLog` stops spreading an unbounded array into `Math.max`**.
+`rows` spans the whole retained log history, so the spread would crash past V8's argument ceiling on a
+long-enough log. Commit `ceb538b` fixed this exact pattern in `read-buy-limits.mjs` and left this site; it now
+uses the same `reduce`, with the `-Infinity` result guarding the empty case the old `.length` test did.
+
+Both new guards caught errors in the very edits that introduced them — `lint-plan-refs` rejected placeholder
+names in its own README prose, and `lint-docs` fired `DUP` on doctrine copied into CLAUDE.md and README
+instead of pointed at. Pipeline/CI/doc-only; `js/windowread.mjs` changed by one comment, so no APP_VERSION
+bump.
+
 ### 0.74.5 — the consumer sweep: the clause reaches the surfaces that quote the price (PLAN-DIURNAL-RECENCY-GUARD Chunk 2c, 2026-08-12)
 
 Chunk 2b fixed five sites in the file where the Green-dragon-leather miss happened. This chunk asked the
