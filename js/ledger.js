@@ -8,6 +8,7 @@
    logic changed. `realised`, `renderCoffer`, `FILLS_STALE_MS` and `fmtAge` stay in ui.js
    (shared with the Coffer/Scan surfaces) and are imported back here. */
 import { STATE, sSet, logEvent, setHealth, IS_LOCALHOST } from './state.js';
+import { breakEven } from './quotecore.js';
 import { tax, netMarginQty, now } from './money-math.js';
 import { fmt, fmtP, parseGp, pad2, sgn } from './money-format.js';
 import { resolveItem, resolveId } from './market.js';
@@ -74,7 +75,13 @@ export async function addTrade(){
     let sell=parseGp(document.getElementById('tSell').value);
     if(isNaN(sell)||sell<=0){ alert('Enter a sell price.'); return; }
     const tx=document.getElementById('tTax');
-    if(tx && tx.dataset.mode==='post') sell=Math.round(sell/0.98); // net gp received → store pre-tax so the pipeline nets the 2% itself
+    // net gp received → store the pre-tax listing so the pipeline nets the 2% itself. MUST be the shared
+    // tax-capped breakEven(), never a local `/0.98`: that plain inverse is wrong in tax()'s two FLAT
+    // regions — below the 50gp exemption (40 → 41, inventing a gp) and above the per-unit cap, where a
+    // 1.6b sell stored 1,632,653,061 instead of 1,605,000,000 and the pipeline booked ~27.7m of profit
+    // that never existed. add-manual-fill.mjs's --net path already calls breakEven; this is the same
+    // operation on the app side, so it uses the same ONE definition.
+    if(tx && tx.dataset.mode==='post') sell=breakEven(sell);
     each=sell;
   } else if(mode==='buy'||mode==='banked'){
     const buy=parseGp(document.getElementById('tBuy').value);
