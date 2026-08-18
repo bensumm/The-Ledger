@@ -1,5 +1,15 @@
 # PLAN-WIKI-CONTEXT — item game-context enrichment (wiki metadata as an inform-only lens)
 
+**Status: NOT STARTED — WC1/WC2/WC3/WC4 all unscheduled, no code exists.** Verified by grep: neither
+`pipeline/lib/wikimeta.mjs` nor the curated bot-exposure tag file exists, and nothing fetches or caches
+wiki metadata. The doc is a scoped proposal plus its evidence section, kept because the evidence (what
+the wiki actually serves, and the coverage check) is the expensive part and would have to be re-gathered.
+Nothing here is gated on another plan; it is simply unpicked. ⚠ **NAME COLLISION to resolve before
+building WC2:** an `itemContext` concept ALREADY exists and is unrelated to this plan —
+`pipeline/lib/market/item-context.mjs`'s `buildItemContext` is the Pipeline-v2 P0 context chain,
+consumed by `quote-items.mjs`. Do not reuse that name (WC2's sketched `getItemContext` would read as
+the same thing); pick a wiki-specific one.
+
 Untracked planning doc (2026-07-16). Per the fold-out discipline this file folds into
 `PLAN.md` when scheduled and is deleted when its last chunk ships. Executor rules =
 PLAN.md "Executor rules", verbatim.

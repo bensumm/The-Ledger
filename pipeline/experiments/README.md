@@ -134,7 +134,7 @@ of that window, not predictive. Nothing in them has been encoded into a gate or 
 
 - **`floor-strategy-study.mjs` → `FLOOR-STRATEGY-FINDINGS.md`** — is "this item is at its N-day low"
   (N ∈ 1/3/7/14/30) a buy signal? **No.** A RE-MEASUREMENT, not a fresh investigation: Ben asked a
-  near-identical question one day after `plans/PLAN-DAY-LOW-SURFACING.md` closed it as a measured
+  near-identical question one day after PLAN.md's `DL-0/DL-1–3` row closed it as a measured
   negative, so this was run under a different construction to see whether that closure survived a
   second look. It does, cell-for-cell. `--section a|b|c|d`, `--json <path>`; read-only over the `/1h`
   SQLite archive via `pipeline/lib/market/archive.mjs`, tax from `js/money-math.js`; writes nothing

@@ -1,11 +1,9 @@
 /**
  * gatecandidates.mjs — the screen's pure candidate-selection + survival doctrine (P1).
  *
- * Extracted from screen-flip-niches.mjs (GC1 first pulled `gateCandidates`/`risingPoolFloor` out as exported,
- * threshold-driven functions behind screen-flip-niches.mjs's invocation guard; P1 relocated the whole
- * pool-selection + post-fetch-doctrine cluster HERE so it is node-importable + fixture-testable with
- * synthetic data and no live network). The LOGIC is byte-identical to the pre-P1 inline screen-flip-niches.mjs
- * code — this is a pure MOVE. screen-flip-niches.mjs imports everything back and calls it exactly where it did.
+ * The pool-selection + post-fetch-doctrine cluster lives HERE (out of screen-flip-niches.mjs) so it is
+ * node-importable + fixture-testable with synthetic data and no live network. screen-flip-niches.mjs
+ * imports it all back and calls it where the logic would otherwise sit inline.
  *
  * The four concerns that live here (all pure, no CLI/network/fs state):
  *   1. gateCandidates(mode, ctx, thresholds) — the PRE-FETCH gate stack (two-sided liquidity OR
@@ -25,9 +23,9 @@
  *      the disc.rescued counter (which increments on rescue even if a later gate drops the row).
  *   4. expUnits — the shared throughput predicate the above and the watchlist path reuse.
  *
- * PIN NOTE (P1 → re-pinned at P5): surviveMode encodes the CURRENT pre-amendment falling-exclusion
- * behavior (falling ⇒ dropped unless --phase-rescue basing). Ben's 2026-07-08 falling amendment
- * lands at P5 — the fixtures here will change then, and that diff IS the doctrine change.
+ * FALLING DOCTRINE (P5): PER-SPEC, never a global exclusion — a faller is not necessarily a poor buy
+ * ("we cannot judge falling without its history and typical fluctuations"). surviveMode reads
+ * `spec.falling`; its header carries the per-value semantics and the held-item bypass.
  *
  * ALL numeric math (the spec edges' tax, overnightStaleRisk, median) is the shared impl (tax lives in
  * flip-niches.mjs's edge functions now, imported from js/money-math.js there), so the numbers stay
@@ -67,33 +65,30 @@ import { eachStructuralCandidate, DEFAULT_STRUCTURAL } from './structural-admiss
 // that don't supply one). Values mirror screen-flip-niches.mjs's `A.<flag> != null ? … : <default>` fallbacks.
 export const DEFAULT_THRESHOLDS = {
   FLOOR: 3500, MIN_ROI: 1.5, MIN_PRICE: 0, MAX_PRICE: 45e6, MIN_NET_GP: 100_000,   // PLAN-VOL24 step 2: FLOOR 50 → 3500 (mirrors screen-flip-niches.mjs; count-matched to the corrected rolling-24h volume)
-  // Bar D (Ben 2026-07-09): the traded-band gate reads tradedWin (density) + sawLow/sawHigh (two-sided),
-  // NOT the same-5m-window active5m count that structurally culled big tickets. MIN_TRADED = dense floor,
+  // Bar D: the traded-band gate reads tradedWin (density) + sawLow/sawHigh (two-sided), NOT the
+  // same-5m-window active5m count that structurally culled big tickets. MIN_TRADED = dense floor,
   // MIN_TRADED_THIN = the relaxed floor for gp-flow big tickets (2 ⇒ a lone spike still fails).
-  // MIN_GPD 500k → 250k (Ben, 2026-08-08), paired with the 6→2 refill haircut above and meaningless
-  // without it: cutting churn's multiplier ~3× while holding a 500k floor would have made the board
-  // STRICTER on churn than before, not rebalanced. Big tickets are volume-bound so the haircut misses
-  // them entirely — the halved floor is what actually lets them surface. EXPERIMENTAL, tune freely.
+  // MIN_GPD is PAIRED with the 6→2 refill haircut and meaningless without it: cutting churn's multiplier
+  // ~3× while holding the old doubled floor would make the board STRICTER on churn, not rebalanced. Big
+  // tickets are volume-bound so the haircut misses them entirely — the halved floor is what actually lets
+  // them surface. EXPERIMENTAL, tune freely.
   MIN_TRADED: 6, MIN_TRADED_THIN: 2, MIN_GPD: 250_000, GP_FLOOR: 4_500_000_000,   // PLAN-VOL24 step 2: GP_FLOOR 250m → 4.5b (corrected gp-flow)
   // P5 value niche — the MIN_GPD gp/day THROUGHPUT floor is REPLACED by valuescreen's after-tax
   // cycle-amplitude floor (a slow-hold has low daily velocity but big cycle appreciation). What value
   // relaxes is the gp/day THROUGHPUT bar, NOT the two-sided UNIT-liquidity bar: you still have to exit a
-  // (large-ish) held position at the cycle top, so the item needs a genuine two-sided market. Ben 2026-
-  // 07-09: raised 20 → 50 (= the base FLOOR) after the value scan surfaced 1/d–6/d untradeable rows
-  // (Adamant halberd 6/d, Gloves of silence 1/d) — a hold you can't exit isn't a hold. PLACEHOLDER
-  // (rule 4). Two-sided liquidity (hpv>0 && lpv>0) stays non-negotiable.
-  // PLAN-VOL24 step 2: 50 → 3500, tracking the base FLOOR against the CORRECTED rolling-24h volume.
-  // (The 2026-07 rationale read "the /24h endpoint under-reads ~10–27×, so the old 50 was ~18× too loose
-  // in corrected units". The ratio is history — /24h measures ~1.0× as of 2026-08-10, see the
-  // marketfetch.mjs loadAll24hRolling header — but 3500 was COUNT-MATCHED to the corrected distribution,
-  // so it is anchored empirically and unaffected by the ratio being wrong.)
+  // (large-ish) held position at the cycle top, so the item needs a genuine two-sided market: at a 20/d
+  // floor the value scan surfaced untradeable 1/d–6/d rows (Adamant halberd 6/d, Gloves of silence 1/d),
+  // and a hold you can't exit isn't a hold. So this TRACKS the base FLOOR, COUNT-MATCHED to the CORRECTED
+  // rolling-24h volume distribution — anchored empirically, NOT off any "/24h under-reads ~10–27×" ratio
+  // (that ratio measures ~1.0×; see marketfetch.mjs's loadAll24hRolling header). PLACEHOLDER (rule 4).
+  // Two-sided liquidity (hpv>0 && lpv>0) stays non-negotiable.
   VALUE_LIQ_FLOOR: 3500,
   // VALUE_CAP_GP: the per-position capital cap that bounds valueScore's deployable-units (bankroll leg). NOT
   // a fixed doctrine number — screen-flip-niches.mjs derives it from --capital ÷ --slots (Ben's current capital spread
   // across the positions we'd hold). This default (≈ 100m ÷ 5 slots) serves fixtures / import callers that
   // don't supply one. PLACEHOLDER (rule 4).
   VALUE_CAP_GP: 20_000_000,
-  // PLAN-CAPITAL-THROUGHPUT (Ben 2026-07-14) — the band/churn expGpDay is now CAPITAL-AWARE. THROUGHPUT_CAP_GP
+  // PLAN-CAPITAL-THROUGHPUT — the band/churn expGpDay is CAPITAL-AWARE. THROUGHPUT_CAP_GP
   // is the FULL derived deployable pool (NOT ÷slots — unlike VALUE_CAP_GP): the attention floor asks "if I
   // dedicate everything to this ONE lane, can it net MIN_GPD/day?"; if not, skip. THROUGHPUT_MODE 'capital'
   // (default) applies the affordable-units cap in expUnits; 'legacy' restores the pre-change capital-blind
@@ -123,8 +118,8 @@ export const VALUE_TOP_DEFAULT = 25;
 export const VALUE_RESERVE_DEFAULT = 6;
 // A2 — the amplitude niche's HARD top-N (same flood-control shape as value; the Stage-1 proxy pool can be
 // large, so rank by ampProxy and take a bounded shortlist to fetch the per-item 1h series for). PLACEHOLDER.
-// F-D (Ben 2026-07-22): WIDENED 25→40 to surface more of the big-ticket oscillator class the top-25 cut hid
-// (a read-only top-60 run surfaced Virtus set/robe, Oathplate, Tormented synapse). Costs ~+15 fetches/scan;
+// F-D: 40 rather than 25, to surface the big-ticket oscillator class a top-25 cut hides (a read-only
+// top-60 run surfaced Virtus set/robe, Oathplate, Tormented synapse). Costs ~+15 fetches/scan;
 // they verify sub-1% off the median-peak basis, so this is VISIBILITY, not new edge — the margin gate + the
 // verify trio still govern. The F-B watchlist RESERVE is the complementary targeted path (a named straggler
 // below this cut still gets a slot); this is the general net-widen.
@@ -157,9 +152,9 @@ export function scaleSlots(base, { capital = null, capRef = CAP_REF, scale = POO
   return Math.min(max, Math.round(widened));
 }
 
-// P6c — empty-result sub-floor fallback sizing + honesty cap (Ben, 2026-07-09: when a niche's floors
-// leave ZERO candidates, re-run BENEATH the floor and show the best few HONESTLY LABELED — never
-// silently lower the bar). Both are named PLACEHOLDERS (rule 4): the cap count is a small "best few",
+// P6c — empty-result sub-floor fallback sizing + honesty cap: when a niche's floors leave ZERO
+// candidates, re-run BENEATH the floor and show the best few HONESTLY LABELED — never silently lower
+// the bar. Both are named PLACEHOLDERS (rule 4): the cap count is a small "best few",
 // and the grade ceiling makes a sub-floor row structurally unable to print a headline grade (it did
 // NOT clear the attention/liquidity bar, so it must never read like a qualified pick).
 export const SUBFLOOR_TOP = 5;
@@ -167,14 +162,12 @@ export const SUBFLOOR_GRADE_CAP = 'C';
 
 // realistic expected units/day: `limit × windows`, capped at a 10% share of the limiting-side daily
 // volume. Null limit → volume share only.
-// ⚠ `windows` DEFAULTS TO `ACTIONABLE_WINDOWS_PER_DAY` = **2**, NOT the physical 6. This line said
-// "buy-limit refreshes ~every 4h → 6 limits/day" until 2026-08-10 — i.e. the DEFINITION SITE still
-// described the pre-2026-08-08 behavior while the constant it takes its default from had been halved
-// three times over. The physical 6 (`REFILL_WINDOWS_PER_DAY`, a game rule) is a DIFFERENT constant and
-// is not what this function uses by default; see js/desk-cadence.mjs for why they diverge.
-// PLAN-CAPITAL-THROUGHPUT (Ben 2026-07-14): optional PER-WINDOW capital cap — `capPerWindow` = units the
+// ⚠ `windows` DEFAULTS TO `ACTIONABLE_WINDOWS_PER_DAY` = **2**, NOT the physical 6. Do NOT describe this
+// as "buy-limit refreshes ~every 4h → 6 limits/day": that is the game rule (`REFILL_WINDOWS_PER_DAY`), a
+// DIFFERENT constant and not what this function uses by default. See js/desk-cadence.mjs for the divergence.
+// PLAN-CAPITAL-THROUGHPUT: optional PER-WINDOW capital cap — `capPerWindow` = units the
 // deployable bankroll affords in ONE 4h buy-window (deployablePool / price). It answers Ben's "for THIS
-// price, how many can I realistically capture" — the old two caps measured MARKET capacity (limit +
+// price, how many can I realistically capture" — the other two caps measure MARKET capacity (limit +
 // volume share), capital-blind. The cap enters INSIDE the per-window multiplier (not as a separate
 // whole-day cap) because
 // churn RECYCLES intra-day: you deploy a tranche, it sells within the window, and the freed capital
@@ -187,9 +180,9 @@ export const SUBFLOOR_GRADE_CAP = 'C';
 // positions, exactly the intended demotion. null capPerWindow → legacy (no capital term), so every
 // existing caller (overnight, watchlist, fixtures) is byte-for-byte unchanged.
 // PHYSICAL vs ACTIONABLE refill windows — the rationale, the ⚠ floor-recalibration warning, and the
-// ruling's still-unmodelled half now live in ONE home: `js/desk-cadence.mjs`. They were duplicated
-// here and in valuescreen/amplitudescreen and drifted apart the moment the 6→2 haircut landed
-// (2026-08-08 moved this one, left the other two at 6 still claiming to "mirror expUnits").
+// ruling's still-unmodelled half live in ONE home: `js/desk-cadence.mjs`. Duplicating them here and in
+// valuescreen/amplitudescreen is exactly what let the copies drift apart under the 6→2 haircut (one
+// moved, the others stayed at 6 while still claiming to "mirror expUnits").
 // Imported (NOT `export … from`, which would re-export without binding them locally — `expUnits`'s
 // default parameter below needs the local binding) and re-exported, so every existing importer of
 // these names keeps working unchanged.
@@ -200,9 +193,9 @@ export const expUnits = (limit, volDay, capPerWindow = null, windows = ACTIONABL
   const perWindow = limit != null ? Math.min(limit, capPerWindow) : capPerWindow;          // + per-window affordability
   return Math.min(perWindow * windows, vShare);
 };
-// COD-2 (2026-07-10) — realistic expected units accumulated over the OVERNIGHT window (the /overnight
-// §6 accumulation sizing, previously hand-computed in the skill as min(buyLimit×2, 8/24×0.10×volDay)
-// with a PROSE plea to "keep the constants aligned with expUnits"). This IS that formula, but derived
+// COD-2 — realistic expected units accumulated over the OVERNIGHT window (the /overnight §6
+// accumulation sizing; the skill's hand-computed min(buyLimit×2, 8/24×0.10×volDay) plus a PROSE plea to
+// "keep the constants aligned with expUnits"). This IS that formula, but derived
 // by SCALING expUnits to the OVERNIGHT_SPAN_H window so the 6-limits/day (24/4h) and 10% volume-share
 // constants can NEVER drift from the day figure: min(a,b)·k = min(a·k, b·k), so multiplying the whole
 // expUnits result by SPAN/24 is exact — min(limit·6, 0.10·volDay)·(8/24) = min(limit·2, 8/24·0.10·volDay).
@@ -288,7 +281,7 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
     if (!edge) return null;
     const { modeNet, activeWin } = edge;
     if (modeNet <= 0) return null;
-    // PLAN-CAPITAL-THROUGHPUT (Ben 2026-07-14): expGpDay is CAPITAL-AWARE — the PER-WINDOW buy is capped by
+    // PLAN-CAPITAL-THROUGHPUT: expGpDay is CAPITAL-AWARE — the PER-WINDOW buy is capped by
     // what the deployable bankroll affords one tranche of at this price (capPerWindow = pool / mid; mid is
     // the gp-flow price proxy this gate already uses at line ~155). THROUGHPUT_MODE 'legacy' or a null cap
     // restores the capital-blind value. expGpDayLegacy is carried on the candidate so screen-flip-niches.mjs can log it
@@ -303,10 +296,10 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
     const expGpDayLegacy = Math.round(expUnits(limit, limitVol) * modeNet);
     // MIN_GPD/day attention floor — pre-rating, so no grade ever advertises a sub-floor row. Thin gp-flow
     // qualifiers are EXEMPT (a unit/gp-day count mismeasures them — see MIN_GPD note). A HELD item is
-    // EXEMPT too (2026-07-16 — was a prose-only "held/asked items are exempt" comment right here with
-    // no code behind it, confirmed by grep; now code-enforced, same held-item exception as surviveMode's
-    // falling bypass below). Held items never reach this file with a real gp-flow reading if the market
-    // moved against them — dropping them here would be the exact "silently vanishes" failure this fixes.
+    // EXEMPT too — CODE-enforced here, not a prose-only "held/asked items are exempt" note (same
+    // held-item exception as surviveMode's falling bypass below). Held items never reach this file with a
+    // real gp-flow reading if the market moved against them — dropping them here would be the exact
+    // "silently vanishes" failure this prevents.
     const held = heldIds.has(id);
     if (!thin && !held && expGpDay < t.MIN_GPD) return null;
     // volDay (MT2, PLAN-MID-TIER-ADMISSION) — TOTAL two-sided daily volume, carried so admission.mjs's
@@ -365,7 +358,7 @@ function gateValueCandidates(ctx, t = DEFAULT_THRESHOLDS) {
    rankAndSlice can hard top-N by it. A cold/short archive slice → null proxy → not a candidate (the
    honest degrade — never a fake amplitude).
 
-   F-B (2026-07-22, PLAN-OSCILLATION-CYCLE post-landing follow-up): `watchedIds` (repo-root
+   F-B (PLAN-OSCILLATION-CYCLE): `watchedIds` (repo-root
    watchlist.json, the SAME set the S3 always-scanned watchlist pass already reads) BYPASSES the
    AMP_STAGE1_MIN_PCT proxy floor — a watchlisted big-ticket whose proxy reads below the floor (or is
    null on a cold archive slice) still becomes a candidate, carrying `watched:true` so rankAndSlice can
@@ -515,7 +508,7 @@ export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESER
   // by design; a riser already high on expGpDay is a no-op (it was already at the front).
   const risers = nonThin.filter(c => (c.proxyDrift ?? 0) > 0).sort((a, b) => b.proxyDrift - a.proxyDrift).slice(0, risingReserve);
   const riserIds = new Set(risers.map(c => c.id));
-  // HELD RESERVE (2026-07-16, same family as thin/rising above): a held item that cleared the gate
+  // HELD RESERVE (same family as thin/rising above): a held item that cleared the gate
   // above must not still vanish here just for ranking below the velocity cutoff. UNBOUNDED by design —
   // there are only ever a handful of held lots at once (never a flood risk like the thin/rising pools),
   // so every held survivor gets a guaranteed slot rather than a capped reserve.
@@ -536,16 +529,16 @@ export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESER
 //     is ultimately kept or dropped by a later gate. The caller: `if (rescued) disc.rescued++`.
 // opts: { phaseRescue, posture, thin, series5m } — series5m is THIS item's raw 5m series (for the
 // overnight staleness read), i.e. renderMode's `series5m && series5m.get(id)`.
-// P5 — the falling doctrine is now PER-SPEC (Ben's 2026-07-08 amendment: a faller is not necessarily a
-// poor buy — "we cannot judge falling without its history and typical fluctuations"). surviveMode reads
-// spec.falling instead of a hardcoded global exclusion:
+// P5 — the falling doctrine is PER-SPEC (the falling amendment: a faller is not necessarily a poor buy —
+// "we cannot judge falling without its history and typical fluctuations"). surviveMode reads
+// spec.falling; there is no hardcoded global exclusion:
 //   'exclude'     — falling ⇒ dropped (unless --phase-rescue basing, OR opts.held — see below). The
-//                   four original niches keep this → byte-identical (the replay goldens pin it) for a
-//                   NON-held row. 'knife-guard' (value) also lands here defensively, but value never
-//                   reaches surviveMode — its knife guard is valueGate.
+//                   four original niches carry this, pinned by the replay goldens for a NON-held row.
+//                   'knife-guard' (value) also lands here defensively, but value never reaches
+//                   surviveMode — its knife guard is valueGate.
 //   'accept'      — falling is a VALID candidate (scalp EXPECTS a falling wide band); not dropped for
 //                   the regime alone. Its intraday tripwire lives in offerVerdict/the path engine.
-//                   Step 5 (2026-07-09): scalp goes further — a scalp-mode CONFIRM below REQUIRES falling
+//                   Step 5: scalp goes further — a scalp-mode CONFIRM below REQUIRES falling
 //                   (a non-falling scalp is a band flip → dropped 'notFalling'), so scalp = fallers only.
 export function surviveMode(mode, row, phase, opts = {}) {
   const { phaseRescue = false, posture = 'active', thin = false, series5m = null, held = false } = opts;
@@ -553,9 +546,9 @@ export function surviveMode(mode, row, phase, opts = {}) {
   const fallingDoctrine = spec ? spec.falling : 'exclude';
   let rescued = false;
   let heldFallingOverride = false;
-  // HELD-ITEM EXCEPTION (was prose-only in the /scan skill: "items Ben holds ... always show, with
-  // price-to-clear" — moved to code 2026-07-16 so it can't silently depend on the agent remembering
-  // to check). A held item's regime can flip to 'falling' between one pass and the next with NO
+  // HELD-ITEM EXCEPTION — CODE, not /scan skill prose ("items Ben holds ... always show, with
+  // price-to-clear"), so it cannot silently depend on the agent remembering to check.
+  // A held item's regime can flip to 'falling' between one pass and the next with NO
   // warning otherwise — this is the ONLY bypass the exception covers; posture/notFalling drops below
   // are untouched (the exception is specifically about the exclude-fallers doctrine, not every gate).
   if (row.falling && fallingDoctrine !== 'accept' && held) {
@@ -564,8 +557,7 @@ export function surviveMode(mode, row, phase, opts = {}) {
     if (phaseRescue && phase && phase.phase === 'basing') rescued = true;   // decayed off a spike, lows flattened
     else return { keep: false, discardReason: 'falling', rescued: false, heldFallingOverride: false };  // screen rule: never surface fallers
   }
-  // Post-fetch CONFIRM — SPEC-DRIVEN (P4c → N2, 2026-07-14: was `mode === 'scalp'` plus a dead
-  // `mode === 'rising'` branch for the deleted niche; `spec.confirm` was declared+validated but unread).
+  // Post-fetch CONFIRM — SPEC-DRIVEN (P4c → N2): read `spec.confirm`, never a `mode === …` branch.
   // A spec that declares `confirm: 'falling'` (scalp) positively REQUIRES a falling regime:
   // spec.falling='accept' stops the exclusion above from dropping the faller, and this confirm ALSO drops a
   // NON-falling row ('notFalling') — a scalp on a non-falling item is just a band flip band already owns.

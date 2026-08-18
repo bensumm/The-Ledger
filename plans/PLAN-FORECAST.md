@@ -1,5 +1,16 @@
 # PLAN-FORECAST — forward 12h/24h price projection from hourly history
 
+**Status: PF1 SHIPPED and in live use; PF1b OPEN (and it is the blocking one); PF8 — the graduation
+gate — NOT RUN, so everything here is still INFORM-ONLY.** `js/forecast.mjs` exists and is consumed by
+`quote-items.mjs`, `screen-flip-niches.mjs`, `read-window-range.mjs`, `js/windowread.mjs`,
+`js/estimators/pair.mjs` and `js/trends.js`, so the PF2–PF5 surface chunks have substantially landed —
+⚠ but read EACH chunk's own marker rather than this line for the per-chunk truth; several carry their
+own in-body `Status:` (PF1b's is at its heading, deep in the doc, which is why the head of this file
+read as unclassified for so long). **PF1b is the one to do first if this is picked up** — it is a
+CORRECTIVE to PF1's shipped model (quantile-flooring the projected peak, found live 2026-07-10) and it
+changes the model every one of those surfaces already reads. Nothing here may graduate past inform-only
+until PF8's validation study runs; that gate has not been touched.
+
 Untracked planning doc (2026-07-10). Per the fold-out discipline this file folds into
 `PLAN.md` when scheduled and is deleted when its last chunk ships. Executor rules =
 PLAN.md "Executor rules", verbatim.

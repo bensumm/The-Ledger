@@ -43,6 +43,19 @@ itself proves wrong, fix it HERE (reconciliation, not append — the CLAUDE.md r
 ## Chunk design rules
 
 - Small, independent, evidence-gated; each independently shippable and fixture-pinned.
+- **Chunk ids must be unique across the WHOLE `plans/` corpus, not just within their plan.** Commit
+  messages, `PLAN.md` Status rows and in-code comments all cite chunks by bare id, so a reused id is
+  ambiguous at exactly the moment someone is trying to trace why a line exists. Measured 2026-08-14:
+  `AC1–AC6` was live in THREE plans at once (ESTIMATOR-POSTURE, REACH-CALIBRATION, PERF-1H-ARCHIVE),
+  so "AC4" named three different open chunks; `R1–R8`, `A1–A6`, `WC1–WC3` and `Q1–Q4` each collided
+  two ways. Pick a prefix unique to the plan (`RF*`, `DT*`, `MT-V2/*`) and check it with
+  `node pipeline/ci/lint-plan-refs.mjs --collisions` before you write the chunk list.
+  Two id spaces are RESERVED and must never be reused by a plan: **`F1`** means the project-wide
+  calibration gate everywhere else in this repo, and **`G1`** means the `main`-branch ruleset in
+  CLAUDE.md. Both have already been taken by a plan's own chunk and both caused confusion.
+- **Don't number non-chunks in chunk style.** Findings, failure modes, dataset rows and answer
+  sections labelled `A1`/`F1`/`D1` are indistinguishable from chunk ids in a commit subject. Label
+  them with a word (`finding 1`, `risk C`), and keep the letter-number space for shippable chunks.
 - **Foundations first, bug-fixes first:** a chunk that kills live pain (the P0 pattern) lands
   before architecture; a data/layer foundation lands before its consumers.
 - **Mechanical moves are separate chunks from behavior changes**, each refactor proven

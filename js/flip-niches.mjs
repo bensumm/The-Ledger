@@ -301,7 +301,12 @@ export const FLIP_NICHE_LIST = Object.freeze([
     // invest` (nothing removed; the `value` KEY + retro history + replay goldens are untouched — reverting
     // is one word). Its display LABEL is 'Invest' now (§3 — it IS a multi-week capital-commitment bet; the
     // ledger key stays 'value' so the suggestions ledger/goldens don't fork). Decide value's fate on the
-    // head-to-head per-attention after amplitude has a few weeks of record.
+    // head-to-head per-attention after amplitude has a few weeks of record — the BASELINE to beat is
+    // value's own record at the swap: 15,018 suggestions → 1 fill → +37.9k realized → +3 per-attention,
+    // the weakest per-attention on the board. That is "hasn't earned its keep", NOT proof it is
+    // worthless: the take-rate was ~0% on every lane, so the comparison is between two unmeasured
+    // things. The KNOWN COST of the swap is that value's one unique lane — the truly-illiquid
+    // multi-week bet that amplitude's daily-reach gate will not surface — goes dark for the trial.
     key: 'value', label: 'Invest', inAll: false,
     edge:valueEdge, rank: 'value', confirm: null,
     // value KEEPS reach — as a full-day week+ daily-min TIMING read (windowHours 24 / 14 nights), not an

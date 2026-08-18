@@ -24,6 +24,10 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..', '..');   // HERE=pipeline/ci; up two -> repo root
 
 // Docs whose code-font file references are guarded (extend as more durable docs adopt the contract).
+// The narrow scope is DELIBERATE and the cost of widening it was measured: the other ~18 docs carry
+// ~532 file-ish tokens of which ~54 don't resolve, and a sample read as benign (illustrative names,
+// prose examples) rather than as drift. Adopting a doc therefore means triaging its 54 first, not
+// flipping a switch. Every place that describes this guard states the two-doc scope — keep it that way.
 const DOCS = ['docs/ARCHITECTURE.md', 'docs/GLOSSARY.md'];
 
 // Referenced files that intentionally don't exist YET (the doc must mark each "(proposed)"/"planned").

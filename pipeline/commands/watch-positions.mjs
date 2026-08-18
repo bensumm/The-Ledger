@@ -2,48 +2,38 @@
 /**
  * watch-positions.mjs — ADAPTIVE, item-type-aware live-session monitor (chunk 7).
  *
- * A market-aware companion to monitor-offers.mjs. Where monitor-offers.mjs is a LOG-STATE snapshot
- * (active offers / recent fills / held count from the exchange log, no market fetch),
- * watch-positions.mjs is the MARKET side of the loop: it re-quotes every held/target item live via
- * js/quotecore.js, classifies it by item TYPE, and drives a human-executed polling session
- * (the /loop skill, ~1–3 min) with:
+ * The MARKET side of the loop, sibling to monitor-offers.mjs (the raw LOG-STATE snapshot: active offers /
+ * recent fills / held count, no market fetch). This re-quotes every held/target item live via
+ * js/quotecore.js, classifies it by item TYPE, and drives a human-executed polling session (/loop, ~1–3 min):
  *   - per-item CLASS  → recommended attention cadence + which playbook applies
  *   - live re-quoted buy-at / list-at prices (list-at is ALWAYS break-even-floored)
  *   - DROP / CUT alerts via the SHARED chunk-6 cut-trigger momVerdict()
- *   - a compact per-item RISK read (spread · two-sided liquidity · regime · ticket/exposure)
- *     with an adverse-selection warning, and the scalp/market-make playbook gated to
- *     ranging-wide-spread items ONLY.
+ *   - a compact per-item RISK read (spread · two-sided liquidity · regime · ticket/exposure) with an
+ *     adverse-selection warning, and the scalp/market-make playbook gated to ranging-wide-spread items ONLY.
+ * Log discovery + open-offer semantics are SHARED via offers.mjs (one owner, both import it).
  *
- * Why a sibling and not an edit to monitor-offers.mjs: monitor-offers.mjs is the raw log-state snapshot
- * (no market fetch); watch-positions.mjs owns market fetch + quotecore classification. Log discovery
- * and open-offer semantics are SHARED via offers.mjs (one owner, both import it).
- * Run monitor-offers.mjs for the raw log state; run watch-positions.mjs to decide what to do.
- *
- * DEFAULT is quiet: prints ONE summary line + the last-report dump path, not the markdown table.
- * The report object is ALWAYS written to pipeline/.cache/last-report/watch.json (gitignored,
- * overwritten per run) — read THAT file for the actual data, never the summary line. Pass
- * --verbose for the markdown table (Ben's terminal read / the "paste this" case). AO1.
+ * DEFAULT is quiet: ONE summary line + the last-report dump path. The report object is ALWAYS written to
+ * pipeline/.cache/last-report/watch.json (gitignored, per-run) — read THAT, never the summary line (AO1).
  *
  * GUARDRAILS (hard):
  *   - HUMAN-EXECUTED DECISION SUPPORT ONLY. This tool NEVER places or cancels a GE offer —
  *     automating GE interaction is botting and bannable. It tells you WHEN to act; you click.
- *   - READ-ONLY w.r.t. the MARKET and POSITIONS: it never places/cancels a GE offer and never
- *     writes fills.json / positions.json / any market file. It DOES append each read to the
- *     analytics suggestions.jsonl ledger (O1) — that's a passive record of what was recommended,
- *     not a market action.
+ *   - READ-ONLY w.r.t. the MARKET and POSITIONS: it never places/cancels a GE offer and never writes
+ *     fills.json / positions.json / any market file. It DOES append each read to the analytics
+ *     suggestions.jsonl ledger (O1) — a passive record of what was recommended, not a market action.
  *   - No reimplemented quote/tax/regime/momentum math — ALL of it is js/quotecore.js.
  *
- * POSITION = any committed capital (Ben's definition, 2026-07-04): held inventory PLUS
- * every active GE offer — a resting BUY is capital committed to buying, a resting SELL is
- * held inventory being sold. The default run therefore watches BOTH:
- *   - held basis = repo-root positions.json OPEN lots (the pipeline's WITHDRAWN/BANKED-aware
- *     FIFO from reconstruct.mjs, written by sync-fills.mjs — the booked view, ~20m sync lag,
- *     printed so a very recent trade's lag is visible);
- *   - active offers = the live exchange log via offers.mjs (~0 lag): asks annotate their held
- *     row (listed n/m @ X, or NOT LISTED as an exit-discipline nudge); bids get their own
- *     section + verdicts (BID-OK / BID-BEHIND / CROSSING / CANCEL-BID — the last also alerts:
- *     a bid filling into a breakdown/falling market is adverse selection, cancel it).
- *   Noise guard: offers under NOISE_OFFER_GP total value are collapsed to one ignored line.
+ * POSITION = any committed capital (Ben's definition): held inventory PLUS every active GE offer — a
+ * resting BUY is capital committed to buying, a resting SELL is held inventory being sold. A default run
+ * therefore watches BOTH:
+ *   - held basis = repo-root positions.json OPEN lots (the pipeline's WITHDRAWN/BANKED-aware FIFO from
+ *     reconstruct.mjs, written by sync-fills.mjs — the booked view, ~20m sync lag, printed so a very
+ *     recent trade's lag is visible);
+ *   - active offers = the live exchange log via offers.mjs (~0 lag): asks annotate their held row (listed
+ *     n/m @ X, or NOT LISTED as an exit-discipline nudge); bids get their own section + verdicts (BID-OK /
+ *     BID-BEHIND / CROSSING / CANCEL-BID — the last also alerts: a bid filling into a breakdown/falling
+ *     market is adverse selection, cancel it).
+ *   Noise guard: offers under NOISE_OFFER_GP total value collapse to one ignored line.
  *
  * Usage:
  *   node pipeline/commands/watch-positions.mjs                       # every position: held lots + active offers
@@ -51,8 +41,8 @@
  *   node pipeline/commands/watch-positions.mjs --targets-only "Ranarr weed"   # skip held+offers, watch only these
  *   node pipeline/commands/watch-positions.mjs --dip "Searing page"  # DL2: also watch dip-watchlist.json for LIQUID flushes (bid-into-the-fall)
  *   node pipeline/commands/watch-positions.mjs --cycle              # Chunk 4: adaptive per-item cycle-expectation notes (INFORM-ONLY; opt-in, additive)
- * Every run syncs fills first, unconditionally (2026-07-16) — local/zero-git, never blocks the pass
- * on failure. `--sync` still parses (harmless no-op) for any external caller that still passes it.
+ * Every run syncs fills first, unconditionally — local/zero-git, never blocks the pass on failure.
+ * `--sync` still parses (harmless no-op) for any external caller that still passes it.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -119,7 +109,7 @@ function loadWatchlistIds(map) {
 /* Append one line per watched item whose GE guide price CHANGED since the last logged value
    (first sighting logs too). Each line is an observed guide-update event: pinning WHEN an
    item's ~daily guide refresh lands + its magnitude is the raw material for pricing around
-   the guide-anchored buyer re-anchor (Ben, 2026-07-06). Local, best-effort, never throws. */
+   the guide-anchored buyer re-anchor. Local, best-effort, never throws. */
 function logGuideChanges(items, guide) {
   try {
     const last = {};
@@ -148,9 +138,9 @@ function logGuideChanges(items, guide) {
 // short version:
 //   LIQUID_FLOOR_PER_DAY — two-sided daily volume below which a book is "thin"; steers poll CADENCE.
 //     Same quantity/units/basis as the screen's FLOOR (volDay is vol24FromInputs-corrected at :447).
-//     100 → 3,500 (2026-08-11): PLAN-VOL24 §2's sweep missed it, leaving a pre-correction scale on
-//     which the thin branch was dead — 99.68% of watch rows read liquid, so a thin big-ticket lot got
-//     the 15m glance instead of THIN_BIG_TICKET_VOLATILE's 3m manage. Item-weighted p25 is 431/d.
+//     3,500, not the pre-vol24-correction 100: at that scale the thin branch was dead — 99.68% of
+//     watch rows read liquid, so a thin big-ticket lot got the 15m glance instead of
+//     THIN_BIG_TICKET_VOLATILE's 3m manage. Item-weighted p25 is 431/d.
 //     Value is INSENSITIVE (population is bimodal, p25 431 → p50 73,877; anything in [1k, 40k]
 //     partitions identically) — 3,500 just single-sources with FLOOR. Risk is ONE-WAY: it only polls
 //     faster, so it cannot cause a missed action. n=26 items, distribution match, not calibrated.
@@ -169,19 +159,18 @@ const BIG_TICKET_UNIT_GP   = 1_000_000;
 const WIDE_SPREAD_PCT      = 3;
 // Offers/HELD LOTS below this TOTAL value (max × price, or qty × avgCost) are noise, not
 // positions — collapsed to one ignored line so a stray 2k-gp supply order or a ×1 rune-drop
-// loot lot never earns a verdict (the /positions skill's incidental-inventory rule — was
-// prose-only for held lots until 2026-07-16: three loot drops kept re-earning CUT-CANDIDATE/
-// UNDERWATER headlines every pass, Ben asked for the code fix). Applied to offers AND held lots;
+// loot lot never earns a verdict (the /positions skill's incidental-inventory rule, code-enforced
+// for held lots rather than left as prose: three loot drops kept re-earning CUT-CANDIDATE/
+// UNDERWATER headlines every pass). Applied to offers AND held lots;
 // a WATCHLISTED item is NEVER filtered by value alone (it's deliberately tracked regardless of
 // size — same exemption precedent as screen-flip-niches.mjs's held/watchlist rows).
 const NOISE_OFFER_GP       = 100_000;
 
 // Attention cadence (minutes) the /loop should re-check an item at. The loop runs at ONE
 // interval; we recommend the TIGHTEST cadence across everything monitored so the most urgent
-// item is polled often enough. Re-scaled (Ben, 2026-07-16 — the 1/2/3 tiers were all "hair-
-// trigger" by GE standards; a fill takes minutes→hours, not seconds, so even the tight tier
-// didn't need to be that tight): 3/5/15 — tight is for actively MANAGING a live situation
-// (a real breakdown/cut candidate you're watching resolve), not just "something's held."
+// item is polled often enough. 3/5/15, not the hair-trigger 1/2/3: a GE fill takes minutes→hours,
+// not seconds, so tight is for actively MANAGING a live situation (a real breakdown/cut candidate
+// you're watching resolve), not just "something's held."
 const CADENCE_TIGHT = 3;   // actively managing: falling, or thin big-ticket volatile
 const CADENCE_MED   = 5;   // active watch: ranging scalp, thin, or unconfirmed regime
 const CADENCE_LOOSE = 15;  // glance: stable liquid narrow-band
@@ -219,10 +208,10 @@ function classify(row) {
 }
 
 
-// --- WINDOW CONTEXT line (2026-07-05, the ring lesson): the stateless 2h verdicts kept
-// firing on a bid whose real question was time-of-day ("does this window print my level,
-// and what does tomorrow recover to?") — evidence that previously needed a manual
-// read-window-range.mjs call. This prints the same quantiles inline, scored over the COMING 8
+// --- WINDOW CONTEXT line (the ring lesson): the stateless 2h verdicts fire on a bid whose real
+// question is time-of-day ("does this window print my level, and what does tomorrow recover to?")
+// — evidence that would otherwise need a manual read-window-range.mjs call.
+// This prints the same quantiles inline, scored over the COMING 8
 // machine-local hours across the last 7 days. Same honesty bound as read-window-range.mjs:
 // touched/reached ≠ filled, ~7 days is a small sample — context, never a verdict input.
 const WINDOW_HOURS = 8;
@@ -506,11 +495,11 @@ function heldAlert(it) {
   }
   // Structural-break escalation (V4) — a CONVINCING break of the V2 tripwire (≥δ below support, or
   // 2 consecutive passes below support). Independent of the mom verdict; not gated by underwater.
-  // R9 (PLAN-VIZ-LAYER VZ2a, Ben ruling 2026-07-16): convictionGate (raw price vs. support/cut-trigger)
-  // and heldDisplay/momVerdict (the full persistence-gated judgment) are TWO SEPARATE state machines
-  // that can genuinely disagree — this branch used to hardcode the headline word to CUT regardless of
-  // what the table verdict said, which is exactly the mismatch bug watched live repeatedly (Water orb,
-  // 2026-07-16). Fix: heldDisplay stays authoritative for the verdict WORD (never overridden here); the
+  // R9 (PLAN-VIZ-LAYER VZ2a): convictionGate (raw price vs. support/cut-trigger) and
+  // heldDisplay/momVerdict (the full persistence-gated judgment) are TWO SEPARATE state machines that
+  // can genuinely disagree, so this branch must NOT hardcode the headline word to CUT regardless of the
+  // table verdict — that is the mismatch bug watched live repeatedly (the Water orb anchor).
+  // heldDisplay stays authoritative for the verdict WORD (never overridden here); the
   // structural break is real and must still surface, as an appended warning clause, not a contradicting
   // verdict. `it._display` is set earlier this same pass (before `held.map(heldAlert)` runs), so the
   // fallback to the raw mv token only matters if display computation itself failed.
@@ -602,13 +591,12 @@ async function main() {
   if (!VERBOSE) console.log = () => {};
   const tokens = args.filter(a => !a.startsWith('--'));
 
-  // ALWAYS sync first (Ben, 2026-07-16 — this was opt-in behind --sync, and "run sync-fills before
-  // every read" stayed a doctrine an agent could just forget; a real position (anglerfish) closed
-  // unnoticed as a result — see the anchor incident in CHANGELOG). Runs sync-fills.mjs as a child;
-  // NEVER blocks the watch pass on failure (a network/git hiccup must not stop monitoring). The bare
-  // (no --publish) call is LOCAL/ZERO-GIT by default since 2026-07-15 (FILLS-PIPELINE §12) — no
-  // commit/push here, so there's no reason this should ever have been opt-in. Quiet: only the sync's
-  // summary line is surfaced. `--sync` is kept as a harmless no-op alias for any external caller.
+  // ALWAYS sync first, never opt-in: "run sync-fills before every read" as doctrine is a thing an
+  // agent forgets, and a real position (anglerfish) closed unnoticed as a result — see the anchor
+  // incident in CHANGELOG. Runs sync-fills.mjs as a child; NEVER blocks the watch pass on failure (a
+  // network/git hiccup must not stop monitoring). The bare (no --publish) call is LOCAL/ZERO-GIT
+  // (FILLS-PIPELINE §12) — no commit/push here, so there is nothing to gate behind a flag. Quiet: only
+  // the sync's summary line is surfaced. `--sync` is a harmless no-op alias for any external caller.
   runLocalSync({ offBookNote: 'watching off the current book' });   // AR1: the ONE shared invocation
 
   const map = await loadMapping();
@@ -623,9 +611,9 @@ async function main() {
   try { const snap = await loadSnapshot({ budgetIds: [] }); snap.archive.close(); } catch { /* archive accrual is best-effort — never block a pass */ }
 
   // held items from positions.json (grouped at weighted-avg cost) unless --targets-only.
-  // Incidental-inventory filter (code-enforced 2026-07-16 — was /positions skill prose only,
-  // which meant a tiny loot lot like a ×1 rune drop kept re-earning a CUT-CANDIDATE/UNDERWATER
-  // headline every single pass): a lot worth < NOISE_OFFER_GP and NOT on the watchlist never
+  // Incidental-inventory filter (code-enforced rather than left as /positions skill prose — as prose,
+  // a tiny loot lot like a ×1 rune drop kept re-earning a CUT-CANDIDATE/UNDERWATER headline every
+  // single pass): a lot worth < NOISE_OFFER_GP and NOT on the watchlist never
   // becomes a held item at all — no table row, no alert, no verdict. Collapsed into one summary
   // line instead (below, near the other footer notes).
   const heldSpecs = [];
@@ -675,8 +663,8 @@ async function main() {
   }
   // DL2 --dip: fold the tracked dip-watchlist.json pool into the buy-side target set (deduped against
   // held lots + CLI tokens). Best-effort: a missing/garbled file degrades to no dip pool.
-  // DL4 (2026-07-11): the schema evolved and screen-fed AUTO-POPULATION now landed (screen-flip-niches.mjs's
-  // nomination pass appends flush-SUITABLE candidates). The reader is POLYMORPHIC — an entry is either
+  // DL4: the pool is screen-fed (screen-flip-niches.mjs's nomination pass appends flush-SUITABLE
+  // candidates). The reader is POLYMORPHIC — an entry is either
   // a LEGACY plain item name / numeric id (mirrors watchlist.json's simple shape) OR a NEW object
   // { id, name, source:'auto'|'manual', track:'liquid'|'illiquid', addedTs }. A mixed array works; we
   // resolve an object by id ?? name (prefer id, the stable key).
@@ -685,7 +673,7 @@ async function main() {
     try { const raw = JSON.parse(fs.readFileSync(DIP_WATCHLIST, 'utf8')); if (Array.isArray(raw)) pool = raw; }
     catch { /* no dip pool — degrade */ }
     for (const entry of pool) {
-      // DL4 (2026-07-12): only the LIQUID track is watched live — it's the FLUSH-alert set, and each target
+      // DL4: only the LIQUID track is watched live — it's the FLUSH-alert set, and each target
       // is a live fetch every ~5m pass, so the illiquid track (DL3's standing-bid backlog, not yet consumed
       // for alerts) is skipped here to keep the loop's per-pass cost bounded. A legacy entry has no track →
       // watched (back-compat: hand-curated entries were always liquid flush candidates).
@@ -834,14 +822,11 @@ async function main() {
       if (it._thesis && it._thesis.tripwire != null && it._thesis.exitPrice == null) {
         try {
           // PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the hourProfile+deriveDiurnalRange pair.
-          // ⚠ CORRECTED 2026-08-10 (DT4b review): this comment used to end "SAME nights:7/liveLo/liveHi as
-          // before, so the fallback ask is identical to the old direct call." That is NO LONGER TRUE on a
-          // gate-PASSING item — DT4b makes the lap refit over windowReliability's 14-day window, so
-          // `lap.ask` here can differ from the old 7d-derived number. This value becomes `diurnalAsk` →
-          // heldDisplay → the rendered "HOLD — per thesis: exit <price>", i.e. a HELD-LOT EXIT PRICE on a
-          // surface that was outside DT4b's diff and whose comment asserted it was unaffected. It moved on
-          // 19 of 31 measured passers (max 11%). Intended — the exit should read the same window the rest
-          // of the row does — but it must not go unrecorded at the site it actually changes.
+          // ⚠ `lap.ask` is NOT the plain nights:7 number: on a gate-PASSING item DT4b refits the lap over
+          // windowReliability's 14-day window, so it can differ from a direct 7d derivation. This value
+          // becomes `diurnalAsk` → heldDisplay → the rendered "HOLD — per thesis: exit <price>", i.e. a
+          // HELD-LOT EXIT PRICE. Measured: it differs on 19 of 31 passers (max 11%). Intended — the exit
+          // should read the same window the rest of the row does — but do not assume the two agree.
           const lap = diurnalTimedLap(it.ts1h, { nights: 7, liveLo: it.row.quickBuy ?? null, liveHi: it.row.quickSell ?? null });
           diurnalAsk = (!lap.degraded && lap.ask != null) ? lap.ask : null;
           // PLAN-DIURNAL-RECENCY-GUARD 2c: `lap.peakReality` is the computeReality read for THIS ask level,
@@ -900,7 +885,7 @@ async function main() {
     it.bid = s.offers[0]; it.bids = s.offers; // primary + all (multi-slot same-item bids)
     // P5: the DECLARED thesis for this bid (declare-thesis.mjs set --path), read-only. When present, its path
     // key + floor tripwire make the shared offerVerdict PATH-AWARE — a scalp/value-hold bid no longer
-    // CANCEL-BIDs off the falling regime alone (Ben's 2026-07-08 amendment). null when undeclared.
+    // CANCEL-BIDs off the falling regime alone (the falling-exclusion amendment). null when undeclared.
     const th = thesisFor(holdThesisStore, s.id);
     it._bidPathCtx = (th && th.path) ? { path: th.path, tripwire: th.tripwire ?? null } : null;
     bidItems.push(it);
@@ -911,7 +896,7 @@ async function main() {
   const loopMin = Math.min(...all.map(it => it.meta.cadence));
 
   // DL2 — flushSignal per buy-side target, computed ONCE (pure) as the single source for BOTH the FLUSH
-  // ledger rows below and the FLUSH alert pass. LOGGING is DECOUPLED FROM ALERTING (2026-07-11): the map
+  // ledger rows below and the FLUSH alert pass. LOGGING is DECOUPLED FROM ALERTING: the map
   // holds every target with a genuine flush SIGNAL (deep + falling; gates ii+iii) — liquid OR NOT — so the
   // illiquid signal-only rows are logged too (their depth/frequency history is the standing-bid evidence
   // basis / DL3's input). Only the LIQUID + exit-clearing subset (sig.flush) produces a headline alert.
@@ -965,12 +950,11 @@ async function main() {
   ]);
 
   // ---------------------------------------------------------------------------
-  // OUTPUT (2026-07-05 format, Ben's ask): HEADLINE (state + alerts up front) →
-  // one verdict-first block PER ITEM → SUMMARY footer (exposure/committed totals,
-  // provenance, loop, exit discipline). Same facts as before, reframed.
+  // OUTPUT: HEADLINE (state + alerts up front) → one verdict-first block PER ITEM →
+  // SUMMARY footer (exposure/committed totals, provenance, loop, exit discipline).
   // ---------------------------------------------------------------------------
-  // LOCAL wall-clock, per the CLAUDE.md time-display convention (the old toISOString stamp
-  // printed UTC and mislabeled a 22:09 local session as 05:09 — 2026-07-05 confusion)
+  // LOCAL wall-clock, per the CLAUDE.md time-display convention. NOT toISOString — a UTC stamp
+  // mislabels a 22:09 local session as 05:09.
   const d = new Date(), p2 = n => String(n).padStart(2, '0');
   const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 
@@ -1053,7 +1037,7 @@ async function main() {
     const listed = ask ? `ask ${ask.qty}/${fmt(ask.max)} @ ${fmtP(ask.offer)}`
       : suspectAsk ? `ask possibly still @ ${fmtP(suspectAsk.offer)} ⚠ vanished without a cancel in a mass log reset, verify in-game`
       : (offersInfo && !offersInfo.err ? 'NOT LISTED' : '');
-    // a held item's still-open BUY must stay visible (2026-07-05: a filled-then-booked lot
+    // a held item's still-open BUY must stay visible (a filled-then-booked lot once
     // swallowed its live bid row and the bid looked cancelled) — annotate it here instead
     const openBid = bids.find(b => b.item === it.id);
     const suspectBid = !openBid && suspectBids.find(b => b.item === it.id);
@@ -1127,7 +1111,7 @@ async function main() {
     let marginBudget = null;
     try { marginBudget = marginBudgetNote(newState['held:' + it.id]); } catch { /* support-only */ }
     // stale-live flag (QUICK_FRESH_MIN): displayed instabuy/instasell is an old /latest print, not a
-    // live tick (below the 90-min reliableReason floor — the 64-min godsword anchor, 2026-07-21).
+    // live tick (below the 90-min reliableReason floor — the 64-min godsword anchor).
     const qs = row.quickStale;
     const staleLive = (qs && (qs.buy || qs.sell))
       ? [qs.sell ? `instabuy ${Math.ceil(row.quoteAgeMin?.sell ?? 0)}m old` : null,

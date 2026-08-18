@@ -1,7 +1,11 @@
 # PLAN-CAPITAL-EFFICIENCY-AND-DIGEST.md — hardened implementation spec
 
-Status: SPEC ONLY, not yet implemented. Owner review requested before an Opus subagent builds
-from this. Folds into `PLAN.md` and is deleted the moment its chunks ship (repo convention).
+Status: **SHIPPED `1c03fd9` (2026-07-21) — all three workstreams** (A `capEfficiency`/`weakDeploy`,
+`screen-flip-niches.mjs:686`/`:701`; B the `/scan` positions-check doctrine, `scan/SKILL.md:102`;
+C `digestVerdict`/`buildDigestBlock`, `:727`/`:944`), plus POLISH 1+2 in `aee0d8b`. Two later
+supersessions: the digest now sorts on `rank`, not §3's `rankKey` (AF1 `cdce288`), and W3-1/W3-2
+(PLAN-OSCILLATION-CYCLE `22f4df7`) reshaped the verdict + rank. OPEN: §10's five owner questions
+were never answered on the record — the build took the spec's stated defaults.
 
 **Scope lock (owner decision, do not relitigate):** everything here is **CONSOLE-ONLY**. No field
 in this plan renders into `screen.json`, so **no `APP_VERSION` bump** (`js/state.js` untouched).

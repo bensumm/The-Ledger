@@ -1,7 +1,10 @@
 # PLAN-MCP-BANK-SERVER — a local MCP server for Ben's live bank/GE state (2026-07-24)
 
-**STATUS: SCOPING ONLY — DEFERRED (Ben, 2026-07-25): finish reverse-flip (RF0-RF6, manual CLI
-seeding) FIRST, build this bank source after.** No code shipped by this doc. The `data-export`
+**STATUS: SCOPING ONLY — an OPEN OWNER DECISION, no longer blocked.** The stated precondition has
+CLEARED: RF0–RF6 all shipped (`PLAN.md` Status row `RF0–RF6` — `0dc43ca`/`665e22e`/`5df6987`/`8d9f348`/
+`89bfdde`/`e1d8c1a`), and RF5 was deleted in favour of this doc's `data-export` finding, so MCP-DEFER is
+already satisfied. MCP0/MCP1/MCP2 remain UNBUILT (no `bankexport.mjs`, no `container_*` reader in tree);
+whether to build them is Ben's call, not a blocked item. The `data-export`
 source was re-confirmed LIVE on 2026-07-25 (`container_bank.json` last-write 5:37 PM, `container_inventory.json`
 6:10 PM that day — the files update mid-session on their own triggers, partial evidence toward MCP0's
 open write-cadence question). Follows `docs/PLANNING.md`'s required shape. Per that doc's lifecycle this

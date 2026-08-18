@@ -1,5 +1,9 @@
 # PLAN-ESTIMATOR-HONEST-SELL — the display sell-read redesign
 
+Status: **E1–E4 SHIPPED ON MAIN; Ring-3 (rank denoise) is the only chunk still OPEN.** E1–E4 `855dc02`
+· consumer audit `97cb12e` · holdHorizon follow-up `8a512c2` (all 2026-07-22). Ring-3 stays gated on
+forward-beats-fold evidence in `join-outcomes --report` Gate C plus the rank knife guard.
+
 Per-topic working doc (PLANNING.md lifecycle). Designed + Fable-hardened 2026-07-22. Grew out of
 PLAN-OSCILLATION-CYCLE's reach-fold investigation.
 
@@ -102,15 +106,15 @@ co-log clock started at the E1–E4 land, so this gate LAGS F1 + RC (0 rows the 
 ## Status
 | Chunk | State | SHA | Notes |
 | --- | --- | --- | --- |
-| E1 | LANDED-in-worktree | — | pair.mjs shell — stopped the BE-overwrite (estSell honest); added `estSellFloorBind`, `pFill` (reuses askReachFactor), `estSellForward`/forward fields (driftExitFrom off `extra.forward`, degrade-safe) |
-| E2 | LANDED-in-worktree | — | cells.mjs — sell cell: honest number + floor ANNOTATION (not substitution) + `list ~X (~Nd hold, conf)`; P(fill) beside the net; estConfLean KEEPs beFloored + ADDs forward fields (YS2) |
-| E3 | LANDED-in-worktree | — | read-window-range `fold:` line — three-part: honest best-case net + P(fill) + `list at X (forward)` + `recency-fold Y (secondary — phase-blind)` + floor caution |
-| E4 | LANDED-in-worktree | — | quote-items — `extra.forward` plumbed from the in-hand `prof`/`ast.days`; footer explainer reconciled |
-| Consumer audit | LANDED-in-worktree | — | reverted the watch-positions BE floor (honest sub-BE = cut price); fixed the quote-items false `(BE-floored)` label |
-| holdHorizon follow-up | LANDED-in-worktree | — | quote-items/read-window-range pass their niche's driftInform.holdDays (band ~2h, not the 1.5d amplitude default); fmtHoldHorizon renders sub-day as hours |
+| E1 | ✅ LANDED | `855dc02` | pair.mjs shell — stopped the BE-overwrite (estSell honest); added `estSellFloorBind`, `pFill` (reuses askReachFactor), `estSellForward`/forward fields (driftExitFrom off `extra.forward`, degrade-safe) |
+| E2 | ✅ LANDED | `855dc02` | cells.mjs — sell cell: honest number + floor ANNOTATION (not substitution) + `list ~X (~Nd hold, conf)`; P(fill) beside the net; estConfLean KEEPs beFloored + ADDs forward fields (YS2) |
+| E3 | ✅ LANDED | `855dc02` | read-window-range `fold:` line — three-part: honest best-case net + P(fill) + `list at X (forward)` + `recency-fold Y (secondary — phase-blind)` + floor caution |
+| E4 | ✅ LANDED | `855dc02` | quote-items — `extra.forward` plumbed from the in-hand `prof`/`ast.days`; footer explainer reconciled |
+| Consumer audit | ✅ LANDED | `97cb12e` | reverted the watch-positions BE floor (honest sub-BE = cut price); fixed the quote-items false `(BE-floored)` label |
+| holdHorizon follow-up | ✅ LANDED | `8a512c2` | quote-items/read-window-range pass their niche's driftInform.holdDays (band ~2h, not the 1.5d amplitude default); fmtHoldHorizon renders sub-day as hours |
 | Ring-3 (rank denoise) | DEFERRED — accrual gate now in the retro; still gated on forward>fold evidence + rank knife guard | — | forward exit → estimateRank/screen.json, all niches; `join-outcomes --report` Gate C tracks readiness |
 
-E1–E4 landed as ONE coherent commit (the shell adds fields the consumers render).
+E1–E4 landed as ONE coherent commit on main, `855dc02` (the shell adds fields the consumers render).
 
 **Consumer audit ruling (Fable a4b4d2bb + independent re-verify) — sub-BE is the CUT price, not a bug.**
 The E1 commit had floored the two PB4 pressure-exit held-lot surfaces to break-even (`estSellFloorBind ??

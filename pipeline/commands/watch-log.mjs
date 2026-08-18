@@ -42,6 +42,11 @@
 import fs from 'node:fs';
 import { join } from 'node:path';
 import { LOG_DIR } from '../lib/reconstruct/offers.mjs';
+// A daemon reaching into the git-writer's module. Safe for two reasons check-daemon-safety.mjs PINS
+// rather than assumes: sync-fills exports only zero-git bindings, and its invocation guard stops main()
+// running on import — main() reads `--publish` from the IMPORTER's argv, so without that guard
+// `node watch-log.mjs --publish` would fetch/commit/push. Keep this to `{ regenerate, REPO_DIR }`;
+// another binding, or a namespace import, fails the build.
 import { regenerate, REPO_DIR } from './sync-fills.mjs';
 
 const DEBOUNCE_MS = 10_000; // coalesce a burst of fs.watch events (and Windows rename dupes) into one run

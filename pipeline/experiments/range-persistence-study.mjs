@@ -192,7 +192,7 @@ function fitRange(mids) {
 
 /* oscFeatures(series, floor, ceiling) — the SELECTIVE criterion `oscillationVsKnife` lacks.
    oscillationVsKnife counts detrended direction REVERSALS against a noise floor: that fires on any
-   non-monotone item (measured 22/23 big-ticket items in plans/PLAN-MULTIWEEK-OSCILLATOR.md §3, i.e. it
+   non-monotone item (measured 22/23 big-ticket items in PLAN.md's `MWO` Status row, i.e. it
    discriminates nothing). This instead demands the series REPEATEDLY RETURN TO THE SAME TWO LEVELS:
      - a floor TOUCH is a maximal run of days with pir <= TOUCH_LO (a run counts once, not per day)
      - a ceiling TOUCH is a maximal run with pir >= TOUCH_HI
@@ -443,7 +443,7 @@ if (want('a')) {
     if (r.gateFlow) s.gateFlow = true; if (r.gateStrict) s.gateStrict = true;
   }
   const all = [...uniq.values()];
-  say('   SELECTIVITY — share of item-origins each criterion fires on (the PLAN-MULTIWEEK-OSCILLATOR §3');
+  say('   SELECTIVITY — share of item-origins each criterion fires on (the MWO scoping');
   say('   problem: the shipped detector read OSCILLATING on 22/23 big-ticket items, i.e. discriminates nothing)');
   say('');
   say('     criterion                                   item-origins   items ever');

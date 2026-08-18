@@ -54,7 +54,24 @@ ok('slots: each active offer occupies one slot; free = 8 − occupied', () => {
   assert.equal(book.slots.free, 5);
   assert.equal(book.slots.occupants.length, 3);
   assert.equal(book.slots.occupants[0].itemId, 300);
-  assert.match(book.slots.caveat, /log-derived lower bound/);
+  assert.match(book.slots.caveat, /log-derived UPPER bound/);
+});
+
+// The direction of that bound, asserted against BEHAVIOUR rather than its wording. The caveat used to
+// read "lower bound" while the code produced the opposite, and a phrase-match test pinned the error in
+// place — so this test drives the case the caveat describes instead of quoting it. `readOffersSnapshot`
+// yields ACTIVE offers only, so a completed-but-uncollected slot is simply absent from the array: it
+// can only ever UNDERCOUNT occupancy, never overcount it. Hence `free` is the "at most" side.
+ok('slots: an uncollected fill inflates `free` — so free is the UPPER bound, occupied the lower', () => {
+  // Same book, minus one offer: exactly what the model sees the instant a slot fills and goes uncollected.
+  const afterFill = buildBook({ groups: GROUPS, offers: OFFERS.slice(0, 2), cash: CASH, marks: MARKS, now: NOW });
+  assert.equal(afterFill.slots.occupied, 2, 'the filled slot drops out of the active-offer array');
+  assert.ok(afterFill.slots.free > book.slots.free,
+    'reported free RISES when a slot fills — the error runs toward over-reporting free');
+  assert.ok(afterFill.slots.occupied < book.slots.occupied,
+    'reported occupancy FALLS below the truth — occupancy is the lower bound');
+  assert.doesNotMatch(afterFill.slots.caveat, /\blower bound\b(?!\))/,
+    'the caveat must not call `free` a lower bound; only occupancy is one');
 });
 
 // --- capital: BYTE-IDENTICAL to the watch-positions.mjs SUMMARY footer (Risk 5 gate) -----------

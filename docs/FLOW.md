@@ -56,7 +56,8 @@ wiki API                    marketfetch                 quotecore               
   true rolling-24h is composed from the healthy `/1h` grain at the fetch layer
   (`pipeline/lib/market/marketfetch.mjs` `loadAll24hRolling`, `js/quotecore.js` consumers). Every
   volume-denominated gate/floor is calibrated to that corrected scale. Full story: the
-  `loadAll24hRolling` header (the ONE home), `PLAN-VOL24.md` (working doc + history).
+  `loadAll24hRolling` header (the ONE home); history + the count-matched floor table in `PLAN.md`'s
+  VOL24 Status row.
 - `computeQuote` turns raw prices + the 2h band + the 24h stats into the **row model** — Guide,
   Quick/Optimistic (robust `robustBand` edges), momentum tell, pressure, break-even, regime.
   Every surface renders that row; none re-derives prices. The canonical rendered shape is the
@@ -221,4 +222,6 @@ this table is the flow view, not a second inventory.
   app's Scan-tab "Refresh scan" runs a REAL local `screen-flip-niches.mjs --publish` (zero git).
 - **CI** (`.github/workflows/checks.yml`) runs the `pipeline/ci/` guards on every push/PR: the
   cheap `checks` job (syntax, `run-tests`, `check-imports`, `check-dead-exports`, `check-daemon-safety`,
-  `check-forecast-guards`, `lint-arch`, `lint-docs`, `lint-skills`) + the `smoke` job (headless-chromium app load).
+  `check-forecast-guards`, `check-verdict-guards`, `lint-arch`, `lint-docs`, `lint-skills`, `lint-comments`,
+  `lint-plan-refs`, `lint-guard-lists`, fills/positions parse) + the `smoke` job (headless-chromium app load).
+  This list is the whole `checks` job and `lint-guard-lists.mjs` fails if it drifts from `checks.yml`.

@@ -2,6 +2,13 @@
 
 Drafted 2026-07-18. Follows `docs/PLANNING.md`.
 
+**Status: SC1–SC4 SHIPPED as the default admission path; SC5 + SC6 OPEN — the doc stays for those.**
+SC5 is the graduation criterion (a join-outcomes check before the new admission layer is trusted
+UNCONDITIONALLY) and SC6 is the docs fold; until SC5 runs, `--admission legacy` remains the deliberate
+rollback per R2/R5. The detail is in the same-day update below — this line exists so the lifecycle
+report can classify the doc, which it could not while the only marker read "STATUS UPDATE" rather than
+`Status:`.
+
 **STATUS UPDATE (Ben, 2026-07-18, same day): SC1–SC4 shipped immediately, not staged.** Ben's
 ruling on reading this plan: "current system is broken... it's not a question of is the old system
 better, it's do we fix the problem or not." So `pipeline/lib/admission.mjs` (`pickFetchPool` +

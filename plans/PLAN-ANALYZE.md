@@ -1,6 +1,9 @@
 # PLAN-ANALYZE.md — the analysis engine (`analyze.mjs` + `/analyze` skill)
 
-Status: **PROPOSAL v2 — re-scoped 2026-07-10 under Ben's analysis-first ruling.** Supersedes the
+Status: **AZ1 + AZ2 SHIPPED; AZ3 OPEN (deferred).** AZ1 `4198365` (`pipeline/commands/analyze-record.mjs`
++ the pure `pipeline/lib/render/analyze.mjs`) · AZ2 `ea6d791` (`.claude/skills/analyze/SKILL.md`).
+AZ3 = the session journal, still SPECULATIVE and Ben-vetoable. Re-scoped 2026-07-10 under
+Ben's analysis-first ruling; supersedes the
 desk-agent framing (`PLAN-DESK-AGENT.md`, same file, now dead): startup orchestration, server-launch,
 workflow-walkthrough, loop-tracking, and ask-routing are all **de-scoped as low-value** (routing is
 already one utterance; `serve.cmd` already backgrounds the daemon; a skill can't reliably own a

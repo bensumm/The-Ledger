@@ -60,17 +60,28 @@ ok('runValidators returns the registry results; worstStatus/flags/leanValidators
   assert.equal(flags(res).length, 0);
   assert.equal(leanValidators(res), undefined, 'a clean row logs no validators field (YS2 lean-include)');
 });
-ok('runValidators degrades a THROWING validator to pass (never breaks a read)', () => {
-  const boom = () => { throw new Error('kaboom'); };
-  // exercise the try/catch via a hand-built one-off registry call shape
-  const res = (function run(only) {
-    const VALIDATORS = { boom };
-    const out = [];
-    for (const k of only) { try { out.push(VALIDATORS[k]({})); } catch (err) { out.push({ key: k, status: 'pass', reason: 'validator-error', evidence: { note: String(err.message) } }); } }
-    return out;
-  })(['boom']);
-  assert.equal(res[0].status, 'pass');
+ok('runValidators degrades a THROWING validator to pass, LOUDLY and into the ledger', () => {
+  // ⚠ This MUST call the real runValidators. The previous version of this test hand-rolled a copy of the
+  // try/catch and asserted against that, so deleting the guard from runValidators entirely left it green —
+  // a regression check that never called the function it guarded (CLAUDE.md rule 10's own anchor).
+  // A Proxy that throws on ANY property read makes a real registry validator crash. 'floor' is chosen
+  // because runValidators touches ctx before the try ONLY on the 'reach' branch.
+  const boomCtx = new Proxy({}, { get() { throw new Error('kaboom'); } });
+  const errs = [];
+  const realErr = console.error;
+  console.error = (m) => errs.push(String(m));
+  let res;
+  try { res = runValidators(boomCtx, { only: ['floor'] }); } finally { console.error = realErr; }
+
+  assert.equal(res.length, 1);
+  assert.equal(res[0].status, 'pass', 'a crash must never become a REJECT — fail-open is deliberate');
   assert.equal(res[0].reason, 'validator-error');
+  assert.equal(flags(res).length, 0, 'and it must not drop the row');
+  // The half that was missing: a fail-open crash that nothing can see lets a gate stop gating forever.
+  assert.equal(errs.length, 1, 'the crash must be logged, not swallowed');
+  assert.match(errs[0], /kaboom/);
+  const lean = leanValidators(res);
+  assert.ok(lean && lean.some(v => v.validatorError), 'and it must reach the suggestions ledger');
 });
 
 // --- 2. reachValidator: reachable / rarely-reached / never-reached ----------------------------

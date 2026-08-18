@@ -8,7 +8,7 @@ Writes nothing the pipeline reads; removable per this directory's README. **Not 
 checkout** — see Limits.
 
 > **⚠ READ THE PRIOR ART FIRST — THIS QUESTION WAS CLOSED YESTERDAY.**
-> `plans/PLAN-DAY-LOW-SURFACING.md` is **`CLOSED — MEASURED NEGATIVE (2026-08-10)`**, from Ben's own
+> `PLAN.md`'s `DL-0/DL-1–3` Status row is **`CLOSED — MEASURED NEGATIVE (2026-08-10)`**, from Ben's own
 > near-identical ask one day earlier (*"a new item surfacing strategy based on items resting on their
 > 1/3/7/30 day lows"*). Four measurement passes ran; nothing was built; the file says *"nothing should
 > be."* **This document is a re-measurement, not a fresh investigation** — different construction, run
@@ -172,7 +172,7 @@ before any signal is applied.
 
 **But the decomposition does not fully close, and I will not call it confirmed.** 0.98 × 1.0194 × 0.9985
 − 1 = **−0.25%** against the observed **−0.84%** — ~0.6pp unexplained, the same shortfall
-`PLAN-DAY-LOW-SURFACING.md:221-223` reported (~1pp) and explicitly warned *"should not be quoted as the
+`PLAN.md`'s `DL-0/DL-1–3` Status row reported (~1pp) and explicitly warned *"should not be quoted as the
 cause"* (a median of a product is not the product of medians when the terms are correlated per-origin).
 My first draft wrote "the mechanism is arithmetic and it is now confirmed twice"; that reproduced the
 exact error the prior art flagged, and is retracted. The sign and rough magnitude replicate; the
@@ -396,7 +396,7 @@ artifact at full strength and **must not be quoted as a return**. Same scope lim
 
 ```
 - **`floor-strategy-study.mjs` → `FLOOR-STRATEGY-FINDINGS.md`** — is "this item is at its 1/3/7/14/30-day
-  low" a tradeable BUY signal? **Re-measurement of `plans/PLAN-DAY-LOW-SURFACING.md`, which closed the same
+  low" a tradeable BUY signal? **Re-measurement of PLAN.md's `DL-0/DL-1–3` row, which closed the same
   question as a measured negative on 2026-08-10 — and it CONFIRMS the closure.** 73 days, 2,020 contributing
   items, 60,151 item-days, 35 origin days. The signal is real and, for the "printed a new N-day low" form,
   monotone in N against a per-origin-day cross-sectional base rate (+0.31pp at 1d → +1.26pp at 30d of 7-day

@@ -78,7 +78,12 @@ export function parseGp(str){
   return Math.round(v);
 }
 export const sgn=n=>n>0?'gain':(n<0?'loss':'');
-export function grade(ri){ return ri<0.25?'A':ri<0.5?'B':ri<0.75?'C':'D'; }
+// A `grade(ri)` used to live here mapping a ratio to A/B/C/D with LOWER = BETTER. It was imported by
+// nothing, and its scale ran opposite to the live desirability grade (rating.mjs: S+ … D, higher = better)
+// that gradeCls below colours — two contradicting meanings for one word in one file. Deleted rather than
+// documented. check-dead-exports.mjs could never have flagged it: `grade` is a common local/property name,
+// and that guard deliberately biases a name collision toward LIVE (its header says so), which is the right
+// trade for a guard whose false positives would get it switched off.
 // gradeCls(g) — color tier CSS class for a DESIRABILITY letter grade (rating.mjs: S+ … D), used by the
 // Finder + Scan so 'S+'/'A-'/'B+' etc. get a color (the raw 'r'+g class can't match — '+'/'-' aren't
 // valid in a CSS class selector). Buckets by the leading letter: S→rS (best), A→rA, B→rB, C→rC, D→rD.

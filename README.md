@@ -152,10 +152,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `js/money-math.js`) + `instantNet`/`instantRoi` (the SAME-HOUR/churn margin — both surfaced, since a
   big-ticket item can show a NEGATIVE same-hour margin beside a POSITIVE timed one) + `bidReach`/
   `askReach` (`recencySplit` scored against the chosen dip/peak levels' own `windowStats` slice) +
-  `lowTrend`/`hiTrend` (`projectTrajectory`) + `dipPool`/`peakPool` + the retuned `trancheComfort`/
+  `lowTrend`/`hiTrend` (`projectTrajectory`) + `dipPool`/`peakPool` + `trancheComfort`/
   `trancheCeiling` (`DT_TRANCHE_COMFORT_VOL_PCT`=0.5%/`DT_TRANCHE_CEILING_VOL_PCT`=1% of `volDay`,
   borrowed from `js/estimators/reach.mjs`'s n≈6 reach-relief knee, not validated for diurnal
-  specifically) + `hourConcentration`'s `clean` verdict; degrades to `{degraded:true, reason}`, never a
+  specifically — rendered `tranche ~X clean · ~Y price-knee`, and **read the two disclaimers on
+  `emit.mjs`'s caveat before quoting either number**: it is a price-degradation knee rather than a
+  clearing cap, and a ROUND-TRIP bound rather than a per-leg one, both of which have been misread off
+  it in a live session) + `hourConcentration`'s `clean` verdict; degrades to `{degraded:true, reason}`, never a
   throw. DT2 (2026-07-23) wires this into `screen-flip-niches.mjs` for EVERY flip-niche survivor
   (was top-picks-only via raw `hourProfile`+`deriveDiurnalRange`), rendered through the ONE shared
   `pipeline/lib/render/emit.mjs` `formatTimedLap` — see that file's README entry. DT3 (2026-07-23) wires the
@@ -617,7 +620,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `--section a|b|c|d`, panel cached to the gitignored `pipeline/.cache/edge-map-panel.jsonl`). Plus
   **`floor-strategy-study.mjs` → `FLOOR-STRATEGY-FINDINGS.md`** (2026-08-11) — is "at its N-day low"
   (1/3/7/14/30) a buy signal? **No, and this was already closed** as a measured negative one day
-  earlier in `plans/PLAN-DAY-LOW-SURFACING.md`; this is a re-measurement under a different
+  earlier by the day-low-surfacing work (PLAN.md's `DL-0` Status row); this is a re-measurement under a different
   construction that reproduces the closure cell-for-cell. A real *relative* signal (monotone in N,
   survives an entry-lag control) that is **not a trade**: best after-tax round trip +0.26%/7d ≈ 15k
   gp/day on 40m vs the 250k gp/day attention floor. `termStructure` already ships `pctInRange` at
@@ -832,36 +835,6 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `quote-items.mjs` default stdout view with `--raw` as the model-free escape hatch; console-only, no
   `screen.json`/app change). Folds into `PLAN.md` and is deleted when its last chunk ships (the
   plan-file rule).
-- `plans/PLAN-DAY-LOW-SURFACING.md` — **CLOSED, NEGATIVE RESULT (2026-08-10). Nothing was built and
-  nothing should be** — kept as a don't-rebuild record, NOT an in-flight plan. Ben's ask for a surfacing
-  lane over "items resting on their 1/3/7/30 day lows". Records what already exists (the per-horizon
-  `low`/`high`/`pctInRange` for 1/3/7/14/28d is ALREADY computed by `js/termstructure.mjs`
-  `termStructure` — the missing piece was the cross-horizon read, not the data), why the horizons are
-  1/3/7/**28** rather than 30, and why the 1d bit is the weak one (daily mids off the 6h series, ~4
-  points — not an intraday low). Its **BLOCKING Chunk 0 ran in four passes** and the result is unusually
-  clean: the cross-horizon position DOES predict relative mid drift (monotone in depth-of-low, surviving
-  de-marketing, per-item equal weighting, a price floor and a one-day entry lag), and it does NOT pay as
-  a trade under EITHER execution bound — 0c (cross the spread twice) loses in every bucket, 0d (both legs
-  fill patiently, liquid population only) tops out at **+0.26% median over a 7-day hold**, ~80k gp/day on
-  a 40m position against the 250k gp/d floor. Also records that the plan's OWN central hypothesis
-  ("at every low at once" is a falling knife) was refuted, and that the −1.32% baseline traces to an
-  origin-population spread (1.82%) below the 2% tax — a mechanism that was itself "refuted" once by a
-  test run on the wrong population. Consumed by nobody; produces no artifact. Precedent: PLAN-BOTH-LEG-ENTRY
-  / `hourlyDrift`.
-- `plans/PLAN-BOTH-LEG-ENTRY.md` — **CLOSED, NEGATIVE RESULT (2026-08-08). Nothing was built and
-  nothing should be** — kept as a don't-rebuild record, NOT an in-flight plan. It proposed solving for an
-  entry price that makes BOTH legs reach (chunks BL1–BL4). Its own BL4 validation gate was run FIRST, on
-  the real archive, and **failed**: the EV frontier loses to the plain median pin out-of-sample, `joint`
-  shrinks 0.394 → 0.079 under holdout, and split-half on the motivating item gives test-EV = 0 in 7 of 8
-  splits. That is structural, not tuning — the argmax always lands exactly ON an order statistic with zero
-  out-of-sample margin, so **the median it set out to replace IS the robust estimator**. The plan also
-  retracted its own framing: the proposed same-day extremes-ordering was the wrong event AND contradicts
-  `AMP_HOLD_DAYS_DEFAULT` being a parameter (a 2.8× undercount, worse than the ~1.6× overcount it claimed
-  to fix), it mischaracterised `legOk` (which never counts both-leg days at all), and the motivating
-  "+533k/u" Dinh's anchor collapses to a 3/16 ordered joint worth ~14–56k gp/day held out. The
-  product-of-marginals defect it named was separately made moot by DT1/DT1b (`pFill2leg` deleted; the
-  ranked P(fill) is now the walk-forward `ampWalkForward`). Read the plan before proposing anything in
-  this space. Being CLOSED, it does NOT fold into `PLAN.md` and is not deleted on a ship.
 - `plans/PLAN-DIGEST-SIGNAL-AND-SCAN-PERF.md` — in-flight per-topic plan (2026-08-07, **PARTLY SHIPPED —
   SP1 landed**; corrected 2026-08-09, this entry said PLANNING ONLY / no code changed): two workstreams that share one file (`pipeline/commands/screen-flip-niches.mjs`)
   and therefore one parallel-safety contract. **A — digest SIGNAL:** `buildDigestBlock`'s comparator
@@ -912,54 +885,6 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   behaviour-preserving-vs-changes-what-surfaces label and a do-first/do-later/don't-bother split.
   Produced by a planning session; consumed by an executor + `PLAN.md`'s Status table. Folds into
   `PLAN.md` and is deleted when its last chunk ships (the plan-file rule).
-- `PLAN-BLINDSPOT-AUDIT.md` — a READ-ONLY audit doc (2026-07-24, no code changed): ranked
-  false-negative signatures the scan/gate/grade stack systematically drops or never surfaces
-  (fixed-size fetch-pool crowding, falling-but-liquid big-tickets invisible unless pre-watchlisted,
-  the repeatable multi-week oscillator taxonomy gap, grade-vs-rank double penalty on thin
-  reach-capped picks), each backed by either a live `screen-flip-niches.mjs`/`analyze-record.mjs`
-  read this session or named as pure structural hypothesis. Companion to `docs/SIGNAL-AUDIT.md`
-  (which covers the inverse: stale/mispriced false POSITIVES). Not a plan file in the execution
-  sense — no chunks to ship — so it stays at the root as a standing reference until superseded or
-  folded.
-- `plans/PLAN-FETCH-POOL-SCALING.md` — **ALL FOUR CHUNKS SHIPPED `5e7e9d9` (2026-07-24)**; corrected
-  2026-08-09 (this entry said PLANNING ONLY / no code changed, and omitted the `plans/` prefix): scopes blindspot-audit findings #1/#7 — the scan's fetch-pool slot counts
-  (`TOP_DEFAULT`/`THIN_RESERVE_DEFAULT`/`VALUE_TOP_DEFAULT`/`AMP_TOP_DEFAULT` in
-  `pipeline/lib/signal/gatecandidates.mjs`) are fixed constants independent of `--capital`, so a real
-  winner can rank outside the slice and never get fetched, and the value flip-niche has no reserve
-  mechanism at all (unlike band/churn's `THIN_RESERVE`). Proposes: (1) a small fixed
-  `VALUE_RESERVE` mirroring `THIN_RESERVE`'s shape (lowest-risk, ships first), (2) a sub-linear,
-  capped capital-scaling curve reusing the existing `derive-cash-tiers.mjs` `deployablePool`
-  read (no new capital plumbing), and (3) a cross-flip-niche `TOTAL_FETCH_MAX` ceiling so
-  `--mode all` can't let every flip-niche's independently-scaled pool sum past a bounded fetch
-  budget. Zero-ripple at today's defaults / no cash anchor stated. Folds into `PLAN.md` and is
-  deleted when its last chunk ships.
-- `PLAN-MULTIWEEK-OSCILLATOR.md` — READ-ONLY scoping doc (2026-07-24, no code changed): investigates
-  blindspot-audit finding #3 (the "repeats every ~6–8 days" fang-class taxonomy hole). Key finding:
-  the ask is largely ALREADY BUILT by `PLAN-OSCILLATION-CYCLE.md`'s six chunks + F-A/F-B/F-D/F-G
-  (detector, drift-adjusted margin gate, watchlist fetch reserve, `watch-positions.mjs --cycle`
-  adaptive re-entry loop, real-fill retro) — the blindspot audit missed it because that per-topic
-  doc never folded into `PLAN.md`. The one real open finding: ran `oscillationVsKnife`
-  (`js/forecast.mjs`) against 23 unrelated big-ticket items over `pipeline/lib/market/archive.mjs`'s 44-day
-  history and got OSCILLATING on 22/23 (96%) — the detector isn't currently selective enough to
-  distinguish a genuine ~6–8 day repeating cycle from ordinary big-ticket price wobble, so it can't
-  yet be used as evidence the fang-class shape is common or rare. Recommends NOT building a new
-  flip-niche; scopes what a real autocorrelation-based period detector would need if ever pursued, and
-  points at `analyze-record.mjs`'s F-G amplitude retro (n=0 today) as the actual evidence gate.
-- `PLAN-REACH-VALIDATOR-AUDIT.md` — READ-ONLY scoping + live-analysis doc (2026-07-24, no code
-  changed): investigates blindspot-audit finding #5 (`reach` as the largest validator-reject
-  source). Corrects the audit's premise — `js/flip-niches.mjs`'s registry has `reach` as
-  `mode:'inform'` on EVERY flip-niche (never gate, confirmed via `git log -S` over the file's whole
-  history), so 99.5% of the historical "8,118 reach rejects" never actually dropped a suggestion
-  (only 37 real gate-mode drops, system-wide, on a non-niche surface) — `reach` isn't currently a
-  live false-negative source. Builds a NEW read-only forward-reach counterfactual join against
-  `pipeline/lib/market/archive.mjs` (not possible a week ago per `PLAN-REACH-CALIBRATION.md`'s AC1 note
-  that the archive then had only 189 buckets; now 1.1M rows / 44 days) — finds ~31% of
-  reach-rejected ask/bid levels DID get reached within the following 8h by real market data,
-  suggesting the reject threshold would be somewhat loose if ever graduated from inform to gate.
-  Scopes the committed-tool version of the join (structured logging + a `pipeline/lib/
-  reach-outcomes.mjs`) as a natural F1/AC1-style chunk. Companion to `PLAN-MULTIWEEK-OSCILLATOR.md`;
-  cross-references the still-open `PLAN-REACH-CALIBRATION.md` (a different axis — achievable-price
-  calibration, not gate-mode/reject-volume).
 - `PLAN-MCP-BANK-SERVER.md` — READ-ONLY scoping doc (2026-07-24, no code): a local MCP server that
   reads Ben's RuneLite `data-export` plugin output (`~/.runelite/Data Exports/container_bank.json`,
   NDJSON, same `{id,quantity,name}` schema the bank dump uses — the plugin is already installed and
@@ -974,30 +899,6 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   into every rank family — highest-leverage, app-touching), G3 (invocation-independent per-mode
   normalized grading), G4 (collapse `riskMult` + kill the momentum double-count), G5 (bound TTF leverage),
   G6 (`(thin)` confidence marker), G7 (retro-retune, F1-gated/deferred). PLANNING ONLY, no code yet.
-- `PLAN-VOL24.md` — in-flight per-topic plan: the `/24h` endpoint is unusable as a trailing-24h source.
-  **Re-measured 2026-08-10**: it now serves a COMPLETE, exact UTC-day aggregate (bit-exact vs the `/1h`
-  sum over `[T, T+23h]`, 374/374 items) whose newest data is ~24–48h old — so the defect is staleness, not the
-  ~10–27× under-report recorded in 2026-07 (that now measures ~1.0×; kept as history in the plan).
-  The composed fix stands either way. Steps 1+2 (SHIPPED 2026-07-13) — the
-  corrected `/1h`-composed rolling source (`marketfetch.mjs` `loadAll24hRolling`/`rolling24FromTs1h`) is now
-  the DEFAULT `screen-flip-niches.mjs` volume (`--vol-source legacy` = escape hatch), and every volume-denominated floor
-  was count-matched to the corrected distribution (`FLOOR`/`VALUE_LIQ_FLOOR` 50→3500, `CHURN_MIN_VOL`
-  2000→65000, `DIP_LOOP_LIQUID_FLOOR` 1000→40000, `GP_FLOOR` 250m→4.5b, `DL4_MIN_GP_FLOW` 500k→9m; `MIN_GPD`
-  was KEPT at 500k through that recal — Ben, real NET-throughput floor — then LOWERED to 250k on
-  2026-08-08, paired with the expUnits 6→2 refill haircut (gpDay had no attention axis and flattered
-  cheap churn); `DL4_MIN_ABS_SWING` unchanged). `volDayRolling` logged on
-  `suggestions.jsonl`. ⚠ **Step 3 was RE-SCOPED 2026-08-10 — it was aimed at a non-problem.** It read
-  "the browser app fix (`js/marketfetch.js` Finder/Watch/Trends still read the broken `/24h`)". The app's
-  per-item read is `js/marketfetch.js:29` → `/24h?id=`. ⚠ **The 2026-08-10 re-scope reasoned from a claim
-  that was itself wrong and is corrected 2026-08-11**: it said the per-item endpoint "measures as the TRUE
-  trailing-24h (22/24 bit-identical)" and that only bulk was broken. Per-item is a complete UTC-DAY
-  aggregate too — just one day fresher (30/30 exact against its own day, 4/30 against the trailing
-  window); the 22/24 was measured inside the single UTC hour where the two coincide. So step 3 was aimed
-  at a REAL problem after all, merely a smaller one than first written: the app's per-item volume is a
-  day-aggregate, not a trailing window. **Both app defects are now FIXED in 0.74.0** — do not re-open
-  them: the Finder reads `STATE.VOL24` (`/24h`) rather than `/1h`, the `|| it.volume` one-sided
-  fallback is gone, and the `volDay > 0` cap escape (which was 100% of the app's S+ grades) is closed.
-  Pinned by `smoke-test.mjs`'s paired volDay assertion. See the header at `desirabilityOf`.
 - `PLAN-ESTIMATOR-FIDELITY.md` — per-topic plan (2026-08-01): the discovery
   estimator understates both legs against the daily distribution (the 2h-band basis + the
   clamp-to-bandTop blend make a verified daily-basis ask/dip structurally unquotable), the rank
@@ -1012,7 +913,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `(none)`-bucket attribution report) → EF2 (timed pair as a visible
   second answer) → EF3 (measured cycles post-fetch + constant single-sourcing). Anchor is n=5
   laps on one item — hypothesis-generating, nothing auto-applies without EF0. Starvation stays
-  with `PLAN-FETCH-POOL-SCALING`; the band sell fold moves only via AC7's re-decision path.
+  with the fetch-pool-scaling work (PLAN.md's `FPS 1–4` Status row); the band sell fold moves only via AC7's re-decision path.
 - `plans/` — the per-topic `PLAN-*.md` working docs (moved off the repo root 2026-07-26). Each is a
   transient planning doc that folds into the root `PLAN.md` (the master plan + scoreboard) and is deleted
   the moment its last chunk ships (`docs/PLANNING.md` lifecycle). `plans/PLAN-*.md` is scanned by
@@ -2086,13 +1987,21 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     firing log is now WIRED (PM2): `logFirings` appends one compact JSONL line per firing —
     `{ts,module,version,stage,surface,id,name,tag,price(price-stage),quickBuy,quickSell,guide,regimeLabel,phase}`
     — the hit/miss ledger the validate-before-promote loop scores later (SCORING is a later chunk).
-  - `lint-skills.mjs` (P7 — a HEURISTIC linter for the linted `SKILL.md` files (`SKILL_FILES`:
-    scan/positions/overnight/morning + analyze + cleanup; book/schedule/ship carry untagged blocks
-    and join once tagged), run in CI's
+  - `lint-skills.mjs` (P7 — a HEURISTIC linter over `SKILL_FILES`, which is now ALL NINE skills
+    (book/schedule/ship joined 2026-07-26 once tagged), run in CI's
     cheap `checks` job + auto-discovered by `run-tests.mjs` via its test: every top-level `- **…**`
     rule-block must carry a backticked `code-pointer` OR an explicit `judgment:` tag; FAILs on
-    untagged blocks and prints per-file + total counts so untagged-prose GROWTH is visible. Exports
-    `lintText`/`lintFile`/`SKILL_FILES` for the test. Deliberately NOT a Markdown parser — a
+    untagged blocks and prints per-file + total counts so untagged-prose GROWTH is visible. **Its
+    SCOPE is self-checking as of 2026-08-14** — `scopeDrift` compares the declared `SKILL_FILES`
+    against `.claude/skills/` in BOTH directions and fails BEFORE linting, so a new skill can't be
+    added and silently never linted, and a renamed one fails by name instead of a raw ENOENT. The
+    declared array stays (it is the reviewable statement of intent, and `lint-plan-lifecycle.mjs`
+    imports it) — but its old comment cited that non-gating report as the backstop, and nothing in
+    CI had ever compared the list to disk. Exports `lintText`/`lintFile`/`scopeDrift`/`SKILL_FILES`
+    for the tests, and `--root <dir>` retargets the run at a fixture tree so the TEST can drive main()
+    itself — without it the only reachable assertion is that the helper computes the right lists, which a
+    gate that IGNORES those lists still satisfies (the first version of its test passed with the failure
+    branch stubbed to `if (false)`). Deliberately NOT a Markdown parser — a
     growth-visibility guard; the semantic dispositions live in `docs/SKILL-TRIAGE.md`),
   - `lint-docs.mjs` (DL1 — a STRUCTURAL, offline doc-drift linter run in CI's cheap `checks` job +
     auto-discovered via `lint-docs.test.mjs`; the CI-encoded half of process rule 8. THREE checks:
@@ -2212,16 +2121,34 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     backstopped by `lostSites()`: any raw `momVerdict(` with arguments that the scan did not see fails the build,
     so the NEXT scrubber bug is loud instead of silent. Produces/consumes nothing; exit 1 + a per-site report)
   - `check-daemon-safety.mjs` (PLAN-DAEMON-SUBSYSTEM Hardening finding #1, the CI half approved for Phase 1 —
-    a STRUCTURAL, DENYLIST-style zero-git guard run in the cheap `checks` job. Scans `pipeline/daemons/registry.mjs`
-    + every `pipeline/daemons/*.mjs` (non-test) and FAILS the build if a local/auto-runnable daemon (1) IMPORTs
-    sync-fills (static or dynamic), (2) SPAWN/EXECs a command referencing `--publish` (the sync-fills git-push
-    flag) or `sync-fills` via `exec`/`execSync`/`execFile`/`execFileSync`/`spawn`/`spawnSync`, or (3) marks the
-    `GIT_WRITER` const `local:true`. Reuses `check-dead-exports.mjs`'s comment stripper (STRINGS preserved so a
-    real footgun's flag is visible, but the registry's description prose "sync-fills.mjs --publish" doesn't trip
+    a STRUCTURAL, DENYLIST-style zero-git guard run in the cheap `checks` job. **Scope is REGISTRY-DERIVED**
+    (widened 2026-08-17): `pipeline/daemons/registry.mjs` + every `pipeline/daemons/*.mjs` (non-test) PLUS every
+    `DAEMONS` entry's implementation, resolved `<name>.mjs` against `pipeline/daemons/` then `pipeline/commands/`;
+    an unresolvable registered name is a HARD FAILURE so a rename cannot silently shrink coverage. It previously
+    scanned only `readdirSync(pipeline/daemons)` while **3 of the 4 registered daemons (sync-fills, watch-log,
+    dev-server) are implemented in `pipeline/commands/`** — it read a quarter of the fleet and reported a clean
+    run, with `watch-log.mjs`'s static `import { regenerate, REPO_DIR } from './sync-fills.mjs'` (a `local:true`
+    resident importing the git-writer module) green throughout. That import is in fact SAFE, and the guard now
+    pins why rather than assuming it. FAILS the build if a daemon (1) IMPORTs sync-fills — narrowed for
+    registered implementations OUTSIDE `pipeline/daemons/` to an allowlist of the zero-git bindings
+    (`ZERO_GIT_EXPORTS` = `regenerate`, `REPO_DIR`), since watch-log legitimately reuses the rebuild core
+    in-process, while a module inside `pipeline/daemons/` keeps the blanket ban; (2) SPAWN/EXECs a command
+    naming `sync-fills` or the `git` binary via `exec`/`execSync`/`execFile`/`execFileSync`/`spawn`/`spawnSync`
+    — **NOT a bare `--publish`**, which is spelled identically by two unrelated commands (`screen-flip-niches.mjs
+    --publish` only rewrites the local `screen.json`; `dev-server.mjs` spawns exactly that, and a bare-flag
+    denylist was only ever safe while dev-server sat outside scope); (3) marks the `GIT_WRITER` const
+    `local:true`; or (4) — on `sync-fills.mjs` ITSELF, where rules 1–2 cannot apply because it IS the writer —
+    loses its `import.meta.url === pathToFileURL(process.argv[1]).href` invocation guard, or exports anything
+    outside `ZERO_GIT_EXPORTS`. Rule 4 is what makes rule 1's allowlist sound: `PUBLISH` is read from
+    `process.argv` at module top level, so without the invocation guard an importing daemon run with `--publish`
+    would fetch/commit/push; and the export check stops the allowlist rotting if a future chunk exports something
+    that does reach git. Reuses `check-dead-exports.mjs`'s comment stripper (STRINGS preserved so a real
+    footgun's flag is visible, but the registry's description prose "sync-fills.mjs --publish" doesn't trip
     it — no spawn/import construct sits by it). Same philosophy as `lint-docs.mjs`/`lint-skills.mjs` — NEVER a
     semantic/LLM check; it is the build-time backstop to the manager's runtime `!d.local` guard. `--dir <path>`
-    scans a synthetic copy (used to prove the fail path without committing a fixture). Exits non-zero naming the
-    offending file:line),
+    scans a synthetic copy (used to prove the fail path without committing a fixture); `--commands-dir <path>`
+    redirects the registry-derived half too, which is how `pipeline/test/daemon-safety.test.mjs` drives every
+    rule to red. Exits non-zero naming the offending file:line),
   - `lint-comments.mjs` + `comment-budget.json` (the COMMENT-DOCTRINE ratchet, run in the cheap `checks` job —
     the CI half of the owner ruling that a comment describes the code AS IT IS NOW plus the context an LLM
     needs to interpret it, while historical narrative belongs in `CHANGELOG.md`. Two structural proxies per
@@ -2237,6 +2164,31 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     a good 39-line contract header from a bad one, only stop them growing; narrative carrying no date, and
     blank-line block splitting, are disclosed evasions it does not catch. Consumes nothing; exit 1 + per-file
     violations),
+  - `lint-guard-lists.mjs` (the guard-list drift gate, run in the cheap `checks` job — the ONE home for its
+    design + limits. The repo documents its own CI in several places, and those copies drifted: three guards
+    were gating while absent from `/cleanup`, and the SAME three were absent from `docs/FLOW.md`, while
+    `CLAUDE.md` was missing a fourth. A `/cleanup` could therefore report a clean sweep and the very next push
+    go red. The guard closes that by treating `.github/workflows/checks.yml` as the registry: it collects the
+    `node pipeline/ci/*.mjs` steps and requires each doc in `GOVERNED_DOCS` to mention every one, and requires
+    every `pipeline/ci/…` path those docs cite to resolve on disk. **Scope, stated honestly because a guard
+    that claims more than it reads is the class this one closes:** it is JOB-SCOPED to `checks` (confirmed via
+    the ruleset API to be the only required status check — `smoke` is a separate, non-gating job, and a
+    job-blind read would wrongly demand `smoke-test.mjs` of docs that deliberately conditionalize it), and it
+    reads only that job's SCRIPT steps, not its two inline ones (the syntax sweep, the fills/positions parse).
+    So it verifies "pipeline/ci scripts within the `checks` job" and its output says exactly that — never "the
+    gating set". Job bodies are found by indentation, not a YAML dependency. The `.mjs` suffix is OPTIONAL when
+    matching a doc, because the governed docs legitimately differ in style (`FLOW.md` writes `check-imports`,
+    `CLAUDE.md` writes `check-imports.mjs`); demanding the suffix would fail files that are correct as written,
+    and a loose match can only ever cost a missed omission, never a false red. LIMITS: it proves a name is
+    PRESENT, never that the prose around it is accurate, and never that a list is byte-for-byte or correctly
+    ordered. `GOVERNED_DOCS` is hand-kept and cannot be derived — only prose says whether a doc claims to
+    enumerate the job — so `/ship` and `/analyze` are excluded BY NAME (they carry partial, purpose-built
+    lists), and a NEW complete-list home added without registering it here is the guard's own blind spot. A
+    zero-length read is a hard failure rather than a clean report, since "0 missing" and "0 examined" are
+    otherwise indistinguishable. Structural only, never semantic. `--root <dir>` drives it against a synthetic
+    tree; `pipeline/test/guard-lists.test.mjs` exercises it through the CLI and every case is mutation-verified
+    — each was confirmed RED against a deliberately broken copy, including the job-blind and suffix-strict
+    mutants. Consumes nothing; exit 1 + the offending doc/script pairs.)
   - `lint-plan-refs.mjs` + `plan-folded.json` (the plan-reference gate, run in the cheap `checks` job — the one
     existence guard `plans/` has. `lint-arch.mjs` governs only ARCHITECTURE.md/GLOSSARY.md and explicitly SKIPS
     every `PLAN-*.md` token as a transient working doc, so before this a plan could be removed while live
@@ -2248,12 +2200,25 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     where naming a folded plan is the job), `pipeline/{test,experiments}` (synthetic fixture names), and its
     own source. Line-wrapped names are rejoined before matching — a comment header that breaks a long plan
     name mid-token across two lines otherwise reads as two separate plans, which measured 2 of the first 33
-    hits. `--refs X` lists every file citing a plan and is the check
+    hits. A BARE FAMILY PREFIX written on purpose is the trap this creates: naming a plan family by its
+    stem alone — `PLAN-` plus a topic word, with no full plan name after it — reads as its own plan name
+    to `PLAN_RE` and turns CI red, and the fix is a baseline line like any other name, since the guard
+    cannot tell a deliberate prefix from a typo. (Writing this entry tripped it, which is the guard
+    working; the example above is deliberately spelled so it does not.) `--refs X` lists every file citing a plan and is the check
     to run BEFORE deleting one; `--unused` shortlists plans nothing outside `plans/` points at; `--bless`
     records folds and refuses to add a name without `--force`. A token match, not a link checker: it answers
-    "is anything still pointing here?", never "does this plan still matter?" — and chunk ids inside a plan
-    (AC1, DT3) are NOT checked, since they collide across plans. Consumes nothing; exit 1 + the referencing
-    file list per dangling name),
+    "is anything still pointing here?", never "does this plan still matter?". Consumes nothing; exit 1 + the
+    referencing file list per dangling name. `--collisions` is a SEPARATE, non-gating report over chunk-id
+    reuse — commit messages and PLAN.md rows cite chunks by bare id, and 49 ids are currently
+    claimed by more than one document (`A1`, `A2`, `A3` and `D1` by five each), so a bare id can be genuinely
+    ambiguous. It reads four declaration forms — headings, table cells, and dashed or numbered bullets —
+    across `plans/` plus the root `PLAN.md`, and requires a digit in the id, so purely alphabetic ids (`F-A`)
+    are invisible. UNDER-REPORTING has bitten this mode twice: reading two of the forms hid the `AC1`
+    three-way clash, and scanning `plans/` alone hid five more — including `O1`, which CLAUDE.md cites bare
+    as F1's gating dependency — by skipping PLAN.md, the corpus's single biggest declarer at ~99 ids. Treat
+    the count as a floor and widen the reader before trusting a clean run. The two
+    pure readers (`unwrap`, `chunkIdsIn`) are pinned by `lint-plan-refs.test.mjs` against literal fixtures,
+    never the live tree),
   - `lint-arch.mjs` (doc-reference guard, 2026-07-14 — enforces `docs/ARCHITECTURE.md` invariant E7 in the
     cheap `checks` job: every code-font FILE token the governed doc names must resolve on disk — a path from
     root, a bare basename against the source dirs; function/field names are skipped, `PLAN-*.md` working docs
@@ -2275,12 +2240,22 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     the manual step. Pure helpers pinned by `move-lib-cluster.test.mjs`),
   - `lint-plan-lifecycle.mjs` (PLAN-CLEANUP-SKILL C10+C11 — a NON-GATING report the `/cleanup` skill
     reads; NOT wired into `checks.yml`. Scans `plans/PLAN-*.md` (excluding the root `PLAN.md`) and flags any
-    whose Status line reads complete (SHIPPED/DONE/LANDED) with no open marker (PARTIAL[LY]/DEFERRED/
-    PENDING/AWAITING/DRAFT/PROPOSAL/OPEN/REMAIN[S]/GATED/WIP) — a doc past its `docs/PLANNING.md`
-    fold-in point — and reports which `.claude/skills/*` are absent from `lint-skills.mjs`'s
-    `SKILL_FILES`. Structural (regex on a Status line + a filename set-difference), never semantic;
-    exit is ALWAYS 0. Exports `extractStatus`/`classifyStatus`/`scanPlans`/`skillDrift`, pinned by
-    `lint-plan-lifecycle.test.mjs`),
+    whose Status reads complete (SHIPPED/DONE/LANDED) with no open marker — a doc past its
+    `docs/PLANNING.md` fold-in point — and reports which `.claude/skills/*` are absent from
+    `lint-skills.mjs`'s `SKILL_FILES`. It reads the whole Status **BLOCK** (the markdown paragraph),
+    not the Status LINE, and with no continuation cap: the real corpus puts the load-bearing clause on
+    line five or six of a status, and every bound short of the paragraph terminator nominated live
+    plans as fold candidates — a false `review` costs a plan, which is the expensive direction for a
+    report consulted before DELETING a doc. The marker set lives in `OPEN_RE` (the ONE home — don't
+    restate it here) and covers three shapes: plain open words, negated completions (`not landed`
+    matched `\bLANDED\b` and nominated a plan whose status says it did not land), and — scrubbed in
+    the other direction — negated open (`Nothing open here` carried the word OPEN while meaning the
+    opposite). Both negation sets are literal phrase lists, so a phrasing outside them still defeats
+    the report; that is the standing limit and why the reader opens the doc. Structural (regex on a
+    status block + a filename set-difference), never semantic; exit is ALWAYS 0. Exports
+    `extractStatus`/`classifyStatus`/`scanPlans`/`skillDrift`, pinned by `lint-plan-lifecycle.test.mjs`
+    — whose assertions are checked to FAIL against the pre-fix implementation, since a status-reader
+    test built from one-line fixtures passes just as happily with the bug in place),
   - `report-branches.mjs` (PLAN-CLEANUP-SKILL C12 — a NON-GATING fact-gather the `/cleanup` skill
     reads; NOT wired into `checks.yml`, never deletes anything. Emits per-local-branch + per-worktree
     JSON (`tipSha`/`tipDate`/`tipSubject`/`isAncestorOfMain` vs `origin/main`, plus per-worktree
@@ -2317,7 +2292,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `alerts.test.mjs` (TD2 — transition-only + quiet-hours contract), `sync-fills.test.mjs`
     (LW1 — `regenerate()` does zero git), `lib/offers.test.mjs` (incl. the LW1 `offersSnapshot`
     emitter), `watchcore.test.mjs` (Watch-tab derivations + `offerVerdict`), `lib/cli.test.mjs`
-    (arg/`parseGp`/`median`), **`check-imports-scanner.test.mjs`** (2026-08-09 — acceptance fixtures for `check-imports.mjs`'s exported `unboundConstantsIn`, i.e. the CI guard's OWN behaviour. Exists because that scanner shipped broken four times in one day and was each time "verified" by running the CLI and seeing ✓ — an aggregate pass says nothing about WHICH shapes are detected. Pins each shipped failure individually: nested-brace `${…}` interiors, a regex containing a quote/backtick blinding the file to EOF, `return /"/…` misread as division, and control-flow parens (`if (X) {`) binding X file-wide and masking a real unbound use; plus the silence side — params/catch/labels/`static`/re-exports/object keys/member access must NOT be reported, since a false positive is a mysterious CI failure on correct code. Mutation-checked: removing the control-flow lookbehind makes it fail), `windowread.test.mjs` (window-range quantiles + the RC1 recency-split reach-contamination guard + the PLAN-DIURNAL-RECENCY-GUARD `computeReality` Layer-A mechanics fixtures — spike/bid-spike/crash/clean series + the `peaks[0]===peak` referential-identity + `{reality,…rest}` deep-equal invariant; moved to `pipeline/` beside the other `js/`-module tests when P2 moved windowread to `js/`), `diurnal-recency-replay.test.mjs` (PLAN-DIURNAL-RECENCY-GUARD Layer-B retrospective replay — reads a FROZEN committed snapshot `fixtures/diurnal-recency-replay.json` (the two anchors' 1h series cut at end-07-23 PDT, `cutISO`, so the recent-3 data days are the 07-21/22 double-spike; refresh via `--snapshot`) and asserts the HARD anchor Black dragon leather (2509) fires `spikeTop` with `typicalLevel` at the reachable ~4,216 (not the 4,337 spike peak); Primordial boots (13239) is reported INFORM-only — its 1h archive has since revised past the sharp 19.36m print (validated live by Fable at build), so it no longer reproduces deterministically. Default path is network-free → it IS a `*.test.mjs` and runs in `run-tests.mjs`/CI; `--live` gives a live diagnostic with no assertion since the wiki's revised averages self-heal past the failure. n=1 hard real anchor + the Layer-A `computeReality` synthetics — validates "catches what fooled us," not a calibrated rate), `forecast.test.mjs` (PF1 — the `js/forecast.mjs` diurnal+trend model: the pinned BLOOD-RUNE golden (whenBuyable ≈ 4h at the projected trough), the anchor boundary condition, the downtrend step-down, the loud degrades (spike/decay/band-violation/thin/no-anchor/trend-only), and the band-non-shrinking + additive-dispersion-fields checks — all synthetic, no fetch/fs), `validate.test.mjs` (P2 — the validator registry semantics + reachValidator fixtures: rarely-reached→caution, never-reached→reject, RC1 stale-optimistic→bumped reject, and the no-data/thin-sample degrade-to-pass contract),
+    (arg/`parseGp`/`median`), **`daemon-safety.test.mjs`** (2026-08-17 — fail-path proofs for
+    `check-daemon-safety.mjs`, which shipped with no test at all while its scope silently covered a
+    quarter of the registered fleet. Drives EVERY rule to RED against synthetic fixtures via the guard's
+    `--dir` + `--commands-dir` CLI rather than by importing its internals, since `check-dead-exports.mjs`
+    forbids an export kept alive only by its own test: out-of-dir implementations are in scope at all; the
+    zero-git import allowlist admits `{regenerate, REPO_DIR}` and refuses anything else, including a
+    namespace import; a git-writer losing its invocation guard or growing a non-allowlisted export; an
+    unresolvable registered daemon name; and the regression that `--publish` alone is NOT a git signal, so
+    `screen-flip-niches.mjs --publish` stays legal while `sync-fills.mjs --publish` still fails. All 7
+    verified to fail against the pre-widening guard), **`check-imports-scanner.test.mjs`** (2026-08-09 — acceptance fixtures for `check-imports.mjs`'s exported `unboundConstantsIn`, i.e. the CI guard's OWN behaviour. Exists because that scanner shipped broken four times in one day and was each time "verified" by running the CLI and seeing ✓ — an aggregate pass says nothing about WHICH shapes are detected. Pins each shipped failure individually: nested-brace `${…}` interiors, a regex containing a quote/backtick blinding the file to EOF, `return /"/…` misread as division, and control-flow parens (`if (X) {`) binding X file-wide and masking a real unbound use; plus the silence side — params/catch/labels/`static`/re-exports/object keys/member access must NOT be reported, since a false positive is a mysterious CI failure on correct code. Mutation-checked: removing the control-flow lookbehind makes it fail), `windowread.test.mjs` (window-range quantiles + the RC1 recency-split reach-contamination guard + the PLAN-DIURNAL-RECENCY-GUARD `computeReality` Layer-A mechanics fixtures — spike/bid-spike/crash/clean series + the `peaks[0]===peak` referential-identity + `{reality,…rest}` deep-equal invariant; moved to `pipeline/` beside the other `js/`-module tests when P2 moved windowread to `js/`), `diurnal-recency-replay.test.mjs` (PLAN-DIURNAL-RECENCY-GUARD Layer-B retrospective replay — reads a FROZEN committed snapshot `fixtures/diurnal-recency-replay.json` (the two anchors' 1h series cut at end-07-23 PDT, `cutISO`, so the recent-3 data days are the 07-21/22 double-spike; refresh via `--snapshot`) and asserts the HARD anchor Black dragon leather (2509) fires `spikeTop` with `typicalLevel` at the reachable ~4,216 (not the 4,337 spike peak); Primordial boots (13239) is reported INFORM-only — its 1h archive has since revised past the sharp 19.36m print (validated live by Fable at build), so it no longer reproduces deterministically. Default path is network-free → it IS a `*.test.mjs` and runs in `run-tests.mjs`/CI; `--live` gives a live diagnostic with no assertion since the wiki's revised averages self-heal past the failure. n=1 hard real anchor + the Layer-A `computeReality` synthetics — validates "catches what fooled us," not a calibrated rate), `forecast.test.mjs` (PF1 — the `js/forecast.mjs` diurnal+trend model: the pinned BLOOD-RUNE golden (whenBuyable ≈ 4h at the projected trough), the anchor boundary condition, the downtrend step-down, the loud degrades (spike/decay/band-violation/thin/no-anchor/trend-only), and the band-non-shrinking + additive-dispersion-fields checks — all synthetic, no fetch/fs), `validate.test.mjs` (P2 — the validator registry semantics + reachValidator fixtures: rarely-reached→caution, never-reached→reject, RC1 stale-optimistic→bumped reject, and the no-data/thin-sample degrade-to-pass contract),
     `dipposture.test.mjs` (DP1 — `recentDirection` falling/reverting/flat/thin/lone-flier-robustness +
     `dipPostureValidator`: no-dip/held/missing-input degrades, falling→pass, reverting→caution with the
     cross message + crossNet, unprofitable-cross language, the NEVER-reject invariant, and the inform clamp),
@@ -2409,7 +2393,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `subFloor` suggestions-ledger marker's absent-field byte-identity),
     `lint-skills.test.mjs` (P7 — the heuristic skill-linter's convention: `- **…**` rule-block
     detection, the two tag forms (code-pointer vs `judgment:`), frontmatter/fence exclusions, the
-    counting, and the LIVE regression guard that all four committed SKILL.md files lint clean),
+    counting, and the LIVE regression guard that every committed SKILL.md in `SKILL_FILES` lints
+    clean — it iterates the array, so it widens automatically as skills join),
+    `lint-skills-scope.test.mjs` (2026-08-14 — fail-path proofs for `lint-skills.mjs`'s `scopeDrift`:
+    a skill on disk but unlisted (the silent coverage-loss direction), a listed skill missing from
+    disk (the stale-entry direction), an exact match drifting neither way, a non-skill subdirectory
+    with no SKILL.md correctly NOT counted, and the real repo reading clean end-to-end through the
+    CLI — every case drives main() through the CLI, NOT the exported helper, and the set is verified RED
+    against a gate stubbed out to `if (false)`. The green run is only meaningful because those reds are
+    reproducible),
     `lint-docs.test.mjs` (DL1 — the doc-drift linter's three checks: denylist pattern precision (live-flip-niche
     form hits, deletion prose does NOT), the live corpus has no hard denylist violations + STILL catches
     the index.html AP1 drift as xfail, `normalizeWords`/`findDuplicateShingles` on synthetic docs

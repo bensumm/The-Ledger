@@ -123,6 +123,24 @@ so the answer is a VISIBLE divergence cap, not a third continuous reach term. Fo
 [G1](#g1--centralize-grade-caps-inside-rateitem-fix-f--land-first-calibration-free) (grade-cap
 centralization) — the reach cap should key off the rank's already-priced reach, not re-derive it.
 
+**The cheap mitigation the audit sketched (§2), and the ONE line of code it actually needs.** The reading
+rule is: **when a row is capped by `reach`, read the RANK, not the letter.** That cap is categorically
+different from the others — `THIN_GRADE_CAP` / `SUBFLOOR_GRADE_CAP` / `PHASE_BASING_GRADE_CAP` each
+represent additional risk the rank does NOT price (thinness, sub-floor entry, basing-phase froth), so
+their demotion carries real information. The reach cap alone demotes on a signal the rank has ALREADY
+multiplied in, so its letter is strictly conservative and the rank is the honest read.
+
+⚠ **It is NOT zero-code, and an earlier draft of this paragraph said it was — check before writing the
+skill bullet.** `cappedBy` ships as a STRUCTURED field on the row and in `suggestions.jsonl`, and
+`screen-flip-niches.mjs` attaches a `grade capped by <cap>` string as the grade cell's `.title` — but
+`.title` renders only as an HTML tooltip in the app (`scTitle`, `pipeline/lib/render/render.mjs`). The
+CONSOLE path goes through `cellText` (`js/quotecore.js`), which returns `c.t` and **drops `.title`
+entirely**, deliberately, so stdout stays clean. So a `/scan` judgment-layer bullet keyed on "when a row
+shows `cappedBy: reach`" would key on a token the console never prints, and could never fire. Making the
+rule usable on the surface it is meant for needs a small render change — a marker in the grade cell's
+visible text, which is what the audit originally proposed ("a distinguishing marker"). Cheap, but code.
+Either way it should NOT be mistaken for the fix: it makes the double-penalty legible, not absent.
+
 ### FLAW 5 — TTF is the most-leveraged, least-measured input — **CONFIRMED, sharper than stated**
 `rankScore` (`families.mjs:253-257`) divides by TTF; the header on the priors block
 (`families.mjs:36-41`) states every estimator constant is "n≈0 on EVERYTHING." Verified further:

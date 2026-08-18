@@ -1,5 +1,15 @@
 # PLAN-PIPELINE-COMPOSITION — one file per estimator/probe/gate, a thin layer that picks which run
 
+**Status: PC1 + PC2 + PC3 SHIPPED; PC4 OPEN — the doc stays for PC4 alone.** ⚠ The chunk headings
+UNDERSTATE what landed: they mark only PC1 and PC3, but PC2 (split `js/estimators.mjs` behind a barrel)
+is shipped too — verified from code, `js/estimators.mjs` is now a ~2.7KB barrel over `js/estimators/`
+(`cells.mjs`, `families.mjs`, `pair.mjs`, `reach.mjs`, `sell-models/`), exactly the described shape. Read
+the code, not the headings. **PC4** (split `js/validate.mjs` into `js/validators/`) is genuinely NOT done
+— no such directory exists and `js/validate.mjs` is still one ~44KB file. It was always scoped as
+"mechanical, opportunistic", so this is a deliberate not-yet, not a stall. Cross-referenced from
+`PLAN-REACH-CALIBRATION.md`, which sequenced this reorg BEFORE its `safeQuantile` chunk AC3 — that
+sequencing is now moot, since AC3 is not proceeding (its gate failed); see that plan's Status.
+
 Untracked planning doc (2026-07-17). Per the fold-out discipline this file folds into
 `PLAN.md` when scheduled and is deleted when its last chunk ships. Executor rules =
 PLAN.md "Executor rules", verbatim. Cross-referenced from `PLAN-REACH-CALIBRATION.md`

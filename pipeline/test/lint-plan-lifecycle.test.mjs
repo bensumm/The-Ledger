@@ -32,6 +32,50 @@ ok('extractStatus ignores a Status line buried below the head window', () => {
   const body = ['# t', ...Array(20).fill('filler'), 'Status: DONE'].join('\n');
   assert.strictEqual(extractStatus(body), null);
 });
+ok('extractStatus reads the whole Status BLOCK, not just its first line', () => {
+  // The live failure this pins: PLAN-DIURNAL-RECENCY-GUARD's status wrapped, the "Chunk 3 stays
+  // deferred" clause landed on line 2, and reading one line flagged an explicitly-open plan as a
+  // fold candidate — the one direction of failure that can cost a plan.
+  assert.strictEqual(
+    classifyStatus(extractStatus('Status: Chunks 1+2 SHIPPED.\nChunk 3 stays deferred.\n')),
+    'ok',
+  );
+});
+ok('the Status block ends at a blank line, a heading, a rule, or a table row', () => {
+  // Each case pairs a line that MUST be read with one that must not, so the assertion fails on a
+  // first-line-only reader too — a terminator test whose fixtures all collapse to the first line
+  // passes just as happily with the bug in place, which is what the earlier version of this did.
+  assert.strictEqual(extractStatus('Status: DONE.\nchunk 4 shipped.\n\nPENDING prose\n'), 'DONE. chunk 4 shipped.');
+  assert.strictEqual(extractStatus('Status: DONE.\nchunk 4 shipped.\n## Open items\n'), 'DONE. chunk 4 shipped.');
+  assert.strictEqual(extractStatus('Status: DONE.\nchunk 4 shipped.\n---\nDRAFT notes\n'), 'DONE. chunk 4 shipped.');
+  assert.strictEqual(extractStatus('Status: DONE.\nchunk 4 shipped.\n| chunk | open |\n'), 'DONE. chunk 4 shipped.');
+});
+ok('a six-line status keeps its open marker — the real corpus shape, uncapped', () => {
+  // The shape that broke the capped reader: PLAN-CAPITAL-EFFICIENCY-AND-DIGEST and PLAN-GRADE-REACH
+  // both put the load-bearing clause on line FIVE of the block, past a 3-continuation cap, and both
+  // were nominated as fold candidates with live work in them. No cap — the paragraph is the bound.
+  const real = [
+    'Status: **SHIPPED `1c03fd9` — all three workstreams**, plus POLISH 1+2.',
+    'Two later supersessions: the digest now sorts on `rank`, not §3\'s `rankKey`,',
+    'and W3-1/W3-2 reshaped the verdict + rank. Constants remain placeholders',
+    'pending the retro join, which has not accrued enough rows to move them.',
+    'OPEN: §10\'s five owner questions were never answered on the record —',
+    'the build took the spec\'s stated defaults.',
+  ].join('\n');
+  assert.match(extractStatus(real), /five owner questions/);
+  assert.strictEqual(classifyStatus(extractStatus(real)), 'ok');
+});
+ok('the reader stops at the paragraph, so later body prose cannot flip the classification', () => {
+  const runaway = ['Status: DONE.', '', ...Array(20).fill('more prose'), 'PENDING'].join('\n');
+  assert.strictEqual(classifyStatus(extractStatus(runaway)), 'review');
+});
+ok('underscored identifiers survive extraction — the report is what a reader greps', () => {
+  // Stripping `_` as emphasis printed `APP_VERSION` as `APPVERSION`, a name that exists nowhere.
+  assert.strictEqual(
+    extractStatus('Status: **SHIPPED** — `PFILL_ASK_REACH_FLOOR` raised, no `APP_VERSION` bump.\n'),
+    'SHIPPED — PFILL_ASK_REACH_FLOOR raised, no APP_VERSION bump.',
+  );
+});
 
 // --- classifyStatus ------------------------------------------------------------------
 ok('a bare done-word with no open marker flags review', () => {
@@ -45,6 +89,34 @@ ok('a landed-but-open status is not flagged', () => {
   assert.strictEqual(classifyStatus('Chunks A–E LANDED; F/G/H/I remain.'), 'ok');
   assert.strictEqual(classifyStatus('most chunks shipped; AC4 open (F1-gated).'), 'ok');
   assert.strictEqual(classifyStatus('WC1 + WC2 LANDED; WC3 gated on accrual.'), 'ok');
+});
+ok('PARTLY is its own stem — not caught by PARTIAL(LY)', () => {
+  assert.strictEqual(classifyStatus('PARTLY SHIPPED — SP1 landed.'), 'ok');
+});
+ok('a NEGATED done-word is an open marker, not a complete one', () => {
+  // `\bLANDED\b` matched "not landed" and nominated PLAN-COPILOT-IDEAS, whose status says the work
+  // did not land. Literal negations, still a word set — no semantics.
+  assert.strictEqual(classifyStatus('PB-1 LANDED. Restart-blindness recovery SCOPED DOWN, not landed.'), 'ok');
+  assert.strictEqual(classifyStatus('Spec DONE; chunk 3 not yet built.'), 'ok');
+  assert.strictEqual(classifyStatus('SHIPPED — the five owner questions were never answered.'), 'ok');
+});
+ok('HELD is an open marker', () => {
+  // PLAN-GRADE-REACH: "Constants are PLACEHOLDERS (n≈14). HELD for F1/retro-join" — the only marker
+  // on the line, and absent from the set it flagged a plan with a live gate on it.
+  assert.strictEqual(classifyStatus('SHIPPED — HELD for F1/retro-join.'), 'ok');
+});
+ok('SHELVED / SCOPING / UNBUILT each decide on their own', () => {
+  // Each of these was in the set but never the DECIDING marker on any real plan, so none had run.
+  assert.strictEqual(classifyStatus('SHIPPED — follow-up SHELVED.'), 'ok');
+  assert.strictEqual(classifyStatus('SHIPPED — successor still SCOPING.'), 'ok');
+  assert.strictEqual(classifyStatus('SHIPPED — chunk 4 UNBUILT.'), 'ok');
+});
+ok('"Nothing open here" is not an open marker — the mirror of the negation case', () => {
+  // PLAN-OUTPUT-TABLE is a genuine fold candidate whose status carries the word OPEN while meaning
+  // the opposite; the bare word test kept it alive. Scrubbed, so it flags.
+  assert.strictEqual(classifyStatus('SHIPPED 3b50b7b, including all three REVISIONS. Nothing open here.'), 'review');
+  assert.strictEqual(classifyStatus('DONE — no chunks open.'), 'review');
+  assert.strictEqual(classifyStatus('DONE — AC4 open.'), 'ok');   // the un-negated word still counts
 });
 ok('DRAFT / PROPOSAL / null are ok (not complete)', () => {
   assert.strictEqual(classifyStatus('DRAFT — not yet executed.'), 'ok');

@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 2.7
+version: 2.9
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -63,13 +63,17 @@ is now the default (AO1) and without `--verbose` there is no table in stdout to 
 
 **`--digest` is part of the STANDARD invocation (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST, Workstream C).**
 _(judgment: triage-read discipline; mechanic in `screen-flip-niches.mjs` `buildDigestBlock`)_ It prints
-ONE compact cross-niche block ABOVE the per-niche tables — `Item | capEff | deploy | reach | phase | soft-buy | grade |
-verdict`, top ~8 ranked by **deployable throughput** (`capEff × deployable capital` ≈ after-tax deployable
-gp/day, NOT raw %) — the "which of these do I look closer at" triage pass. Ranking by raw capEff alone let
-dust-tier cheap high-% flips bury the big-ticket deploys, so the digest weights capEff by the deployable
-capital (reusing the value flip-niche's `deployUnits` against the full `--capital` pool) — `capEff` stays a shown
-column, and the `deploy` column shows the parkable capital so the ordering reads honestly (a big-ticket you
-can park 40m into out-ranks a dust flip you can only put 100k into, even at a lower %). `capEff` is a
+ONE compact cross-niche block ABOVE the per-niche tables — `Item | capEff | deploy | reach | trend | phase | soft-buy |
+grade | verdict`, top ~8 ranked by **`rank` = net × P(fill) ÷ TTF** — the "which of these do I look closer
+at" triage pass. **The ordering is SCALE-AWARE and WALLET-FREE: it does NOT move with your cash, so do
+NOT read a row's position as a sizing or capital-throughput signal** — it ranks the opportunity's QUALITY.
+`capEff` and `deploy` remain SHOWN as sizing columns, and are explicitly not what the block sorts on
+(`rankKey` = capEff × deployable survives only as a tie-break). The block's own printed header states this
+— trust it over any prose. ⚠ An earlier version of this skill described the sort as "deployable
+throughput (`capEff × deployable capital`)"; that basis was measured unusable and REPLACED — on a fully
+deployed book `rankKey` collapses to 0 and the ordering fell through to scale-free `capEff`, reproducing
+the dust-sweep it was meant to prevent (all 8 main rows C/D dust, Black knife at 9907%/d, the only A−
+`fill-now` row buried in the appendix). `capEff` is a
 REALIZABLE sustained %/day — buy-limit-bounded at the deployed size, so a fast-churn cheap item reads
 ~13%/d, not a ~198%/d fantasy you can't actually cycle. A `— big-ticket lane —` sub-section is APPENDED when
 fewer than 2 big-tickets (`mid ≥ BIG_TICKET_GP`) made the visible top-8, so the low-fuss big-ticket class
@@ -229,7 +233,11 @@ band + churn + AMPLITUDE — `value` is OUT of the default (took its slot); valu
   newly-tracked item with a thin slice still degrades to no-data. **Artifact/liquidity hardening (Ben
   2026-07-09):** `valueGate` rejects an **artifact-low** (live >15% below the durable q15 floor — a broken
   instasell print or a crash mid-fall, the low-side analog of the band artifact-bid; the §F footer counts
-  the drops), and the unit-liquidity floor was raised 20→50 (a value hold you can't exit isn't a hold).
+  the drops), and it carries its own unit-liquidity floor (`VALUE_LIQ_FLOOR` in
+  `pipeline/lib/signal/gatecandidates.mjs` — a value hold you can't exit isn't a hold). ⚠ Read that
+  constant, not a number quoted here: the floor was raised 20→50 long before the VOL24 recalibration
+  re-based every volume floor onto the composed rolling-24h source, and this line still said "50" while
+  the live value was 70× that (see the `50→3,500` note further down, which is the current one).
   **RC1 recency anchor (same day):** the cycle range is now anchored to the recent 7d, so a stale HIGH from
   a prior regime the item LEFT can't inflate amplitude or make a mid-recovery item read "near the low →
   BUY-NOW" (Contract-of-sensory-clouding was #3 BUY-NOW off a month-old 365k ceiling → correctly WATCH now).
@@ -430,11 +438,13 @@ This is the tribal layer the script can't do — apply ALL of these:
   big-ticket realized sample is n=1 (one godsword) — the crossover is UNMEASURED. When the RC co-log
   accrues enough closed big-ticket round-trips, compare realized %/day directly instead of estimating.
   Companion to the parked-capital-leak hypothesis above.
-- **Deployable-throughput ordering — read the digest's `capEff`/`deploy` columns, not just Grade/Rank
+- **Read the digest's `capEff`/`deploy` columns for SIZING — they are shown, not ranked on
   (PLACEHOLDER, n≈0).** _(judgment: the NUMERIC companion to "Velocity vs magnitude" above — inform-only
-  ordering)_ The digest ranks by **deployable throughput** = `capEff × deployable capital` (≈ after-tax
-  deployable gp/day), NOT raw capEff — because raw `capEff` is scale-free and let dust-tier cheap high-%
-  flips bury the big-ticket deploys. `capEff` = after-tax ROI%/day of capital tied up (`roiPct ÷ holdDays`;
+  sizing read; the sort basis itself is fixed in `screen-flip-niches.mjs` `buildDigestBlock`)_ ⚠ The digest
+  ranks by `rank` (net × P(fill) ÷ TTF), which is wallet-free — **it does NOT rank by `capEff × deployable
+  capital`**, and this bullet said it did until the code was checked. Use these two columns to decide HOW
+  MUCH to put in a row you have already picked off the ordering, never to infer why one row sits above
+  another. `capEff` = after-tax ROI%/day of capital tied up (`roiPct ÷ holdDays`;
   a recycling churn lane's `holdDays` reflects its laps/day, so a fast small win can out-rank a slow big
   one); the `deploy` column is the parkable capital (the value flip-niche's `deployUnits` × buy price, against
   the full `--capital` pool) — a big-ticket you can park 40m into out-ranks a dust flip you can only put
@@ -497,9 +507,17 @@ This is the tribal layer the script can't do — apply ALL of these:
     The line closes with `hours MAY repeat most days` / `levels only — no reliable hours` / `levels only —
     hours unverified`. Only ~0.8% of items pass, so an absent window is the NORMAL case now — read the
     LEVEL and treat the hours as a bonus when they appear. `range-churn — no timing edge` is gone.
-  - All shapes append a liquidity/tranche segment (`vol/d · dip-pool · peak-pool · tranche comfortable
-    ~X / ceiling ~Y`) and a `⚠ buy limit … exceeds tranche ceiling` caveat when the item's buy limit sits
-    past the (n≈6, borrowed-not-validated) tranche ceiling — expect a worse realized net at that size.
+  - All shapes append a liquidity/tranche segment (`vol/d · dip-pool · peak-pool · tranche ~X clean ·
+    ~Y price-knee`) and a `⚠ buy limit … exceeds the round-trip price-knee` caveat when the item's buy
+    limit sits past it. _(judgment: relay discipline — this segment is the most misread thing the lap
+    prints)_ **Never quote these as a quantity Ben cannot clear.** They are a PRICE-QUALITY knee off a
+    borrowed n≈6 study that measured how far the realized price degrades with lot size and never
+    measured whether the lot fills — so sizing past the knee predicts a worse net, not a stuck offer.
+    They are also a ROUND-TRIP bound (`volDay` = min(hpv,lpv), so the tighter leg governs); a one-leg
+    sell of stock already held is bounded by the sell side alone, which the printed `peak-pool` gives
+    and which on a lopsided book is several times larger. Anchor: two one-leg sapling sells cleared 146
+    and 200 units at 4.0%/4.5% of min-side `volDay` — 8x the `clean` number and 4x the knee — and the
+    read that told Ben not to scale past the knee was wrong for exactly this reason.
   - **A SECOND window may also flag** (PLAN-MULTI-PEAK-WINDOWS) — a trailing `also ASK …/also BID … —
     second elevated/depressed window (n≈0, inform)` clause on the SAME line when an item has a second
     genuinely-prominent elevated (or depressed) diurnal window, not just one (e.g. a reliable overnight

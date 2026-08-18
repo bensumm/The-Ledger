@@ -95,7 +95,9 @@ export function buildBook({ groups = [], offers = [], cash = {}, marks = new Map
   // --- (1) slots -------------------------------------------------------------------------------
   // offers is already latest-per-slot ACTIVE offers (BUYING/SELLING only — activeOffers semantics),
   // so each entry is one occupied slot. Decision 4: a just-completed BOUGHT/SOLD (not-yet-collected)
-  // slot is absent from this array and correctly reads as free — an accepted log-derived lower bound.
+  // slot is absent from this array and reads as free — an accepted simplification. That makes `free`
+  // an UPPER bound and `occupied` the LOWER one: the miss can only ever UNDERCOUNT occupancy, so a
+  // caller sizing new offers against `free` must treat it as "at most", never "at least".
   const occupants = offers.map(o => ({
     slot: o.slot, side: o.side, itemId: o.itemId, name: o.item,
     price: o.price, qty: o.qty, filled: o.filled,
@@ -106,7 +108,7 @@ export function buildBook({ groups = [], offers = [], cash = {}, marks = new Map
     occupied,
     free: Math.max(0, TOTAL_SLOTS - occupied),
     occupants,
-    caveat: 'free-slot count is a log-derived lower bound; a just-completed, not-yet-collected slot reads as free (accepted simplification, not a bug)',
+    caveat: 'free-slot count is a log-derived UPPER bound (occupancy is the lower bound) — a just-completed, not-yet-collected slot reads as free, so read it as "at most N free" (accepted simplification, not a bug)',
   };
 
   // --- (1) capital -----------------------------------------------------------------------------

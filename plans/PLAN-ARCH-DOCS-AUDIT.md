@@ -1,7 +1,10 @@
 # PLAN-ARCH-DOCS-AUDIT.md — critical pass over architecture + the whole doc corpus
 
-Status: **PROPOSAL — Ben review required.** Produced 2026-07-10, investigation-only (no code
-or doc edited). Per `docs/PLANNING.md` this is a draft; approved chunks fold into `PLAN.md`.
+Status: **MOSTLY SHIPPED — DOC-5 + ARCH-2 REMAIN OPEN (both Ben-gated).** ARCH-1 `a24d456` ·
+DL1 `ef239dc` · COD-1 `55861d1` · COD-2 `81d9049` ·
+COD-3 `5b91d10` · COD-4 `a923496` · DOC-1..4 `e45cd7b`/`560b28b`/`1619ff6`/`0c9ecca` · ARCH-3
+`6808c58`; Part 4's N1+N2 also fixed (`gatecandidates.mjs:568-569`). **OPEN: DOC-5 + ARCH-2 only**
+— both judgment-heavy and Ben-gated. A2/A6/A7 are owned by `PLAN-APP-PARITY`/P8, not by this doc.
 
 Overall verdict up front, honestly: post-Pipeline-v2 the architecture is in GOOD shape — one
 verdict home (`lib/context.mjs` ended the quote/watch fork), declarative strategy specs, pure

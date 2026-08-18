@@ -1,7 +1,15 @@
 # PLAN-CODE-REVIEW — fixes from the 2026-07-16 script-by-script review
 
-Status: **DRAFT — not yet executed.** Per-topic working doc (PLANNING.md lifecycle); folds into
-PLAN.md and is deleted when its last chunk ships.
+Status: **PARTIALLY EXECUTED — chunks 2, 3 and most of 5/6 remain OPEN.**
+SHIPPED: chunk 1 (`ceb538b` read-buy-limits + `68627cc` offers.mjs),
+chunk 4 (`1563c10`), and — in `ceb538b` — 2 of chunk 5 (declare-thesis `argv[1]` guard, marketfetch
+in-flight-promise cache) plus chunk 6's `REPO_DIR`→`lib/paths.mjs` layering fix.
+**OPEN: chunk 2** (`offersSnapshot` still returns no `suspects`), **chunk 3** (`collapseOffers`
+unchanged), chunk 5's remaining three (`askFromSnapshot` first-match, `delete e.empty`, `eventId`
+price/qty hash), and chunk 6's `streaks()` extraction + dead-import sweep.
+⚠ Every `pipeline/lib/*.mjs` path below is STALE — the libs moved into subdirs
+(`lib/reconstruct/{offers,reconstruct}.mjs`, `lib/thesis/watchstate.mjs`,
+`lib/capital/derive-cash-tiers.mjs`, `lib/market/marketfetch.mjs`).
 
 ## Context / diagnosis
 
@@ -73,6 +81,15 @@ LH2.4 fixed, in every consumer of `offers.json`:
   readers already follow). `derive-cash-tiers.mjs`'s escrow calc should treat a suspect resting bid
   the same as a confirmed one for the purpose of NOT counting its gp as deployable (the safe
   direction — false-negative escrow is a real-money risk; false-positive "still committed" is not).
+- **⚠ OWNER RULING 2026-08-15 — the "safe direction" above is BACKWARDS for this tool, do not build
+  it as written.** Ben: *"The escrow behavior is so that we dont fail by excluding items I can
+  actually afford."* Counting reclaimable deep-bid escrow as deployable is DELIBERATE, and erring
+  high is the CHEAP error: an inflated pool costs one in-game verification (and already prints the
+  `⚠ N restart-suspect bid(s) may be included` note), whereas an understated pool silently shrinks
+  the derived `--max-price` and HIDES items he could actually buy — an invisible, uncorrectable
+  loss. So the `suspects` field is still worth adding for VISIBILITY, but it must not be subtracted
+  from `deployablePool`. Same error-cost logic as `gate-on-error-cost-not-n`, and the shown-not-
+  modelled discipline of PLAN-CAPITAL-DEPLOYABILITY L3.
 - **Verification:** extend `offers.test.mjs` with a restart-blind fixture asserting `suspects`
   populates and `offers` doesn't double-count it; a `derive-cash-tiers.test.mjs` case showing a
   blind bid's escrow is still excluded from `deployablePool`.

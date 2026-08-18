@@ -420,16 +420,20 @@ ok('formatTimedLap: clean cycle — BID/ASK+windows, BOTH timed net and same-hou
   assert.ok(text.includes('858k/d'), 'the liquidity segment (volDay merged onto the lap)');
   assert.ok(text.includes('dip-pool ~200k'));
   assert.ok(text.includes('peak-pool ~448k'));
-  assert.ok(text.includes('tranche ~4.3k comfortable'));
-  assert.ok(text.includes('~8.6k ceiling'));
+  assert.ok(text.includes('tranche ~4.3k clean'));
+  assert.ok(text.includes('~8.6k price-knee'));
   assert.ok(!text.includes('⚠ buy limit'), 'buyLimit (5,000) is UNDER trancheCeiling (8,580) — no caveat');
 });
 
 ok('formatTimedLap: §4 caveat fires when the caller-relevant size (buyLimit) exceeds trancheCeiling — the real bolts anchor (buyLimit 11,000 > ceiling 8,580 per the plan\'s §4 table)', () => {
   const overCeiling = { ...boltsLap, buyLimit: 11000 };   // the real bolts session anchor — 11,000 > 8,580
   const text = formatTimedLap(overCeiling);
-  assert.ok(text.includes('⚠ buy limit 11k exceeds tranche ceiling'), `caveat must fire (got: ${text})`);
-  assert.ok(text.includes('n≈6 reach-relief, not validated for diurnal'));
+  assert.ok(text.includes('⚠ buy limit 11k exceeds the round-trip price-knee'), `caveat must fire (got: ${text})`);
+  // The caveat must state what it is NOT: a price claim, not a clearing claim. Reading it as a
+  // quantity cap is the live misread this wording exists to prevent, so pin the disclaiming clause.
+  assert.ok(text.includes('not a failure to clear'), `caveat must disclaim the clearing reading (got: ${text})`);
+  assert.ok(text.includes('one-leg sells are bounded by peak-pool ~448k'), `caveat must name the one-leg bound (got: ${text})`);
+  assert.ok(text.includes('n≈6 borrowed price study, not validated for diurnal'));
   assert.ok(!formatTimedLap(boltsLap).includes('⚠ buy limit'), 'the base fixture (buyLimit 5,000) stays under the ceiling — no caveat');
 });
 

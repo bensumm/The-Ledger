@@ -262,13 +262,18 @@ export async function loadAllLatest() {
    (8/24, up to +56%) — different windows, not truncation.
    The ~10-27x under-report (2026-07-13) is HISTORY; bulk measures ~1.0x vs the day it labels.
    Why the endpoint changed is UNKNOWN — do not invent a mechanism.
-   Full retraction history: CHANGELOG 2026-08-10 / 2026-08-11 entries, PLAN-VOL24.md.
+   Full retraction history: CHANGELOG 2026-08-10 / 2026-08-11 entries, PLAN.md's VOL24 Status row.
 
    /5m, /1h, /6h are healthy. Composers that reconstruct the TRUE trailing 24h from /1h:
      • rolling24FromTs1h  — sums an ALREADY-FETCHED per-item /timeseries?1h (zero new fetch).
      • loadAll24hRolling  — walks the last 24 complete bulk /1h?timestamp windows, reusing the
        Tier-1 SQLite 1h archive (check-before-fetch). Emits loadAll24h's per-id shape, so callers
        swap sources with no shape change; avg prices are true VWAPs of the hourly avgs.
+       ⚠ THE 24-WINDOW WALK IS NOT AN UNEXAMINED COST — do not "optimise" it into one fetch.
+       There is NO single-fetch bulk source of true rolling-24h volume. The tempting one is
+       /volumes, and it does not work: one unsplit daily number, ~13h stale, with no hpv/lpv
+       split, so it cannot feed the two-sided liquidity gate at all. That was measured and
+       rejected before this walk was written.
    `rolling` IS THE SCREEN DEFAULT (since 2026-07-13; --vol-source fallback:'rolling', pinned by
    compose.test.mjs). `--vol-source legacy` is an escape hatch, not the default. */
 export const ROLL24_HOURS = 24;

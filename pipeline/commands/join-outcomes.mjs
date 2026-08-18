@@ -36,7 +36,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { reconstructCampaigns, REPRICE_GAP, MANUAL_SLOT } from '../lib/reconstruct/campaigns.mjs';
+import { reconstructCampaigns, REPRICE_GAP, isManualSlot } from '../lib/reconstruct/campaigns.mjs';
 import { loadMapping, loadAll24h, loadHistBands } from '../lib/market/marketfetch.mjs';
 import { loadHistState, bandPercentile } from '../lib/signal/range-position.mjs';
 import { velocityClass } from '../lib/timing/velocity.mjs';
@@ -55,7 +55,7 @@ const OUT = path.join(ROOT, 'outcomes.json');
 const WEEKLY_STAMP = path.join(HERE, '..', '.cache', 'last-weekly-report');
 
 // --- tunable named constants (NOT magic numbers) ---------------------------------------------
-// REPRICE_GAP + MANUAL_SLOT are now imported from lib/campaigns.mjs (the shared campaign primitive) —
+// REPRICE_GAP + isManualSlot are now imported from lib/campaigns.mjs (the shared campaign primitive) —
 // ONE source, so this file and the forward-join siblings can't drift on the reprice-stitch window.
 const SUGGEST_WINDOW = 6 * 3600;    // s: a suggestion older than this before placement is too stale to join
 // --- --report cell floors (the numbers that GATE F1 — see FILLS-PIPELINE.md §10) --------------
@@ -203,7 +203,7 @@ async function build() {
     const completeOffer = c.offers.find(o => o.state === 'complete');
     const tsComplete = completeOffer ? completeOffer.tsClose : null;
     const terminalState = last.state;
-    const manual = c.offers.some(o => o.slot === MANUAL_SLOT);
+    const manual = c.offers.some(o => isManualSlot(o.slot));
 
     // band percentile at placement (where the placement price sat in the trailing-2h band)
     const b = bands ? bands[idx] : null;

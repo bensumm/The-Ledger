@@ -1,6 +1,6 @@
 ---
 name: cleanup
-version: 1.2
+version: 1.5
 description: A repeatable post-wave hygiene + architectural-integrity pass — run the CI guards, then a SESSION/WAVE-scoped judgment sweep for drift, duplication, dead code, doc-honesty, and worktree/branch staleness, and produce a proposed-fix list. Triggers — "clean up after this session/wave", "check the architecture", "did we leave a mess", "run a cleanup", "post-wave cleanup", "cleanup".
 ---
 
@@ -32,15 +32,29 @@ node pipeline/ci/check-imports.mjs
 node pipeline/ci/check-dead-exports.mjs
 node pipeline/ci/check-daemon-safety.mjs
 node pipeline/ci/check-forecast-guards.mjs
+node pipeline/ci/check-verdict-guards.mjs
 node pipeline/ci/lint-arch.mjs
 node pipeline/ci/lint-skills.mjs
 node pipeline/ci/lint-docs.mjs
+node pipeline/ci/lint-comments.mjs
+node pipeline/ci/lint-plan-refs.mjs
+node pipeline/ci/lint-guard-lists.mjs
 ```
+  ⚠ This list must stay BYTE-FOR-BYTE the gating set in `checks.yml`'s `checks` job — and
+  `lint-guard-lists.mjs` (last line above) now FAILS CI if it drifts, so this is enforced rather than
+  merely asked for. It drifted twice before that guard existed: `check-verdict-guards`, `lint-comments`
+  and `lint-plan-refs` were gating in CI while missing here (and the same three were missing from
+  `docs/FLOW.md`), so a `/cleanup` could report green and the very next push go red, which is the one
+  outcome this step exists to prevent. When you add a guard to `checks.yml`, add it here in the same
+  commit. Note the guard checks NAMES, not order or prose — it cannot tell you this list is
+  byte-for-byte, only that nothing is missing. (The bare
+  `lint-plan-refs.mjs` above is the GATE; the `--collisions` run further down is a different, non-gating
+  report and does not substitute for it.)
 - **Run the browser smoke ONLY if the session touched an app-imported module** — cross-check the
   touched files against the app-imported list in `docs/ARCHITECTURE.md`, then `pipeline/ci/smoke-test.mjs`.
   A pipeline/skill-only wave skips it.
 
-## 2. Run the two non-gating report scripts
+## 2. Run the three non-gating report scripts
 
 - **Gather plan-lifecycle + skill-coverage facts** — `pipeline/ci/lint-plan-lifecycle.mjs` flags any
   root `PLAN-*.md` whose Status reads complete with no deferred/partial marker (a doc past its
@@ -49,9 +63,16 @@ node pipeline/ci/lint-docs.mjs
 - **Gather branch/worktree facts** — `pipeline/ci/report-branches.mjs` emits tip sha/date, ancestor-
   of-`origin/main`, and per-worktree dirty state as JSON. It ONLY gathers; the stale-vs-deferred
   verdict is the judgment pass in §6.
+- **Gather chunk-id collisions** — `pipeline/ci/lint-plan-refs.mjs --collisions` lists every chunk id
+  claimed by more than one plan. _(judgment: only ACT on a collision when the wave you are cleaning
+  up added one — the existing 37 are a standing backlog, not this wave's mess.)_ Renaming a shipped
+  chunk's id is NOT a fix: the old id is already in commit messages and PLAN.md rows, so a rename
+  moves the ambiguity rather than removing it. The fix is prospective — `docs/PLANNING.md`'s
+  plan-unique-prefix rule — plus disambiguating the id at any in-tree citation that is now unclear.
 ```
 node pipeline/ci/lint-plan-lifecycle.mjs
 node pipeline/ci/report-branches.mjs --pretty
+node pipeline/ci/lint-plan-refs.mjs --collisions
 ```
 
 ## 3. One-line mechanical checks

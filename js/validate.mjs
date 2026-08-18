@@ -26,9 +26,9 @@
  *     validator flag as a note.
  *
  * THRESHOLDS ARE PLACEHOLDERS (process rule 4). Every cutoff below is named + flagged; none is
- * validated EXCEPT floorValidator's FLOOR_CAUTION_RANGES, set from the 2026-08-08 forward-scoring study
- * recorded in its own MEASURED block (and dip-posture's reverting branch, whose POLICY that same study
- * falsified — see the recentDirection header in js/quotecore.js). Everything else is still un-scored.
+ * validated EXCEPT floorValidator's FLOOR_CAUTION_RANGES, set from the forward-scoring study recorded in
+ * its own MEASURED block (and dip-posture's reverting branch, whose POLICY that same study falsified —
+ * see the recentDirection header in js/quotecore.js). Everything else is still un-scored.
  * reachValidator REUSES js/windowread.mjs's existing quantile/recency logic and constants
  * (RECENT_NIGHTS, recencySplit's staleOptimistic) rather than inventing parallel ones; floorValidator
  * REUSES js/termstructure.mjs's term-structure math (the durable floor + typical fluctuation) rather
@@ -43,8 +43,8 @@ import { tax, netMargin } from './money-math.js';
 const SEVERITY = { pass: 0, caution: 1, reject: 2 };
 /* the more severe of two statuses (reject > caution > pass) — the worst gate wins on a surface. */
 export function worseOf(a, b) { return (SEVERITY[b] ?? 0) > (SEVERITY[a] ?? 0) ? b : a; }
-/* The RC1 stale-flag bump, CAPPED AT CAUTION (2026-08-09 — measured; was pass→caution AND caution→reject).
-   It now only ever raises a pass to caution; a caution stays a caution and a reject stays a reject.
+/* The RC1 stale-flag bump, CAPPED AT CAUTION. It only ever raises a pass to caution; a caution stays a
+   caution and a reject stays a reject.
    WHY THE CAP (forward-scored over 6,016 ask-reach rows with a real 8h outcome, base rate 40.3%):
      · staleOptimistic DOES carry signal at matched reach fraction — stale rows print −4.0pp less often
        (frac-weighted; −6.6pp and −8.8pp in the 0.2–0.3 and 0.3–0.4 bands, though 0.4–0.5 reverses +9.1pp).
@@ -76,12 +76,12 @@ export const REACH_REJECT_FRAC = 0;     // reached on ≤ this fraction ⇒ reje
  * validator. It answers: does the last ~REACH_NIGHTS same-window nights say this candidate bid/ask is
  * actually reachable? A rarely-reached level → caution; a never-reached level → reject; the RC1
  * stale-optimistic flag (the full count concentrated in an OLDER, higher/cheaper price regime) raises a
- * pass to CAUTION and stops there (2026-08-09 — it used to escalate caution→reject too; measured, see
- * staleFlagBump above), because a reach the recent nights don't confirm is worth a flag but not an
- * out-of-range verdict — reusing recencySplit's existing staleOptimistic semantics, no new threshold.
+ * pass to CAUTION and stops there (the cap is measured — see staleFlagBump above), because a reach the
+ * recent nights don't confirm is worth a flag but not an out-of-range verdict — reusing recencySplit's
+ * existing staleOptimistic semantics, no new threshold.
  *
- * ⚠ THRESHOLD HONESTY (measured 2026-08-09, n=6,016 ask rows with a real 8h outcome). REACH_CAUTION_FRAC
- * was NOT retuned, and the reason is worth recording: no cut point earns much. The base miss rate is
+ * ⚠ THRESHOLD HONESTY (measured, n=6,016 ask rows with a real 8h outcome). REACH_CAUTION_FRAC
+ * is deliberately NOT tuned, and the reason is worth recording: no cut point earns much. The base miss rate is
  * 60.0%, and moving the line from 0.5 down to 0.2 buys precision 60.0% → 64.6% while recall falls to
  * 62.7% — a ~5pp lift at best anywhere in the range, and 0.1/0.15 are no better. The underlying signal is
  * REAL but CONTINUOUS: within-item (composition cancelled) a higher reach fraction prints 9.8pp more
@@ -96,7 +96,7 @@ export const REACH_REJECT_FRAC = 0;     // reached on ≤ this fraction ⇒ reje
  * level print in the SAME coming-8h window it's about to rest through?" — so the count MOVES with the
  * clock. quote-items.mjs scores the same level over the FULL DAY (windowStats wStart 0, wEnd 0):
  * "does this level print at some point in a day?" Both are legitimate questions and they legitimately
- * DISAGREE (the 2026-08-02 neitiznot bid: 0/3 here vs 2/3 full-day, minutes apart — the dip printed
+ * DISAGREE (the neitiznot bid anchor: 0/3 here vs 2/3 full-day, minutes apart — the dip printed
  * outside the coming-8h window). INTENTIONAL DIFFERENCE, kept: the screen's rank P(fill) is built on
  * this window read (unifying it to full-day would re-score every board — its own chunk, EF0-gated).
  * Cross-surface comparison of raw reach tokens is invalid without naming the window basis.
@@ -163,13 +163,13 @@ export function reachValidator(ctx) {
 // The floor + typical-swing math itself lives in js/termstructure.mjs (its own PLACEHOLDERs); these
 // govern how far above the durable floor a BUY is allowed to sit before we caution/reject it.
 //
-// MEASURED 2026-08-08 — the F1/P6 study this header used to ask for HAS NOW BEEN RUN. 4,121 band/churn
+// MEASURED — the F1/P6 study this header once asked for has been run. 4,121 band/churn
 // firings forward-scored against the 5m archive; drawdown measured below the buy over 48h and expressed
 // in the item's OWN typical-swing units (recoverable per row as (level − floor) / ranges):
 //     ranges 1.00–1.25  n=1,734 — median drawdown 0.34 swing · P(drawdown ≥ 1 swing)  9.6%
 //     ranges 1.25–1.50  n=1,075 — median drawdown 0.37 swing · P(drawdown ≥ 1 swing) 16.2%
 //     ranges 1.50–2.00  n=1,227 — median drawdown 0.58 swing · P(drawdown ≥ 1 swing) 30.5%
-// ⚠ EFFECT SIZE, CORRECTED (2026-08-08 re-measure): the swing-unit outcome above shares terms with the
+// ⚠ EFFECT SIZE, CORRECTED on re-measure: the swing-unit outcome above shares terms with the
 // `ranges` bucketing (both divide by the same typicalSwing off the same level), so part of that
 // 9.6→30.5 spread is mechanical, not market. Re-scored with the threshold FIXED IN PERCENT (8% depth —
 // `ranges` cannot enter the outcome) and outlier-resistant depth statistics (n=4,079 windows, median 221
@@ -193,7 +193,7 @@ export function reachValidator(ctx) {
 //       only 6–8.5% of the time within 48h, NON-monotonically — the DISTANCE carries the information,
 //       the DESTINATION does not. The reason no longer asserts the destination.
 export const FLOOR_CAUTION_RANGES = 1.5;   // buy > this many typical swings above the durable floor ⇒ caution (MEASURED; was 1.0)
-// UNMEASURED IN BAND/CHURN — CENSORED BY ITS OWN GATE (corrected 2026-08-08; an earlier note here called
+// UNMEASURED IN BAND/CHURN — CENSORED BY ITS OWN GATE (an earlier note here called
 // this tier "inert", which was circular): floor runs mode:'gate' in band/churn, and a reject row is
 // `continue`d out of screen-flip-niches.mjs BEFORE it reaches the suggestions ledger — so the ledger
 // CANNOT contain a band/churn row above 2.0 by construction. The distribution shows the wall (a dense
@@ -207,7 +207,7 @@ export const FLOOR_REJECT_RANGES = 2.0;    // buy > this many typical swings abo
 // R3 (PLAN-SIGNAL-RECENCY): a falling recentTrend TIGHTENS the level check (additive-only — never relaxes).
 // A `pass` only escalates to caution once the bid is already within this fraction of the caution line
 // (borderline-elevated); a clean low pass with real headroom is NEVER touched by the trend alone.
-// UNMEASURABLE FROM THE LEDGER — THE ARM IS CENSORED (corrected 2026-08-08; an earlier note here read the
+// UNMEASURABLE FROM THE LEDGER — THE ARM IS CENSORED (an earlier note here read the
 // n=60 comparison as evidence AGAINST the rule, which was a composition artifact): R3's own escalation
 // destroys its evidence. falling + already-caution ⇒ reject ⇒ the row is dropped before logging in
 // band/churn, so the ledgered falling-note arm is ONLY the borderline pass→caution band — ranges
@@ -220,7 +220,7 @@ export const FLOOR_REJECT_RANGES = 2.0;    // buy > this many typical swings abo
 // now 1.125–1.5, a DIFFERENT population from the censored 0.75–1.0 arm described above, so even that
 // artifact-laden n=60 says nothing about the rows the rule escalates today.
 export const FLOOR_TREND_BORDERLINE_FRAC = 0.75;
-// MEASURED 2026-08-08: the MEDIAN drawdown below a buy sitting at/above the caution line, in typical-swing
+// MEASURED: the MEDIAN drawdown below a buy sitting at/above the caution line, in typical-swing
 // units (n=1,227 at ranges 1.50–2.00). Used ONLY to state the expected dip in the reason. It is a
 // POPULATION MEDIAN, not a per-item forecast — the per-item gp figure comes from that item's own
 // typicalSwing, which is why the message multiplies it rather than quoting a flat percentage.
@@ -231,7 +231,7 @@ export const FLOOR_TYPICAL_DRAWDOWN_SWINGS = 0.6;
  * sit, measured in units of the item's TYPICAL fluctuation (the 28d daily-mid IQR)? Within ~1.5 normal
  * swings of the floor → pass; beyond that → caution (an elevated entry that tends to dip below you first).
  *
- * WHAT IT IS NOT (measured 2026-08-08 — the MEASURED block above carries the numbers). It is NOT a loss
+ * WHAT IT IS NOT (measured — the MEASURED block above carries the numbers). It is NOT a loss
  * predictor and NOT a "support is down there" claim. Elevation predicts DRAWDOWN, not a bleed: 7-day
  * returns are flat across every elevation bucket, and the floor it names prints only 6–8.5% of the time
  * within 48h. The reject tier is UNMEASURED in band/churn — its own gate censors the evidence (see the
@@ -248,7 +248,7 @@ export const FLOOR_TYPICAL_DRAWDOWN_SWINGS = 0.6;
  *   ctx.floor.level             the buy candidate to score (the bid we'd place). Falls back to
  *                               ctx.market.row.optBuy (the patient band-floor bid) when not set.
  *
- * DEGRADES to pass (never rejects on absence — the archive only began accruing 2026-07-08, so a null /
+ * DEGRADES to pass (never rejects on absence — the archive has a finite start, so a null /
  * thin structure is the COMMON early case): held lot, no term structure, structure with no data, no
  * durable floor (too few multi-week points), no typical swing, or no buy candidate.
  */
@@ -302,7 +302,7 @@ export function floorValidator(ctx) {
 // recent multi-week path?" — a knife still stepping down (Nightmare staff), an OSCILLATING faller you buy
 // at the local min (Hydra leather), a flat base at the floor (Berserker ring), or bought high. The
 // classification math lives in js/termstructure.mjs (classifyTrajectory, attached as ts.trajectory);
-// this validator is only the buy-side POLICY over the shape. Ben 2026-07-09: it runs on EVERY thesis
+// this validator is only the buy-side POLICY over the shape. Ben’s rule: it runs on EVERY thesis
 // (the analysis is universally useful for entry timing) but its GATE-vs-INFORM action is per-thesis —
 // on scalp it INFORMS (scalp accepts a falling wide band by thesis), on band/value it can gate. Started
 // INFORM-ONLY everywhere (rule 4 — n≈0) until the suggestions accrual gives the knife/oscillating split
@@ -312,7 +312,7 @@ export function floorValidator(ctx) {
  * canonical shape, so a consumer that needs the LEVEL read (is this near durable support?) never
  * re-derives the floor, the typical swing, or the thresholds.
  *
- * WHY IT EXISTS (2026-08-06, the Snape grass entry): `softBuyFloorCue` in js/windowread.mjs answers
+ * WHY IT EXISTS (the Snape grass entry): `softBuyFloorCue` in js/windowread.mjs answers
  * buy-timing off `floorCeilingTrack`'s 5-DAY shape only, so on a 4-day-old spike — where the 5d window
  * sits entirely inside the spike and the floor "rises" BECAUSE of it — it said `▲ favorable — dip in
  * uptrend` on the same pass this validator said "1.68× typical swing above the 28d floor 960 — not near
@@ -353,14 +353,14 @@ export function trajectoryValidator(ctx) {
 }
 
 // --- valueAmplitudeValidator ------------------------------------------------------------------
-// Value's "intraday swings against the recent WEEK" check (Ben 2026-07-09). Value buys a good ENTRY
+// Value's "intraday swings against the recent WEEK" check (Ben's rule). Value buys a good ENTRY
 // TIME near a recent-week low and holds for the cycle — so the question is: is there a real week cycle
 // to harvest AND is live near its low right now? Reads the 7d lookback of the SAME term structure
 // floorValidator/trajectoryValidator read (no new fetch). Complementary to valuescreen.mjs's valueGate
 // (that is the MULTI-WEEK 14/28d cycle gate; this is the recent-WEEK amplitude + proximity read). BUY-side.
 export const VALAMP_MIN_PCT  = 0.04;   // PLACEHOLDER (rule 4): after-tax week amplitude below this ⇒ no cycle to harvest → reject
 export const VALAMP_NEAR_LOW = 0.40;   // PLACEHOLDER: live above this fraction up the week range ⇒ not at the low yet → caution (wait for the dip)
-// BAR E's LOW-SIDE TWIN (Ben 2026-07-10): the week edges are the ROBUST q15/q85 of the 7d daily mids, not
+// BAR E's LOW-SIDE TWIN (Ben's rule): the week edges are the ROBUST q15/q85 of the 7d daily mids, not
 // the raw min/max — so a LONE recent dip/spike print can't set the week floor/ceiling and fake proximity
 // (the Extreme-energy 1,447 artifact: one thin dip dragged the raw week low far below where the item
 // actually trades, making "70% up a phantom-wide range → wait" contradict the durable-range BUY-NOW tier).
@@ -397,7 +397,7 @@ export function valueAmplitudeValidator(ctx) {
 }
 
 // --- limitValidator ---------------------------------------------------------------------------
-// LM1 (Ben 2026-07-09: "limits.mjs ... a part of every flow that suggests items ie we can flag as
+// LM1 (Ben: "limits.mjs ... a part of every flow that suggests items ie we can flag as
 // profitable but disqualify on limits and state when the limit should reset"). BUY-SIDE. Reads a
 // caller-supplied 4h buy-limit WINDOW (pipeline/lib/limits.mjs `limitWindow` result) and disqualifies
 // a suggested buy that has NO room left in the rolling 4h window — a profitable item Ben has already
@@ -439,19 +439,19 @@ export function limitValidator(ctx) {
 }
 
 // --- dipPostureValidator ----------------------------------------------------------------------
-// DP1 (2026-07-10) — dip DIRECTION, not just depth. BUY-SIDE · INFORM-ONLY · NEVER-REJECT.
+// DP1 — dip DIRECTION, not just depth. BUY-SIDE · INFORM-ONLY · NEVER-REJECT.
 // The ⬇DIP probe (pipeline/probes/dip.mjs) says a row is a dip (live instasell under the 24h avg
 // low = DEPTH). This validator adds the missing question: is that dip still FALLING, or has it
 // already REVERTED (bounced off its low)? The direction read, the mechanic, the n=2 anchor incidents
-// and the 2026-08-08 MEASUREMENT that rewrote this policy all live in the recentDirection header in
+// and the MEASUREMENT that rewrote this policy all live in the recentDirection header in
 // js/quotecore.js — this validator is only the buy-side POLICY over that read.
 //
-// REFRAMED 2026-08-08 — READ THE quotecore MEASURED BLOCK BEFORE TOUCHING THE REVERTING BRANCH.
+// REFRAMED — READ THE quotecore MEASURED BLOCK BEFORE TOUCHING THE REVERTING BRANCH.
 // This used to claim a reverting dip's resting bid "likely misses" and recommend crossing the spread
 // or passing. Forward-scoring falsified it: the reverting bid is reached MORE often than the falling
 // one this blessed (85.7% vs 82.6% within 8h, n=5,535), because the level quoted is quickBuy — the
 // LIVE instasell, which rose with the bounce and sat ABOVE the low being warned about in 92.4% of
-// 7,886 firings. NOTE THE SCOPE (corrected 2026-08-08): what failed is the claim AT THE QUOTED LEVEL.
+// 7,886 firings. NOTE THE SCOPE (corrected): what failed is the claim AT THE QUOTED LEVEL.
 // The underlying rest-at-the-low mechanic is UNRESOLVED — it scores both ways depending on how the
 // level is defined, and direction is not separable from level because recentDirection is DEFINED by
 // where live sits relative to the low (the quotecore "GEOMETRY TRAP" note — read it before proposing
@@ -491,14 +491,14 @@ export function dipPostureValidator(ctx) {
     quickBuy, quickSell, crossNet: null, avgLow24, dipPct: round2(dipPct),
   };
   if (dir === 'falling')
-    // "fills as it drops" was removed 2026-08-08: this arm measured the LEAST-reached of the three
+    // the "fills as it drops" arm is REMOVED: it measured the LEAST-reached of the three
     // (82.6% @8h vs reverting's 85.7%), because here quickBuy really is pinned at a fresh 3h low, so a
     // fill needs price to revisit it. State the position, not a fill promise.
     return { key, status: 'pass', reason: `dip still falling — the bid @ ${quickBuy.toLocaleString()} sits at/near the ${DIR_LOOKBACK_H}h low`, evidence };
   if (dir === 'flat')
     return { key, status: 'pass', reason: `dip flat — resting bid @ ${quickBuy.toLocaleString()} viable`, evidence };
   // dir === 'reverting' — the local bottom is IN. ENTRY-QUALITY ONLY: no fill-probability claim and no
-  // cross-or-pass recommendation (both falsified 2026-08-08 — see the header + the quotecore MEASURED
+  // cross-or-pass recommendation (both falsified — see the header + the quotecore MEASURED
   // block). crossNet is still computed and kept in `evidence` as DATA for anyone studying the question,
   // but is deliberately NOT surfaced in the reason; do not turn it back into advice without a fresh
   // measurement at the level actually quoted.
@@ -533,7 +533,7 @@ export const VALIDATORS = {
 };
 export const REGISTRY_ORDER = ['reach', 'floor', 'trajectory', 'value-amplitude', 'limit', 'dip-posture'];
 
-/* GATE vs INFORM (Ben 2026-07-09). A validator's COMPUTATION is thesis-agnostic (the swing/local-min/
+/* GATE vs INFORM (Ben’s rule). A validator's COMPUTATION is thesis-agnostic (the swing/local-min/
    knife/reach analysis is useful to every buy); what differs per thesis is the ACTION. A spec entry is
    either a bare key string (defaults to gate mode) or an object { key, mode:'gate'|'inform', window }:
      gate   — the validator's natural status stands (a caution/reject downgrades/drops the row).
@@ -565,7 +565,15 @@ export function runValidators(ctx, { only = null, specs = null } = {}) {
       useCtx = { ...ctx, intraday: { ...ctx.intraday, reach: { ...ctx.intraday.reach, ...p.window } } };
     let res;
     try { res = v(useCtx); }
-    catch (err) { res = { key: p.key, status: 'pass', reason: 'validator-error', evidence: { note: String((err && err.message) || err) } }; }
+    // A THROWING validator DEGRADES TO PASS — deliberate (a crash must never start REJECTING rows), but
+    // it must not be SILENT: fail-open plus invisible means a gating validator can stop gating forever
+    // with nothing anywhere to show for it. So it is logged loudly here and carried into the ledger by
+    // leanValidators below. Kept as `status:'pass'` so no consumer's drop logic changes.
+    catch (err) {
+      const note = String((err && err.message) || err);
+      console.error(`validator '${p.key}' THREW — degrading to pass (it is not gating this row): ${note}`);
+      res = { key: p.key, status: 'pass', reason: 'validator-error', validatorError: true, evidence: { note } };
+    }
     const mode = p.mode === 'inform' ? 'inform' : 'gate';
     if (mode === 'inform' && res.status !== 'pass')
       res = { ...res, status: 'pass', gatedStatus: res.status, mode };   // clamp to pass; keep the would-have verdict
@@ -599,6 +607,9 @@ export function leanValidators(results) {
   const out = [];
   for (const r of results || []) {
     if (r.status !== 'pass') out.push({ key: r.key, status: r.status, reason: r.reason });
+    // A crashed validator is 'pass' by policy, so both branches below would skip it — log it explicitly.
+    // It fires only when a validator actually throws, so a healthy row's logged shape is unchanged.
+    else if (r.validatorError) out.push({ key: r.key, status: 'pass', reason: r.reason, validatorError: true });
     else if (r.mode === 'inform' && r.gatedStatus) out.push({ key: r.key, status: r.gatedStatus, reason: r.reason, mode: 'inform' });
   }
   return out.length ? out : undefined;

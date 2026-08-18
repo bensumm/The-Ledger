@@ -1,6 +1,22 @@
 # PLAN-REACH-CALIBRATION — true achievable buy/sell, size-conditioned, calibrated on our own fills
 # (+ agent-readable script output, and the combined sequenced roadmap at the end)
 
+**Status: AC1 + AC2 + AC4(a) SHIPPED; the AC1 GATE was NOT MET, so AC3 is NOT PROCEEDING; AC4(rest)/
+AC5/AC6 + all of Part 2 remain OPEN.** The plan's own gate clause is the thing to read before picking
+this up: AC1's calibration study ran and the Finding-2 knee **does not replicate** — not disproven,
+UNOBSERVABLE on our ground truth at the sizes we actually trade, so the plan self-instructed to stop at
+AC1 + AC4a's descriptive percentile-placement rendering. AC4(a) duly shipped WITHOUT the "safe ≈ pXX"
+annotation, because that annotation was the part AC3 would have supplied. **So `safeQuantile` is not
+coming from here** — a future size-conditioned reach model needs new evidence, not this doc's remaining
+chunks. Kept live because AC5/AC6 (the now/24h pairing, and the hard-refuse-on-stale-anchor guard) are
+independent of the failed gate and still worth doing, and because Part 2's agent-readable-output work is
+untouched. ⚠ The standing memory `reach-calibration-plan-in-flight` says to resume at the estimator/
+probe/gate reorg — that reorg is `plans/PLAN-PIPELINE-COMPOSITION.md`, and PC1–PC3 have since SHIPPED;
+only its PC4 remains. **And read `PLAN.md`'s `RVA` Status row alongside this:** it settles a DIFFERENT
+axis of `reach` (whether the reject VOLUME costs us anything — it does not, the validator is inform-mode
+everywhere), which is not an answer to this plan's question of whether the underlying 1h-average check
+measures an achievable price at all. Two axes, two answers; neither substitutes for the other.
+
 Untracked planning doc (2026-07-17). Per the fold-out discipline this file folds into
 `PLAN.md` when scheduled and is deleted when its last chunk ships. Executor rules =
 PLAN.md "Executor rules", verbatim. Two topics, one roadmap: Part 1 = reach calibration

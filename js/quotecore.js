@@ -220,8 +220,12 @@ export function regimeLabel(regime){
    COMPLEMENTARY to regimeDrift/regimeLabel, which stays the flat/rising/falling GATE driver (this
    changes NOTHING about that). phase() reads the *shape* of a pump-and-fade off the SAME `ts6h`
    points computeQuote already fetches (points = [{avgLowPrice, avgHighPrice, timestamp}]) → ZERO new
-   network. It is consumed ONLY by the pipeline (screen-flip-niches.mjs display + the opt-in basing-rescue); the
-   deployed app renders nothing off it, so this ships without an APP_VERSION bump.
+   network. ⚠ THE DEPLOYED APP DOES RENDER OFF THIS — `js/trends.js` imports `phase` and calls it to build
+   the diurnalForecast ctx, then renders the "mid-spike/decay, the rhythm can't be projected through a
+   shock" line. So a change to phase()/PHASE_SPIKE_PCT/PHASE_DECAY_FROM_PEAK_PCT DOES need an APP_VERSION
+   bump (process rule 5). This comment claimed the opposite — "consumed ONLY by the pipeline … ships
+   without a bump" — which was true when written and became false when Trends adopted it; the sibling
+   claims on flushSignal and nominateDip are still accurate, so do not assume by analogy, grep first.
 
    Returns { phase, curMid, baseMid, peakMid, lowSlope }, phase ∈ 'base'|'spike'|'decay'|'basing'|'unknown':
      base    stable / no recent spike (or a spike so old it's the new normal)
@@ -1179,8 +1183,8 @@ export const DL4_WIDE_DAY_PCT  = 0.05;          // PLACEHOLDER (n=2): min 24h-ra
 // Min mid×limitVol gp-flow/day to be worth watching. Node-only (dip nomination) → no APP_VERSION bump.
 // NOT tied to MIN_GPD's NET-throughput floor (250k) — different dimension.
 // PROVENANCE (weak, known): 500k → 9m by TRANSFERRING GP_FLOOR's ~18× count-match ratio; never
-// count-matched on its own distribution. Not re-anchorable from the record: PLAN-VOL24 §Step 2 is the
-// only row with no target COUNT. Re-anchoring = pick a target count; do NOT re-solve against today's
+// count-matched on its own distribution. Not re-anchorable from the record: in the VOL24 recalibration
+// (PLAN.md's VOL24 Status row) this is the only floor with no target COUNT. Re-anchoring = pick a target count; do NOT re-solve against today's
 // legacy distribution (≈ true volume now; that path yields ~414k and is invalid). Admits ~1,214 today.
 export const DL4_MIN_GP_FLOW = 9_000_000;
 // PER-UNIT SWING FLOOR (2026-07-12, Ben — the penny-junk-still-leaked fix). The gp-flow floor above is a

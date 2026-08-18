@@ -91,7 +91,7 @@ These are different things at different levels — kept as two words on purpose.
 - **Vol/d** — limiting-side daily volume, `min(hpv, lpv)`, from the corrected rolling-24h source (the
   wiki `/24h` endpoint is unusable as a trailing-24h source — a complete UTC-day aggregate whose newest data is ~24–48h old
   as of 2026-08-10; see the `marketfetch.mjs` `loadAll24hRolling` header, the ONE home, and
-  `PLAN-VOL24.md` for the history).
+  `PLAN.md`'s VOL24 Status row for the history).
 - **pressure** — the realized buy/sell flow imbalance (a flow proxy, not an order book).
 - **flush** — a liquid book actively *dumping* (live instasell well below the 24h floor, still
   falling); the **dip loop** fires a reactive bid-into-the-fall alert.

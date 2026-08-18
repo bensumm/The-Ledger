@@ -4,126 +4,82 @@
  *
  *   node pipeline/commands/screen-flip-niches.mjs [--mode band|churn|scalp|value|amplitude|reverse|all]
  *     [--floor 3500] [--min-roi 1.5] [--min-price 0] [--max-price <capital-derived>] [--top 90]
- *     [--band-hours 2] [--min-traded 6] [--stats] [--publish] [--verbose]
+ *     [--band-hours 2] [--min-traded 6] [--stats] [--publish] [--verbose] [--archive-regime]
  *     [--thin-reserve 6] [--gear-reserve 4] [--mid-tier-reserve 2] [--mid-tier-offset 0]
- *     [--archive-regime]
  *
- *   --archive-regime (AF5b, PLAN-ARCHIVE-FIRST-FUNNEL — OFF by default, byte-identical when off) reads
- *   the 6h REGIME series (regimeDrift's falling/rising gate + phase()'s trajectory shape) out of the
- *   LOCAL SQLite archive instead of paying a per-item /timeseries call, capped at the last 365×6h so
- *   an ever-accruing archive can't feed DEPTH-dependent phase() more history than live would. That cap
- *   is a CEILING, not a floor — it cannot add depth the archive lacks, so while the archive is shorter
- *   than live's 91d phase() is NOT live-equivalent (the run prints the achieved depth). PRICES stay
- *   live either way; the flag refuses --publish. Unpromoted: AF6 owns the promotion decision.
+ * OUTPUT (AO1). DEFAULT is quiet: ONE summary line + the last-report path; the per-niche report objects are ALWAYS
+ * written to pipeline/.cache/last-report/screen.json (gitignored, per run) — read THAT, never the summary line.
+ * --verbose prints the markdown table. --publish ALSO writes repo-root screen.json { app, generatedAt, mode,
+ * params, headers, niches:{band,churn} } for the app's Scan tab, rows { id (Item→Trends deep link), cells }
+ * byte-identical to the printed table (sync-fills.mjs commits it beside fills/positions). ONE table PER niche,
+ * sorted by a letter GRADE = per-thesis RANK × a risk-quality multiplier (regime, momentum, liquidity, capital,
+ * band confidence) — PLACEHOLDER cutoffs/weights, see rating.mjs, plus a per-table grade-distribution footer.
  *
- *   DEFAULT is quiet: prints ONE summary line + the last-report dump path, not the markdown table.
- *   The per-niche report objects are ALWAYS written to pipeline/.cache/last-report/screen.json
- *   (gitignored, overwritten per run) — read THAT file for the actual data, never the summary line.
- *   Pass --verbose for the markdown table (Ben's terminal read / the "paste this" case). AO1.
+ * GATES. ONE shared stack for every mode; --mode only swaps the step-3 EDGE DEFINITION + ranking. Shared:
+ * two-sided liquidity (highPriceVolume>0 && lowPriceVolume>0, limiting side ≥ --floor — the ghost-spread
+ * lesson), --min-price/--max-price on mid, top-N per-item regime confirm via computeQuote, and the per-spec
+ * falling doctrine (P5: band/churn EXCLUDE fallers, scalp ACCEPTS + REQUIRES, value KNIFE-GUARDS — the
+ * registry's `spec.falling` in js/flip-niches.mjs, NOT a global rule).
  *
- *   --publish ALSO writes repo-root screen.json: a self-describing per-niche graded snapshot
- *   { app, generatedAt, mode, params, headers, niches:{band,churn} } that the app's
- *   Scan tab renders. Each row is { id (for the Item→Trends deep link), cells } byte-identical to
- *   the printed table. sync-fills.mjs commits screen.json alongside fills/positions when present.
+ * FETCH POOL. The per-item timeseries fetch is the expensive step, so pool ORDER matters: loadDaily()'s bulk mid
+ * archive (whole-market /1h @6h, D0 Tier-1 SQLite) feeds a NEVER-displayed regime PROXY (proxyDrift) that only
+ * ORDERS the top-N pool — fallers down, a bounded rising reserve up — while the real regime + falling-exclusion
+ * run post-fetch on computeQuote. Both per-item pools share ONE FETCH_CONCURRENCY worker bound — the politeness
+ * throttle, no per-fetch sleep here — and land in id-keyed Maps, so completion order never reaches the output.
  *
- * The screen has ONE shared gate stack for every mode; --mode only swaps the step-3 EDGE
- * DEFINITION + ranking. Shared gates: two-sided liquidity (highPriceVolume>0 && lowPriceVolume>0,
- * limiting side ≥ --floor — the ghost-spread lesson), --min-price/--max-price on mid, top-N per-item
- * regime confirm via computeQuote, per-spec falling doctrine (P5: band/churn EXCLUDE fallers, scalp
- * ACCEPTS + REQUIRES, value KNIFE-GUARDS — `js/flip-niches.mjs` `spec.falling`, NOT a global rule).
- *
- * Fetch-pool ordering (the pre-filter rework): the expensive step is the per-item timeseries fetch,
- * so WHICH gated items make the top-N fetch pool matters. loadDaily() builds a BULK multi-day
- * mid-price archive (whole-market /1h @6h spacing, backed by the D0 Tier-1 SQLite archive) → a regime PROXY (proxyDrift, same
- * 3d-vs-~2wk shape as computeQuote's regimeDrift) that is NEVER displayed and only ORDERS the pool:
- * probable fallers are deprioritized (they'd be discarded post-fetch anyway), and a bounded rising
- * reserve front-loads the highest-proxy risers so they aren't buried below flats (the absorbed `rising`
- * mechanism, Steps 3+4). The real regime + falling-exclusion still run post-fetch on computeQuote. Per-item
- * series are cached (fetchTsCached) so re-running the screen doesn't re-hammer the API, and BOTH per-item
- * fetches — the survivor pool (5m/6h/1h) and the watchlist pool (5m/6h, SP1) — run through bounded worker
- * pools sharing one FETCH_CONCURRENCY bound, each item's endpoints in parallel. The pool bound is the
- * politeness throttle; NO per-fetch sleep remains in this file. Both pools land results in id-keyed Maps
- * and the compute loops walk their own source order, so completion order can never reach the output.
- * --stats prints
- * a per-niche footer: gated / fetched / survivors / yield / discard reasons.
- *
- * Output (chunk 0 rework): ONE table PER niche (no more Tier A / Tier B split), each sorted by a
- * letter GRADE. The grade is a desirability heuristic — "which of these do I actually put offers in
- * for?" — that blends the PER-THESIS RANK with a risk-quality multiplier (regime, momentum, liquidity,
- * capital, band confidence). See rating.mjs for the full rationale; the grade cutoffs + factor weights
- * there are PLACEHOLDERS pending calibration. P6b (Ben 2026-07-09: "gp/d is out as the ranking metric"):
- * the last column is `Rank net·P/ttf` — the risk-adjusted `net after tax × P(fill at the quoted pair) ÷
- * TTF` (pipeline/lib/estimators.mjs), rendered with its components (net · P~ · ttf~) so the honesty
- * travels with the number. expGpDay survives ONLY as the cheap pre-fetch pool orderer (rankAndSlice) +
- * the --min-gpd attention pre-filter — never again the displayed "best" number or the grade basis.
- * `--mode all` runs all four niches and shares one per-item fetch cache (items common to several niches
- * are fetched once). A grade-distribution footer per table lets us SEE whether the score separates
- * best-from-good (if a batch clumps at one grade, the factors — not the letter scale — need work).
- *
- * Modes (step-3 edge). Steps 3+4 (Ben 2026-07-09): the `spread` and `rising` niches are DELETED — spread's
- * 24h-average edge is narrower than the band + surfaced ≈0 clean flips once the net>0 gate landed (its thin
- * big-ticket lane is already caught by band's thin path), and rising ⊆ band with its proxy-ordering absorbed
- * into rankAndSlice's rising reserve. Remaining:
- *   band  (DEFAULT) — the crystal-teleport-seed niche: a liquid, regime-stable item with a wide
- *                     INTRADAY band. Edge = after-tax net of bandLo→bandHi from loadBands
- *                     (--band-hours, default 2); gate bandRoi ≥ --min-roi AND the band must be
- *                     TRADED — Bar D: ≥ --min-traded windows with ANY trade (density) AND both sides
- *                     printed ≥1× across the window (two-sided), NOT the old same-5m-window count.
- *   churn           — buy-limit-cycle commodities: volDay ≥ 2000 && limit > 0, tiny ROI accepted
- *                     (no --min-roi gate), the high-frequency small-margin niche.
- *   scalp           — provisional, OFF-by-default (explicit --mode only): a deliberate flip on a FALLING
- *                     wide band (fallers only).
- *   value           — a term-structure buy-hold (own table); provisional (n≈0) but IN --mode all as of
- *                     2026-07-10 (Ben) — console-only (excluded from screen.json).
- *   reverse         — RF2 (PLAN-REVERSE-FLIP), provisional/off-by-default (explicit --mode only): HARVEST an
- *                     OWNED keep item — sell into the diurnal/multi-day PEAK, rebuy at the DIP (capital-free).
- *                     Its pool is OWNERSHIP-gated (owned-items.json classification:'keep' ∪ hold-thesis
- *                     reverseFlip:true), NOT the fetch universe, so it's a SEPARATE branch (runReverseMode)
- *                     with its OWN table + INVERTED regime read; console-only (excluded from screen.json).
- *   all             — run band + churn + amplitude in sequence (shared fetch cache). scalp/value/reverse explicit-only.
- *
+ * MODES (step-3 edge). No `spread` or `rising` niche: spread's 24h-average edge is narrower than the band and
+ * surfaced ≈0 clean flips under the net>0 gate (band's thin path covers its big tickets), and rising ⊆ band.
+ *   band (DEFAULT) — a liquid, regime-stable item with a wide INTRADAY band. Edge = after-tax net of
+ *                    bandLo→bandHi (loadBands, --band-hours default 2); gate bandRoi ≥ --min-roi AND a TRADED
+ *                    band — Bar D: ≥ --min-traded windows with ANY trade AND both sides printed ≥1× across it.
+ *   churn          — buy-limit-cycle commodities (volDay ≥ 2000 && limit > 0), tiny ROI accepted (no --min-roi).
+ *   scalp          — provisional, explicit --mode only: a deliberate flip on a FALLING wide band.
+ *   value          — term-structure buy-hold, own table; provisional n≈0, console-only, --mode value|invest.
+ *   amplitude      — the MULTI-DAY-cycle big-ticket lane (PLAN-AMPLITUDE-SCAN), own table; console-only, n≈0.
+ *   reverse        — RF2 (PLAN-REVERSE-FLIP), explicit --mode only: HARVEST an OWNED keep — sell into the
+ *                    diurnal/multi-day PEAK, rebuy at the DIP (capital-free). Its OWNERSHIP-gated pool makes it a
+ *                    SEPARATE branch (runReverseMode), OWN table + INVERTED regime read; console-only.
+ *   all            — band + churn + amplitude in sequence, sharing one fetch cache.
  *   --mode dip is DESIGNED-NOT-BUILT (flat regime + mom↓ wick-bids). Out of scope here on purpose.
  *
- * Ranking: the fetch POOL is still picked by realistic expected gp/day (expUnits/day = min(limit×2,
- * 10% × volDay) — ×2 is ACTIONABLE_WINDOWS_PER_DAY, not the physical 6; this header said ×6 until 2026-08-10; expGpDay = expUnits × the mode's net/u) — the ONLY surviving use of expGpDay, as the
- * cheap pre-fetch orderer + the --min-gpd pre-filter. That pre-filter is a HARD GATE, not a
- * demotion (MT1, 2026-07-27 — it read "P6b demotion" here for months): gatecandidates.mjs:284 returns
- * null, so a sub-floor non-thin/non-held candidate is DROPPED and never rated. Do not confuse it with
- * the `⚠<floor` marker on the Path-A column, which is display-only and measures a DIFFERENT number —
- * see the "TWO METRICS, ONE CONSTANT" note at pathABCell. PLAN-LANE-ADMISSION Chunk D
- * (2026-07-25): the CONSOLE / last-report band/churn table is now sorted PRIMARILY by Path-A intraday-flip
- * gp/day (pipeline/lib/patha.mjs pathAGpDay, off Chunk A's daily ranges + Chunk B's vol lane), shown in a
- * `Path-A gp/d*` column with the risk-adjusted per-thesis RANK/grade retained BESIDE it as the shown
- * BACKUP + live A/B (owner decision H4; captureFrac is a PLACEHOLDER n≈0 — the `*`). The --min-gpd
- * floor is a post-rank SURFACING partition (not a gate); null-Path-A rows fall back to the grade sort.
- * SCOPE LOCK: this is CONSOLE-ONLY — the --publish screen.json return is frozen on the pre-Path-A
- * (grade) order + cells (byte-identical), so the deployed app stays on grade until a later chunk promotes
- * Path-A. Reverting to grade-primary = swap the console comparePathARows sort back to `b.score - a.score`.
+ * RANKING. The fetch POOL is ordered by realistic expected gp/day (expUnits/day = min(limit×2, 10% × volDay) —
+ * ×2 is ACTIONABLE_WINDOWS_PER_DAY, not the physical 6; expGpDay = expUnits × the mode's net/u): that orderer and
+ * the --min-gpd pre-filter are expGpDay's ONLY surviving uses, and --min-gpd is a HARD GATE, not a demotion (MT1
+ * — gatecandidates.mjs `eachLiquidCandidate`'s `expGpDay < t.MIN_GPD` guard returns null, so a sub-floor
+ * non-thin/non-held candidate is DROPPED, never rated). Do
+ * not confuse it with the display-only `⚠<floor` marker on the Path-A column, a DIFFERENT number — see "TWO
+ * METRICS, ONE CONSTANT" at pathABCell. The DISPLAYED metric is `Rank net·P/ttf` = net after tax × P(fill at the
+ * quoted pair) ÷ TTF (estimators.mjs), rendered with its components so the honesty travels with the number.
+ * PLAN-LANE-ADMISSION Chunk D: the CONSOLE/last-report band/churn table sorts PRIMARILY by
+ * Path-A intraday-flip gp/day (patha.mjs pathAGpDay) in a `Path-A gp/d*` column with RANK/grade BESIDE it as the
+ * shown BACKUP + live A/B (captureFrac PLACEHOLDER n≈0 — the `*`); --min-gpd is a post-rank SURFACING partition
+ * there, and null-Path-A rows fall back to the grade sort. SCOPE LOCK: CONSOLE-ONLY — the --publish return is
+ * frozen on the pre-Path-A (grade) order + cells; revert by swapping comparePathARows for `b.score - a.score`.
+ * --archive-regime (AF5b, PLAN-ARCHIVE-FIRST-FUNNEL) is OFF by default; its contract lives at its declaration.
  *
- * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only
- * fetches + gates + rates + renders.
+ * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only fetches, gates, rates and renders.
  */
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, reachedDays, RECENCY_DIVERGE, RECENT_NIGHTS, askReachDecayNote, softBuyRead, softBuyHoursClause, displayFitNights, phaseFromLap, SOFT_BUY_CUE_TEXT, floorCeilingTrack } from '../../js/windowread.mjs';   // reachedDays (RF6) — daily-HIGH reach count for the thin big-ticket ask-spread flag   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment (DC3 demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS); PLAN-DIURNAL-TIMING DT2 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal note computation; PLAN-HOURLY-3DAY-TREND HT3 → DT3 — askReachDecayNote, the shared compact note renderer used to enrich the top-X digest picks (the per-hour drift-slope renderer it replaced was DELETED as a measured non-signal)
-import { askReachDecay } from '../lib/market/hourly-lmh.mjs';   // DT3 — the ask-reach decay read, run on the top-X digest picks ONLY (bounded enrichment, not the full candidate universe). Replaced the deleted hourlyDrift slope read — see hourly-lmh.mjs's tombstone.
+import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, reachedDays, RECENCY_DIVERGE, RECENT_NIGHTS, askReachDecayNote, softBuyRead, softBuyHoursClause, displayFitNights, phaseFromLap, SOFT_BUY_CUE_TEXT, floorCeilingTrack } from '../../js/windowread.mjs';   // diurnal/timed-lap (DT2), window-clear (PLAN-WINDOW-CLEAR B2), asym pair, reachable band (RC-S2), placement (AC1, PLAN-ESTIMATOR-POSTURE), weekdayProfile (A3, PLAN-AMPLITUDE-SCAN), reachedDays (RF6) — all off the in-hand 1h series, no fetch. askReachDecayNote (DT3, PLAN-HOURLY-3DAY-TREND) is the shared compact note renderer for the top-X digest picks; there is NO per-hour drift-slope renderer (measured a non-signal), and no demandRegime read (PLAN-REMOVE-DEPTH-PRESSURE-READS).
+import { askReachDecay } from '../lib/market/hourly-lmh.mjs';   // DT3 — ask-reach decay, top-X digest picks ONLY (bounded, not the full candidate universe). No hourlyDrift slope read — see hourly-lmh.mjs's tombstone.
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
-// (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
+// (owner ruling: gp/d is out as the ranking metric). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
-import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS, MIRAGE_PLACEMENT, DEADBID_PFILL_FLOOR, reachFraction } from '../lib/signal/estimators.mjs';   // RB-5 (PLAN-RECENCY-BASIS): reachFraction = the ONE recency-basis rule; digestReachFrac was the third independent copy of it and now delegates   // EF1 (PLAN-ESTIMATOR-FIDELITY): MIRAGE_PLACEMENT moved to estimators/families.mjs (single-sourced — it now ALSO bounds the churn ask-reach exemption); DEADBID_PFILL_FLOOR = the dead-bid reprice trigger the ↻ note names   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series; PC3: SELL_TOP_MODELS = the named sell-top registry (--est-sell)   // AC9(b): the overnight sort now weights by the rank's own er.pFill (two-leg fill prob), not askReachFactor — see the sort comment below
+import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS, MIRAGE_PLACEMENT, DEADBID_PFILL_FLOOR, reachFraction } from '../lib/signal/estimators.mjs';   // reachFraction (RB-5, PLAN-RECENCY-BASIS) = the ONE recency-basis rule; MIRAGE_PLACEMENT (EF1, PLAN-ESTIMATOR-FIDELITY) also bounds the churn ask-reach exemption; DEADBID_PFILL_FLOOR = the dead-bid reprice trigger the ↻ note names; dayHighFrom5m (PLAN-LIQUIDITY-REACH) = the observed 24h high off the in-hand 5m series; SELL_TOP_MODELS (PC3) = the named sell-top registry (--est-sell).
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
-import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, loadDailyRangeBulk, fetchTsCached, pruneCache } from '../lib/market/marketfetch.mjs';   // loadDailyRangeBulk (PLAN-LANE-ADMISSION Chunk A) — read-only zero-fetch per-item daily intraday range powering Path-A's console primary sort · SP1 dropped `sleep` — no serialized per-fetch throttle remains in this file, the two worker-pool bounds are the throttle
+import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, loadDailyRangeBulk, fetchTsCached, pruneCache } from '../lib/market/marketfetch.mjs';   // loadDailyRangeBulk (PLAN-LANE-ADMISSION Chunk A) — zero-fetch per-item daily intraday range powering Path-A's console sort. No `sleep` import (SP1): the two worker-pool bounds ARE the throttle.
 import { parseArgs, parseGp, mdTable, stdCells, writeLastReport } from '../lib/render/cli.mjs';   // writeLastReport — AO1 agent-readable dump
 import { resolve, loadPipelineConfig, refusePublishIfNonNeutral, shadowModelsOf } from '../lib/market/compose.mjs';   // PC1 — the flag>config>default precedence resolver + the ONE publish-refusal guard; PC3 — shadowModelsOf pools the default-shadow sell models
 import { open as openArchive } from '../lib/market/archive.mjs';   // AF5b — READONLY handle for --archive-regime's 6h read (open() runs schema DDL unless readonly; never take that path on the live DB)
-import { sixHourReader, archiveSeries, LIVE_TS6H_BUCKETS, REGIME_MIN_6H_BUCKETS } from '../lib/market/archive-series.mjs';   // DT1b: archiveSeries = the ts→timestamp adapter the amplitude walk-forward reads its long 1h history through   // AF5b — the ONE 6h seam, the /timeseries 365-bucket pin that keeps phase() depth-stable, and the depth floor below which the seam serves live instead
-import { renderReport, renderHtmlTable } from '../lib/render/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer; a niche's table + footer notes build a screen-report printed via renderReport (byte-identical to the prior console.log sequence); renderHtmlTable (2026-07-16) — the Stage-2 HTML twin published into screen.json for the app's Scan tab
+import { sixHourReader, archiveSeries, LIVE_TS6H_BUCKETS, REGIME_MIN_6H_BUCKETS } from '../lib/market/archive-series.mjs';   // archiveSeries (DT1b) = the ts→timestamp adapter the amplitude walk-forward reads long 1h history through; AF5b — the ONE 6h seam, its 365-bucket pin (phase() depth stability) and the depth floor below which it serves live.
+import { renderReport, renderHtmlTable } from '../lib/render/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer: a niche's table + footer notes build a screen-report printed via renderReport. renderHtmlTable = the Stage-2 HTML twin published into screen.json for the app's Scan tab.
 import { formatTimedLap, formatBasePosition, formatAsymFill } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT2 — the ONE shared diurnalTimedLap renderer (also DT3's future quote/watch call site); DT6 — the base-position note renderer; formatAsymFill — the shared ◆ asym fill clause pair (quote emits the same line)
-// P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
-// here: gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
-// renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen-flip-niches.mjs passes its CLI
-// THRESHOLDS / sizing explicitly. Fixtures drive them in gatecandidates.test.mjs + survivemode.test.mjs.
+// P1: the pure candidate-selection + survival doctrine lives in lib/gatecandidates.mjs —
+// gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice plus renderMode's post-fetch surviveMode.
+// screen-flip-niches.mjs passes its CLI THRESHOLDS / sizing explicitly; fixtures drive them in
+// gatecandidates.test.mjs + survivemode.test.mjs.
 import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, AMP_TOP_DEFAULT, VALUE_RESERVE_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP,
   scaleSlots, TOP_MAX, THIN_RESERVE_MAX, VALUE_TOP_MAX, VALUE_RESERVE_MAX, AMP_TOP_MAX } from '../lib/signal/gatecandidates.mjs';   // RF2 — reverse routes via gateCandidates('reverse', …) → gateReverseFlipCandidates internally
 import { loadOwned, computeOwnedQty } from '../lib/capital/ownedledger.mjs';   // RF2 — the owned-item pool source (classification:'keep') + the pure owned-qty fold
@@ -131,30 +87,30 @@ import { loadReverseFlip, reverseFlipFor } from '../lib/thesis/reverseflipstate.
 import { loadHoldThesis } from '../lib/thesis/holdthesis.mjs';   // RF2 — the hold-thesis store; reverseFlip:true entries join the reverse-flip pool (Case-A marker)
 import { isThinBigTicket, reverseListBandCell, askSpreadFlag, askSpreadNote, rebuyStrandNote } from '../../js/reverseflip.mjs';   // RF6 — thin big-ticket DISPLAY guards (inform-only, thin-item-only; a liquid reverse row renders byte-identically)
 import { pickFetchPool, buildTrackIndex, clampUnionFetch, TOTAL_FETCH_MAX, GEAR_RESERVE_DEFAULT, EXPLORE_RESERVE_DEFAULT, rotationPeriodMs, MID_TIER_RESERVE_DEFAULT, MID_TIER_OFFSET_DEFAULT } from '../lib/signal/admission.mjs';
-import { pathAGpDay, comparePathARows, assignRankInLane } from '../lib/signal/patha.mjs';   // PLAN-LANE-ADMISSION Chunk C/D — the Path-A intraday-flip gp/day scorer (captureFrac PLACEHOLDER n≈0) + the pure two-tier console ranker (comparePathARows) & in-lane ranker (assignRankInLane); Chunk D makes Path-A gp/day the CONSOLE/last-report PRIMARY sort with rateItem's grade shown as the A/B backup (console-only; screen.json unchanged)
+import { pathAGpDay, comparePathARows, assignRankInLane } from '../lib/signal/patha.mjs';   // PLAN-LANE-ADMISSION Chunk C/D — the Path-A gp/day scorer (captureFrac PLACEHOLDER n≈0) + the pure two-tier console ranker and in-lane ranker.
 import { classifyVolLane } from '../lib/signal/structural-admission.mjs';   // PLAN-LANE-ADMISSION Chunk B — the gear/churn volume lane selecting Path-A's captureFrac
-import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST follow-up) = the shared three-way-min deployable position size, reused for the digest's deployable-throughput ranking
-import { amplitudeRanges, amplitudeGate, amplitudeDriftMargin, ampWalkForward, AMP_HOLD_DAYS_DEFAULT, AMP_ASK_Q, AMP_BID_Q, AMP_WF_WARMUP_DAYS, AMP_WF_FIT_DAYS, AMP_WF_MIN_JUDGED } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the MULTI-DAY-cycle niche's Stage-2 gate + hold-horizon default (re-horizoned 1d → 4d at DT1); DT1b — ampWalkForward = the measured round-trip P(fill) + its AMP_WF_* window/sample constants; PLAN-OSCILLATION-CYCLE Chunk 2 — amplitudeDriftMargin = the shadow-logged drift-adjusted margin; F-E — AMP_ASK_Q/AMP_BID_Q = the DEFAULT reach-vs-margin quantiles the --amp-ask-q/--amp-bid-q flags fall back to
-import { driftExitFrom, oscillationVsKnife, OSC_DETECTOR_NIGHTS } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 2 — driftExitFrom = the ONE slope-sourcing + drift-adjusted-exit composition (Chunk 6 reuses it); off in-hand hourProfile + windowStats().days, NO fetch. Chunk 3 — oscillationVsKnife tempers the knife guard (a drift-riding oscillator is not a false knife). F-H — OSC_DETECTOR_NIGHTS = the detector's OWN longer trailing window, decoupled from the gate's AMP_NIGHTS
+import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits = the shared three-way-min deployable position size (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST), reused for the digest's deployable-throughput ranking.
+import { amplitudeRanges, amplitudeGate, amplitudeDriftMargin, ampWalkForward, AMP_HOLD_DAYS_DEFAULT, AMP_ASK_Q, AMP_BID_Q, AMP_WF_WARMUP_DAYS, AMP_WF_FIT_DAYS, AMP_WF_MIN_JUDGED } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the multi-day niche's Stage-2 gate + its 4d hold-horizon default (DT1); ampWalkForward (DT1b) = the measured round-trip P(fill) + its AMP_WF_* constants; amplitudeDriftMargin (PLAN-OSCILLATION-CYCLE Chunk 2) = the shadow-logged drift-adjusted margin; AMP_ASK_Q/AMP_BID_Q (F-E) = the default reach-vs-margin quantiles behind --amp-ask-q/--amp-bid-q.
+import { driftExitFrom, oscillationVsKnife, OSC_DETECTOR_NIGHTS } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE — driftExitFrom = the ONE slope-sourcing + drift-adjusted-exit composition, off in-hand hourProfile + windowStats().days, NO fetch; oscillationVsKnife tempers the knife guard (a drift-riding oscillator is not a false knife); OSC_DETECTOR_NIGHTS (F-H) = the detector's OWN longer window, decoupled from the gate's AMP_NIGHTS.
 import { amplitudeShadow } from '../lib/render/suggestlog.mjs';   // A5 — the amplitude lane shadow block on suggestions.jsonl
-// P4c: the four niches are DECLARATIVE strategy specs now. screen-flip-niches.mjs derives its mode-name lists from
+// P4c: the niches are DECLARATIVE strategy specs. screen-flip-niches.mjs derives its mode-name lists from
 // the registry (the names live in ONE place — flip-niches.mjs) and reads each spec's inferred default
 // entry path for the suggestions ledger + the per-row path annotation.
 import { FLIP_NICHES, MODE_KEYS, ALL_MODE_KEYS, driftInformNote } from '../../js/flip-niches.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 6 — driftInformNote = the per-thesis drift-adjusted-exit INFORM note (registry-driven, NO if(mode===) branch; off the shared driftExitFrom, NO fetch)
 import { enumeratePaths, weighPaths } from '../../js/held-item-strategy.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
-import { rateItem, GRADE_CUTOFFS, REACH_GRADE_CAP_FRAC, CONF_THIN_N_FLOOR } from '../lib/signal/rating.mjs';   // G1: the four grade caps now live INSIDE rateItem (applyGradeCaps) — the render site passes cap values/flags, no longer calls capGrade itself. REACH_GRADE_CAP_FRAC stays for the digest's reach ✓/✗ read. G6: CONF_THIN_N_FLOOR for the (thin) confidence-marker tooltip.
+import { rateItem, GRADE_CUTOFFS, REACH_GRADE_CAP_FRAC, CONF_THIN_N_FLOOR } from '../lib/signal/rating.mjs';   // G1: the four grade caps live INSIDE rateItem (applyGradeCaps) — the render site passes cap values/flags and never calls capGrade itself. REACH_GRADE_CAP_FRAC = the digest's reach ✓/✗ read; CONF_THIN_N_FLOOR (G6) = the (thin) confidence-marker tooltip.
 import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow, timedLapShadow, excludedShadow } from '../lib/render/suggestlog.mjs';   // RC-S2: pressure co-log on survivors (five-way head-to-head off the in-hand 1h series); shared asym reshaper; PLAN-DIURNAL-TIMING DT4: timedLap shadow reshaper
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
 import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (derive-cash.mjs anchor + log flow)
 import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification); L2 suspect-bid flag
-import { readOpenPositions } from '../lib/reconstruct/positions.mjs';   // held-item ids — the code-enforced "always show a held item" exception (was prose-only)
+import { readOpenPositions } from '../lib/reconstruct/positions.mjs';   // held-item ids — the code-enforced "always show a held item" exception
 import { runValidators, flags, informFlags, leanValidators, worstStatus, durableFloorRead, FLOOR_CAUTION_RANGES, FLOOR_REJECT_RANGES } from '../../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
 import { buysByItem, limitWindow, LIMIT_WINDOW_SEC } from '../lib/capital/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side); LIMIT_WINDOW_SEC = the churn laps/day ceiling source (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST capEff)
 import { termStructure, basePosition, BASEPOS_LOOKBACK_DAYS } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series); DT6 — the light multi-week base-position read off the SAME `ts`, never a second structure computation
-// COD-4 (2026-07-10): richFrom1h/trajectoryFrom1h were EXTRACTED to lib/warm-term-structure.mjs (byte-identical
-// logic) so quote-items.mjs's budgeted-ts1h read shares the IDENTICAL warm-term-structure aggregation and the
-// two surfaces can't drift — the loadDaily archive is still young, so both derive the warm trajectory (+
-// value-amplitude's recent-week lookbacks) off the 1h /timeseries. See the warm-term-structure.mjs header for why.
+// COD-4: richFrom1h/trajectoryFrom1h live in lib/warm-term-structure.mjs so quote-items.mjs's budgeted-ts1h
+// read shares the IDENTICAL warm-term-structure aggregation and the two surfaces can't drift. The loadDaily
+// archive is still young, so both derive the warm trajectory (+ value-amplitude's recent-week lookbacks)
+// off the 1h /timeseries. See the warm-term-structure.mjs header for why.
 import { richFrom1h, trajectoryFrom1h, warmOverride } from '../lib/market/warm-term-structure.mjs';
 import { stateTransition } from '../lib/timing/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
 import { buildVelocityIndex, velocityTag } from '../lib/timing/velocitytag.mjs';   // Build 2 — per-item velocity footnote from outcomes.json
@@ -173,7 +129,7 @@ const A = parseArgs(process.argv.slice(2));
 // so a future config file can set the same default without editing each script.
 const CONFIG = loadPipelineConfig();
 const MODES = MODE_KEYS;         // P4c: valid explicit --mode values, from the strategy registry (band/churn/scalp/value — spread+rising deleted, Steps 3+4)
-// --mode all runs the inAll specs — band/churn/AMPLITUDE since THE SWAP (PLAN-AMPLITUDE-SCAN §3, 2026-07-19: amplitude took value's slot; value/invest + scalp are explicit-only).
+// --mode all runs the inAll specs — band/churn/AMPLITUDE (THE SWAP, PLAN-AMPLITUDE-SCAN §3: amplitude holds value's slot; value/invest + scalp are explicit-only).
 // PC3 pickup: the niche SET for `--mode all` is config-overridable via pipeline-config.json "modes":[…]
 // — an ARRAY, distinct from the scalar `mode` selection above. Resolved through the SAME precedence
 // resolver (no CLI flag — `--mode all` is the trigger — so config-or-default only); unknown entries are
@@ -193,8 +149,8 @@ const MIN_PRICE = A['min-price'] != null ? parseGp(A['min-price']) : 0;
 const MAX_PRICE_EXPLICIT = A['max-price'] != null;
 // MAX_PRICE is no longer a literal — it DERIVES from capital. Declared after VALUE_CAPITAL resolves
 // (search MAX_PRICE below), and re-synced in main() once the market-ref pool is known.
-// Fetch-pool size per niche. 40 → 90 (Ben, 2026-08-07, PLAN-FETCH-POOL-SCALING): the old 40 was
-// mis-tuned AT ITS OWN REFERENCE POINT. `scaleSlots`' CAP_REF is 100m — the bankroll the fixed defaults
+// Fetch-pool size per niche, default 90 (PLAN-FETCH-POOL-SCALING). A 40 default is
+// mis-tuned AT ITS OWN REFERENCE POINT: `scaleSlots`' CAP_REF is 100m — the bankroll the fixed defaults
 // are treated as tuned against — yet a measured pass at 100.75m showed `--top 40` leaving 37 gradeable
 // BAND rows and 8 S+ CHURN rows unfetched vs `--top 90`. No capital-conditioning curve could fix that,
 // because the curve is ANCHORED to the number that was wrong (at 100.75m it widens 40 → 43; it reaches
@@ -206,13 +162,13 @@ const MAX_PRICE_EXPLICIT = A['max-price'] != null;
 const TOP = A.top != null ? +A.top : 90;
 const TOP_EXPLICIT = A.top != null;   // PLAN-FETCH-POOL-SCALING: an explicit --top always wins — never capital-scaled
 const BAND_HOURS = A['band-hours'] != null ? +A['band-hours'] : 2;
-// Bar D (Ben 2026-07-09) DENSITY floor for dense (non-thin) bands — # of windows with ANY trade (one-
+// Bar D DENSITY floor for dense (non-thin) bands — # of windows with ANY trade (one-
 // sided OK) the band must show; two-sidedness is a separate check (sawLow && sawHigh) in bandCore. This
 // replaces the old active5m (both-sided-in-the-same-5m) gate that structurally culled big tickets.
 // --min-traded is the flag; --min-active is kept as a back-compat alias for the same knob.
 const MIN_TRADED = A['min-traded'] != null ? +A['min-traded'] : (A['min-active'] != null ? +A['min-active'] : 6);
 const STATS = !!A.stats;
-// --- value niche: deployable-capital inputs (Ben 2026-07-09). The per-position capital cap that bounds
+// --- value niche: deployable-capital inputs. The per-position capital cap that bounds
 // valueScore's deployable-units is NOT a fixed constant — it's Ben's current capital ÷ how many positions
 // (slots) we'd spread it across. --capital <gp> is the input (his real bankroll); --slots N is how many
 // concurrent value holds to size for (≈ the count of quality candidates). VALUE_CAP_GP = capital ÷ slots.
@@ -223,10 +179,10 @@ const STATS = !!A.stats;
 // placeholder only when no anchor is set. The eager figure here has NO market reference (so a resting bid
 // classifies COMMITTED → deployablePool == availableCash, the conservative floor); main() RE-DERIVES it
 // with a marketRef built from the bulk /latest it fetches (zero extra fetch) so deep bids count. The value
-// niche always reads the re-derived figure. NOTE (PLAN-CAPITAL-THROUGHPUT, 2026-07-14): the band/churn
+// niche always reads the re-derived figure. NOTE (PLAN-CAPITAL-THROUGHPUT): the band/churn
 // THROUGHPUT_CAP_GP also reads VALUE_CAPITAL — after the re-derive when value runs, else this eager
-// CONSERVATIVE (no-marketRef) figure. That's intentional (a smaller pool binds the throughput cap a touch
-// harder = more conservative demotion); it is no longer true that the eager value is "never surfaced".
+// CONSERVATIVE (no-marketRef) figure. That's intentional — a smaller pool binds the throughput cap a touch
+// harder = more conservative demotion — so the eager value IS surfaced, contrary to what it once was.
 const VALUE_CAPITAL_EXPLICIT = A.capital != null;
 let DERIVED_CASH = VALUE_CAPITAL_EXPLICIT ? null : loadDerivedCash();
 const VALUE_CAPITAL_DERIVED = !!(DERIVED_CASH && DERIVED_CASH.known);   // derived from the cash anchor (not a placeholder)
@@ -235,14 +191,10 @@ let VALUE_CAPITAL = VALUE_CAPITAL_EXPLICIT ? parseGp(A.capital)
 const VALUE_SLOTS = A.slots != null ? Math.max(1, +A.slots) : 5;
 let VALUE_CAP_GP = VALUE_CAPITAL / VALUE_SLOTS;
 
-// MAX_PRICE — DERIVED FROM CAPITAL (Ben, 2026-08-08). Was a bare `45e6` literal with no rationale in
-// code, docs/, or any plan: it traces to the tool's first implementation plan (83ec264, 2026-07-03,
-// written as `[--max-price 45m]`) and was never revisited — conspicuous beside FLOOR (recalibrated
-// 50→3500 with a study) and TOP (40→90 explicitly because it was mis-tuned against scaleSlots' CAP_REF
-// of 100m). The codebase's stated reference bankroll was 100m while a single item was capped at 45% of
-// it, so the cap silently hid every big ticket regardless of how much cash was actually free.
+// MAX_PRICE — DERIVED FROM CAPITAL, never a literal. A fixed 45m cap sits at 45% of the codebase's 100m
+// reference bankroll, so it silently hides every big ticket regardless of how much cash is actually free.
 //
-// The rule now: you can be shown anything you can afford ONE unit of. That is the same affordability
+// The rule: you can be shown anything you can afford ONE unit of. That is the same affordability
 // test the amplitude lane already uses (an item you can't afford ≥1 unit of is DROPPED as
 // `unaffordable`) — reused, not reinvented. Deliberately the FULL deployable pool, not ÷slots: this is
 // a DISCOVERY cap answering "could I buy this at all", while position sizing stays the sizing layer's
@@ -258,12 +210,16 @@ let MAX_PRICE = MAX_PRICE_EXPLICIT ? parseGp(A['max-price'])
 const AMP_HOLD_DAYS = A['hold-days'] != null ? Math.max(1, +A['hold-days']) : AMP_HOLD_DAYS_DEFAULT;
 // F-E (PLAN-OSCILLATION-CYCLE): the amplitude reach-vs-margin DIAL — the daily high/low quantiles the
 // peak-ask / trough-bid quote from. Default = the module's KEPT board (AMP_ASK_Q/AMP_BID_Q = 0.5/0.5, the
-// median peak/trough — Ben's explicit call, NOT changed by F-E). A HIGHER --amp-ask-q (e.g. 0.75) quotes a
-// better-but-less-reachable sell so a later retro (F-G) can compare which quantile nets more; absent flag ⇒
+// median peak/trough — Ben's explicit call, NOT changed by F-E). ⚠ DIRECTION: the quantile counts from the
+// HIGH side, so it reads as "reached on this fraction of days" — a HIGHER --amp-ask-q means a MORE-reachable,
+// LOWER ask, and a LOWER --amp-ask-q (e.g. 0.25) is the better-but-less-reachable sell. Verify with
+// quantHigh([200,210,220,230,240], q): 0.25→230, 0.5→220, 0.75→210. (This comment asserted the opposite
+// until it was run; the /scan skill had it right. A later retro (F-G) compares which quantile nets more.)
+// Absent flag ⇒
 // defaults ⇒ byte-identical to pre-F-E. clamp01 so a fat-fingered arg can't ask for a nonsense quantile.
 const AMP_ASK_Q_EFF = A['amp-ask-q'] != null ? Math.min(1, Math.max(0, +A['amp-ask-q'])) : AMP_ASK_Q;
 const AMP_BID_Q_EFF = A['amp-bid-q'] != null ? Math.min(1, Math.max(0, +A['amp-bid-q'])) : AMP_BID_Q;
-// AMP sizing (PLAN-AMPLITUDE-SCAN sizing fix, Ben 2026-07-19). Amplitude is a big-ticket CONCENTRATION
+// AMP sizing (PLAN-AMPLITUDE-SCAN). Amplitude is a big-ticket CONCENTRATION
 // lane — the owner would put his whole bankroll into a single ~345m item — NOT a diversify-across-slots
 // lane like value. So it does NOT use value's per-position (÷slots) cap: it sizes against TOTAL REALIZABLE
 // capital (the "if all lots sold" yardstick = free cash + liquidation value of holds = the LOOSER
@@ -295,8 +251,8 @@ const MIN_TRADED_THIN = 2;
 // surfaced precisely because a unit-count/gp-day measure mismeasures it (a 360k-net/u big ticket is
 // worth an offer even at a couple units a day). Held/asked items are exempt too (they don't occur in a
 // screen; the S3 watchlist pass bypasses gates entirely).
-// 500k → 250k (Ben, 2026-08-08). PAIRED with the expUnits refill haircut (6→2, gatecandidates.mjs) and
-// meaningless without it: gpDay's cheap-churn leg fell ~3×, so holding 500k would have made the board
+// 250k is PAIRED with the expUnits refill haircut (6→2, gatecandidates.mjs) and meaningless without it:
+// gpDay's cheap-churn leg fell ~3×, so holding the prior 500k would have made the board
 // STRICTER on churn rather than rebalanced (measured: band gated 135→85, churn 102→43 with the haircut
 // alone). Big tickets are volume-bound and never saw the multiplier, so the halved floor is the half
 // that actually lets them surface. EXPERIMENTAL, easily tuned — override with --min-gpd.
@@ -329,7 +285,7 @@ const MID_TIER_OFFSET  = A['mid-tier-offset']  != null ? +A['mid-tier-offset']  
 // cross-niche union is clamped to TOTAL_FETCH_MAX. Chunk 1's VALUE_RESERVE is default-ON independent of
 // this flag (it only ADDS value-niche slots; value is not in --mode all).
 const SCALE_POOL = A['scale-pool'] === true;
-// ADMISSION (PLAN-SCREEN-ARCHITECTURE, 2026-07-18): the fetch-pool admission path. UNIFIED is now the
+// ADMISSION (PLAN-SCREEN-ARCHITECTURE): the fetch-pool admission path. UNIFIED is the
 // default — pickFetchPool (pipeline/lib/admission.mjs) ranks the thin lane on its after-tax realistic
 // edge instead of raw gp-flow, adds a bounded rotating exploration reserve, folds in the track-record
 // boost, and reports every excluded candidate. `--admission legacy` restores rankAndSlice byte-for-byte
@@ -338,7 +294,7 @@ const ADMISSION = A['admission'] === 'legacy' ? 'legacy' : 'unified';
 // GC1: the CLI-derived thresholds gateCandidates consumes, grouped into ONE object so the gate stack
 // takes them as an argument (fixtures can drive it) instead of closing over module-level CLI state.
 // main() passes THRESHOLDS; nothing about the values or ordering changed — this is a pure refactor.
-// PLAN-CAPITAL-THROUGHPUT (Ben 2026-07-14): --throughput capital|legacy toggles the capital-aware
+// PLAN-CAPITAL-THROUGHPUT: --throughput capital|legacy toggles the capital-aware
 // expGpDay (default capital). THROUGHPUT_CAP_GP is set from the DERIVED deployablePool after main()
 // re-derives the cash anchor (below); the build-time default is the pre-derive VALUE_CAPITAL (which is
 // itself the derived pool unless --capital was passed). 'legacy' or a null pool → capital-blind expGpDay.
@@ -360,7 +316,7 @@ const THRESHOLDS = {
 const POSTURE_ARG = A.posture != null && A.posture !== true ? String(A.posture).toLowerCase() : 'active';
 if (!['overnight', 'active', 'auto'].includes(POSTURE_ARG)) { console.error(`! unknown --posture "${A.posture}". Use overnight, active, or auto.`); process.exit(1); }
 const POSTURE = POSTURE_ARG === 'auto' ? (isOvernightNow() ? 'overnight' : 'active') : POSTURE_ARG;
-// --publish (DEFAULT ON, 2026-07-16 — was opt-in): also write repo-root screen.json so the app's
+// --publish (DEFAULT ON): also write repo-root screen.json so the app's
 // Scan tab renders the SAME per-niche graded scan a Claude session produces (byte-parity via the
 // shared stdCells / rating path). The file is self-describing (its own `headers` travel with the
 // rows) and each row keeps its itemId for the Item→Trends deep link. PUBLISHING (this local file
@@ -426,10 +382,11 @@ const ASYM = resolve('asym', { flag: A.asym === true ? true : undefined, config:
 // SQLite archive (1h rows aggregated to aligned 6h windows) instead of a per-item /timeseries call.
 // OFF BY DEFAULT — and off means byte-identical, not "close": the seam (sixHourReader with no handle)
 // is a pure pass-through to the same fetchTsCached call each site made before. Flag-only, deliberately
-// NOT config-resolvable: this is an unpromoted shadow comparison, not a desk setting.
+// NOT config-resolvable: this is an unpromoted shadow comparison, not a desk setting. PRICES stay live
+// either way, and --publish is REFUSED under the flag (refusePublishIfNonNeutral below).
 // See archive-series.mjs's archive6h header for the LIVE_TS6H_BUCKETS pin (the load-bearing part), the
 // ceiling-not-floor limit, and the derived-volume caveat. Promotion to the default path is AF6's job and
-// has THREE preconditions: the archive must exceed 365×6h ≈ 91.25d (~2026-08-28) before the phase() read
+// has THREE preconditions: the archive must exceed 365×6h ≈ 91.25d before the phase() read
 // can be trusted; the 00:00–02:00 local-window re-run §8 flags as the one untested mechanism; and a
 // ruling on the thin tail (measured depth spans 40–285 buckets, and 40 is below regimeDrift's own
 // 20-day appetite).
@@ -449,31 +406,27 @@ PUBLISH = refusePublishIfNonNeutral({
     { on: ARCHIVE_REGIME, message: '! --archive-regime is an UNPROMOTED data-source swap (AF5b) — refusing --publish under it (screen.json + the deployed app stay on the live 6h series until AF6 promotes it).' },
   ],
 });
-// --- PLAN-VOL24 (2026-07-13): --vol-source rolling|legacy. The wiki /24h endpoint is unusable as a
-// trailing-24h source — as re-measured 2026-08-10 it serves a COMPLETE, exact UTC-day aggregate that is
-// STALE by ~24–48h at its newest (the ~10–27× under-report seen in 2026-07 now measures ~1.0×). ONE home for the current
-// description: the marketfetch.mjs loadAll24hRolling header; full history: PLAN-VOL24.md.
-// The DEFAULT is now `rolling` (step 2, Ben-validated): the corrected trailing-24h volume composed from the
-// healthy /1h grain (loadAll24hRolling — 24 bulk /1h windows, mostly warm from the SQLite 1h archive) is the
+// --- PLAN-VOL24: --vol-source rolling|legacy. The wiki /24h endpoint is unusable as a trailing-24h
+// source — it serves a COMPLETE, exact UTC-day aggregate that is STALE by ~24–48h at its newest. ONE home
+// for the current description: the marketfetch.mjs loadAll24hRolling header.
+// The DEFAULT is `rolling`: the corrected trailing-24h volume composed from the healthy /1h grain (loadAll24hRolling — 24 bulk /1h windows, mostly warm from the SQLite 1h archive) is the
 // ACTIVE volDay behind every gate/rank/column, and the volume-denominated floors (FLOOR/GP_FLOOR/VALUE_LIQ_
 // FLOOR/CHURN_MIN_VOL/DIP_LOOP_LIQUID_FLOOR/DL4_MIN_GP_FLOW) were count-matched to the corrected distribution
 // in the same change. `--vol-source legacy` switches to the raw bulk /24h map — but it does NOT reproduce
 // pre-recal output any more: bulk /24h is now a complete day that is only 24–48h stale, so legacy/rolling
-// measures median 1.151× and disagrees on just 5.2% of FLOOR admissions (2026-08-10, 1961 items). It is a
+// measures median 1.151× and disagrees on just 5.2% of FLOOR admissions (n=1961 items). It is a
 // staleness A/B, not a time machine. Every published row also logs the corrected per-item volume as the lean
 // `volDayRolling` shadow field regardless of this flag (from the in-hand 1h series → no new fetch).
-// NOTE: MIN_GPD (the ATTENTION floor) was KEPT at 500k through the VOL24 recal (Ben's call) — it is a
-// real-world NET-throughput quantity, so 500k of TRUE throughput was the honest floor. SUPERSEDED
-// 2026-08-08: now 250k, paired with the expUnits 6→2 refill haircut. See the MIN_GPD declaration.
+// NOTE: MIN_GPD (the ATTENTION floor) is NOT volume-denominated and was NOT count-matched by the VOL24
+// recal — it is a real-world NET-throughput quantity. Its own basis is at the MIN_GPD declaration.
 const VOL_SOURCE = resolve('volSource', { flag: A['vol-source'] != null && A['vol-source'] !== true ? String(A['vol-source']).toLowerCase() : undefined, config: CONFIG.volSource, fallback: 'rolling' }).active;
 if (!['legacy', 'rolling'].includes(VOL_SOURCE)) { console.error(`! unknown --vol-source "${A['vol-source']}". Use rolling (default) or legacy.`); process.exit(1); }
 // The `volSrc` provenance label for EVERY suggestion row this script writes — ONE home. Derive it from
 // VOL_SOURCE; do NOT hardcode at the emit sites (all four — band, value, amplitude, watchlist — were
-// hardcoded 'bulk' from 2026-07-13 to 2026-08-11 while running rolling, mislabelling ~1,940 of 2,000
-// rows). suggestlog.mjs's classAndSource() separately tags 'bulk' and is CORRECT — it reads raw
-// all24h.json.
+// once hardcoded 'bulk' while running rolling, mislabelling ~1,940 of 2,000 rows). suggestlog.mjs's
+// classAndSource() separately tags 'bulk' and is CORRECT — it reads raw all24h.json.
 const VOL_SRC_LABEL = VOL_SOURCE === 'rolling' ? 'rolling' : 'bulk';
-// --- PLAN-OUTPUT-TABLE (2026-07-13): the DEFAULT niche-table stdout view is the reconciliation-
+// --- PLAN-OUTPUT-TABLE: the DEFAULT niche-table stdout view is the reconciliation-
 // estimator pair — Est. buy / Est. sell / Net/u (ROI) / BE with confidence riding in the price cells
 // (js/estimators.mjs estimatePair — reach-folded, BE-floored, PLACEHOLDER model n≈14). `--raw`
 // restores the model-free Quick + Optimistic columns (the honest arithmetic underneath). --asym
@@ -495,7 +448,7 @@ const ASYM_NIGHTS = 14;
 // AF6 promotes the source.
 const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_TRADED, posture: POSTURE, volSource: VOL_SOURCE, ...(ARCHIVE_REGIME ? { archiveRegime: true } : {}) };
 
-const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // `all` = band/churn/amplitude (THE SWAP, 2026-07-19); value/invest + scalp explicit-only
+const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // `all` = band/churn/amplitude (THE SWAP); value/invest + scalp explicit-only
 const NEED_BANDS = true;   // every remaining niche prices its edge off the 2h band (spread, the one 24h-avg niche, is deleted)
 const IS_VALUE = RUN_MODES.includes('value');                    // P5 — the value niche needs the 28d term structure
 const N_WIN = Math.max(1, Math.ceil(BAND_HOURS * 3600 / 300));   // 5m windows in the band (confidence denom)
@@ -504,7 +457,7 @@ const N_WIN = Math.max(1, Math.ceil(BAND_HOURS * 3600 / 300));   // 5m windows i
 const DAILY_DAYS = IS_VALUE ? 28 : 17, DAILY_STEP_H = 6;
 const DAILY_COLD = 10 * 24 / DAILY_STEP_H;                       // < this many windows ⇒ cold archive, degraded proxy
 const TS_TTL_5M = 3 * 60 * 1000, TS_TTL_6H = 30 * 60 * 1000;     // per-item series cache TTLs (screen re-fetch avoidance)
-const TS_TTL_1H = 15 * 60 * 1000;                                // Leg B (2026-07-09): the 1h series reachValidator scores — fetched for SURVIVORS only
+const TS_TTL_1H = 15 * 60 * 1000;                                // Leg B: the 1h series reachValidator scores — fetched for SURVIVORS only
 // --- AF5b: the ONE 6h read for the whole screen (survivor pool, watchlist pool, reverse-flip pool).
 // `read6h(id)` is `sixHourReader`'s closure: with no archive handle it pass-throughs to the identical
 // `fetchTsCached(id, '6h', TS_TTL_6H)` call the THREE sites made individually before, so a bare scan is
@@ -534,17 +487,15 @@ const read6h = sixHourReader({
   },
 });
 // AF5b: name the data source and the archive/live split HONESTLY — an all-archive claim would be wrong
-// the moment one item is missing, and the fallback is silent by design. Hoisted to a function because
-// `--mode reverse` returns before main()'s header ever runs: the reverse table's Regime column is the
-// DECISION-CENTRAL inverted read, and it was being fed swapped data with zero disclosure (2026-08-08
-// adversarial review, D4). Every exit path that renders an archive-sourced regime must call this.
+// the moment one item is missing, and the fallback is silent by design. It is a FUNCTION because
+// `--mode reverse` returns before main()'s header ever runs, and the reverse table's Regime column is the
+// DECISION-CENTRAL inverted read (D4). Every exit path that renders an archive-sourced regime must call it.
 // `log` MUST be main()'s captured `realLog`, never bare console.log: quiet is the DEFAULT and main()
-// stubs `console.log = () => {}` under it, which silently swallowed this banner on every default-quiet
+// stubs `console.log = () => {}` under it, which silently swallows this banner on every default-quiet
 // run — including `--mode reverse`, whose whole table prints via realLog for exactly that reason. A
-// safety disclosure that a verbosity flag can suppress is not a disclosure: under quiet the scan still
-// writes `.cache/last-report/screen.json`, which is what an agent reads for its data, so a quiet flag-on
-// run was serving archive-sourced regime with nothing anywhere saying so. Caught 2026-08-08 by running
-// the D4 fix instead of trusting it.
+// safety disclosure a verbosity flag can suppress is not a disclosure: under quiet the scan still writes
+// `.cache/last-report/screen.json`, which is what an agent reads for its data, so a quiet flag-on run
+// would serve archive-sourced regime with nothing anywhere saying so.
 function printArchiveRegimeBanner(scopeNote, log = console.log) {
   log(`⚠ --archive-regime UNPROMOTED (AF5b): the 6h REGIME series comes from the LOCAL archive, pinned to the last ${LIVE_TS6H_BUCKETS}×6h — ${ARCH_6H.archive} from archive / ${ARCH_6H.fallback} absent + ${ARCH_6H.shallow} too-shallow fell back to a live fetch (${scopeNote}). Prices are untouched (live). --publish refused.`);
   if (ARCH_6H.shallow) log(`  ${ARCH_6H.shallow} item(s) had an archive slice under ${REGIME_MIN_6H_BUCKETS} buckets (deepest rejected: ${ARCH_6H.shallowMaxN}) — too short BY COUNT for regimeDrift's ${5}-full-day minimum, so they were served LIVE instead. Note this is a COUNT floor only: an admitted one-sided series (highs but no lows) can still yield an \`unknown\` label — same as live would.`);
@@ -559,8 +510,8 @@ function printArchiveRegimeBanner(scopeNote, log = console.log) {
       ? `  regimeDrift (the falling/rising GATE) clears its windowStats(nights:20) = ${REGIME_DEPTH_BUCKETS}-bucket appetite on every series here — but see the evidence line: depth is not the only way the gate flips.`
       : `  ⚠ and the thinnest series (${ARCH_6H.minN} buckets ≈ ${(ARCH_6H.minN * 6 / 24).toFixed(0)}d) is BELOW regimeDrift's windowStats(nights:20) appetite of ${REGIME_DEPTH_BUCKETS} buckets — those items feed the falling/rising GATE less history than a live fetch would.`);
   }
-  // D1 (2026-08-08 adversarial review) REPLACES the old "0/165 SAME-SPAN, none was data quality" line.
-  // That claim was falsified: same-span, same-end regime flips are REAL and go in the unsafe direction.
+  // D1: same-span, same-end regime flips are REAL and go in the unsafe direction. (An earlier
+  // "0/165 SAME-SPAN, none was data quality" claim here was falsified — do not restate it.)
   log(`  ⚠ Evidence, corrected: regime flips DO occur at same span and same end — 2/60 six-way and 1/60 GATE flips in the 00:00–02:00 local window, from ±1gp rounding residue in a re-derived weighted mean tipping a discrete test (Red d'hide chaps: floor slope −14.40 live vs −14.20 archive against a ≈14.30 flat-band, which OPENS the falling exclusion on an item live EXCLUDES). driftPct p95 4.27pp / max 12.55pp in that window vs 0.70pp by day. This is NOT depth and NOT the 15.2d cliff — do not read the depth lines above as the whole risk.`);
 }
 // SP1 (PLAN-DIGEST-SIGNAL-AND-SCAN-PERF): the ONE API-politeness bound, shared by BOTH per-item fetch
@@ -600,9 +551,9 @@ const PATHA_HEADER = 'Path-A gp/d*';
 // range (it then sorts by Grade, surfaced not dropped); a sub-MIN_GPD (attention-floor) number is marked
 // `⚠<floor` (surfaced, NOT gated — the floor is a post-rank surfacing partition here, not a drop).
 //
-// ⚠ TWO METRICS, ONE CONSTANT (MT1, PLAN-MID-TIER-ADMISSION 2026-07-27 — read this before reasoning about
+// ⚠ TWO METRICS, ONE CONSTANT (MT1, PLAN-MID-TIER-ADMISSION — read this before reasoning about
 // `⚠<floor`). MIN_GPD is compared against TWO DIFFERENT numbers in this pipeline, and they disagree:
-//   · Stage-1 `expGpDay` (gatecandidates.mjs:284, PRE-fetch)  — a HARD GATE. Sub-floor ⇒ dropped, never rated.
+//   · Stage-1 `expGpDay` (gatecandidates.mjs `eachLiquidCandidate`, PRE-fetch) — a HARD GATE. Sub-floor ⇒ dropped, never rated.
 //   · Path-A `pa.gpDay`  (here, POST-fetch)                   — DISPLAY ONLY. Sub-floor ⇒ marked, still shown.
 // So a row CAN carry `⚠<floor` while having comfortably cleared the gate on the other number — Helm of
 // neitiznot passes Stage-1 at ~692k and prints 420.7k/d ⚠<floor. Seeing the marker and concluding "MIN_GPD
@@ -798,28 +749,21 @@ const DIGEST_ROWS = [];
 // symmetric (churn/amplitude) niche is reach-EXEMPT (→ null, renders '—' NOT '✗' — a false alarm, §3.4)
 // is decided by the CALLER (digestReachAndPlacement) since EF1(b) made the exemption placement-bounded.
 // ⚠ DELIBERATELY RECENT-BASED — DO NOT "FIX" THIS BACK TO THE FULL WINDOW (RB-5, PLAN-RECENCY-BASIS).
-// This surface has been recent-preferring since PLAN-CAPITAL-EFFICIENCY-AND-DIGEST; it was one of THREE
-// independent copies of the same rule (the fold price in pair.mjs's reachRead, and an inline
-// reachedDays/nDays in askReachFactor). RB-5 collapsed this one onto the shared `reachFraction`, so the
-// rule now has ONE home. A future reader WILL notice the digest column disagreeing with `screen.json`'s
-// rank/grade — that is EXPECTED and decided, not drift: the RANK is full-window on purpose
-// (js/estimators/families.mjs:389, deferred pending a fills-joined study).
-// ⚠ UPDATED 2026-08-09 — the claim "every DISPLAY surface is recent-preferring" WAS true and is NOT any
-// more. The fold price + its pFill (js/estimators/pair.mjs) flipped BACK to the full window: recent-3 is
-// four-valued at n=3, and forward-scoring found the full-window read is what discriminates (+9.8pp
-// within-item, p=0.0001, n=6,016). So this digest column and watch-positions' size-relief note are now
-// the ONLY recent-preferring surfaces left, and they disagree with the fold as well as the rank.
-// That WAS a KNOWN, FLAGGED split. ✅ MEASURED 2026-08-13 — `pipeline/commands/join-reach-basis.mjs`
-// (PLAN-REACH-BASIS-DECISION, folded into PLAN.md Discovered). 7,904 deduped rows / 635 items forward-
-// scored against the 1h archive. recent-3 IS the cheaper basis here — M(1)=+2.3pp, item-clustered 95%
-// CI [0.8, 3.8], sign stable across four horizons and both fold-flip eras — so THIS COLUMN STAYS
-// RECENT and the split with the fold/rank is now a measured, deliberate disagreement rather than an
-// unexamined one. ⚠ BUT THE BIGGER RESULT IS ABOUT THIS TAG, NOT THE BASIS: at equal error costs BOTH
-// bases lose to never gating at all (never 2950 · recent 3493 · full 3668), so `sell unreliable` only
-// pays for itself when a false green-light costs ≥ ~1.29× a false gate, and recent-3 only wins below
-// r*=1.76 — a narrow 1.29<r<1.76 window. Do not read this column as a filter. Whether 0.5 is the right
-// cut at all is F1's, not a hand-tune. If it ever does flip, flip it HERE (one shared `reachFraction`
-// call), never by re-forking a local implementation.
+// The rule has ONE home, the shared `reachFraction`; if it ever flips, flip it THERE, never by re-forking
+// a local implementation. This column DISAGREES with the estimator's fold price and with `screen.json`'s
+// rank/grade, and that split is MEASURED and deliberate, not drift:
+//   · the fold price + its pFill (js/estimators/pair.mjs) are FULL-window — recent-3 is four-valued at
+//     n=3, and forward-scoring found the full-window read is what discriminates (+9.8pp within-item,
+//     p=0.0001, n=6,016); the RANK is full-window too, deferred pending a fills-joined study
+//     (js/estimators/families.mjs:389);
+//   · this column is RECENT — join-reach-basis.mjs (PLAN-REACH-BASIS-DECISION) forward-scored 7,904
+//     deduped rows / 635 items against the 1h archive: recent-3 is the cheaper basis HERE, M(1)=+2.3pp,
+//     item-clustered 95% CI [0.8, 3.8], sign stable across four horizons and both fold bases.
+// ⚠ THE BIGGER RESULT IS ABOUT THE TAG, NOT THE BASIS: at equal error costs BOTH bases lose to never
+// gating at all (never 2950 · recent 3493 · full 3668), so `sell unreliable` only pays for itself when a
+// false green-light costs ≥ ~1.29× a false gate, and recent-3 only wins below r*=1.76 — a narrow
+// 1.29<r<1.76 window. Do not read this column as a filter. Whether 0.5 is the right cut at all is F1's
+// call, not a hand-tune.
 function digestReachFrac(askReachExtra) {
   return reachFraction(askReachExtra, { prefer: 'recent' });
 }
@@ -905,17 +849,17 @@ export function digestReachAndPlacement({ spec, row, askReachExtra, his, days } 
 // Reuses the footer Diurnal-timing idiom (fmtHour dip window) off the SAME in-hand `prof` — zero new fetch,
 // no `dr` threading needed. STDOUT-ONLY: never gates/drops/regrades and never enters screen.json (frozen
 // schema 2). Returns null when no diurnal profile / dip window exists (→ '—' cell).
-// ONE IMPLEMENTATION (Ben 2026-07-21): this cell delegates to the SHARED softBuyRead (js/windowread.mjs) so
+// ONE IMPLEMENTATION: this cell delegates to the SHARED softBuyRead (js/windowread.mjs) so
 // the digest and the positions ⏳ soft-buy note can never drift — same dip window, same @floor/+X% boundary,
 // same floor-aware cue. `fc` = the floorCeilingTrack read off the SAME in-hand 14-day windowStats days (zero
 // new fetch) that drives the positions cue; on @floor it appends the caution/favorable tag (a breaking floor
 // = a dump artifact, not a discount — the fang under-read fix). Compact CELL shape (window · marker · [cue]),
 // NOT formatSoftBuy's prefixed line. STDOUT-ONLY: never gates/drops/regrades, never enters screen.json.
-// DT4 (2026-08-10): the tri-state + the fit basis both ride in on the row's ALREADY-computed timedLap
+// DT4: the tri-state + the fit basis both ride in on the row's ALREADY-computed timedLap
 // (zero recompute, zero fetch). The dip HOURS render only when the split-half gate passes; the @floor/+X%
 // marker and the floor-aware cue are LEVEL reads, so they still render either way — but note DT4b: on a
 // PASSING row the levels are now read off the gate's own 14-day fit, since hours and levels are one fit.
-// DT4b (2026-08-10): takes the RAW 1h series, not a caller-fitted profile. The dip window this cell
+// DT4b: takes the RAW 1h series, not a caller-fitted profile. The dip window this cell
 // prints must be fitted over the window the gate verified (the fit-window transfer gap; see
 // displayFitNights) — and the caller's `prof` is a DIURNAL_NIGHTS=7 fit built for the `phase` column,
 // which is precisely the basis mismatch this closes. `lap` (the row's already-built diurnalTimedLap)
@@ -933,18 +877,17 @@ function digestSoftBuy(ts1h, row, fc = null, durable = null, lap = null) {
   if (read.marker == null) return win;                            // window known, live-vs-floor unavailable
   // append the cue only when it's the meaningful floor-aware read (favorable/caution); the @floor/+X% marker
   // already conveys buy-now/wait, so those two words stay implicit in the compact cell.
-  // DT2 (2026-08-09): the compact cell keeps its shape (the digest is width-constrained and is an ATTENDED
+  // DT2: the compact cell keeps its shape (the digest is width-constrained and is an ATTENDED
   // triage surface by construction), but read the marker correctly — `+X%` states WHERE LIVE SITS relative
   // to the dip floor, it is NOT an instruction to wait. A resting bid goes in at the floor level regardless
   // of the hour; the window is where an attended TAKE is cheapest. See softBuyRead's header for why.
   const cueTag = (read.cue === 'favorable' || read.cue === 'caution' || read.cue === 'unproven-base') ? ` · ${SOFT_BUY_CUE_TEXT[read.cue]}` : '';
   return `${win} · ${read.marker}${cueTag}`;
 }
-// DT4b-fix (2026-08-10): the `phase` column reads off the LAP's peak window, not the `prof` fit. The
-// original DT4b claim — "phase is a cycle-position WORD, not a printed hour span, so it is not gated" —
-// was WRONG: diurnalPhase is a pure function of peak.startH/endH, so leaving it on a 7-day fit made the
-// digest row's phase disagree with the window rendered beside it. `prof` survives ONLY as the no-lap
-// fallback. See phaseFromLap's header in js/windowread.mjs.
+// DT4b-fix: the `phase` column reads off the LAP's peak window, NOT the `prof` fit — diurnalPhase is a
+// pure function of peak.startH/endH, so fitting it over a different window makes the digest row's phase
+// disagree with the window rendered beside it. `prof` survives ONLY as the no-lap fallback. See
+// phaseFromLap's header in js/windowread.mjs.
 function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacement, marginTrend = null, placementDiverges = false, prof, ts1h = null, lap = null, fc = null, durable = null, subFloor }) {
   if (subFloor) return;                       // sub-floor fallback rows are never "top-8 decision" candidates
   if (HELD_IDS.has(id)) return;               // a held item's read belongs to the positions surface, not the buy-triage digest
@@ -1013,13 +956,11 @@ const digestCells = r => [
 // fetch on the common path); a row whose id isn't in the map (shouldn't happen for a digest survivor, but
 // the read degrades honestly either way) simply gets no note.
 //
-// THE VERDICT RELABEL WAS DELETED HERE (2026-08-09), not just disabled. This function used to flip a
-// 'fill-now' band/churn verdict to `⚠ falling — verify (~X/d)` off a uniform down-drift in
-// hourlyDrift().dominant. That direction call was measured to be a coin flip (49.7%), so the label was
-// firing on noise — a visible swap is only honest when the thing driving it carries information. Both the
-// relabel and its two PLACEHOLDER constants (DRIFT_RELABEL_NICHES, DIGEST_DRIFT_RELABEL_FRAC) are gone;
-// the digest verdict is now always the computed verdict. Full refutation: hourly-lmh.mjs's tombstone.
-// Do not reintroduce a drift-keyed relabel without a measured direction signal behind it.
+// NO drift-keyed verdict relabel: flipping a 'fill-now' band/churn verdict to `⚠ falling — verify (~X/d)`
+// off a uniform down-drift in hourlyDrift().dominant was measured a coin flip (49.7% direction), i.e. the
+// label fired on noise, and a visible swap is only honest when what drives it carries information. The
+// digest verdict is always the computed verdict. Full refutation: hourly-lmh.mjs's tombstone. Do not
+// rebuild it without a measured direction signal behind it.
 //
 // INFORM ONLY — this never drops a row, never touches capEff/rankKey/sort order, and no longer alters a
 // displayed verdict at all. It appends a note when (and only when) the ask is sliding out of reach.
@@ -1049,7 +990,7 @@ export function buildDigestBlock(pool = DIGEST_ROWS, { series1h = null } = {}) {
   // rankKey is 0, so the ordering collapsed into the capEff tie-break — and capEff is SCALE-FREE, which
   // is the exact failure `× deployable` was added to prevent, so a fully-deployed book reproduced the
   // dust-sweep bug by a different route; (2) capEff is unbounded, so a dust item prints 9907%/d and wins
-  // any comparison it survives. Measured 2026-08-07 on a deployed book: all 8 main rows were C/D dust
+  // any comparison it survives. Measured on a deployed book: all 8 main rows were C/D dust
   // (Black knife 9907.69%/d, C) and the only A- `fill-now` row was buried in the big-ticket appendix.
   // `rank` is already computed per row, is scale-AWARE (gp, not %), and needs no capital — the property
   // being ranked is the opportunity's quality, which does not change with the size of the wallet.
@@ -1089,7 +1030,9 @@ function rollShadow(series1h, id) {
   return rr ? { hpv: rr.highPriceVolume, lpv: rr.lowPriceVolume } : null;
 }
 
-// grade-distribution footer, in GRADE_CUTOFFS (best→worst) order, present grades only
+// grade-distribution footer, in GRADE_CUTOFFS (best→worst) order, present grades only. It is the read on
+// whether the score separates best-from-good: clumping at one grade means the FACTORS need work, not the
+// letter scale.
 function gradeDist(dist) {
   const parts = GRADE_CUTOFFS.map(([g]) => g).filter(g => dist[g]).map(g => `${g}×${dist[g]}`);
   return parts.length ? parts.join('  ') : '—';
@@ -1171,7 +1114,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0, negNet: 0, notFalling: 0, partition: 0 };  // post-fetch discard reasons (--stats)
   const rejReasons = {};   // P2: reject reason → count, for the `rejected: N (top reasons)` footer
   const cautionNotes = []; // P2: one flagged-caution note per item (the row still shows)
-  const informNotes = [];  // 2026-07-09: inform-mode validator findings (trajectory/reach analysis) — decision support, never a drop
+  const informNotes = [];  // inform-mode validator findings (trajectory/reach analysis) — decision support, never a drop
   const headroomNotes = []; // Bar E ask-headroom (PLAN Bar-E-signal): the robust p90 shaved a TRADED in-band top off the quoted ask — sibling inform note, never a gate/drop/grade/screen.json input
   const windowClearNotes = []; // PLAN-WINDOW-CLEAR B2 (churn/scalp): the ask reaches on days but rarely IN its peak window / size ≫ window pool — sibling inform note, never a gate/drop/grade/screen.json input
   const driftNotes = []; // PLAN-OSCILLATION-CYCLE Chunk 6 (band/churn/scalp): the per-thesis drift-adjusted exit — sibling inform note off the shared driftExitFrom, never a gate/drop/grade/screen.json input
@@ -1203,7 +1146,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // P2/P3 validators. reachValidator (via the spec plan) scores the patient ask (optSell) against the
     // reach window off the Leg-B 1h series; a SECOND inform-only reach call below scores the patient BID
     // (optBuy) reachability — the 2h band min is an artifact-prone floor and an unreachable bid inflates
-    // the grade (2026-07-09 bid-leg fix). P3's
+    // the grade (the bid-leg fix). P3's
     // floorValidator scores the patient BUY (optBuy) against the durable multi-week floor from the
     // loadDaily {ts,mid} regime-proxy series ALREADY loaded at gate time (daily[id]) — no new fetch.
     // A buy parked well above where the 14/28d structure says support prints (the decay-knife shape) is
@@ -1219,9 +1162,9 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // DP1: the 24h /24h record (avgLowPrice = the dip-depth reference) — HOISTED above runValidators so
     // both the dip-posture validator ctx and the probe ctx below read the ONE lookup (not computed twice).
     const d24 = v24 && (v24[s.id] || v24[String(s.id)]);
-    // Ben 2026-07-09: drive the registry off the THESIS's own validator PLAN (spec.validators — modes +
-    // reach horizon), not the whole registry. Leg B feeds the real 1h series now (was null → reach
-    // degraded); trajectory reads the term structure's shape classification (no new fetch). Inform-mode
+    // Drive the registry off the THESIS's own validator PLAN (spec.validators — modes + reach horizon),
+    // not the whole registry. Leg B feeds the real 1h series (a null series degrades reach); trajectory
+    // reads the term structure's shape classification (no new fetch). Inform-mode
     // validators annotate but never drop (informFlags); only gate-mode caution/reject flag/drop the row.
     const vres = runValidators({
       market: { row },
@@ -1247,15 +1190,15 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     }
     // inform-mode findings (the analysis that WOULD have gated under a stricter thesis) — surfaced as a
     // decision-support note, never a drop. This is where the trajectory/reach read lands on a surfaced row.
-    // Bid-leg reach (2026-07-09): the spec's `reach` validator scores only the ASK (optSell); the
+    // Bid-leg reach: the spec's `reach` validator scores only the ASK (optSell); the
     // optimistic BID is the 2h band min, so a single artifact-low 5m print (touched 0/Nd) inflates the
     // grade off an UNREACHABLE buy with no warning (the Primordial-boots S- catch — estimateRank prices
     // optBuy→optSell). Score the bid leg the same INFORM way (mirrors renderValueMode's side:'bid' call),
     // reusing the 1h series already fetched for the ask reach — zero new fetch, never drops a row.
     let bidReach = [];
-    // Step 1 (2026-07-09): the BID-side reach also FEEDS the rank estimate's P(fill). estimateRank's
-    // intraday estimator prefers a real reach read (reach.reachedDays/nDays) over the band-depth prior;
-    // before this it was called with no extra, so P(fill) fell to a ~uniform 0.50 band-depth number.
+    // Step 1: the BID-side reach also FEEDS the rank estimate's P(fill). estimateRank's intraday
+    // estimator prefers a real reach read (reach.reachedDays/nDays) over the band-depth prior; called
+    // with no extra, P(fill) falls to a ~uniform 0.50 band-depth number.
     // P(fill) here is a BID-FILL probability → it MUST use the bid-side reach (bidRes, optBuy), NOT the
     // ask-side spec-plan reach (vres, optSell). NOTE the field remap: estimators reads reach.nDays /
     // reach.reachedDays; the validator emits evidence.days / evidence.hit.
@@ -1332,11 +1275,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // Inform-only: the `reachable` shadow field only (never a gate/drop/grade/screen.json input).
     const rbStats = (series1h && series1h.get(s.id)) ? windowStats(series1h.get(s.id), { nights: 14, wStart: 0, wEnd: 0 }) : null;
     const reachable = rbStats ? reachableBand(rbStats) : null;
-    // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2 (2026-07-22): the DC3 demand-regime flip-side classifier
-    // (`demReg` — the inform note + the `demandRegime` shadow field) was REMOVED along with `demandRegime`
-    // itself (narrow removal — the Extension-B demand-cycle read never fed the gate/rank/grade/screen.json).
+    // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2: NO DC3 demand-regime classifier here — `demReg`, its inform
+    // note and the `demandRegime` shadow field are all gone (the Extension-B demand-cycle read never fed the
+    // gate/rank/grade/screen.json). Don't rebuild it.
     // rev2: strategy-aware entry (estimatePair reads STRATEGY[mode]'s falling/priceBasis doctrine).
-    // FIX 1 (2026-07-13): declared-exit anchoring is DELIBERATELY NOT applied on the discovery screen —
+    // FIX 1: declared-exit anchoring is DELIBERATELY NOT applied on the discovery screen —
     // a bare candidate row is a "should I buy this" read, never a held lot, so a declared SELL exit
     // (a held-lot plan) must not inflate its Est. sell/net. Declared-exit anchoring lives ONLY on the
     // held-lot surfaces (quote-items.mjs --positions/watch-positions.mjs verdict frame, and quote-items.mjs per-item ONLY when
@@ -1367,11 +1310,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // gate/drop/grade/screen.json input — the spec's `driftInform` label drives the wording, so this is a
     // registry-line read, not an `if (mode===...)` branch. Passes buy-side `optBuy` as the entry so the note
     // states the drift-adjusted after-tax margin. driftInformNote returns null (no note) when the spec has no
-    // driftInform or the projection degraded. F-C (2026-07-22): pass THIS spec's own driftInform.holdDays
-    // (band/churn/scalp → DRIFT_INTRADAY_HOLD_DAYS, the ~2h Bar-E hold — was silently defaulting to the
-    // oscillation-forecast 1.5-DAY horizon (NOT the amplitude hold, 4d since DT1), wildly overstating the residual-horizon drift shift on an
-    // hours-long flip) — undefined ⇒ driftExitFrom's own generic fallback (unaffected for any future spec
-    // that doesn't set it).
+    // driftInform or the projection degraded. F-C: pass THIS spec's own driftInform.holdDays
+    // (band/churn/scalp → DRIFT_INTRADAY_HOLD_DAYS, the ~2h Bar-E hold); without it the generic
+    // oscillation-forecast 1.5-DAY horizon applies (NOT the amplitude hold, 4d) and wildly overstates the
+    // residual-horizon drift shift on an hours-long flip. undefined ⇒ driftExitFrom's own generic fallback
+    // (unaffected for any future spec that doesn't set it).
     // `ph` (the phase() read at the top of this same loop body) — NOT `row.phase`, which does not exist:
     // computeQuote returns no `phase` field, so that read `undefined` and silently disabled forecast's
     // post-shock-shape refusal here. See the note beside `ph` in quote-items.mjs runItems.
@@ -1484,9 +1427,9 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       const af = formatAsymFill(asymEr, asymRead);   // ONE home for the clause wording (lib/render/emit.mjs); defaults to fmtP — full gp on a price an offer is placed at
       if (af) asymNotes.push(`${name}: ${af.bidTxt} → ${af.askTxt} · net ${fmt(asymEr.net)}/u${roi != null ? ` (${roi}%)` : ''} · asym-rank ${fmtP(Math.round(asymEr.rank))}${ASYM ? ' — QUOTED (--asym)' : ''}`);
     }
-    // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2 (2026-07-22): the DC3 demand-tilt inform note was REMOVED
-    // with `demandRegime` (narrow removal — Extension-B demand-cycle read, never a rank/gate input).
-    // Step 2 (2026-07-09): a RENDER-stage net>0 surface gate. er.net is the after-tax net at the thesis's
+    // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2: no DC3 demand-tilt inform note here — it went with
+    // `demandRegime` (an Extension-B demand-cycle read, never a rank/gate input).
+    // Step 2: a RENDER-stage net>0 surface gate. er.net is the after-tax net at the thesis's
     // OWN posted price pair (spec.priceBasis; the BOND 10%-guide-retrade exception rides through via
     // netMargin). A non-positive net means the thesis can't make money at the pair it would post — a bond
     // whose retrade fee eats the spread, a spread niche's 24h-avg pair underwater after tax, a ZGS-style
@@ -1494,7 +1437,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // the pinned gateCandidates→rankAndSlice→surviveMode funnel + the replay goldens are unaffected.
     // Held/asked/watchlist rows never reach renderMode (their surfaces never hide), so they're auto-exempt.
     if (er.net <= 0) { disc.negNet++; continue; }
-    // Step 6a (Ben 2026-07-09): partition churn from band in --mode all so they don't show identical
+    // Step 6a: partition churn from band in --mode all so they don't show identical
     // rows. band is the PER-UNIT lane — its gate already requires ROI ≥ MIN_ROI; churn is the VOLUME /
     // low-margin lane. When BOTH run, drop from churn any row whose after-tax per-unit ROI (at the same
     // opt pair the rank uses) clears MIN_ROI — band surfaces those, so churn keeps only the sub-MIN_ROI
@@ -1581,7 +1524,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     });
     // PM2: record every firing to pipeline/modules/<module>.log (failure-safe, stdout-untouched).
     logFirings(fired, { surface: 'screen', id: s.id, name, quickBuy: row.quickBuy, quickSell: row.quickSell, guide: row.guide, regimeLabel: row.regimeLabel, phase: ph?.phase ?? null });
-    // B (2026-08-06, the Snape grass entry): the durable-floor CAUTION rides the ROW, not just the footer.
+    // B (the Snape grass entry): the durable-floor CAUTION rides the ROW, not just the footer.
     // It fired three passes running on Snape grass ("1.68× → 1.76× typical swing above the 28d floor 960 —
     // not near durable support") and was scrolled past every time, because it was one of FOURTEEN
     // identically-formatted `⚠ caution —` footer lines. A signal printed fourteen times a pass is
@@ -1604,7 +1547,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // P(fill) — `er.pFill.value` = family/entry (bid) reach × askF (ask reach, churn-exempt per
     // families.mjs:251). A P~0.00 row now weights ~0 and sinks; a reachable high-P edge leads. Symmetric
     // niches (churn) stay EXEMPT at weight 1 — the reach read mismeasures a tight two-sided churn band
-    // (Ben 2026-07-12), so churn's overnight order stays raw-optNet, UNCHANGED from the first AC9(b) cut.
+    // so churn's overnight order stays raw-optNet, untouched by AC9(b).
     // EF1(b): the exemption is placement-bounded here too (er.exemptionBounded mirrors the rank) — an
     // above-the-distribution churn ask weights by its discounted two-leg P like every asym row.
     const ovWeight = (FLIP_NICHES[mode].fillShape === 'symmetric' && !er.exemptionBounded) ? 1 : (er.pFill?.value ?? 0);
@@ -1644,7 +1587,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     rows.sort((a, b) => pNet(b) - pNet(a));
   }
 
-  // PLAN-LANE-ADMISSION Chunk D (2026-07-25) — Path-A becomes the CONSOLE / last-report PRIMARY sort key,
+  // PLAN-LANE-ADMISSION Chunk D — Path-A is the CONSOLE / last-report PRIMARY sort key,
   // with rateItem's grade (already the Grade cell) shown ALONGSIDE as the BACKUP + live A/B column (owner
   // decision H4). Path-A gp/day is a NEW captureFrac-PLACEHOLDER (n≈0) number under live A/B evaluation.
   // SCOPE LOCK (rule 2): this re-sort + the extra A/B column touch the CONSOLE/last-report ONLY. The
@@ -1663,7 +1606,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // this item can produce for anyone, NOT what this wallet can extract from it. It was passing
     // VALUE_CAPITAL, and `capUnits = floor(capital / price)` (patha.mjs:105) drives units → cycles → gpDay,
     // so on a fully-deployed book EVERY row scored 0/d and the PRIMARY console sort died silently,
-    // falling back to grade order with no indication. Measured 2026-08-07: all 63 band rows `0/d`,
+    // falling back to grade order with no indication. Measured: all 63 band rows `0/d`,
     // including an 8gp Raw mackerel — capital was exactly 0, so the number said nothing about any item.
     // Capital does not vanish: it rides as `affordableUnits` (SIZING, shown in the cell title), which is
     // the honest place for it — an A- setup is A- whether you can afford 40 units of it or none.
@@ -1709,12 +1652,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       asym: asymShadow(r.asymEr),
       // PLAN-OUTPUT-TABLE shadow pair: the reconciliation estimate the DEFAULT table renders (F1 scores estSell vs the realized sell)
       estBuy: r.est ? r.est.estBuy : null, estSell: r.est ? r.est.estSell : null, estConfidence: estConfLean(r.est),
-      // PLAN-VOL24 shadow: the corrected /1h-composed trailing-24h volume beside the active (broken) /24h volDay
-      // ⚠ FIXED 2026-08-11: volSrc above was HARDCODED 'bulk' with the note "screen's volDay is bulk /24h
-      // (v24) → volSrc 'bulk'". That stopped being true on 2026-07-13 when VOL_SOURCE's fallback became
-      // 'rolling' (:468) and v24 became loadAll24hRolling() (:2827) — so ~1,940 of the last 2,000 ledger
-      // rows carry a provenance label contradicting their OWN run params (`volSource:'rolling'`), and F1
-      // would bucket rolling-sourced rows as bulk. It now follows VOL_SOURCE. Rows written before this
+      // PLAN-VOL24 shadow: the corrected /1h-composed trailing-24h volume beside the active volDay.
+      // ⚠ volSrc above MUST follow VOL_SOURCE (via VOL_SRC_LABEL, the ONE home) — never hardcode 'bulk'
+      // here. Hardcoding it while VOL_SOURCE runs `rolling` mislabels the provenance of every row against
+      // its OWN run params (`volSource:'rolling'`) and makes F1 bucket rolling-sourced rows as bulk;
+      // ~1,940 of 2,000 ledger rows were written that way before the label was single-sourced.
       volDayRolling: rollShadow(series1h, r.id),   // AZ-forward: grade = the rendered letter (verdict keeps it too — legacy readers)
       // PLAN-CAPITAL-THROUGHPUT shadow pair: the ACTIVE (capital-aware, default) expGpDay + the legacy
       // capital-blind expGpDayLegacy, so --stats/analyze/F1 can diff old-vs-new surfacing on real rows.
@@ -1815,17 +1757,17 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     const top = Object.entries(rejReasons).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([why, n]) => `${why}×${n}`).join(', ');
     footerLines.push(`rejected: ${disc.reject}${top ? ` (${top})` : ''}`);
   }
-  // C (2026-08-06): BUCKET, don't sort. Ben's question was "would we put severe at the top or the
-  // bottom?" — and the honest answer is that ordering fourteen identically-formatted lines just picks
+  // C: BUCKET, don't sort. To "would we put severe at the top or the
+  // bottom?" the honest answer is that ordering fourteen identically-formatted lines just picks
   // which one you read first. Every floor caution lives in the 1.5×–2.0× band by construction (above
   // FLOOR_REJECT_RANGES the row is already a hard `rejected:`), so the useful split is NEAR-REJECT vs
   // marginal. The boundary is the MIDPOINT of the existing band — derived from the two constants that
   // already own this policy, NOT a new placeholder threshold. Near-reject rows keep their own lines;
   // the marginal tail collapses to ONE line, the same trim the /scan skill already applies to the
   // D-grade table tail (actionable-first-dead-last). Nothing is dropped — every name still prints.
-  // RIPPLE, ACCEPTED (2026-08-08): FLOOR_CAUTION_RANGES 1.0 → 1.5 moved this midpoint 1.5 → 1.75, so
-  // fewer caution rows earn their own footer line and more collapse into the marginal tail — intended
-  // (the band narrowed; the midpoint still bisects it), documented so the shift isn't read as a bug.
+  // The midpoint TRACKS FLOOR_CAUTION_RANGES: raising that constant raises NEAR_REJECT, so fewer caution
+  // rows earn their own footer line and more collapse into the marginal tail. That ripple is intended —
+  // the band narrows and the midpoint still bisects it — not a bug.
   const NEAR_REJECT = (FLOOR_CAUTION_RANGES + FLOOR_REJECT_RANGES) / 2;
   const elevated = cautionNotes.filter(c => c.ranges != null && c.ranges >= NEAR_REJECT);
   const marginal = cautionNotes.filter(c => !(c.ranges != null && c.ranges >= NEAR_REJECT));
@@ -1856,8 +1798,8 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // are collected as report sections and appended to the SAME niche report, printed ONCE at the end —
   // byte-identical to the prior inline console.log sequence (all flush, no inter-blank line).
   const extraSections = [];
-  // Diurnal timing (2026-07-09; DT2-superseded 2026-07-23) — the timed-lap peak-timing read, now
-  // computed for EVERY niche survivor (was top-picks-only) off the SAME diurnalTimedLap result already
+  // Diurnal timing (DT2) — the timed-lap peak-timing read,
+  // computed for EVERY niche survivor (not just top picks) off the SAME diurnalTimedLap result already
   // stored on the row (r.timedLap — zero new fetch, zero recompute). Rendered via the ONE shared
   // formatTimedLap (pipeline/lib/emit.mjs) so this stays the SAME `diurnal` NOTE_KIND/sigil quote-items
   // and watch-positions will move onto too (DT3) — no second diurnal-text definition on this codebase.
@@ -1893,7 +1835,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       ...diurnalLines.map(l => l === '' ? '' : `  ↳ ${l}`),
     ] });
   }
-  // PLAN-DIURNAL-TIMING DT6 (2026-07-23): the "base position" note — WHERE live sits in the multi-week
+  // PLAN-DIURNAL-TIMING DT6: the "base position" note — WHERE live sits in the multi-week
   // daily-mid range + the multi-week SHAPE (range-bound/trending/decaying), off the SAME `r.ts` every
   // row already computed above for floorValidator (zero new fetch, zero second term-structure call).
   // §7-style softened contract: computed for every survivor, PRINTED only when basePosition() finds a
@@ -1914,7 +1856,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       ...baseLines.map(l => `  ↳ ${l}`),
     ] });
   }
-  // COD-2 (2026-07-10) — the OVERNIGHT accumulation-and-capital table. Encoded from /overnight §6's
+  // COD-2 — the OVERNIGHT accumulation-and-capital table. Encoded from /overnight §6's
   // hand-computed sizing (the prose formula min(buyLimit×2, 8/24×0.10×volDay), now the shared
   // expUnitsOvernight so its constants can't drift from screen's expUnits). Ben's exact ask: "how many
   // can I accumulate in 8h and how much capital does that require." Prints ONLY under --posture overnight
@@ -1976,7 +1918,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       ...rows.map(r => pathLine(map.byId[r.id]?.name || ('#' + r.id), r.pathWeighed, defaultPath)),
     ] });
   }
-  // SC1 (PLAN-SCREEN-ARCHITECTURE, 2026-07-18) — exclusion visibility. UNCONDITIONAL (not behind
+  // SC1 (PLAN-SCREEN-ARCHITECTURE) — exclusion visibility. UNCONDITIONAL (not behind
   // --stats): the bludgeon/sanguinesti anchor incident was invisible for months because nothing
   // reported that a real edge lost its fetch slot to a higher-gp-flow big ticket; this line exists
   // so that class of silent starvation can't happen again without being named every single pass.
@@ -2003,7 +1945,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // P6c: sub-floor rows are STDOUT-ONLY — publish [] so screen.json/the app see exactly what a
   // pre-P6c empty niche published (byte-identical app contract, no APP_VERSION bump).
   if (subFloor) return [];
-  // PB4 app-display (2026-07-15): each published row ALSO carries the pressure-driven `reachable` band
+  // PB4 app-display: each published row ALSO carries the pressure-driven `reachable` band
   // (reachableShadow — { ask, bid, pressure, reliability, bandLow, bandHigh }, already computed for the
   // RC-S2 co-log on every survivor). This is ADDITIVE DISPLAY DATA ONLY — the `cells`, the Grade, the
   // rank, and the NEUTRAL sort order are byte-unchanged, so screen.json's DECISION surface stays exactly
@@ -2026,15 +1968,15 @@ const VALUE_HEADERS = ['Item', 'Guide', 'Live', 'Multi-wk range (low→high)', '
 function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, guide, daily) {
   const buyNow = [], watch = [];
   const sugg = [];
-  const valueInformNotes = [];   // 2026-07-09: value's reach-TIMING + trajectory/amplitude inform notes (never a drop — valueGate still selects)
-  // value KEEPS reach as a daily-min TIMING read (Ben 2026-07-09): run ONLY the spec's inform validators
+  const valueInformNotes = [];   // value's reach-TIMING + trajectory/amplitude inform notes (never a drop — valueGate still selects)
+  // value KEEPS reach as a daily-min TIMING read: run ONLY the spec's inform validators
   // here so the note is added WITHOUT re-gating the value table (valueGate already selected these rows).
   const valueInformSpecs = FLIP_NICHES.value.validators.filter(v => typeof v === 'object' && v.mode === 'inform');
-  // trajectory was a value-only GATE from 2026-07-09 and is INFORM again as of 2026-08-08 (its premise
-  // measured backwards — see the value spec in js/flip-niches.mjs). It now rides valueInformSpecs like the
-  // other inform validators, and a would-reject knife is TIER-DEMOTED buy-now → watch below rather than
-  // dropped. Nothing here looks for a 'gate' trajectory cell any more: that lookup would silently return
-  // null after the spec flip, which is exactly the kind of quiet dead branch this comment exists to prevent.
+  // trajectory is INFORM here, NEVER a value-only gate — its gating premise measured backwards (see the
+  // value spec in js/flip-niches.mjs). It rides valueInformSpecs like the other inform validators, and a
+  // would-reject knife is TIER-DEMOTED buy-now → watch below rather than dropped. Nothing here may look
+  // for a 'gate' trajectory cell: that lookup returns null silently — exactly the kind of quiet dead
+  // branch this comment exists to prevent.
   let droppedKnife = 0;   // post-fetch phase() decay-knife drops (valueGate's own decay shape — UNAFFECTED by the demotion)
   let droppedArtifact = 0;   // post-fetch artifact-low drops (live implausibly below the durable floor)
   const demotedTrajKnife = [];   // trajectory-classified knives demoted buy-now → watch (named in the §F footer for auditability)
@@ -2079,16 +2021,15 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
     const vt1h = series1h && series1h.get(s.id);
     const vStats = vt1h ? windowStats(vt1h, { nights: 14, wStart: 0, wEnd: 0 }) : null;
     const vProf = vt1h ? hourProfile(vt1h, { nights: DIURNAL_NIGHTS }) : null;
-    // F-C (2026-07-22): value's own driftInform.holdDays (DRIFT_VALUE_HOLD_DAYS=14, multi-week — was
-    // silently defaulting to the 1.5-day OSC_HOLD_HORIZON_DAYS shell default (NOT the amplitude hold,
-    // which is 4d since DT1), wildly UNDERSTATING the drift a
-    // multi-week hold actually rides).
+    // F-C: value's own driftInform.holdDays (DRIFT_VALUE_HOLD_DAYS=14, multi-week). Without it the
+    // 1.5-day OSC_HOLD_HORIZON_DAYS shell default applies (NOT the amplitude hold, which is 4d),
+    // wildly UNDERSTATING the drift a multi-week hold actually rides.
     const vDae = (vProf && vStats && vStats.days) ? driftExitFrom(vProf, vStats.days, {
       liveLo: row.quickBuy, liveHi: row.quickSell, phase: ph && ph.phase, mom: row.mom, reliable: row.reliable,
     }, { holdHorizonDays: FLIP_NICHES.value.driftInform?.holdDays }) : null;
     const vDriftNote = driftInformNote(FLIP_NICHES.value, vDae, { entry: vr.buyLow, fmt: fmtP });
     if (vDriftNote) valueInformNotes.push(`${name}: ${vDriftNote.text}`);
-    // BUY-NOW / value-amplitude reconciliation (Ben 2026-07-10, Rank 1). The BUY-NOW tier reads proximity
+    // BUY-NOW / value-amplitude reconciliation (Rank 1). The BUY-NOW tier reads proximity
     // off the durable multi-week range (valueRanges, loadDaily); value-amplitude reads it off the recent
     // WEEK (1h-derived). They can disagree, so a "wait for the dip" caution could sit inside BUY-NOW
     // (Extreme energy). If value-amplitude WOULD caution/reject (its inform-clamped gatedStatus), DEMOTE
@@ -2100,10 +2041,10 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
       tier = 'watch';
       valueInformNotes.push(`${name}: demoted BUY-NOW → WATCH (value-amplitude would ${ampGate} — live not near the recent-week low)`);
     }
-    // TRAJECTORY KNIFE: demote, don't drop (2026-08-08 — replaces the 2026-07-09 gate; premise measured
-    // backwards, see js/flip-niches.mjs's value spec). Exactly the shape of the value-amplitude demotion
-    // above: a would-REJECT trajectory (the knife verdict) can't be called "buy now", but it stays on the
-    // board, keeps its inform note, and — unlike the dropped rows before it — accrues a track record.
+    // TRAJECTORY KNIFE: demote, don't drop — a gate here measured backwards (see js/flip-niches.mjs's
+    // value spec). Exactly the shape of the value-amplitude demotion above: a would-REJECT trajectory (the
+    // knife verdict) can't be called "buy now", but it stays on the board, keeps its inform note, and —
+    // unlike a dropped row — accrues a track record.
     // Only 'reject' demotes: 'elevated' is a would-CAUTION timing flag and already prints via informFlags,
     // so demoting on caution too would quietly re-tighten the board the measurement just loosened.
     const trajGate = (vres.find(r => r.key === 'trajectory') || {}).gatedStatus;
@@ -2137,10 +2078,10 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
     const vrank = rankScore({ net: netU, pFill: vpFill.value, ttfSec: vttf.value });
     sugg.push(suggestionEntry(row, { itemId: s.id, cls: liqClass(row), volDay: row.volDay, volSrc: VOL_SRC_LABEL, verdict: tier === 'buy-now' ? 'VALUE-BUY' : 'VALUE-WATCH', posture: POSTURE, path: 'value-hold',   // SF-3: volDay provenance follows VOL_SOURCE
       bid: vr.buyLow, ask: vr.durableHigh, pFill: round2(vpFill.value), ttfSec: vttf.value, rank: Math.round(vrank), estBasis: `${vpFill.basis}/${vttf.basis}`, estN: Math.min(vpFill.n, vttf.n),
-      // 2026-08-08: value rows never carried `validators`, so the value niche was the ONE surface whose
-      // validator findings left no ledger trace — the reason the knife gate could not be judged from the
-      // record and needed a 71-day archive replay instead. leanValidators keeps inform findings that WOULD
-      // have gated (gatedStatus), so demoted knives now accrue exactly the track record the gate destroyed.
+      // value rows MUST carry `validators`: without them the value niche is the ONE surface whose validator
+      // findings leave no ledger trace, and a gate here cannot be judged from the record at all (the knife
+      // gate needed a 71-day archive replay instead). leanValidators keeps inform findings that WOULD have
+      // gated (gatedStatus), so demoted knives accrue exactly that track record.
       validators: leanValidators(vres),
       volDayRolling: rollShadow(series1h, s.id),   // PLAN-VOL24 shadow: corrected /1h-composed 24h volume
       via: s.via, preRank: s.preRank, prePool: s.prePool }));   // EF-0a: admission provenance (via 'reserve' = the value cycle-amplitude reserve) + the valueScore pre-fetch position
@@ -2234,11 +2175,11 @@ function wfArchive() {
 // by the archive era, not by this number; the read costs ~20ms/item and the whole board ~0.3s.
 const WF_ARCHIVE_DAYS = AMP_WF_WARMUP_DAYS + AMP_WF_FIT_DAYS + 60;
 
-// `series6h` is threaded in (2026-08-10) for ONE reason: the driftExitFrom ctx below needs a real
-// `phase`. It previously passed `row.phase`, which computeQuote does not return — so the ctx carried
-// `undefined`, forecast's post-shock-shape refusal was fail-open, and amplitudeGate's driftMargin was
-// computed off a projection the doctrine says must be REFUSED on a spike/decay shape. This is the one
-// site of the seven where the dead guard fed a real gate rather than an inform-only note.
+// `series6h` is threaded in for ONE reason: the driftExitFrom ctx below needs a REAL `phase`. Never pass
+// `row.phase` — computeQuote does not return that field, so the ctx would carry `undefined`, forecast's
+// post-shock-shape refusal would be fail-open, and amplitudeGate's driftMargin would be computed off a
+// projection the doctrine says must be REFUSED on a spike/decay shape. This is the one such site where
+// the guard feeds a real GATE rather than an inform-only note.
 function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1h, guide, daily) {
   const rows = [], sugg = [];
   const informNotes = [];
@@ -2267,7 +2208,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
     // PLAN-OSCILLATION-CYCLE Chunk 3B — the drift-aware oscillation-vs-knife detector. It TEMPERS the raw
     // `knife` above: a drift-riding oscillator (fang/blowpipe) is not a false knife and must reach the
     // margin gate, not die as `knife`.
-    // F-H (2026-07-22): the detector reads a SEPARATE, LONGER trailing window (`OSC_DETECTOR_NIGHTS`, >
+    // F-H: the detector reads a SEPARATE, LONGER trailing window (`OSC_DETECTOR_NIGHTS`, >
     // AMP_NIGHTS) — NOT the gate's `stats` — so it gets the ≥1.5 cycles / ≥3 legs of history it needs to
     // fire OSCILLATING WITHOUT widening the gate's own daily-range/reach/recency reads (which stay on the
     // AMP_NIGHTS `stats`). Same in-hand `ts1h`, NO new fetch — just a longer lookback into the SAME series
@@ -2291,10 +2232,10 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
     // rank via the EXISTING spine: the 'amplitude' estimator family (pFill = the measured walk-forward
     // round-trip rate (DT1b), ttf =
     // hold horizon, lapUnits = deployable min) → rankScore(net×P÷TTF). capGp = TOTAL REALIZABLE capital
-    // (liquidCapital), UNDIVIDED — amplitude is a concentration lane, NOT ÷slots like value (Ben 2026-07-19).
+    // (liquidCapital), UNDIVIDED — amplitude is a concentration lane, NOT ÷slots like value.
     const capGp = AMP_CAPITAL;
     const lapUnits = ESTIMATORS.amplitude.lapUnits({ capGp, ampBid: ar.ampBid, limitVol: s.limitVol, limit: s.limit, holdDays: AMP_HOLD_DAYS });
-    // The ONLY sizing gate that matters (Ben 2026-07-19): can you afford ≥1 unit if all lots were liquid?
+    // The ONLY sizing gate that matters: can you afford ≥1 unit if all lots were liquid?
     // lapUnits floors to 0 when capGp < the trough-bid → the pick is genuinely UNAFFORDABLE at this capital.
     // DROP it (don't show a phantom ~1u); these thin big-tickets legitimately need a bigger pool.
     if (!(lapUnits >= 1)) { dropped.unaffordable++; continue; }
@@ -2320,12 +2261,11 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
     // format change only), then annotate the trough-vs-decay phase so a low recent reach on a trough-phase
     // oscillator no longer over-implies "sell-unreliable". `osc`/`dae`/`driftShadow` are already in scope.
     const rf = t => `${t.recentHit}/${t.recentDays || AMP_HOLD_DAYS}·${t.fullHit}/${t.fullN}`;
-    // DT1b (2026-08-09): the reach cell now carries the WALK-FORWARD round-trip rate — the measured
-    // "given the bid filled, was the ask reached ≤Nd?" — in place of DT1's `ask-reprints` cell. That cell
-    // was the in-sample `cycleCompletion` figure: saturated by construction (~94% at H=4; the live board
-    // read 18/19) and so near-uninformative when high. Printing both would put ~95% next to ~6% for the
-    // same item and invite reading the flattering one. `cycleCompletion` survives in the module and the
-    // shadow log; it is no longer shown. `—` when the archive can't support a read: an honest absence,
+    // DT1b: the reach cell carries the WALK-FORWARD round-trip rate — the measured "given the bid filled,
+    // was the ask reached ≤Nd?". It is NOT the in-sample `cycleCompletion` figure, which is saturated by
+    // construction (~94% at H=4; a live board read 18/19) and near-uninformative when high; printing both
+    // would put ~95% next to ~6% for the same item and invite reading the flattering one.
+    // `cycleCompletion` survives in the module and the shadow log, deliberately unshown. `—` when the archive can't support a read: an honest absence,
     // never a 0. Sample n rides the cell so a thin read is visible without opening the footer.
     const wfCell = (wf && wf.frac != null && (wf.judged ?? 0) >= AMP_WF_MIN_JUDGED)
       ? `round-trip ${wf.completed}/${wf.judged} = ${(wf.frac * 100).toFixed(0)}% ≤${AMP_HOLD_DAYS}d`
@@ -2439,11 +2379,11 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
 // item as a full standard row, EXEMPT from all floors/gates, graded, with the reason a gate WOULD
 // have hidden it as a Note — and FALLING watchlist items ARE shown (the held/asked falling-exception
 // now extends to watchlisted items). The app takes union(localStorage, repo file); write-back is M1.
-// REPO ROOT = two levels up from pipeline/commands/ (this file's dir). The R3 rename (2026-07-15)
-// moved this CLI pipeline/ → pipeline/commands/ but left REPO_ROOT at ONE `..` (→ pipeline/), so the
-// scan silently read fills/watchlist/offers/outcomes from the wrong dir (degrading to empty) AND wrote
-// screen.json/dip-watchlist.json to pipeline/ instead of the ROOT the app/sync/dev-server all read —
-// the deployed Scan tab froze. Two `..` matches the sibling convention (watch-positions.mjs uses HERE/../..).
+// REPO ROOT = TWO levels up from pipeline/commands/ (this file's dir), matching the sibling convention
+// (watch-positions.mjs uses HERE/../..). ONE `..` (→ pipeline/) makes the scan silently read
+// fills/watchlist/offers/outcomes from the wrong dir (degrading to empty) AND write
+// screen.json/dip-watchlist.json to pipeline/ instead of the ROOT the app/sync/dev-server all read,
+// which freezes the deployed Scan tab.
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 // Build 2: per-item velocity index from the gitignored outcomes.json (YV1 campaigns), loaded ONCE.
@@ -2555,7 +2495,7 @@ async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
 // file, no fetch) and read by renderMode's validator ctx (`limits` stage). Empty map ⇒ every item has
 // zero in-window buys ⇒ limitValidator passes ⇒ byte-identical output (the degrade contract).
 let BUYS_BY_ITEM = new Map();
-// held-item ids (2026-07-16) — same module-level-let-set-in-main pattern as BUYS_BY_ITEM above, so
+// held-item ids — same module-level-let-set-in-main pattern as BUYS_BY_ITEM above, so
 // renderMode (a separate function) can read what main() loaded. Empty set ⇒ no override ⇒ byte-identical.
 let HELD_IDS = new Set();
 let TRACK_INDEX = null;   // admission.mjs track-record boost index (built from positions.json closed lots)
@@ -2796,8 +2736,8 @@ async function main() {
   // every renderMode niche is still captured into REPORTS for the dump via emitReport.
   const realLog = console.log;
   if (!VERBOSE) console.log = () => {};
-  // ALWAYS sync first (Ben, 2026-07-16 — the /scan skill's "sync first, always" was doctrine an
-  // agent could just forget; a real closed position went unnoticed as a result). Local/zero-git,
+  // ALWAYS sync first (the /scan skill's "sync first, always" is doctrine an agent can simply forget —
+  // a real closed position went unnoticed that way). Local/zero-git,
   // cheap, never blocks the screen on failure — this is the held-item exception's freshness input
   // too (HELD_IDS below reads positions.json right after this). AR1: the ONE shared invocation.
   runLocalSync({ offBookNote: 'screening off the current book' });
@@ -2823,14 +2763,14 @@ async function main() {
 
   pruneCache('ts', 24 * 3600 * 1000);                     // bound the per-item series cache
   BUYS_BY_ITEM = loadBuysByItem();                        // LM1: buy-limit windows for the validator ctx
-  // CODE-ENFORCED held-item exception (2026-07-16 — was a /scan skill prose rule Ben had to remember to
-  // apply manually every pass; moved here so a held item can't silently vanish from band/churn the
+  // CODE-ENFORCED held-item exception (a /scan skill prose rule an agent had to remember to
+  // apply manually every pass; enforced here so a held item can't silently vanish from band/churn the
   // moment its regime flips to falling). Read-only, no fetch — degrades to an empty set on any error so
   // a positions.json problem never breaks the screen itself.
   try {
     const { groups, pos } = readOpenPositions(join(REPO_ROOT, 'positions.json'));
     HELD_IDS = new Set((groups || []).map(g => g.itemId));
-    // Track-record admission boost (R4, Ben 2026-07-18): built from the SAME positions.json read —
+    // Track-record admission boost (R4): built from the SAME positions.json read —
     // no new fs/fetch. Absent/unparseable positions.json → empty index → boostOf degrades to 1
     // everywhere (byte-identical to no boost at all).
     TRACK_INDEX = buildTrackIndex(pos && pos.closed);
@@ -2868,7 +2808,7 @@ async function main() {
     THRESHOLDS.VALUE_CAP_GP = VALUE_CAP_GP;   // gateCandidates/valueScore read the cap from THRESHOLDS
     AMP_CAPITAL = DERIVED_CASH.liquidCapital; // amplitude sizes against the LOOSER total-realizable pool, undivided
   }
-  // PLAN-CAPITAL-THROUGHPUT (Ben 2026-07-14): sync the band/churn capital cap to the current deployable
+  // PLAN-CAPITAL-THROUGHPUT: sync the band/churn capital cap to the current deployable
   // pool (the market-ref-refined VALUE_CAPITAL if value ran above; else the conservative pre-derive pool,
   // or the explicit --capital). The FULL pool, NOT ÷slots — the attention floor asks "if I put everything
   // in this ONE lane…". Left null under --throughput legacy → gateCandidates uses the capital-blind value.
@@ -2975,9 +2915,9 @@ async function main() {
     const queue = [...ids];
     const worker = async () => {
       for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
-        // Leg B (2026-07-09): the 1h series for reachValidator — the sell-leg "windowrange --ask" reach + the
-        // value niche's daily-min TIMING read. SURVIVOR-ONLY (this pool is the union of mode survivors, not
-        // the top-40 gated pool), so a scan adds ~one 1h fetch per surfaced row, never per candidate.
+        // Leg B: the 1h series for reachValidator — the sell-leg "windowrange --ask" reach + the value
+        // niche's daily-min TIMING read. SURVIVOR-ONLY (this pool is the union of mode survivors, not the
+        // top-N gated pool), so a scan adds ~one 1h fetch per surfaced row, never per candidate.
         const [ts5m, ts6h, ts1h] = await Promise.all([
           fetchTsCached(id, '5m', TS_TTL_5M),
           read6h(id),                       // AF5b seam — live fetchTsCached unless --archive-regime
@@ -3050,13 +2990,13 @@ async function main() {
     // value + amplitude are console-only (their own column sets; no app tab yet) → excluded from
     // screen.json (which carries a single HEADERS set). An app surface is a later, APP_VERSION-bumping step.
     for (const m of RUN_MODES) if (FLIP_NICHES[m].gate === 'band') pubNiches[m] = niches[m];
-    // Stage-2 HTML (2026-07-16): a PRE-RENDERED html string per niche (+ watchlist), the pipeline-side
+    // Stage-2 HTML: a PRE-RENDERED html string per niche (+ watchlist), the pipeline-side
     // twin of js/ui.js's client-side scanTableHtml — additive sibling to `cells`, never a replacement
     // (an older app build that doesn't know about `html` still works off `cells` unchanged).
     const pubHtml = {};
     for (const m of Object.keys(pubNiches)) pubHtml[m] = renderHtmlTable(HEADERS, pubNiches[m]);
     if (watchlist) pubHtml.watchlist = renderHtmlTable(watchlist.headers, watchlist.rows);
-    // Carry forward any existing `analysis` blurb (2026-07-16) — it's a judgment overlay set
+    // Carry forward any existing `analysis` blurb — it's a judgment overlay set
     // separately via set-scan-analysis.mjs (the /scan skill's judgment PASS OVER a published
     // scan), not part of this script's own deterministic output, so a routine re-publish (e.g.
     // the recurring /scan loop) must not silently wipe it. Best-effort: a missing/corrupt prior

@@ -232,15 +232,23 @@ export function formatTimedLap(lap, { fmt: fmtFn = fmt } = {}) {
     const sizeBits = [`${fmtFn(lap.volDay)}/d`];
     if (lap.dipPool != null) sizeBits.push(`dip-pool ~${fmtFn(lap.dipPool)}`);
     if (lap.peakPool != null) sizeBits.push(`peak-pool ~${fmtFn(lap.peakPool)}`);
-    if (lap.trancheComfort != null) sizeBits.push(`tranche ~${fmtFn(lap.trancheComfort)} comfortable`);
-    if (lap.trancheCeiling != null) sizeBits.push(`~${fmtFn(lap.trancheCeiling)} ceiling`);
+    if (lap.trancheComfort != null) sizeBits.push(`tranche ~${fmtFn(lap.trancheComfort)} clean`);
+    if (lap.trancheCeiling != null) sizeBits.push(`~${fmtFn(lap.trancheCeiling)} price-knee`);
     bits.push(sizeBits.join(' · '));
   }
-  // §4 caveat — a caller-relevant size (buyLimit — the natural per-window accumulation unit) sized
-  // past the ceiling means expect a materially worse realized net than quoted (the n≈6 reach-relief
-  // finding, BORROWED from a different feature's calibration, not validated for diurnal tranches).
+  // THE TWO THINGS THIS SEGMENT IS NOT, both of which have been misread off it:
+  //   (1) It is a PRICE-QUALITY knee, not a CLEARING CAP. The borrowed n≈6 study measured how far the
+  //       realized price degrades with lot size; it never measured whether the quantity fills at all.
+  //       Sizing past the knee predicts a worse net, NOT a stuck offer.
+  //   (2) It is a ROUND-TRIP bound. `volDay` is min(hpv, lpv), so the tighter LEG governs both numbers.
+  //       A one-leg sell of stock already held is bounded by the sell side alone (`peakPool`), which on a
+  //       lopsided book is several times larger — so the round-trip number understates it, by design.
+  // Ground truth, n=2 items / one operation: two one-leg sapling sells cleared 146 and 200 units at
+  // 4.0% and 4.5% of min-side volDay — 8x the `clean` number and 4x the knee — with no failure to fill.
+  // Price quality at that size was NOT measured, so this refutes (1)'s clearing reading, not the knee.
   if (lap.buyLimit != null && lap.trancheCeiling != null && lap.buyLimit > lap.trancheCeiling) {
-    bits.push(`⚠ buy limit ${fmtFn(lap.buyLimit)} exceeds tranche ceiling — expect a worse realized net than quoted at this size (n≈6 reach-relief, not validated for diurnal)`);
+    const oneLeg = lap.peakPool != null ? `; one-leg sells are bounded by peak-pool ~${fmtFn(lap.peakPool)} instead` : '';
+    bits.push(`⚠ buy limit ${fmtFn(lap.buyLimit)} exceeds the round-trip price-knee — expect a worse realized NET at this size, not a failure to clear${oneLeg} (n≈6 borrowed price study, not validated for diurnal)`);
   }
   // DT4 — the verdict on the hours, LAST so it qualifies the whole timing read rather than reading as
   // one more datum. Three states because "measured unreliable" and "not measurable" are different

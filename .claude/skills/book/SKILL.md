@@ -50,9 +50,11 @@ manual sync needed. It does ONE live fetch per item in the held ∪ resting-bid 
   `book-model.mjs` returns `refuse: true` / `refuseReason: 'unknown-limit'` with every bound null when
   `limit == null`. Relay that as "cannot advise a size", not as an unbounded one (repo rule
   `buy-limit-caps-every-size`).
-- **The free-slot count is a log-derived LOWER bound.** _(judgment: display honesty)_ A just-completed-but-not-yet-collected GE slot
-  reads as FREE (the Exchange Logger only emits on a state change). So "N free" means "at least N
-  free" — don't treat it as ground truth if a fill just landed.
+- **The free-slot count is a log-derived UPPER bound** (equivalently: OCCUPANCY is the lower bound).
+  _(judgment: display honesty)_ A just-completed-but-not-yet-collected GE slot reads as FREE (the
+  Exchange Logger only emits on a state change), which inflates `free`. So "N free" means "at MOST N
+  free" — size new offers against it knowing it can only be too high, and don't treat it as ground
+  truth if a fill just landed.
 - **`deployablePool` degrades conservatively.** _(mechanic: `pipeline/lib/capital/derive-cash-tiers.mjs`)_ A resting bid whose item isn't in the fetched marketRef
   classifies COMMITTED, so the deployable figure can under-report — it never over-reports.
 - **The deployable figure is SHOWN, not modelled — a restart-suspect flag warns when it may be inflated, and a wrong number is fixed at the SOURCE (PLAN-CAPITAL-DEPLOYABILITY L2/L3, Ben 2026-07-26).** _(judgment: capital-transparency doctrine)_ The deployable line now carries `⚠ N restart-suspect bid(s) (~Xm) may be included — verify in-game` when a restart-blind bid (`suspectBidEscrow`) may have inflated it: a restart-blind slot reads EMPTY, so its escrow drops out of offers.json and is never subtracted. The flag is INFORM-ONLY (it never changes the number). When the deployable is actually wrong, correct it at the SOURCE, never by patching a derived view (`fix-at-the-source-not-derived-view`): **re-anchor** `node pipeline/commands/derive-cash.mjs <amount>` for a drifted free-cash baseline, or a **manual-log fix / phantom-bid clear** for a "reclaimable" bid that's really gone. The automated modelling redesign was deliberately shelved — Ben's one-command correction is the resolution (`gate-on-error-cost-not-n`).

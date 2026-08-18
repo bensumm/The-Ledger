@@ -62,7 +62,7 @@
     },
     "js/forecast.mjs": {
       "dated": 10,
-      "block": 75
+      "block": 74
     },
     "js/github.js": {
       "dated": 0,
@@ -141,7 +141,7 @@
       "block": 40
     },
     "js/validate.mjs": {
-      "dated": 24,
+      "dated": 0,
       "block": 40
     },
     "js/valuescreen.mjs": {
@@ -157,8 +157,8 @@
       "block": 40
     },
     "js/windowread.mjs": {
-      "dated": 43,
-      "block": 93
+      "dated": 0,
+      "block": 57
     },
     "pipeline/ci/check-daemon-safety.mjs": {
       "dated": 0,
@@ -194,6 +194,10 @@
     },
     "pipeline/ci/lint-plan-lifecycle.mjs": {
       "dated": 2,
+      "block": 40
+    },
+    "pipeline/ci/lint-plan-refs.mjs": {
+      "dated": 0,
       "block": 40
     },
     "pipeline/ci/lint-skills.mjs": {
@@ -289,7 +293,7 @@
       "block": 40
     },
     "pipeline/commands/quote-items.mjs": {
-      "dated": 23,
+      "dated": 0,
       "block": 40
     },
     "pipeline/commands/read-book.mjs": {
@@ -313,8 +317,8 @@
       "block": 40
     },
     "pipeline/commands/read-window-range.mjs": {
-      "dated": 25,
-      "block": 60
+      "dated": 0,
+      "block": 45
     },
     "pipeline/commands/reconcile-reverse-flip.mjs": {
       "dated": 0,
@@ -333,8 +337,8 @@
       "block": 43
     },
     "pipeline/commands/screen-flip-niches.mjs": {
-      "dated": 87,
-      "block": 104
+      "dated": 0,
+      "block": 60
     },
     "pipeline/commands/set-scan-analysis.mjs": {
       "dated": 0,
@@ -353,8 +357,8 @@
       "block": 40
     },
     "pipeline/commands/watch-positions.mjs": {
-      "dated": 20,
-      "block": 55
+      "dated": 0,
+      "block": 45
     },
     "pipeline/daemons/cache-warm.mjs": {
       "dated": 3,
@@ -505,8 +509,8 @@
       "block": 40
     },
     "pipeline/lib/render/suggestlog.mjs": {
-      "dated": 32,
-      "block": 158
+      "dated": 0,
+      "block": 141
     },
     "pipeline/lib/signal/admission.mjs": {
       "dated": 8,
@@ -517,7 +521,7 @@
       "block": 40
     },
     "pipeline/lib/signal/gatecandidates.mjs": {
-      "dated": 19,
+      "dated": 0,
       "block": 40
     },
     "pipeline/lib/signal/levels.mjs": {

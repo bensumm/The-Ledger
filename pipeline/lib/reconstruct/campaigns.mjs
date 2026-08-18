@@ -18,7 +18,14 @@ import { collapseOffers, matchTrades, dedupeSnapshots } from './reconstruct.mjs'
 
 // --- tunable named constants (moved verbatim from join-outcomes.mjs; single source now) --------
 export const REPRICE_GAP = 20 * 60;   // s: a re-place within this of a cancel = same campaign (a reprice)
-export const MANUAL_SLOT = 8;         // coffer-manual.log slot (mobile / manual fills)
+// Hand-entered fills occupy SYNTHETIC slots, never a real GE slot (a real book has 0-7). The floor is
+// what defines them, not a single value: coffer-manual.log writes slot 8, the app's mobile GitHub path
+// writes 9, and FILLS-PIPELINE.md tells a backfill to pick '--slot <n> (>= 8)' — the live book already
+// holds events on 10-14. This was `=== 8` while its own comment said 'mobile / manual', so every slot-9
+// MOBILE campaign was reported manual:false and entered outcomes.json as an organic GE fill, which makes
+// a hand-typed 'time to first fill' fiction in the F1 calibration set.
+export const MANUAL_SLOT_MIN = 8;     // slot >= this is a synthetic/manual slot, not a real GE slot
+export const isManualSlot = slot => Number.isFinite(slot) && slot >= MANUAL_SLOT_MIN;
 
 // First-fill timing: collapseOffers loses intermediate event timing, so scan the raw events to
 // stamp each offer's tsFirstFill (first event in its slot+item+type window with filled>0). Offers
@@ -84,7 +91,7 @@ export function campaignBase(c) {
   const completeOffer = c.offers.find(o => o.state === 'complete');
   const tsComplete = completeOffer ? completeOffer.tsClose : null;
   const terminalState = last.state;
-  const manual = c.offers.some(o => o.slot === MANUAL_SLOT);
+  const manual = c.offers.some(o => isManualSlot(o.slot));
   return {
     itemId: c.itemId, side: c.type, manual, placementTs, placementPrice, targetQty,
     filledUnits, filledFraction, firstFillTs,

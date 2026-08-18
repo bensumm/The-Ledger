@@ -109,7 +109,7 @@ deliberate):**
 | "**loop** positions AND scan", "monitor **and** discover", "check positions every X **and** scan every Y" | `node pipeline/commands/run-loop.mjs [--watch <min>] [--scan <min>] [--min-idle <gp>] [--no-sync]` (multi-action `/loop` driver — time-gated multiplexer runs `watch-positions.mjs` + `screen-flip-niches.mjs --mode all` on independent cadences from ONE loop; scan gated on DEPLOYABLE capital ≥ `--min-idle` (`derive-cash-tiers.mjs` `deployablePool` = free cash + reclaimable DEEP-bid escrow — the three-tier `availableCash ≤ deployablePool ≤ liquidCapital` model; the gate does a small live fetch of just the resting-bid ids to classify each bid deep-vs-committed, degrading to `availableCash` if that fetch fails). **A local book-refresh rides with the watch pass by default** — `sync-fills.mjs --local` (now the default behavior, kept as an explicit synonym) rebuilds fills/positions/offers.json from the exchange logs (ZERO git, no push) so positions always reads a fresh book; the loop never pushes to `main` — publishing is the once-a-day `/overnight` `sync-fills.mjs --publish`; `--no-sync` opts out. Drive with `/loop <gcd>m node pipeline/commands/run-loop.mjs --watch 30 --scan 15`) |
 | "watch for **dips/flushes**", "run the **dip loop**", "catch a **liquid flush**" | `node pipeline/commands/watch-positions.mjs --dip ["<target>" …]` (DL2 — folds `dip-watchlist.json`; fires a reactive FLUSH bid-into-the-fall alert on a LIQUID dumping item; 5m cadence floor) |
 | "can I **buy more** X?", "how much **buy limit** left [on X]?", "have I hit my **limit**?", "when does X's limit **reset**?" | `node pipeline/commands/read-buy-limits.mjs "<item or id>" [...]` (no args → every item bought in the last 4h) |
-| "what's my **book** look like?", "what's **deployed vs idle**?", "how many **slots free**?", "**capital dashboard**", "how much **X can I buy** right now?" | **`/book` skill** — runs `node pipeline/commands/read-book.mjs` (GE slots + working/parked/idle capital split + grouped per-lot P&L board); add `--size "<item>" [--capital <gp>]` for the tranche sizer (min of buy-limit × clearability × capital + the binding bound + net-if-cycled). Inform-only; live marks age-labelled, free-slot count a log-derived lower bound |
+| "what's my **book** look like?", "what's **deployed vs idle**?", "how many **slots free**?", "**capital dashboard**", "how much **X can I buy** right now?" | **`/book` skill** — runs `node pipeline/commands/read-book.mjs` (GE slots + working/parked/idle capital split + grouped per-lot P&L board); add `--size "<item>" [--capital <gp>]` for the tranche sizer (min of buy-limit × clearability × capital + the binding bound + net-if-cycled). Inform-only; live marks age-labelled, free-slot count a log-derived UPPER bound (a completed-but-uncollected slot reads as free — "at most N free") |
 | "what's my **agenda**", "what should I **buy/sell and when**", "when's the **next window**", "what's **coming up**", "**schedule**" | **`/schedule` skill** — runs `node pipeline/commands/read-schedule.mjs [-c\|-w] [--audit]` (default `-c` = current positions ∪ open offers; `-w` = watchlist; `--audit` = flipped-but-not-watchlisted review) → ONE time-sorted `In (h)` agenda of each item's buy(dip)/sell(peak) windows off the same `hourProfile` `read-window-range.mjs --profile` prints, then a spoken agenda. INFORM-ONLY n≈0 (plans, never gates). `run-loop.mjs` prints a `⏭ next:` one-liner off this each watch tick |
 | "**analyze** our track record", "**what should we tune?**", "did we **log everything**?", "run a **retro**", "how are our **suggestions** doing?" | **`/analyze` skill** — runs `node pipeline/commands/analyze-record.mjs` (read-only dataset audit + per-flip-niche retro rollup + n-gated tuning candidates; `--json` for the brief) then interprets it into a retro + F1-routed improvement proposals + a project-guidelines checklist over the session's edits |
 | "is the **depth model** any good?", "does size actually **move my fill price**?", "how big a lot can I **really clear**?", "score **clearableAsk**" | `node pipeline/commands/join-depth-outcomes.mjs [--item "<item>"] [--json] [--competition N] [--nights N]` (2026-08-11 — scores the DE3 depth model against REALIZED sells; recomputes per sell EPISODE with NO look-ahead rather than reading the sparse logged `depthExit`. **The measured answer so far is NO — the model does not clear its own null baseline**, and the residual is dominated by price TREND rather than depth, so read the trend rows and never the pooled number. Full result + why the size axis is not yet readable: README's `join-depth-outcomes.mjs` entry and PLAN.md Discovered — don't restate them here) |
@@ -265,8 +265,8 @@ metadata, not a leak; the concern is content, not commit authorship.
   admin bypass (pipeline-owned artifacts; clobber-guard reconciles). A bare `sync-fills.mjs` is
   local/zero-git (the default in-session book read) and pushes nothing. No unattended writer / machine
   bypass identity exists — the schedule was eliminated (`pipeline/FILLS-PIPELINE.md` §12).
-- **CI: `.github/workflows/checks.yml`** — a cheap `checks` job (JS syntax sweep, quotecore
-  + reconstruct acceptance fixtures, **`check-dead-exports.mjs`**, **`lint-arch.mjs`**, **`check-imports.mjs`** — TWO static binding guards over every
+- **CI: `.github/workflows/checks.yml`** — a cheap `checks` job (JS syntax sweep, the auto-discovered
+  acceptance fixtures **`run-tests.mjs`**, **`check-dead-exports.mjs`**, **`lint-arch.mjs`**, **`check-imports.mjs`** — TWO static binding guards over every
   `pipeline/commands/*.mjs` entrypoint: (1) import RESOLUTION — every name imported exists in the target
   module's exports (catches a missing-export that `node --check`'s syntax-only pass lets through); and
   (2) UNBOUND CONSTANTS — every SCREAMING_SNAKE name USED is imported or declared, which is the reverse
@@ -284,9 +284,19 @@ metadata, not a leak; the concern is content, not commit authorship.
   ratchet, and `lint-plan-refs.mjs` — the plan-reference gate, the only existence guard `plans/` has.
   **Run `lint-plan-refs.mjs --refs <NAME>` BEFORE deleting any plan** — it lists every referencing
   file, and nothing else in CI will tell you. Both guards' design + limits live in their README
-  entries, the ONE home. And `check-daemon-safety.mjs`
-  — the daemon zero-git guard (fails if any local/auto-runnable daemon imports or shells `sync-fills
-  --publish`; same denylist philosophy), and `check-forecast-guards.mjs` — the FAIL-OPEN-refusal pin: every
+  entries, the ONE home. And **`check-verdict-guards.mjs`** — every production `momVerdict()` threads
+  `lotCtx` (the dropped-softening pin). And **`lint-guard-lists.mjs`** — the guard-list drift gate:
+  every `pipeline/ci/*.mjs` the `checks` job runs must be NAMED in each doc that enumerates that job
+  (this file, `docs/FLOW.md`, `/cleanup`), because the list had silently drifted in two of the three.
+  It is job-scoped and reads only the script steps, so it checks "pipeline/ci scripts in the `checks`
+  job", never "the gating set" — design + limits in README's entry, the ONE home. And `check-daemon-safety.mjs`
+  — the daemon zero-git guard (fails if any local/auto-runnable daemon imports or shells the git-writer;
+  same denylist philosophy). **Its scope is REGISTRY-DERIVED, not a directory listing — don't narrow it
+  back:** it was a `readdirSync(pipeline/daemons)` while 3 of the 4 registered daemons live in
+  `pipeline/commands/`, so it read a quarter of the fleet and still printed a clean run. It now also pins
+  `sync-fills.mjs`'s own invocation guard + export surface (the two properties that make importing it
+  safe), and `--publish` alone is NOT treated as a git signal — `screen-flip-niches.mjs --publish` writes
+  only a local file. Design + limits: README's entry, the ONE home. And `check-forecast-guards.mjs` — the FAIL-OPEN-refusal pin: every
   `diurnalForecast`/`driftExitFrom` call must pass `phase` **as a resolvable VALUE**, since an omitted
   OR undefined guard field silently disables the `post-shock-shape` refusal (the 2026-08-06 Snape grass
   miss — the verification trio projected a mid-decay item for a day; CHANGELOG 0.71.1). **The v1 guard

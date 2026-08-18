@@ -71,6 +71,9 @@ jobs:
       - name: plan-refs (no plan deleted while live source still points at it — plans/ has no other existence guard)
         run: node pipeline/ci/lint-plan-refs.mjs
 
+      - name: guard-lists (every checks-job script is named in each doc that enumerates this job)
+        run: node pipeline/ci/lint-guard-lists.mjs
+
       - name: fills.json / positions.json parse
         run: |
           node -e "

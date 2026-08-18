@@ -147,7 +147,7 @@ days. The criterion measured is the criterion described.
 
 ### 4b. RETRACTED: the 98.4% is not a measurement of the shipped detector
 
-The first draft wrote that `PLAN-MULTIWEEK-OSCILLATOR.md` §3's 22/23 result "now reproduces at 4,363
+The first draft wrote that PLAN.md's `MWO` Status row's 22/23 result "now reproduces at 4,363
 items… It is confirmed." **That is wrong three times over** and is withdrawn:
 
 1. The scored population is **2,212 items**, not 4,365 (that is the panel before fit-coverage and the
@@ -174,7 +174,7 @@ the shipped composition end to end and found `oscillationVsKnife` firing on **63
 with the `knife` reject in `amplitudeGate` still firing on **3–4%** of rows. **So the shipped knife
 guard is alive, and the "it discriminates nothing" reading does not transfer to it.**
 
-`PLAN-MULTIWEEK-OSCILLATOR.md` §3's own conclusion is also more careful than the draft made it: it says
+PLAN.md's `MWO` Status row's own conclusion is also more careful than the draft made it: it says
 the detector "cannot be used as evidence either way, **on this basket**," and the plan's status is
 `SCOPING ONLY`.
 

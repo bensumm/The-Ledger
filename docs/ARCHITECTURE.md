@@ -82,7 +82,7 @@ important structural rule — it's what prevents the app and pipeline from diver
 | Validators | `js/validate.mjs` | pure `(ctx) → {status, reason, evidence}` |
 | Rank / grade | `js/estimators.mjs` (`estimateRank`) + `js/rating.mjs` (`rateItem`) | `pipeline/lib/signal/estimators.mjs`/`rating.mjs` are one-line re-export SHIMS, not forks |
 | Sync-before-read invocation (SY1) | `pipeline/lib/reconstruct/sync-invoke.mjs` (`runLocalSync`) | `screen-flip-niches.mjs`, `quote-items.mjs`, `watch-positions.mjs` each call it once (AR1 — was copy-pasted byte-for-byte, with a hairline regex divergence, across all three) |
-| Fetch-pool admission (screen) | `pipeline/lib/signal/admission.mjs` (`pickFetchPool`, default) / `pipeline/lib/signal/gatecandidates.mjs` (`rankAndSlice`, `--admission legacy` rollback) | `screen-flip-niches.mjs`. AR2 honesty note: `pickFetchPool`'s exploration reserve is `Date.now()`-bucketed (deliberately left non-deterministic), so a survivor admitted purely on this pass's rotation carries `via:'explore'` and the screen table marks it 🎲 — a lottery slot is never rendered as a ranked-in pick. Inform-only; never gates/ranks/grades. **SUNSET CONDITION for the `legacy` path — EVIDENCE-based, not time-based:** `rankAndSlice` retires once a `join-outcomes` read shows `unified` non-regressive against it; until then any gate-stack change (a new reserve category, a new filter) MUST be applied to BOTH functions or `legacy` silently diverges further on every one-sided edit. Keeping it costs nothing to run and everything to maintain, so the trigger is the proof, not the calendar — the same shape as the reserve EXIT CONDITION in `admission.mjs`. |
+| Fetch-pool admission (screen) | `pipeline/lib/signal/admission.mjs` (`pickFetchPool`, default) / `pipeline/lib/signal/gatecandidates.mjs` (`rankAndSlice`, `--admission legacy` rollback) | `screen-flip-niches.mjs`. Exploration-reserve honesty note: `pickFetchPool`'s exploration reserve is `Date.now()`-bucketed (deliberately left non-deterministic), so a survivor admitted purely on this pass's rotation carries `via:'explore'` and the screen table marks it 🎲 — a lottery slot is never rendered as a ranked-in pick. Inform-only; never gates/ranks/grades. **SUNSET CONDITION for the `legacy` path — EVIDENCE-based, not time-based:** `rankAndSlice` retires once a `join-outcomes` read shows `unified` non-regressive against it; until then any gate-stack change (a new reserve category, a new filter) MUST be applied to BOTH functions or `legacy` silently diverges further on every one-sided edit. Keeping it costs nothing to run and everything to maintain, so the trigger is the proof, not the calendar — the same shape as the reserve EXIT CONDITION in `admission.mjs`. |
 
 A second implementation of any of these anywhere is drift — call the home, don't re-derive.
 
@@ -172,8 +172,8 @@ recur — the point is to catch the pattern, not patch instances.
   `.js`/`.mjs` blast-radius convention, N3). **Guard: the app-import manifest test (E9, proposed) + this
   doc's blast-radius model.**
 
-Full audit + findings: `PLAN-ARCH-DOCS-AUDIT.md` (Parts 1–5); the disposition validation:
-`PLAN-CLEANUP-VALIDATION.md`.
+Full audit + findings: `PLAN-ARCH-DOCS-AUDIT.md` (Parts 1–5); the disposition validation: PLAN.md's
+`CV1–CV14` Status row.
 
 ---
 

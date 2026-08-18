@@ -451,10 +451,9 @@ export function driftExitFrom(profile, days, ctx = {}, { holdHorizonDays } = {})
  * one-line change that takes this to ~100% OSC and SILENTLY DELETES the Chunk-3B knife temper's
  * discriminating power — no error, no test failure, the gate just stops rejecting. **If you widen this
  * window, you MUST first normalise the criterion (legs per unit time, or a period-regularity /
- * repeated-level-traversal test) — do not simply pass a longer series.** Context: this is also why
- * `plans/PLAN-MULTIWEEK-OSCILLATOR.md` measured 22 of 23 unrelated big-tickets as OSCILLATING; the
- * detector was never selective, and that plan's open question now has its mechanism.
- * Full study: `pipeline/experiments/RANGE-PERSISTENCE-FINDINGS.md` (the finding is incidental to it).
+ * repeated-level-traversal test).** This is also why the multi-week-oscillator scoping pass (PLAN.md's
+ * `MWO` Status row) measured 22 of 23 unrelated big-tickets as OSCILLATING: the detector was never
+ * selective. Full study: `pipeline/experiments/RANGE-PERSISTENCE-FINDINGS.md` (incidental to it).
  *
  * @param {Array} days   a windowStats().days series — [[key, {low, hi}], …] oldest→newest
  * @param {object} opts { minDays = OSC_MIN_DAYS, minLegDays = OSC_MIN_LEG_DAYS,

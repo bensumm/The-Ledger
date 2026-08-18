@@ -1,40 +1,37 @@
 #!/usr/bin/env node
 /* lint-plan-refs.mjs — the PLAN REFERENCE gate.
  *
- * WHY: `plans/` is the one doc tree with NO existence guard. lint-arch.mjs governs only
- * ARCHITECTURE.md/GLOSSARY.md, and it explicitly skips every `PLAN-*.md` token as a transient
- * working doc — so a plan can be deleted while live source and governed docs still point at it,
- * and every check stays green. Deleting a shipped plan is the routine end of its lifecycle
- * (docs/PLANNING.md), which is exactly why the dangling pointer is easy to leave behind.
+ * WHY: `plans/` is the one doc tree with NO existence guard — lint-arch.mjs skips every `PLAN-*.md`
+ * token as a transient working doc, so a plan can be deleted while live source and governed docs
+ * still point at it and every check stays green.
  *
  * WHAT it enforces — a RATCHET over deletions, not a verdict on past ones. Every plan token in a
- * scanned file must resolve to a file in `plans/`, or already be listed in the FOLDED baseline
- * (`plan-folded.json`). Names dangling when the baseline was seeded are grandfathered: those plans
- * shipped and folded, and their names survive in code as provenance tags. What the guard stops is
- * the NEXT one — delete a plan something still points at and its name is not in the baseline, so
- * the build goes red naming every referencing file.
+ * scanned file must resolve to a file in `plans/` or be listed in the FOLDED baseline
+ * (`plan-folded.json`); names dangling when the baseline was seeded are grandfathered as provenance
+ * tags. What the guard stops is the NEXT one.
  *
- * NOT SCANNED, and why: CHANGELOG.md and docs/LORE.md are the dated record, where naming a folded
- * plan is the job. `pipeline/test/` and `pipeline/experiments/` hold synthetic fixture names
- * (PLAN-OPEN, PLAN-X) and dated findings. This file is skipped too — its own prose names plans.
+ * NOT SCANNED: CHANGELOG.md and docs/LORE.md (the dated record, where naming a folded plan is the
+ * job), `pipeline/test/` and `pipeline/experiments/` (synthetic fixture names), and this file.
  *
- * HONEST LIMITS: a token match, not a link checker. It cannot tell a load-bearing pointer from a
- * passing mention, so it answers "is anything still pointing here?", never "does this plan still
- * matter?" — that judgement stays with the reader, which is what `--refs` is for: run it before
- * deleting and read what comes back. A bare prefix written on purpose ("the PLAN-REACH family")
- * reads as its own plan name and needs a baseline line like any other. Chunk ids inside a plan
- * (AC1, DT3) are NOT checked; ids collide across plans and resolving them needs semantics this
- * guard lacks.
+ * HONEST LIMITS: a token match, not a link checker — it answers "is anything still pointing here?",
+ * never "does this plan still matter?". That judgement is the reader's, which is what `--refs` is
+ * for: run it BEFORE deleting. `--collisions` reads HEADINGS, TABLE CELLS and dashed-or-numbered
+ * BULLETS across `plans/` + the root `PLAN.md`, and requires a digit in the id, so alphabetic ids
+ * (`F-A`) are invisible to it. UNDER-REPORTING is the failure mode to watch, and it has bitten this
+ * mode TWICE: reading two of the declaration forms hid a three-way clash on `AC1`, and scanning only
+ * `plans/` hid five more (incl. `O1`) by skipping the corpus's biggest declarer. Widen the reader
+ * before trusting a clean run — the count is a floor, never a total.
+ * Full design + limits: README's `lint-plan-refs.mjs` entry, the ONE home.
  *
  * CLI:
- *   node pipeline/ci/lint-plan-refs.mjs             every reference resolves (CI mode)
- *   node pipeline/ci/lint-plan-refs.mjs --refs X    list every file referencing plan X
- *   node pipeline/ci/lint-plan-refs.mjs --unused    plans nothing outside plans/ points at
+ *   node pipeline/ci/lint-plan-refs.mjs                   every reference resolves (CI mode)
+ *   node pipeline/ci/lint-plan-refs.mjs --refs X          every file referencing plan X
+ *   node pipeline/ci/lint-plan-refs.mjs --unused          plans nothing outside plans/ points at
+ *   node pipeline/ci/lint-plan-refs.mjs --collisions      chunk ids reused across plans (report)
  *   node pipeline/ci/lint-plan-refs.mjs --bless --force   record folds into the baseline
  *
- * `--bless` refuses to add a name without `--force`, and lists each one it would add. Folding a
- * plan is deliberate, so acknowledging it should be too — otherwise the reflex fix for a red
- * build is to re-bless, which is precisely how a bad deletion would get laundered green.
+ * `--bless` refuses to add a name without `--force` and lists each it would add: otherwise the
+ * reflex fix for a red build is to re-bless, which is how a bad deletion gets laundered green.
  *
  * CONSTRAINTS (checks.yml, /ship §4): fast, offline, deterministic, public-log-safe, no
  * ~/.runelite, no secrets, no network, static-only (reads sources as text, never imports them).
@@ -58,7 +55,7 @@ const TEXT_RE = /\.(mjs|js|md|json|ya?ml|cmd|html)$/;
 // then reads as its own plan. Rejoin across the break before matching, so the token seen is the
 // one the author wrote. Only PLAN- prefixed matches are kept, so joining every trailing hyphen is
 // harmless — no other wrapped word can become a plan name.
-const unwrap = txt => txt.replace(/-[ \t]*\r?\n[ \t]*(?:\*|\/\/|#)?[ \t]*/g, '-');
+export const unwrap = txt => txt.replace(/-[ \t]*\r?\n[ \t]*(?:\*|\/\/|#)?[ \t]*/g, '-');
 
 /** Every scannable repo file, repo-relative and sorted for deterministic output. */
 function sources() {
@@ -85,6 +82,58 @@ function referenceGraph(files) {
     }
   }
   return refs;
+}
+
+// A chunk id as PLANS actually write them: AC1, DT4b, AF5b, V2-P4a, MT-V2/2. The DIGIT requirement is
+// the false-positive filter — it drops prose headings ("Status", "Chunks", "Wave") without a wordlist,
+// at the cost of the purely alphabetic ids the header names as invisible.
+const CHUNK_ID = '[A-Z][A-Za-z0-9]*(?:[-/][A-Za-z0-9]+)*';
+const HEADING_RE = new RegExp(`^#{2,5}\\s+\\**\\s*(${CHUNK_ID})\\b`);
+// Leading cell OR a later one: PLAN-DIGEST-SIGNAL-AND-SCAN-PERF writes `| | **SP5-code** | …`, so
+// anchoring on the FIRST cell alone misses a declaration table whose first column is a spacer.
+const TABLE_RE = new RegExp(`^\\|(?:\\s*\\|)*\\s*\\**\\s*(${CHUNK_ID})\\s*\\**\\s*\\|`);
+// Chunk lists are written FOUR ways in this corpus, and a guard that reads a subset under-reports
+// while its own header claims coverage: PLAN-PERF-1H-ARCHIVE declares AC1–AC6 as dashed bullets
+// alone, so omitting that form hid a genuine three-way clash on AC1, and PLAN-REACH-CALIBRATION
+// numbers its list (`5. **AC4a — …`). The trailing dash is the filter that keeps both bullet forms
+// from matching ordinary prose.
+const BULLET_RE = new RegExp(`^\\s*(?:[-*]|\\d+\\.)\\s*\\**\\s*(${CHUNK_ID})\\**\\s*[—–-]\\s`);
+const isChunkId = id => id.length <= 14 && /[0-9]/.test(id) && !id.startsWith('PLAN-');
+
+/** Every chunk id ONE plan's text declares, in any of the four declaration forms. */
+export function chunkIdsIn(text) {
+  const out = new Set();
+  for (const line of text.split('\n')) {
+    const m = HEADING_RE.exec(line) || TABLE_RE.exec(line) || BULLET_RE.exec(line);
+    if (m && isChunkId(m[1])) out.add(m[1]);
+  }
+  return out;
+}
+
+/**
+ * id -> Set(plan names declaring it), across every plan on disk PLUS the root `PLAN.md`.
+ * PLAN.md is the master plan + scoreboard and the single biggest declarer of chunk ids (~99 of
+ * them), and it is precisely the document the collision footer tells you cannot disambiguate a bare
+ * id — so scanning only `plans/` answered the question against a corpus it had not read, and hid
+ * five genuine cross-document clashes including `O1`, which CLAUDE.md cites bare as F1's gate.
+ * Memoised: the report needs the map twice (the clash list and the id total).
+ */
+let CHUNK_IDS_CACHE = null;
+function chunkIds() {
+  if (CHUNK_IDS_CACHE) return CHUNK_IDS_CACHE;
+  const byId = new Map();
+  const declare = (plan, text) => {
+    for (const id of chunkIdsIn(text)) {
+      if (!byId.has(id)) byId.set(id, new Set());
+      byId.get(id).add(plan);
+    }
+  };
+  for (const f of fs.readdirSync(PLANS).filter(f => f.endsWith('.md'))) {
+    declare(f.slice(0, -3), fs.readFileSync(path.join(PLANS, f), 'utf8'));
+  }
+  try { declare('PLAN.md (root)', fs.readFileSync(path.join(ROOT, 'PLAN.md'), 'utf8')); } catch { /* absent → plans/ only */ }
+  CHUNK_IDS_CACHE = byId;
+  return byId;
 }
 
 const onDisk = () => new Set(fs.readdirSync(PLANS).filter(f => f.endsWith('.md')).map(f => f.slice(0, -3)));
@@ -118,6 +167,17 @@ function main() {
       console.log(`  ${n.padEnd(38)} cited by ${peers} peer plan(s)`);
     }
     console.log('\nNot a delete list — a shortlist. Read each with --refs before removing it.');
+    return;
+  }
+
+  if (argv.includes('--collisions')) {
+    const clashes = [...chunkIds()].filter(([, plans]) => plans.size > 1)
+      .sort((a, b) => b[1].size - a[1].size || a[0].localeCompare(b[0]));
+    console.log(`chunk ids declared by more than one plan — ${clashes.length} of ${chunkIds().size} ids, across ${exist.size} plans + the root PLAN.md\n`);
+    for (const [id, plans] of clashes) console.log(`  ${id.padEnd(10)} ${plans.size}x  ${[...plans].sort().join(' · ')}`);
+    if (!clashes.length) console.log('  (none — every chunk id is unique across plans/)');
+    console.log('\nReport only, never gating. A bare id in a commit message or a PLAN.md row cannot');
+    console.log('disambiguate these; pick a plan-unique prefix (docs/PLANNING.md, chunk design rules).');
     return;
   }
 

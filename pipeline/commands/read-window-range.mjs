@@ -1,77 +1,62 @@
 #!/usr/bin/env node
 /**
- * read-window-range.mjs — historical time-of-day RANGE read (lows AND highs) for price placement.
- * (Renamed from nightlows.mjs 2026-07-05 when the high side was added — the tool outgrew
- * overnight-bid pricing and became the standing time-of-day context read required by
- * CLAUDE.md's market-analysis contract on every price recommendation.)
+ * read-window-range.mjs — historical time-of-day RANGE read (lows AND highs) for price placement; the
+ * standing time-of-day context CLAUDE.md's market-analysis contract requires on every price rec. A bid at
+ * the *evening* 2h-band floor answers the wrong question; an ask above what the window prints is stranded.
  *
- * The 2026-07-04 zero-fill night showed that a bid at the *evening* 2h-band floor answers
- * the wrong question, and the same day's bludgeon retro showed the mirror image on the
- * sell side (an ask above what the window actually prints is a stranded premium). This
- * script measures both directly from the /timeseries 1h endpoint (~15 days of history):
- * for each of the last N local days, the lowest traded avgLow AND highest traded avgHigh
- * inside the wall-clock window, with the instasell/instabuy volume that crossed during it,
- * then the bid levels touched on ≥50% / ≥75% / all of those days and the ask levels
- * reached on the same fractions.
- *
- * "Touched"/"reached" = some volume traded at-or-beyond that price in at least one window
- * hour. It is NOT "filled a 25k-unit limit" — pair the level with the window volume line
- * (that volume is the pool a resting offer competes for). Honesty rule (process rule 4):
- * ~14 days is a small sample; treat the levels as a guide, not a guarantee.
+ * Off the /timeseries 1h endpoint (~15 days): for each of the last N local days, the lowest traded
+ * avgLow AND highest traded avgHigh inside the wall-clock window plus the instasell/instabuy volume
+ * that crossed during it, then the bid levels touched on ≥50%/≥75%/all of those days and the ask levels
+ * reached on the same fractions. "Touched"/"reached" = some volume traded at-or-beyond that price in at
+ * least one window hour — NOT "filled a 25k-unit limit"; pair the level with the window volume line (the
+ * pool a resting offer competes for). Honesty rule (process rule 4): ~14 days is a small sample.
  *
  * Usage:
  *   node pipeline/commands/read-window-range.mjs "Soul rune" "Death rune"
  *   node pipeline/commands/read-window-range.mjs 566 --nights 10 --window 0-8 --bid 371 --ask 395
  *
  * Flags:
- *   --nights <n>   how many recent local days to score (default 14, capped by history)
- *   --window <a-b> local wall-clock window, hours 0-23 (default 0-8; may cross midnight,
- *                  e.g. 23-7 — the day is keyed to the morning the window ends on)
- *   --bid <gp>     score a specific candidate bid ("touched k/N days")
- *   --ask <gp>     score a specific candidate ask ("reached k/N days")
+ *   --nights <n>   recent local days to score (default 14, capped by history)
+ *   --window <a-b> local wall-clock window, hours 0-23 (default 0-8; may cross midnight, e.g. 23-7 —
+ *                  the day is keyed to the morning the window ends on). Also `peak`/`dip` (T1).
+ *   --bid <gp>     score a candidate bid ("touched k/N days")
+ *   --ask <gp>     score a candidate ask ("reached k/N days")
  *   --exit <gp>    back-solve the LARGEST profitable buy from an intended exit ask (#9, PLAN-WINDOW-CLEAR
- *                  B3 — maxBuyForExit, the tax-exact inverse of breakEven) + how reachable the exit is in
- *                  the window (a rarely-printed exit over-states the sell → the buy is optimistic)
+ *                  B3 — maxBuyForExit, the tax-exact inverse of breakEven) + how reachable that exit is
+ *                  in-window (a rarely-printed exit over-states the sell → the buy is optimistic)
  *   --margin <gp>  minimum after-tax net/u the back-solve must leave (default 0 = break-even-clearing)
- *   --depth <qty>  (PLAN-DEPTH-EXIT DE2 + DE6) percentile-DEPTH read for a lot of <qty> units, BOTH
- *                  edges: the per-day instabuy flow at/above the scored --ask (clears qty×competition?),
- *                  the clearableAsk ("BOOK AT ≤ X"), the per-day instasell flow at/below a scored --bid,
- *                  and the clearableBid ("CATCH AT ≥ X" — how deep a bid still fills). A thin book prints
- *                  its COLLAPSE REASON, never a bare null. Estimate from bucket AVERAGES, not an order
- *                  book (inform-only, n≈0).
+ *   --depth <qty>  (PLAN-DEPTH-EXIT DE2/DE6) percentile-DEPTH read for <qty> units: the per-day instabuy
+ *                  flow at/above the scored --ask, and clearableAsk ("BOOK AT ≤ X"). A thin book prints
+ *                  its COLLAPSE REASON, never a bare null. From bucket AVERAGES, not an order book (n≈0).
  *   --hourly       (PLAN-DIURNAL-HOURLY) the RAW per-LOCAL-hour LOW/MID/HIGH grid — a 7d-avg (median)
- *                  block + the last N dates broken out individually (N via --days, default 3, most-recent
- *                  first). The hour-by-hour detail the dip/peak summary distills away (it caught a churn
- *                  item whose break-even sat above its typical hourly high, and a secret +7% breakout).
- *                  Reuses the SAME 1h series (no second fetch). Inform-only, n≈0 — a diagnostic, never gates.
- *   --niche <n>    (PLAN-ESTIMATOR-POSTURE AC8) which strategy spec the reach-FOLD data point is computed
- *                  against — band (default) | churn | scalp. With a scored --bid/--ask/--exit + a live
- *                  pair, prints one `fold: best-case X → reach-folded Y` line (the estimator's fold, moved
- *                  out of the discovery price into validation) + a `result.fold` in --json/--out. churn
- *                  inherits the AC5/AC6 fold exemption (fold ≈ best-case). Zero new fetch; inform-only.
+ *                  block + the last N dates broken out (N via --days, default 3, most-recent first): the
+ *                  detail the dip/peak summary distills away (it caught a churn item whose break-even sat
+ *                  above its typical hourly high, and a secret +7% breakout). Same 1h series, no second
+ *                  fetch. Inform-only, n≈0 — a diagnostic, never gates.
+ *   --niche <n>    (PLAN-ESTIMATOR-POSTURE AC8) the strategy spec the reach-FOLD data point is scored
+ *                  against — band (default) | churn | scalp. With a scored --bid/--ask/--exit + a live pair,
+ *                  prints `fold: best-case X → reach-folded Y` + `result.fold` in --json/--out. churn
+ *                  inherits the AC5/AC6 fold exemption (fold ≈ best-case). No fetch; inform-only.
  *   --pressure     (PLAN-DEPTH-EXIT Extension A, PB2) the demand-balance reachable band: pressure =
- *                  medVolHi/medVolLo (buy-heavy > 1 / sell-heavy < 1), the regime label, and the
- *                  reachableBid/reachableAsk = base ± band·φ(±s)·reliability with the band + reliability
- *                  inline. The manual φ-tuning surface. Inform-only, n≈0 — φ/PRESSURE_* are placeholders.
- *   --out <path>   ALWAYS write JSON.stringify(results, null, 2) (the same array --json prints) to this
- *                  path, regardless of whether --json was also passed — combine with normal markdown
- *                  stdout to keep the human read while also saving a machine-readable dump for a later
- *                  interpretation pass (e.g. pipeline/.cache/last-report/verify.json). Creates parent
- *                  directories as needed. Default (no --out) is unchanged.
+ *                  medVolHi/medVolLo (buy-heavy > 1 / sell-heavy < 1), the regime label, and
+ *                  reachableBid/reachableAsk = base ± band·φ(±s)·reliability, band + reliability inline.
+ *                  The manual φ-tuning surface. Inform-only, n≈0 — φ/PRESSURE_* are placeholders.
+ *   --out <path>   ALWAYS write the results array as JSON to this path, whether or not --json was passed —
+ *                  keeps the markdown stdout while also saving a machine-readable dump. Creates parents.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadMapping, fetchTs, fetchLatest, rolling24FromTs1h } from '../lib/market/marketfetch.mjs';   // rolling24FromTs1h: the TRUE trailing-24h units/d composed from the IN-HAND 1h series (never the broken /24h) — feeds the avg-bound deep/thin split at zero new fetch
 import { parseArgs, parseGp } from '../lib/render/cli.mjs';
 import { windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, fmtHoldHorizon, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, demandPressure, reachableBand, askExitRead, reachMargin, realityClause, computeReality, avgBoundRead, formatAvgBound, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read printed under the --profile trajectory block; DE2: --depth reads the percentile-depth "BOOK AT ≤X" (clearableAsk); PB2: --pressure reads the demand-balance band; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home (depthDays/clearableBid/demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
-import { maxBuyForExit, breakEven, QUICK_FRESH_MIN, phase } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask; QUICK_FRESH_MIN gates the stale-live pace guard; `phase` (2026-08-06) feeds diurnalForecast's post-shock-shape REFUSAL through driftExitFrom's ctx — see the FORECAST-GUARD note below
+import { maxBuyForExit, breakEven, QUICK_FRESH_MIN, phase } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask; QUICK_FRESH_MIN gates the stale-live pace guard; `phase` feeds diurnalForecast's post-shock-shape REFUSAL through driftExitFrom's ctx — see the FORECAST-GUARD note below
 import { netMargin } from '../../js/money-math.js';   // PLAN-ESTIMATOR-HONEST-SELL E3: the HONEST best-case margin at the raw exit (never BE-clamped) for the three-part fold line
 import { open as openArchive } from '../lib/market/archive.mjs';   // AC4a: read-only 5m-grain reach where the Tier-1 archive has coverage (degrades to 1h-only when it doesn't)
 import { driftExitFrom } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 5: the drift-adjusted exit LEVEL folded into the floor/ceiling note (off the in-hand profile+days — no fetch)
 import { estimatePair, estConfLean, askReachFactor, REACH_RELIEF_MIN_VOL } from '../lib/signal/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold); RB-3: askReachFactor on its DEFAULT (full-window) basis, so the fold line can print the pre-change number beside the new one instead of swapping it silently
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // AC8: the per-niche spec the fold is computed against (--niche, default band)
 import { fmtHourRange } from '../../js/money-format.js';   // both-zone (local / UK) window labels — kills the GMT/Pacific narration mismatch
-import { hourlyLMH, askReachDecay } from '../lib/market/hourly-lmh.mjs';   // --hourly: the raw per-local-hour LOW/MID/HIGH diagnostic (reuses the 1h series already fetched; inform-only, n≈0); askReachDecay (DT3) — is the --ask level sliding out of reach? (replaced the deleted hourlyDrift slope + its Δ/d column)
+import { hourlyLMH, askReachDecay } from '../lib/market/hourly-lmh.mjs';   // --hourly: the raw per-local-hour LOW/MID/HIGH diagnostic (reuses the 1h series already fetched; inform-only, n≈0); askReachDecay (DT3) — is the --ask level sliding out of reach? (there is no per-hour drift slope; see the DT3 note below the grid)
 import { askReachDecayNote, liveAgeTag, windowReliability, fitWindowMismatchNote } from '../../js/windowread.mjs';   // DT3 — the shared compact decay-note renderer (one owner with quote-items.mjs/screen-flip-niches.mjs); liveAgeTag = the always-rendered /latest print-age suffix (pure, threshold passed in)
 
 // #9: exit reached on < this fraction of the scored days ⇒ the exit OVER-states the reachable sell,
@@ -89,21 +74,20 @@ for (let i = 0; i < argv.length; i++) {
 }
 if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8|peak|dip] [--bid <gp>] [--ask <gp>] [--exit <ask> [--margin <gp>]] [--depth <qty>] [--pressure] [--profile] [--trajectory] [--hourly [--days 3]] [--niche band|churn|scalp] [--json] [--out <path>]'); process.exit(1); }
 
-// DELIBERATELY ITS OWN LITERAL, *not* WINDOW_RELIABLE_NIGHTS (pinned to the gate constant for one
-// commit on 2026-08-10; reverted after review). NIGHTS feeds ~15 call sites here — windowStats ×4,
-// hourProfile ×2, clearableAsk, and the quantile/reach/placement/depth/trajectory block — almost none
-// of which are the display gate. Pinning it to a DISPLAY-gate constant meant moving that gate would
-// silently move reach counts, placement percentiles and the trajectory basis across the whole command,
-// which is exactly what displayFitNights' own header warns against ("DO NOT simplify this into a
-// blanket nights=14 for the callers"). The gate-vs-fit divergence is handled by DISCLOSURE below, so
-// no pin is needed. Keep this equal to WINDOW_RELIABLE_NIGHTS by default anyway — a bare --profile run
-// should show the judged hours — but change it on its own merits, not the gate's.
+// DELIBERATELY ITS OWN LITERAL, *not* WINDOW_RELIABLE_NIGHTS. NIGHTS feeds ~15 call sites here —
+// windowStats ×4, hourProfile ×2, clearableAsk, and the quantile/reach/placement/depth/trajectory
+// block — almost none of which are the display gate. Pinning it to a DISPLAY-gate constant means
+// moving that gate silently moves reach counts, placement percentiles and the trajectory basis across
+// the whole command, exactly what displayFitNights' own header warns against ("DO NOT simplify this
+// into a blanket nights=14 for the callers"). The gate-vs-fit divergence is handled by DISCLOSURE
+// below, so no pin is needed. Keep this equal to WINDOW_RELIABLE_NIGHTS by default anyway — a bare
+// --profile run should show the judged hours — but change it on its own merits, not the gate's.
 const NIGHTS = Math.max(1, parseInt(A.nights, 10) || 14);
 // PLAN-WINDOW-VERIFY T1 — --window also accepts the literals `peak` / `dip`, resolved PER ITEM to that
-// item's own diurnal peak/dip hours (hourProfile). This removes the hand-transcription step — read
-// "PEAK window 20:00–23:00" off the profile line, retype it as `--window 20-23` — that was the mechanical
-// origin of the 2026-07-25 all-day-vs-window incident (an exit was verified with `--window 0-23`, the
-// ALL-DAY window, while the pitch named the 20:00–23:00 peak). An explicit `H-H` behaves exactly as before.
+// item's own diurnal peak/dip hours (hourProfile). This removes the hand-transcription step (read
+// "PEAK window 20:00–23:00" off the profile line, retype it as `--window 20-23`) — the mechanical origin
+// of the all-day-vs-window incident: an exit verified with `--window 0-23`, the ALL-DAY window, while
+// the pitch named the 20:00–23:00 peak. An explicit `H-H` is unaffected.
 const W_RAW = String(A.window ?? '0-8').trim().toLowerCase();
 const W_MODE = (W_RAW === 'peak' || W_RAW === 'dip') ? W_RAW : 'fixed';
 let W_FIXED_START = 0, W_FIXED_END = 8;
@@ -190,18 +174,17 @@ for (const want of positionals) {
   // ONE hourProfile per item, shared by the T1 --window peak|dip resolution, the --profile block, and
   // the reachMargin pace read (previously computed twice per item). Pure — no fetch.
   const prof = hourProfile(series, { nights: NIGHTS });
-  // ── FORECAST-GUARD (2026-08-06, the Snape grass miss) ─────────────────────────────────────────────
+  // ── FORECAST-GUARD (the Snape grass miss) ─────────────────────────────────────────────────────────
   // `diurnalForecast` REFUSES to project three shapes — `unreliable-quote` (ctx.reliable === false),
   // `post-shock-shape` (ctx.phase 'spike'|'decay' — "a post-SHOCK shape is not the recurring shape"),
   // and `band-violation-live` (ctx.mom 'breakdown'|'breakup'). Those guards are FAIL-OPEN by
   // construction: `ctx.phase === 'spike'` is simply false when the caller omits `phase`, so a blind
-  // call yields an UNGUARDED projection that renders byte-identically to a guarded one. Every other
-  // driftExitFrom call site (screen-flip-niches ×2, quote-items ×2) passes phase/mom/reliable; THIS
-  // script — the mandatory verification trio — passed only liveLo/liveHi, so all three were dead here.
-  // Real cost: Snape grass (classified `spike`, mid-decay) kept printing a drift-adj peak (~1,090 →
-  // ~1,024 across one day) that the module was written to refuse, and it was quoted as decision
-  // evidence. `phase` is derivable free off the 1h series already in hand — compute it ONCE here and
-  // thread it into both ctx objects. `mom`/`reliable` are NOT computed on this surface; P1's
+  // call yields an UNGUARDED projection that renders byte-identically to a guarded one — which is why
+  // every driftExitFrom call site must pass phase/mom/reliable (pinned by check-forecast-guards.mjs).
+  // Measured cost of the omission here: Snape grass (classified `spike`, mid-decay) kept printing a
+  // drift-adj peak (~1,090 → ~1,024 across one day) the module is written to refuse, and it was quoted
+  // as decision evidence. `phase` is derivable free off the 1h series already in hand — compute it ONCE
+  // here and thread it into both ctx objects. `mom`/`reliable` are NOT computed on this surface; P1's
   // `guardsChecked` marker is what makes their absence visible rather than silent.
   const fcPhase = phase(series);
   const guardCtx = { phase: fcPhase ? fcPhase.phase : undefined };
@@ -220,8 +203,7 @@ for (const want of positionals) {
   // to `⚠ Nm old` past QUICK_FRESH_MIN (a stale print is an old tick, not the current price — the 64-min
   // godsword anchor). Rendering the age unconditionally is what lets a reader tell an unchanged-but-
   // current price from a stale one; see liveAgeTag's header for the misdiagnosis that motivated it.
-  // ONE age helper for the whole file — the pace/stale threading below reuses `_liveAge`, which was a
-  // second byte-identical copy until 2026-08-09.
+  // ONE age helper for the whole file — the pace/stale threading below reuses `_liveAge`.
   const _liveAge = t => (t != null && Number.isFinite(t)) ? (Date.now() / 1000 - t) / 60 : null;
   const _liveTag = age => liveAgeTag(age, { freshMin: QUICK_FRESH_MIN });
   const liveNowLine = () => (latest && latest.low != null)
@@ -244,7 +226,7 @@ for (const want of positionals) {
       }
       const win = (w) => `${pad2(w.startH)}:00–${pad2(w.endH)}:00`;
       log(`  ---`);
-      // DT4 (PLAN-DIURNAL-TRIAGE, 2026-08-10) — the split-half RELIABILITY read on these hours. This is
+      // DT4 (PLAN-DIURNAL-TRIAGE) — the split-half RELIABILITY read on these hours. This is
       // the diagnostic surface, so it prints the raw r's rather than just the verdict: the other surfaces
       // (soft-buy, the diurnal note, /schedule) only show the tri-state, and this is where you come to see
       // WHY one of them suppressed a window. Computed off the RAW series at windowReliability's own pinned
@@ -259,7 +241,7 @@ for (const want of positionals) {
         : rel.reason === 'flat-shape'
           ? `  reliability: FLAT — the de-trended 24h shape has no variance over ${rel.daysUsed}d, so the dip/peak hours below are an arbitrary tiebreak among equal hours. Use the LEVELS.`
           : `  reliability: r ${rel.r.toFixed(2)} (low ${rel.rLow.toFixed(2)} · high ${rel.rHi.toFixed(2)}) over ${rel.daysUsed}d ⇒ ${rel.reliable ? 'RELIABLE — the shape reproduces across a parity split; hours are worth acting on' : 'UNRELIABLE — the shape does not reproduce; treat the hours below as noise and use the LEVELS'}`);
-      // DT4b FOLLOW-UP (2026-08-10) — the fit-window transfer gap, DISCLOSED rather than closed.
+      // DT4b — the fit-window transfer gap, DISCLOSED rather than closed.
       // The verdict above is measured over the gate's own pinned window; the hours below are fitted
       // over --nights. When those differ the verdict does NOT transfer to the hours actually printed:
       // measured over the archive, a 7d and a 14d fit of the SAME passing item agree on the dip hour
@@ -275,13 +257,13 @@ for (const want of positionals) {
       // level-reality read; byte-identical (no clause) when reality is absent/clean.
       const dipRC = realityClause(prof.dip.reality, { side: 'bid', fmt, style: 'full' });
       const peakRC = realityClause(prof.peak.reality, { side: 'ask', fmt, style: 'full' });
-      // T0 items 1+5 (PLAN-WINDOW-VERIFY, the 2026-07-25 all-day-vs-window incident) — score each derived
-      // window AGAINST ITS OWN HOURS, right on the line that names it. Same windowStats+recencySplit pattern
-      // diurnalTimedLap §2 already uses (js/windowread.mjs ~1488) — applied here so the peak/dip lines carry
-      // their own in-window reach + the pool a resting order actually competes for, WITHOUT the caller
-      // hand-transcribing the hours into a second --window run. When --ask/--bid was also passed, that level
-      // is scored in the SAME window and its gap to the window's own level is stated as a number: the incident
-      // was an ask quoted 101 gp ABOVE the peak's own level and then called window-clear. INFORM-only, n≈0.
+      // T0 items 1+5 (PLAN-WINDOW-VERIFY, the all-day-vs-window incident) — score each derived window
+      // AGAINST ITS OWN HOURS, right on the line that names it. Same windowStats+recencySplit pattern
+      // diurnalTimedLap §2 uses (js/windowread.mjs ~1488), so the peak/dip lines carry their own in-window
+      // reach + the pool a resting order actually competes for, WITHOUT the caller hand-transcribing the
+      // hours into a second --window run. When --ask/--bid was also passed, that level is scored in the SAME
+      // window and its gap to the window's own level is stated as a number: the incident was an ask quoted
+      // 101 gp ABOVE the peak's own level and then called window-clear. INFORM-only, n≈0.
       const rsTxt = s => s ? `${s.fullHit}/${s.fullN}d (recent ${s.recentHit}/${s.recentDays}${s.staleOptimistic ? ' ⚠ stale' : ''})` : '—';
       const winScore = (w, side, userLevel) => {
         if (!w) return null;
@@ -309,24 +291,24 @@ for (const want of positionals) {
       { const l = liveNowLine(); if (l) log(l); }
       const dr = deriveDiurnalRange(prof, { liveLo: latest && latest.low != null ? latest.low : null, liveHi: latest && latest.high != null ? latest.high : null });
       if (dr) {
-        // DT4 (2026-08-10, after review): this actionable line quotes the dip/peak HOURS, so it must
-        // carry the same verdict the reliability line above just printed. Without the suffix the block
-        // contradicted itself — "treat the hours below as noise" followed by an unqualified hour-stamped
-        // BID/ASK recommendation. The LEVELS are unconditional; only the hours claim is qualified.
+        // DT4: this actionable line quotes the dip/peak HOURS, so it must carry the same verdict the
+        // reliability line above just printed — without the suffix the block contradicts itself ("treat
+        // the hours below as noise" followed by an unqualified hour-stamped BID/ASK recommendation). The
+        // LEVELS are unconditional; only the hours claim is qualified.
         const relSuffix = rel.reliable === true ? ''
           : rel.reliable === false ? '  ⚠ hours not reliable — take the LEVELS, not the timing'
           : '  ⚠ hours unverified — take the LEVELS, not the timing';
-        // PLAN-DIURNAL-RECENCY-GUARD Chunk 2b (2026-08-12) — Chunk 2 tagged the WINDOW HEADER on this
-        // surface (:303/:305) and the RECOMMENDATION on the screen surface (formatTimedLap, emit.mjs
-        // :182-185). This line — the recommendation on THIS surface — fell in the gap between those two
-        // items, so the block printed "PEAK window … 1,904 ⚠ spike-top" and then "→ ASK 1,904" bare two
-        // lines later. Real cost: 1,904 was quoted off it as a Green dragon leather exit, never printed,
-        // and the lot went underwater (2026-08-12).
-        // ASK is safe unconditionally — deriveDiurnalRange returns `ask = profile.peak.level` verbatim
-        // (js/windowread.mjs `deriveDiurnalRange`'s `const ask = profile.peak.level` passthrough). BID is NOT: it is REPRICED to the live instasell when the dip is not
-        // below live ( — `deriveDiurnalRange`'s `bid >= liveLo` reprice branch, bidBasis 'live'), and `dipReality` describes profile.dip.level. Tagging
-        // a repriced bid with the dip level's reality would label one number with another's conditions —
-        // the exact defect this guard exists to prevent. Hence the bidBasis gate; do not "simplify" it.
+        // PLAN-DIURNAL-RECENCY-GUARD Chunk 2b — the RECOMMENDATION line carries the same reality clause
+        // as the window header above it (the screen surface's equivalent is formatTimedLap in emit.mjs).
+        // Untagged, this block printed "PEAK window … 1,904 ⚠ spike-top" and then a bare "→ ASK 1,904"
+        // two lines later; 1,904 was quoted off it as a Green dragon leather exit, never printed, and the
+        // lot went underwater.
+        // ASK is safe unconditionally — deriveDiurnalRange returns `ask = profile.peak.level` verbatim.
+        // BID is NOT: it is REPRICED to the live instasell when the dip is not below live
+        // (js/windowread.mjs, `deriveDiurnalRange`'s `bid >= liveLo` reprice branch, bidBasis 'live'),
+        // while `dipReality` describes profile.dip.level. Tagging a repriced bid with the dip level's
+        // reality would label one number with another's conditions — the exact defect this guard exists
+        // to prevent. Hence the bidBasis gate; do not "simplify" it.
         const askRCShort = realityClause(prof.peak.reality, { side: 'ask', fmt, style: 'short' });
         const bidRCShort = dr.bidBasis === 'live' ? ''
           : realityClause(prof.dip.reality, { side: 'bid', fmt, style: 'short' });
@@ -335,15 +317,12 @@ for (const want of positionals) {
       }
       log(`  (hour-of-day medians, small sample — a guide, not a guarantee)`);
       result.profile = { nights: prof.nights, dip: prof.dip, peak: prof.peak, amplitude: prof.amplitude, amplitudePct: prof.amplitudePct, trendPerDay: prof.trendPerDay, trendDominates: prof.trendDominates };
-      // Chunk 2c (2026-08-13) — this payload ALREADY carries the reality objects, one field up:
+      // Chunk 2c — this payload ALREADY carries the reality objects, one field up:
       // `result.profile.peak.reality` / `.dip.reality` (hourProfile attaches them; `prof.peak`/`prof.dip`
-      // are serialised verbatim above). A draft of this chunk added `peakReality`/`dipReality` to
-      // `diurnalRange` too, justified as "the recommended levels were serialised stripped of their
-      // condition — nobody can ever measure whether this guard is worth anything." **That was false for
-      // THIS file** and the duplicate keys were a second home for one object in one payload — the bug
-      // class this repo names repeatedly. Removed by review. The claim IS true of `suggestions.jsonl`,
-      // whose `timedLapShadow` genuinely dropped them; that is where the write-side fix belongs and
-      // where it stayed.
+      // are serialised verbatim above). Do NOT also add `peakReality`/`dipReality` to `diurnalRange` —
+      // duplicate keys are a second home for one object in one payload, the bug class this repo names
+      // repeatedly. (`suggestions.jsonl`'s `timedLapShadow` genuinely DOES drop them; that is where the
+      // write-side fix belongs, and where it lives.)
       //
       // A consumer joining reality→level here reads `profile.*.reality` and pairs it with `bidBasis`
       // below: `ask` is `profile.peak.level` verbatim, but `bid` is REPRICED to the live instasell when
@@ -425,12 +404,11 @@ for (const want of positionals) {
       const span = ds => ds.length ? `${ds[0]}→${ds[ds.length - 1]}` : '—';
       log(`  7d-avg (median L/M/H) over ${span(hl.avgDates)} (${hl.avgDates.length} date${hl.avgDates.length === 1 ? '' : 's'}) · per-day, most-recent first: ${hl.perDayDates.join(' · ')}`);
       const triple = t => (t == null || (t.low == null && t.mid == null && t.high == null)) ? '—' : `${fmt(t.low)}/${fmt(t.mid)}/${fmt(t.high)}`;
-      // DT3 (2026-08-09): the Δ/d per-hour slope column is DELETED. It was the per-hour least-squares
-      // slope rendered as a column, and that slope carried no information (49.7% direction; beat
-      // predict-no-change on 6 of 380 items) — worse, at the default 3-day window it was frequently a
-      // TWO-POINT difference dressed up as a fitted trend, printing ±10m/day of fake diurnal structure on
-      // a big-ticket item. The raw per-day L/M/H columns above remain, which is exactly the eyeball job
-      // the column was automating badly. See hourly-lmh.mjs's tombstone. Do not reintroduce it.
+      // DT3: there is NO Δ/d per-hour slope column. That per-hour least-squares slope measured a
+      // non-signal — 49.7% direction, beat predict-no-change on 6 of 380 items — and at the default
+      // 3-day window it is frequently a TWO-POINT difference dressed up as a fitted trend, printing
+      // ±10m/day of fake diurnal structure on a big-ticket item. The raw per-day L/M/H columns above are
+      // the eyeball job it automated badly. See hourly-lmh.mjs's tombstone. Do not reintroduce it.
       const heads = ['7d-avg L/M/H', ...hl.perDayDates.map(d => d.slice(5) + ' L/M/H')];
       const rowsData = hl.hours.map(row => ({ h: row.h, cells: [triple(row.avg7), ...row.perDay.map(triple)] }));
       const W = Math.max(...heads.map(s => s.length), ...rowsData.flatMap(rd => rd.cells.map(c => c.length))) + 2;
@@ -451,16 +429,16 @@ for (const want of positionals) {
   const stats = windowStats(series, { nights: NIGHTS, wStart: W_START, wEnd: W_END });
   // T0 item 2 — a window spanning every hour is labelled ALL-DAY. `--window 0-23` is a legal, distinct
   // 24-hour window, NOT a "no window scoping" sentinel; reading it as the latter is what let an all-day
-  // reach/placement/pool read be quoted as peak-window verification (2026-07-25). Say which it is.
+  // reach/placement/pool read be quoted as peak-window verification. Say which it is.
   const spansAllDay = ((W_END - W_START + 24) % 24) >= 23;
   const winLabel = `${spansAllDay ? 'ALL-DAY ' : ''}${pad2(W_START)}:00–${pad2(W_END)}:00 local${wResolvedFrom ? ` (via --window ${wResolvedFrom})` : ''}`;
   result.winLabel = winLabel;
   result.spansAllDay = spansAllDay;
   log(`\n## ${r.name} — window range, last ${stats ? stats.days.length : 0} day(s) (${winLabel}, 1h series)`);
   // T0 item 4 — --window and the diurnal profile are two INDEPENDENT computations rendering into one
-  // stdout stream; nothing used to cross-check them, so a peak-window pitch could be verified against
-  // all-day (or any other) hours and read as coherent. When both ran and they disagree, say so plainly:
-  // everything scored below describes THESE hours, not the profile's peak/dip window.
+  // stdout stream, so without this cross-check a peak-window pitch can be verified against all-day (or
+  // any other) hours and read as coherent. When both ran and they disagree, say so plainly: everything
+  // scored below describes THESE hours, not the profile's peak/dip window.
   if (A.profile !== undefined && prof && W_MODE === 'fixed'
       && !(W_START === prof.peak.startH && W_END === prof.peak.endH)
       && !(W_START === prof.dip.startH && W_END === prof.dip.endH)) {
@@ -495,13 +473,13 @@ for (const want of positionals) {
   const fiveOk = fiveStats && (fiveStats.his.length >= FIVE_MIN_MIN_DAYS || fiveStats.lows.length >= FIVE_MIN_MIN_DAYS);
   // PLAN-POSITIONS-WINDOW-READ: the ask-side typical-exit read assembled ONCE via the shared askExitRead
   // (the same call quote-items.mjs --positions makes) — the ASK-side summary line + the scored --ask
-  // reach/placement + the 5m-grain block below all render from its fields (was inline primitives).
+  // reach/placement + the 5m-grain block below all render from its fields.
   // reachMargin (the fade check) needs the hour profile (for today's pace) + live; compute once here so
   // both the ask-side (via aer) and the --bid render below share it. PURE — no fetch (series already in hand).
-  const profMargin = prof;   // the ONE per-item hourProfile hoisted above (was a second identical call)
+  const profMargin = prof;   // the ONE per-item hourProfile hoisted above
   // thread /latest print ages + staleness so the reachMargin pace read refuses a stale tick (the
-  // 64-min godsword anchor, 2026-07-21) — same QUICK_FRESH_MIN bar quote-items.mjs uses.
-  // reuses the ONE `_liveAge` hoisted with the live-now line above (was a second identical copy).
+  // 64-min godsword anchor) — same QUICK_FRESH_MIN bar quote-items.mjs uses. Reuses the ONE `_liveAge`
+  // hoisted with the live-now line above.
   const _loAge = latest ? _liveAge(latest.lowTime) : null, _hiAge = latest ? _liveAge(latest.highTime) : null;
   const liveNow = latest ? { lo: latest.low ?? null, hi: latest.high ?? null,
     staleLo: _loAge != null && _loAge > QUICK_FRESH_MIN, staleHi: _hiAge != null && _hiAge > QUICK_FRESH_MIN,
@@ -512,21 +490,19 @@ for (const want of positionals) {
   const sgm = v => v == null ? '—' : (v >= 0 ? '+' : '') + fmt(v);
   const logReachMargin = (rm) => {
     if (!rm) return;
-    // T0 item 6 — the two danger signals used to render as separate sub-lines, which let them be read (and
-    // quoted) independently: on 2026-07-25 `cushion ⚠ FADING` and `pace ⚠ lagging` were both reported and
-    // then individually argued past. Fired TOGETHER they are the doctrine's price-to-sell-EARLY trigger
-    // ("ACT on the fade", /positions SKILL.md), so state that once, above the detail. INFORM-only — it
-    // never gates and the named-tripwire override pattern is unchanged.
+    // T0 item 6 — `cushion ⚠ FADING` and `pace ⚠ lagging` fired TOGETHER are the doctrine's
+    // price-to-sell-EARLY trigger ("ACT on the fade", /positions SKILL.md), so state that once, above the
+    // detail. Rendered as two separate sub-lines they get read — and argued past — independently.
+    // INFORM-only — it never gates, and the named-tripwire override pattern is unaffected.
     const paceBad = rm.pace && !rm.pace.stale && !rm.pace.onPace;
     if ((rm.trend === 'fading' || (rm.cushionNow != null && rm.cushionNow < 0)) && paceBad) {
-      // Chunk 2b (2026-08-12) — this composite runs on BOTH legs, but its text was hardcoded to the
-      // ASK reading. reachMargin's cushion is SIDE-FLIPPED (js/windowread.mjs:756 —
-      // `side === 'bid' ? level - e : e - level`), so on a bid a negative cushion means THE DAY'S LOW
-      // NEVER CAME DOWN TO YOUR BID (a fill-side fact), not "sell early". It was shipping a
-      // price-to-sell-EARLY instruction under `--bid 2,291`. Wording only — the AND threshold is
-      // deliberately UNCHANGED: widening it to fire on either signal alone was measured at a 60%
-      // fire-rate over 25 scored legs (56% cushion-only / 44% fading-only) against a ~40% wallpaper
-      // bar, so it was dropped. See plans/PLAN-DIURNAL-RECENCY-GUARD.md Chunk 2b §3.
+      // Chunk 2b — this composite runs on BOTH legs, so its text is SIDE-AWARE. reachMargin's cushion is
+      // side-flipped (js/windowread.mjs:756 — `side === 'bid' ? level - e : e - level`), so on a bid a
+      // negative cushion means THE DAY'S LOW NEVER CAME DOWN TO YOUR BID (a fill-side fact), not "sell
+      // early"; ASK-worded, it ships a price-to-sell-EARLY instruction under `--bid 2,291`. The AND
+      // threshold is deliberately NARROW: firing on either signal alone measured a 60% fire-rate over 25
+      // scored legs (56% cushion-only / 44% fading-only) against a ~40% wallpaper bar, so it was
+      // rejected. See plans/PLAN-DIURNAL-RECENCY-GUARD.md Chunk 2b §3.
       const cushWord = rm.trend === 'fading' ? 'cushion FADING' : 'cushion NEGATIVE';
       log(rm.side === 'bid'
         ? `    ⚠⚠ ${cushWord} + pace lagging today — the market is pulling AWAY from this bid: it is not filling at this level, and the level is drifting further out of reach. Re-price to live or accept it rests unfilled — this is a FILL-side warning, not a sell trigger`
@@ -541,12 +517,11 @@ for (const want of positionals) {
     else if (rm.pace) log(`      pace: live ${fmt(rm.pace.liveNow)} vs ${pad2(rm.pace.hour)}:00 median ${fmt(rm.pace.medianAtHour)} → ${sgm(rm.pace.gap)}${rm.pace.onPace ? ' on pace' : ' ⚠ lagging'} (n ${rm.pace.n})`);
   };
 
-  // ── DAILY TRAJECTORY (was JSON-only until this block) — the multi-day price path + a heuristic
-  // shape read, surfaced by DEFAULT so a scored/verify read can't skip the trajectory in favour of
-  // just the reach/placement fields (the exact under-read this fixes: an agent read reach/placement
-  // and ignored the `days` series sitting in the same dump). PURELY ADDITIVE console rendering of
-  // data already in `result.days`/`profMargin` — no new computation, no JSON/number change. Gated on
-  // a scored/verify run (a bid/ask/exit/depth level or --profile), matching the trio's intent.
+  // ── DAILY TRAJECTORY — the multi-day price path + a heuristic shape read, surfaced by DEFAULT so a
+  // scored/verify read can't skip the trajectory in favour of just the reach/placement fields (the
+  // under-read this prevents: reading reach/placement and ignoring the `days` series sitting in the
+  // same dump). Console rendering of data already in `result.days`/`profMargin` — no new computation,
+  // no JSON/number change. Gated on a scored/verify run (a bid/ask/exit/depth level or --profile).
   const isVerifyRun = BID != null || ASK != null || EXIT != null || DEPTH_QTY != null || A.profile !== undefined;
   if (isVerifyRun && scored.length) {
     log(`  --- DAILY TRAJECTORY (window low/high per day, oldest→newest)`);
@@ -571,24 +546,22 @@ for (const want of positionals) {
     // diurnal dip/peak summary — ONLY when --profile didn't already print the full profile block above.
     if (A.profile === undefined && profMargin) {
       const tr = profMargin.trendPerDay;
-      // PLAN-DIURNAL-RECENCY-GUARD Chunk 2c (2026-08-12) — the LAST bare diurnal level on this surface.
-      // Chunk 2 tagged the --profile block's window headers (:303/:305) and Chunk 2b the `→ BID/ASK`
-      // recommendation (:333) — but BOTH of those live inside `if (A.profile !== undefined)`, and this
-      // line only renders when `A.profile === undefined`. The two are mutually exclusive by
-      // construction, so every fix so far missed the branch a plain `--ask`/`--bid`/`--exit` run takes:
-      // this was the ONLY diurnal read a scored (non---profile) run printed, and it printed both levels
-      // bare. That is the branch the Green dragon leather 1,904 exit was read off.
+      // PLAN-DIURNAL-RECENCY-GUARD Chunk 2c — the diurnal levels on THIS branch carry reality clauses
+      // too. This line renders only when `A.profile === undefined`, mutually exclusive with the
+      // --profile block's tagged window headers and its `→ BID/ASK` recommendation, so it is the ONLY
+      // diurnal read a scored (non---profile) `--ask`/`--bid`/`--exit` run prints — the branch the Green
+      // dragon leather 1,904 exit was read off.
       //
       // BID-SIDE GATE — why there is no `bidBasis` test here, and what would make one REQUIRED. The
-      // number on this line is `profMargin.dip.level` VERBATIM, which is exactly the level
-      // `hourProfile` computed `dip.reality` against (js/windowread.mjs:1312 —
-      // `dipObj.reality = computeReality(clusterDays(dipC.set), dipObj.level, 'bid')`). No
-      // `deriveDiurnalRange` result is rendered here, so the stale-to-live reprice ( — `deriveDiurnalRange`'s `bid >= liveLo` reprice branch, which
-      // is what makes `dr.bid` stop being the dip level) cannot have happened to this number — the
-      // clause describes the printed price, which is the whole rule. If this line is ever changed to
-      // print `dr.bid` instead, the `dr.bidBasis === 'live' ? '' : …` gate from :331 MUST come with it
-      // in the same edit; without it a repriced live price would be labelled with the dip level's
-      // conditions. The ask has no such hazard on either line (peak.level passes through untouched).
+      // number on this line is `profMargin.dip.level` VERBATIM, exactly the level `hourProfile` computed
+      // `dip.reality` against (js/windowread.mjs:1312 — `dipObj.reality =
+      // computeReality(clusterDays(dipC.set), dipObj.level, 'bid')`). No `deriveDiurnalRange` result is
+      // rendered here, so its stale-to-live reprice (the `bid >= liveLo` branch, which is what makes
+      // `dr.bid` stop being the dip level) cannot have happened to this number — the clause describes
+      // the printed price, which is the whole rule. If this line is ever changed to print `dr.bid`, the
+      // `dr.bidBasis === 'live' ? '' : …` gate on the --profile recommendation MUST come with it in the
+      // same edit; without it a repriced live price would be labelled with the dip level's conditions.
+      // The ask has no such hazard on either line (peak.level passes through untouched).
       const dipRCShort = realityClause(profMargin.dip.reality, { side: 'bid', fmt, style: 'short' });
       const peakRCShort = realityClause(profMargin.peak.reality, { side: 'ask', fmt, style: 'short' });
       log(`    diurnal: dip ${fmtHourRange(profMargin.dip.startH, profMargin.dip.endH)} ${fmt(profMargin.dip.level)}${dipRCShort ? ' ' + dipRCShort : ''} · peak ${fmtHourRange(profMargin.peak.startH, profMargin.peak.endH)} ${fmt(profMargin.peak.level)}${peakRCShort ? ' ' + peakRCShort : ''} · amp ${profMargin.amplitudePct != null ? (profMargin.amplitudePct * 100).toFixed(1) + '%' : '—'} · trend ${tr == null ? '—' : (tr >= 0 ? '+' : '') + fmt(Math.round(tr)) + '/day'}`);
@@ -596,13 +569,13 @@ for (const want of positionals) {
   }
 
   log(`  ---`);
-  // Chunk 2b (2026-08-12) — the recent-N level is the ONLY level on these two menu lines that carries
-  // information not already implied by its own label. `~50% of days` / `~75%` / `every day` ARE quantiles
-  // of this very distribution (quantHigh's header, js/windowread.mjs:31-32: `ask ≤ (1−p)-quantile ⇔
-  // reached on ≥p of days`), so annotating them with reach/placement would restate the label. The
-  // recent-N level is fitted over a DIFFERENT (recent) window, so it can be a spike-top against the full
-  // one — which is exactly what happened: `recent-3 ~50%: 1,904` was quoted as a Green dragon leather
-  // exit off this line while the profile block two screens up already tagged 1,904 `⚠ spike-top`.
+  // Chunk 2b — the recent-N level is the ONLY level on these two menu lines that carries information not
+  // already implied by its own label. `~50% of days` / `~75%` / `every day` ARE quantiles of this very
+  // distribution (quantHigh's header, js/windowread.mjs:31-32: `ask ≤ (1−p)-quantile ⇔ reached on ≥p of
+  // days`), so annotating them with reach/placement would restate the label. The recent-N level is fitted
+  // over a DIFFERENT (recent) window, so it can be a spike-top against the full one — as happened when
+  // `recent-3 ~50%: 1,904` was quoted as a Green dragon leather exit off this line while the profile
+  // block two screens up had already tagged 1,904 `⚠ spike-top`. Hence the reality clause here.
   const rq = (side, p) => {
     const v = recentQuant(scored, side, p, RECENT_NIGHTS);
     if (v == null) return '';
@@ -730,10 +703,10 @@ for (const want of positionals) {
     // + daily windowStats series (scored) the trajectory note already used this pass (ZERO new fetch). The
     // shell computes driftExitFrom off these; absent them it degrades (forward fields null). On a KNIFE
     // driftExitFrom returns a labeled trend-only level (never a crash) — no new detector call site here.
-    // PLAN-ESTIMATOR-HONEST-SELL follow-up (2026-07-22): pass THIS niche's own driftInform.holdDays
-    // (band/churn/scalp → DRIFT_INTRADAY_HOLD_DAYS ~2h) rather than inheriting the shell's bare
-    // OSC_HOLD_HORIZON_DAYS=1.5d oscillation-forecast default (NOT the amplitude hold — that is 4d since DT1) — mirrors the screen's F-C wiring so the forward
-    // "list at X (~Nd hold)" scales to the niche the fold is computed against, not a 1.5d amplitude cycle.
+    // PLAN-ESTIMATOR-HONEST-SELL: pass THIS niche's own driftInform.holdDays (band/churn/scalp →
+    // DRIFT_INTRADAY_HOLD_DAYS ~2h) rather than inheriting the shell's bare OSC_HOLD_HORIZON_DAYS=1.5d
+    // oscillation-forecast default (NOT the amplitude hold — that is 4d per DT1). Mirrors the screen's
+    // F-C wiring so the forward "list at X (~Nd hold)" scales to the niche the fold is scored against.
     extra.forward = (profMargin && scored && scored.length)
       ? { profile: profMargin, days: scored, holdHorizonDays: FLIP_NICHES[NICHE]?.driftInform?.holdDays }
       : null;
@@ -742,23 +715,23 @@ for (const want of positionals) {
       const nicheTag = NICHE === 'band' ? '' : ` [--niche ${NICHE}]`;
       const recFull = r => r ? ` (recent ${r.recentHit != null ? r.recentHit : '—'}/${r.recentDays != null ? r.recentDays : '—'} · full ${r.reachedDays}/${r.nDays})` : '';
       // THE THREE-PART SELL READ (E3, the DRILLED surface): (1) the HONEST best-case margin at the raw exit
-      // (netMargin — NEVER BE-clamped to a false "+1") + (2) its P(fill) (askReachFactor on the RECENT-3
-      // display basis since RB-3, with the full-window value — which is what the RANK still carries — shown
-      // beside it when they differ) + (3) the FORWARD "list at X" (driftExitFrom, phase-aware, hold-horizon
-      // + confidence ordinal).
+      // (netMargin — NEVER BE-clamped to a false "+1") + (2) its P(fill) (askReachFactor on the FULL-WINDOW
+      // basis, the basis the RANK also carries, with the recent-3 value shown beside it when the two
+      // differ) + (3) the FORWARD "list at X" (driftExitFrom, phase-aware, hold-horizon + confidence
+      // ordinal).
       // The reach-fold rides ALONGSIDE, labeled SECONDARY/phase-blind (the correct read for a confirmed
       // knife); beFloored is a caution on that fold, never a market fact. NO "which is authoritative" claim —
       // both ship until the F-G realized-fill retro adjudicates (rule 4, n≈0 on the forward).
       if (askScoreLevel != null) {
         const rawNet = netMargin(est.estBuy, askScoreLevel);   // honest best-case margin (un-BE-clamped)
         const sign = rawNet != null && rawNet > 0 ? '+' : '';
-        // BASIS FLIP 2026-08-09: est.pFill is the FULL-WINDOW probability again (matching the full-window
-        // fold price on the same line — js/estimators/pair.mjs). The dual-basis print stays, INVERTED:
-        // full window is primary, recent-3 rides beside it whenever the two differ, so the basis change is
-        // VISIBLE rather than silently swapped (the `⚠ exemption dropped — … rank X (was Y)` precedent,
-        // EF1(b)). Equal ⇒ the single value, no noise (the suppress-when-unmoved rule). Keeping the recent-3
-        // number ON the line is the point: the freshness read is not discarded, it just no longer sets the
-        // number. The full-window read is ALSO what the rank carries — display and rank now agree.
+        // BASIS: est.pFill is the FULL-WINDOW probability, matching the full-window fold price on the same
+        // line (js/estimators/pair.mjs), and it is the basis the RANK carries — display and rank agree.
+        // The print is DUAL-BASIS: full window primary, recent-3 beside it whenever the two differ, so a
+        // basis difference is VISIBLE rather than silently swapped (the `⚠ exemption dropped — … rank X
+        // (was Y)` precedent, EF1(b)). Equal ⇒ the single value, no noise (the suppress-when-unmoved
+        // rule). Keeping the recent-3 number ON the line is the point: the freshness read is shown, it
+        // just does not set the number.
         const pfFull = est.pFill != null ? Math.round(est.pFill * 100) : null;
         const pfRecent = est.pFill != null ? Math.round(askReachFactor(extra.askReach, 0, { prefer: 'recent' }) * 100) : null;
         const pf = pfFull != null
@@ -780,9 +753,9 @@ for (const want of positionals) {
   }
   // DE2 (PLAN-DEPTH-EXIT) — --depth <qty>: the percentile-DEPTH "BOOK AT ≤ X" read (clearableAsk — the
   // highest ask <qty> can actually book at ≥ targetFrac of days). A thin book collapses to a null WITH its
-  // reason (never a silent degrade — the surfacing rule). PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1
-  // (2026-07-22): the per-day depthDays flow tables (ask + bid) and the low-side clearableBid "CATCH AT ≥ X"
-  // line were REMOVED (narrow removal — inspector-only DE1/DE6 reads); clearableAsk survives (live DE3 shadow).
+  // reason (never a silent degrade — the surfacing rule). There are no per-day depthDays flow tables and
+  // no low-side clearableBid "CATCH AT ≥ X" line (PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1 —
+  // inspector-only DE1/DE6 reads); clearableAsk stays (the live DE3 shadow).
   if (DEPTH_QTY != null) {
     result.depth = { qty: DEPTH_QTY };
     const ca = clearableAsk(series, { qty: DEPTH_QTY, wStart: W_START, wEnd: W_END, nights: NIGHTS });
@@ -819,11 +792,11 @@ for (const want of positionals) {
       } else {
         log(`    (too few scored days to form a band — need ≥5)`);
       }
-      // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2 (2026-07-22): the DC2 per-hour demand-CYCLE block
-      // (demandRegime — per-hour pressure track + buy/sell windows + the price-shape cross-check) was
-      // REMOVED (narrow removal — Extension-B DC1/DC3 demand-cycle reads had no live decision consumer).
-      // The base demand-BALANCE ratio + the reachableBand (Extension A) above SURVIVE (they power the
-      // pressure sell-model). Revive demandRegime from git if the per-hour cycle read is wanted again.
+      // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2: there is no DC2 per-hour demand-CYCLE block
+      // (demandRegime — per-hour pressure track + buy/sell windows + the price-shape cross-check); those
+      // Extension-B DC1/DC3 reads had no live decision consumer. The base demand-BALANCE ratio + the
+      // reachableBand (Extension A) above stay — they power the pressure sell-model. Revive demandRegime
+      // from git if the per-hour cycle read is wanted again.
       log(`    (pressure = medVolHi/medVolLo; φ slope + PRESSURE_* are PLACEHOLDERS, n≈0 — the reachable price is where price TRADED, not a verified fill · inform-only)`);
     }
   }

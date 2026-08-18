@@ -1,7 +1,14 @@
 # PLAN-THIN-RESERVE — should `THIN_RESERVE` be widened, or capital-scaled, or replaced?
 
-**Status: INVESTIGATION ONLY (2026-08-09). No code changed. RECOMMENDATION: DO NOT WIDEN, DO NOT
-DEFAULT-ON `--scale-pool`, DO NOT BLEND TO MERIT.** The starting hypothesis — "`THIN_RESERVE = 6`
+**Status: INVESTIGATION DONE; TR1/TR2/TR3 ALL STILL OPEN — no code changed and only ONE of TR1's four
+doc edits landed** (`PLAN.md`'s "Thin-reserve should scale with `--capital`" entry, `PLAN.md:1102`).
+Still missing: the CAPITAL-CONDITIONED-RESERVES §5e caveat (`PLAN.md:1155-1176`), the `THIN_RESERVE`
+note on `pipeline/lib/signal/admission.mjs`'s ⚠ scaffolding header (`:77-99`), the `docs/MARKET-ANALYSIS.md`
+§fetch-pool correction (`:363`), TR2's displacement line + fixture, and TR3's comment.
+**RECOMMENDATION, as amended by this doc's own R5/R6: DO NOT WIDEN, DO NOT DEFAULT-ON `--scale-pool`,
+DO NOT BLEND TO MERIT — *at present capital*. The closure is CAPITAL-CONDITIONAL, not permanent**
+(revisit at ~150–200m deployable), and the reason to cite is "capital binds before slots", NOT §3c
+(DOWNGRADED: n=20, 47% non-flips, CI [0.26%,7.04%], the 2.8× figure unreproduced). The starting hypothesis — "`THIN_RESERVE = 6`
 is a hard quota that starves a 3.34m/d big-ticket, so widen it (or turn on the capital curve)" —
 is **mechanically correct and economically backwards**. Widening it is free in fetch cost, so the
 question is never "can we afford it"; it is a pure 1-for-1 *reallocation* from the cheap-churn

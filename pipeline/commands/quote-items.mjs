@@ -74,7 +74,7 @@ const REVERSE_FLIP = path.join(HERE, '..', '..', 'reverse-flip-state.json');   /
 // a re-run inside the TTL is fetch-free. Same 15-min TTL as screen's TS_TTL_1H.
 const TS_TTL_1H_EXIT = 15 * 60 * 1000;
 // Incidental-inventory filter — shared threshold + watchlist exemption with watch-positions.mjs
-// (the /positions skill's incidental-inventory rule, code-enforced 2026-07-16).
+// (the /positions skill's incidental-inventory rule, code-enforced here rather than left as prose).
 const NOISE_OFFER_GP = 100_000;
 const WATCHLIST_PATH_Q = path.join(HERE, '..', '..', 'watchlist.json');
 function loadWatchlistIds(map) {
@@ -91,7 +91,7 @@ function loadWatchlistIds(map) {
 
 const args = process.argv.slice(2);
 const POSITIONS_MODE = args.includes('--positions');
-// PLAN-OUTPUT-TABLE (2026-07-13): the per-item table's DEFAULT view is the reconciliation-estimator
+// PLAN-OUTPUT-TABLE: the per-item table's DEFAULT view is the reconciliation-estimator
 // pair (Est. buy/sell/Net/BE, confidence in the cells — estimatePair, PLACEHOLDER model n≈14);
 // --raw restores the model-free Quick + Optimistic columns. --positions is INTENT-DIFFERENT (the
 // held-lot clear-price/list-at frame) and keeps Quick/Optimistic unconditionally — see runPositions.
@@ -138,7 +138,7 @@ function hhmm(tsSec) { return tsSec == null ? '—' : new Date(tsSec * 1000).toL
 // STALE-LIVE guard note (QUICK_FRESH_MIN, quotecore): fires on ANY lot whose displayed "live"
 // instabuy/instasell is an OLD /latest print rather than a live tick — the class of error where a
 // 64-min-old godsword instabuy (39.75m) rendered as live and drove a false pace read while the true
-// price had fallen ~500k (2026-07-21). Names the stale side + its age and points at the fresher side
+// price had fallen ~500k. Names the stale side + its age and points at the fresher side
 // as the truer current level, so no surface can quote a stale number without the age attached.
 function staleLiveNote(name, itemId, row) {
   const qs = row.quickStale; if (!qs || (!qs.buy && !qs.sell)) return null;
@@ -184,8 +184,8 @@ const EST_EXPLAINER = `(Est. buy/sell are ESTIMATES — reach-folded, PLACEHOLDE
 // per-kind sigil now lives in render.mjs's formatNote (NOTE_KINDS), not at the push site. The
 // keepEmpty:true notes section reproduces the pre-VZ3 pattern where the block was always two
 // unconditional console.log calls (a blank then the joined lines) even with zero notes.
-// Fold the multi-day trajectory read onto EVERY quote surface (Ben 2026-07-21 — the fang under-read
-// fix). The exact under-read the fang exposed: reach/placement read "fill-now A-" while the
+// Fold the multi-day trajectory read onto EVERY quote surface (the fang under-read fix). The exact
+// under-read the fang exposed: reach/placement read "fill-now A-" while the
 // `days` array (already in hand from windowStats) showed an oscillator sitting at its 2-week floor.
 // Renders the full DAILY TRAJECTORY block (per-day low/high, oldest→newest) + ONE combined floor/ceiling
 // note. R6 (PLAN-SIGNAL-RECENCY): the trajectoryRead SHAPE synthesis line is RETIRED — its blended-mid
@@ -229,17 +229,17 @@ function localDayKey(d = new Date()) {
 // pushTrajectory just returned (the SAME multi-day floor read) — it drives the @floor floor-aware cue
 // (caution on a breaking floor, favorable on a dip-in-uptrend) with NO re-derived slope. Inform-only,
 // never a gate; null profile → no note; null fc → the cue honestly degrades to the bare 'buy now'.
-// DT4 (2026-08-10): the dip HOURS are gated on windowReliability's split-half r; the FLOOR level and the
+// DT4: the dip HOURS are gated on windowReliability's split-half r; the FLOOR level and the
 // floor-aware cue are unaffected. `ts1h` (the RAW in-hand 1h series) is what the gate needs — it pins its
 // own 14-day window, because at the nights=7 window this note's profile uses, the parity halves fall under
 // HOURPROFILE_MIN_DAYS and the gate is uncomputable for ~100% of items. Both call sites pass ts1h; without
 // it `reliable` stays null and the note honestly says the hours are unverified rather than asserting them.
-// DT4b (2026-08-10) — the `prof` PARAMETER WAS DELETED, deliberately. The dip WINDOW this note prints
-// has to be fitted over the window the gate verified (the fit-window transfer gap; see displayFitNights),
-// and the only caller that passed `prof` handed in a nights:7 fit built for OTHER consumers — so an
-// optional caller-supplied profile is exactly the basis-mismatch hole this chunk exists to close. This
-// now always fits its own profile at the resolved `fitNights`, which makes the mismatch unrepresentable
-// rather than merely unlikely. Pass `lap` (the already-built diurnalTimedLap) to reuse its resolved
+// DT4b — there is deliberately NO `prof` PARAMETER. The dip WINDOW this note prints has to be fitted
+// over the window the gate verified (the fit-window transfer gap; see displayFitNights), and a
+// caller-supplied profile is exactly the basis-mismatch hole this closes (the one caller that had one
+// handed in a nights:7 fit built for OTHER consumers). This always fits its own profile at the resolved
+// `fitNights`, which makes the mismatch unrepresentable rather than merely unlikely. Pass `lap` (the
+// already-built diurnalTimedLap) to reuse its resolved
 // basis at zero recompute; without one — the --positions site has no lap — it resolves its own.
 function pushSoftBuy(notes, { ts1h = null, live = null, itemId = null, fc = null, durable = null, lap = null } = {}) {
   if (!ts1h) return;
@@ -322,7 +322,7 @@ async function runItems() {
   const hist = loadGuideHistory(GUIDE_HISTORY);   // YP1 advisory (gated → silent until history accrues)
   const buysByItemMap = loadBuysByItem();   // LM1: per-item 4h buy-limit windows (regime-line + limitValidator)
   const holdThesisStore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));   // PLAN-OUTPUT-TABLE rev2: declared exits anchor Est. sell (READ-ONLY)
-  // FIX 1 (2026-07-13): a declared exit is a HELD-LOT plan, so an ad-hoc per-item read anchors Est. sell
+  // FIX 1: a declared exit is a HELD-LOT plan, so an ad-hoc per-item read anchors Est. sell
   // to it ONLY when that id is actually held (an open lot in positions.json) — never on a bare "how's X"
   // read of an item we don't hold. Build the open-position id set once (read-only; degrades to empty).
   const heldIds = new Set();
@@ -341,11 +341,11 @@ async function runItems() {
   const warm24h = loadAll24hWarm();
   const rows = [], notes = [], sugg = [], probeStrs = [];
   for (const { id, name } of resolved) {
-    // COD-4: BUDGETED ts1h fetch (1–2 items/invocation — cheap). Fixes the A4 asymmetry: the explicit-ask
-    // surface used to fetch NO 1h series, so reach/trajectory DEGRADED to pass on exactly the surface Ben
-    // uses most ("how's X?"). Now the 1h series is in hand, so reachValidator FIRES (real window read) and
-    // trajectoryValidator fires off the warm 1h-derived term structure, and we print the diurnal timing line.
-    // SF-2 (2026-07-10): this ts1h fetch is UNCAPPED — the "1–2 items/invocation" budget is a usage
+    // COD-4: BUDGETED ts1h fetch (1–2 items/invocation — cheap). Closes the A4 asymmetry: without a 1h
+    // series reach/trajectory DEGRADE to pass on exactly the surface Ben uses most ("how's X?"). With it
+    // in hand reachValidator FIRES (real window read), trajectoryValidator fires off the warm 1h-derived
+    // term structure, and the diurnal timing line can print.
+    // SF-2: this ts1h fetch is UNCAPPED — the "1–2 items/invocation" budget is a usage
     // convention, NOT enforced, so `quote A B C … J` amplifies the 1h fetch count one-per-item linearly.
     // Fine at the intended handful; if large-batch quotes ever become routine, add a soft cap here
     // (skip the ts1h enrichment past N items, degrading reach/diurnal to "not fetched — batch too large").
@@ -361,9 +361,10 @@ async function runItems() {
     // PHASE — computed ONCE here, up front, because every diurnalForecast/driftExitFrom ctx below needs it.
     // DO NOT write `phase: row.phase`: computeQuote() returns NO `phase` field (js/quotecore.js:470-479),
     // so that reads `undefined` and js/forecast.mjs's `ctx.phase === 'spike'|'decay'` post-shock-shape
-    // refusal is FAIL-OPEN by absence — the exact 2026-08-06 Snape-grass miss the refusal exists to stop.
-    // It shipped that way at 3 sites in this file and passed check-forecast-guards.mjs, which used to match
-    // the WORD `phase` in the argument text; it now resolves the VALUE. Reused at the validator ctx below.
+    // refusal is FAIL-OPEN by absence — the Snape-grass miss the refusal exists to stop.
+    // check-forecast-guards.mjs resolves the VALUE rather than matching the WORD `phase` in the argument
+    // text, precisely because that spelling passed a word-match guard at 3 sites in this file.
+    // Reused at the validator ctx below.
     const ph = phase(inp.ts6h);
     const std = stdCells(name, row);   // PLAN-OUTPUT-TABLE: the row is pushed AFTER the est pair is computed below (view-dependent cells)
     const limWin = limitWindow({ buys: buysByItemMap.get(id) || [], limit: map.byId[id]?.limit ?? null });
@@ -402,13 +403,11 @@ async function runItems() {
     // range, bid/ask reach, hold horizon, base trend, liquidity/tranche segment). prof/dr above are KEPT
     // AS-IS — they still feed extraEst.diurnal, windowClear's peak window, pushTrajectory, and the
     // forward E4 inputs below (zero behavior change to those paths).
-    // DT4b (2026-08-10) CORRECTS what this comment used to claim: it said diurnalTimedLap "recomputes its
-    // own hourProfile internally off the SAME inp.ts1h/nights:7 … so dr.bid/dr.ask are identical to what
-    // the timed lap derives". That is NO LONGER TRUE on a gate-PASSING item — the lap now refits over the
-    // gate's 14-day window (displayFitNights), so its bid/ask can differ from `dr`'s. This is intended and
-    // is the point of the chunk: the lap renders the window that was VERIFIED, while `dr`/`prof` stay on
-    // the 7-day basis their own consumers were built and measured against. Read `timedLap.fitNights` if
-    // you need to know which basis a lap is on; do NOT assume the two agree.
+    // DT4b — `dr.bid`/`dr.ask` are NOT identical to what the timed lap derives. On a gate-PASSING item the
+    // lap refits over the gate's 14-day window (displayFitNights), so its bid/ask can differ from `dr`'s:
+    // the lap renders the window that was VERIFIED, while `dr`/`prof` stay on the 7-day basis their own
+    // consumers were built and measured against. Read `timedLap.fitNights` for which basis a lap is on;
+    // do NOT assume the two agree.
     // §7 softened: no note on a degrade (formatTimedLap returns null).
     const timedLap = { ...diurnalTimedLap(inp.ts1h, {
       nights: 7, buyLimit: map.byId[id]?.limit ?? null, volDay: row.volDay ?? null,
@@ -417,7 +416,7 @@ async function runItems() {
     const timedLapText = formatTimedLap(timedLap, { fmt });
     if (timedLapText) notes.push({ kind: 'diurnal', itemId: id, text: timedLapText });
     // (SOFT-BUY moved below pushTrajectory so its @floor cue can reuse the floorCeilingTrack fc — see there.)
-    // #6 (PF1 forecast, Ben 2026-07-15): the module's motivating ask — "not buyable/sellable at a good
+    // #6 (PF1 forecast): the module's motivating ask — "not buyable/sellable at a good
     // price NOW, but ~Xh from now." whenBuyable/whenSellable over ONE diurnalForecast (all js/forecast.mjs).
     // Inform-only, provisional (n≈0, diurnal+trend only) — zero new fetch (reuses the in-hand prof); never
     // a table/verdict/price input. The projection is computed ONCE and shared by both timing lines.
@@ -439,8 +438,8 @@ async function runItems() {
     }
     // SELL timing (HELD lot only — a non-held read is a buy decision): when does the projected high reach
     // your target ask? Target = the DECLARED thesis exit if set, else the reachable band top (optSell).
-    // "not sellable now" = the live instabuy sits below the target. whenSellable's held-lot home (was the
-    // #6 follow-up marker) — zero new fetch, the same shared fc.
+    // "not sellable now" = the live instabuy sits below the target. whenSellable's held-lot home — zero
+    // new fetch, the same shared fc.
     if (fc && heldIds.has(id) && row.quickSell != null) {
       const targetAsk = (thesisFor(holdThesisStore, id)?.exitPrice ?? null) ?? row.optSell;
       if (targetAsk != null && row.quickSell < targetAsk) {          // can't sell at the target at the live instabuy now
@@ -483,9 +482,9 @@ async function runItems() {
       ? { reachedDays: touchedDays(ast.lows, row.optBuy), nDays: ast.lows.length, recentHit: bidRc?.recentHit, recentDays: bidRc?.recentDays } : null;
     const askReach = (ast && ast.his && ast.his.length && row.optSell != null)
       ? { reachedDays: reachedDays(ast.his, row.optSell), nDays: ast.his.length, recentHit: askRc?.recentHit, recentDays: askRc?.recentDays } : null;
-    // PLAN-QUOTE-PLACEMENT (Ben 2026-07-17): fold read-window-range.mjs's --bid/--ask placement percentile
-    // onto the quote itself — Ben had to fall back to a manual read-window-range.mjs run for this on every
-    // overnight-listing decision. Zero new fetch: reuses the SAME ast.lows/ast.his + bidReach/askReach
+    // PLAN-QUOTE-PLACEMENT: fold read-window-range.mjs's --bid/--ask placement percentile onto the quote
+    // itself, so an overnight-listing decision needs no separate manual read-window-range.mjs run.
+    // Zero new fetch: reuses the SAME ast.lows/ast.his + bidReach/askReach
     // already computed above for the patient pair (row.optBuy/row.optSell). Mirrors read-window-range.mjs's
     // wording exactly (touched/reached k/N · recent m/3 · placement pXX of the N-day daily-LOW/HIGH
     // distribution); degrades to whichever side has usable data, and is skipped entirely when neither does
@@ -562,12 +561,13 @@ async function runItems() {
       // PLAN-ESTIMATOR-HONEST-SELL E4: the FORWARD "list at X" inputs — the SAME in-hand hourProfile (prof)
       // + daily windowStats series (ast.days) this file already computes for its trajectory/diurnal notes
       // (ZERO new fetch). The shell computes driftExitFrom off these; absent them → forward fields null (degrade).
-      // Follow-up (2026-07-22): this file quotes every row against FLIP_NICHES.band (line below), so the
-      // forward horizon is band's own driftInform.holdDays (~2h), NOT the shell's 1.5d OSC_HOLD_HORIZON_DAYS default (which is NOT the amplitude hold — that is 4d since DT1) —
-      // matching the screen's F-C niche-conditioning so "list at X (~Nd hold)" isn't a mis-scaled 1.5d.
-      // `phase` rides the bundle because pair.mjs is a PURE module with no series of its own — it used to
-      // read `row.phase` (nonexistent ⇒ undefined ⇒ forecast's post-shock-shape refusal fail-open). The
-      // series lives here, so the caller resolves it and hands over the value.
+      // This file quotes every row against FLIP_NICHES.band (line below), so the forward horizon is band's
+      // own driftInform.holdDays (~2h), NOT the shell's 1.5d OSC_HOLD_HORIZON_DAYS default (which is NOT
+      // the amplitude hold — that is 4d per DT1) — matching the screen's F-C niche-conditioning so
+      // "list at X (~Nd hold)" isn't a mis-scaled 1.5d.
+      // `phase` rides the bundle because pair.mjs is a PURE module with no series of its own; reading
+      // `row.phase` instead would be nonexistent ⇒ undefined ⇒ forecast's post-shock-shape refusal
+      // fail-open. The series lives here, so the caller resolves it and hands over the value.
       forward: (prof && ast && ast.days && ast.days.length)
         ? { profile: prof, days: ast.days, phase: ph?.phase ?? null, holdHorizonDays: FLIP_NICHES.band.driftInform?.holdDays }
         : null,
@@ -634,9 +634,9 @@ async function runItems() {
 }
 
 async function runPositions() {
-  // ALWAYS sync first (Ben, 2026-07-16 — prose "sync before every read" was skipped repeatedly
-  // because it was only a doctrine, never enforced; a real position closed unnoticed as a result,
-  // see the anglerfish anchor incident). Local/zero-git, cheap, never blocks the read on failure.
+  // ALWAYS sync first — "sync before every read" as CODE, not doctrine: as prose it was skipped
+  // repeatedly and a real position closed unnoticed (the anglerfish anchor incident).
+  // Local/zero-git, cheap, never blocks the read on failure.
   // AR1: the ONE shared invocation (pipeline/lib/sync-invoke.mjs).
   runLocalSync({ offBookNote: 'reading off the current book' });
 
@@ -648,16 +648,14 @@ async function runPositions() {
 
   const { err, groups: allGroups, openLots, ageMin } = readOpenPositions(POSITIONS);
   if (err) { console.error('cannot read positions.json: ' + err); process.exit(1); }
-  // TERMINAL-STATE EMISSION (2026-08-10, found by adversarial audit). Both early returns below used to
-  // report through bare `console.log`, which main() stubs to a no-op under the QUIET DEFAULT — so a book
-  // whose every lot is incidental printed ZERO BYTES and exited 0, indistinguishable from a crash or a
-  // hang. They also returned BEFORE writeLastReport, leaving `last-report/quote.json` holding an OLDER
-  // run that an agent following the AO1 read-the-dump contract would consume as current. Silent success
-  // plus silently-stale data is the worst pair on this surface.
-  //   This is the SAME bug class already documented and fixed at screen-flip-niches.mjs:530 ("a safety
-  // disclosure that a verbosity flag can suppress is not a disclosure") — it simply was never swept here.
-  // Every terminal path now emits like the successful one: render (verbose), dump ALWAYS, realLog a
-  // one-liner when quiet.
+  // TERMINAL-STATE EMISSION. An early return must NOT report through bare `console.log`: main() stubs
+  // that to a no-op under the QUIET DEFAULT, so a book whose every lot is incidental prints ZERO BYTES
+  // and exits 0, indistinguishable from a crash or a hang. It must also not return BEFORE
+  // writeLastReport, which would leave `last-report/quote.json` holding an OLDER run that an agent
+  // following the AO1 read-the-dump contract consumes as current. Silent success plus silently-stale
+  // data is the worst pair on this surface. Same bug class as screen-flip-niches.mjs:530 ("a safety
+  // disclosure that a verbosity flag can suppress is not a disclosure"). Every terminal path emits like
+  // the successful one: render (verbose), dump ALWAYS, realLog a one-liner when quiet.
   const finishEarly = (msg) => {
     const report = buildQuoteReport({ mode: 'positions', header: msg + '\n', headers: [], rows: [], notes: [] });
     console.log(renderReport(report));            // no-op unless --verbose, exactly like the main path
@@ -673,8 +671,8 @@ async function runPositions() {
   try { snap = await loadSnapshot({ budgetIds: ids }); } catch { snap = null; }
   const map = snap ? snap.mapping : await loadMapping();
   const guide = snap ? snap.guide : await loadGuide();
-  // Incidental-inventory filter (code-enforced 2026-07-16, matches watch-positions.mjs — was
-  // /positions skill prose only): a lot worth < NOISE_OFFER_GP and NOT on the watchlist never
+  // Incidental-inventory filter (code-enforced here rather than left as /positions skill prose; matches
+  // watch-positions.mjs): a lot worth < NOISE_OFFER_GP and NOT on the watchlist never
   // reaches the table/verdict loop at all. Collapsed into one summary line instead.
   const watchlistIds = loadWatchlistIds(map);
   const incidentalNames = [];
@@ -787,7 +785,7 @@ async function runPositions() {
     // EXISTING mom tell re-voiced as ladder guidance, no new number). Sibling line off the verdict (the
     // renderPathLine pattern) — the verdict string + momVerdict are UNTOUCHED (no APP_VERSION, no
     // byte-identity break); never an alert/reprice input. The lean askHeadroom field is logged via suggestionEntry.
-    // Proposal C (2026-07-12): stale declared-exit auto-flag — INFORM-ONLY. When the hold thesis
+    // Proposal C: stale declared-exit auto-flag — INFORM-ONLY. When the hold thesis
     // declares a numeric exit, score it against the recent full-day reach history (lib/staleexit.mjs
     // — windowread's own windowStats/recencySplit/recentQuant, the reachValidator machinery). A
     // declared exit recent nights no longer print gets a NOTE naming the reachable level (the
@@ -831,7 +829,7 @@ async function runPositions() {
     const ahHeld = askHeadroomText(row);
     if (ahHeld) notes.push({ kind: 'askHeadroom', itemId, text: `${name}: ask headroom — ${ahHeld}` });
     else if (row.mom === 'breakup' && row.optSell != null) notes.push({ kind: 'askHeadroom', itemId, text: `${name}: list @ ${fmtP(row.optSell)} is a FLOOR, not a target — live broke +${(row.momPct * 100).toFixed(1)}% above the 2h band; step the ask above the live print (the GE better-price rule fills higher if depth is there). Inform-only, n=1.` });
-    // PLAN-QUOTE-PLACEMENT (Ben 2026-07-17): the same reach/placement fold as the plain-quote path above,
+    // PLAN-QUOTE-PLACEMENT: the same reach/placement fold as the plain-quote path above,
     // on the held-lot view — inp.ts1h is already fetched unconditionally for this booked-lots row (the
     // PLAN-VOL24 parity fix above), so this is zero new fetch. Degrades/skips the same way.
     const astHeld = inp.ts1h ? windowStats(inp.ts1h, { nights: 14, wStart: 0, wEnd: 0 }) : null;
@@ -842,10 +840,10 @@ async function runPositions() {
     const bidPlaceHeld = bidReachHeld ? placement(astHeld.lows, row.optBuy) : null;
     const askPlaceHeld = askReachHeld ? placement(astHeld.his, row.optSell) : null;
     const pct = f => 'p' + Math.round(f * 100);
-    // PLAN-POSITIONS-WINDOW-READ (Ben, 2026-07-18): for a BIG-TICKET held lot (lot value ≥ BIG_TICKET_GP,
-    // or a watchlist member — the same force-include the incidental filter uses), auto-surface the full
-    // ask-side window-clear / "typical exit" read that used to require a manual `read-window-range.mjs
-    // "<item>" --ask <level>` — the daily-HIGH typical-exit levels, the list-price reach/placement, the
+    // PLAN-POSITIONS-WINDOW-READ: for a BIG-TICKET held lot (lot value ≥ BIG_TICKET_GP, or a watchlist
+    // member — the same force-include the incidental filter uses), auto-surface the full ask-side
+    // window-clear / "typical exit" read, so it needs no manual `read-window-range.mjs "<item>" --ask
+    // <level>` — the daily-HIGH typical-exit levels, the list-price reach/placement, the
     // less-smoothed 5m-grain reach, live-instabuy-vs-list, and which diurnal window the level prints in.
     // ONE assembly via the shared askExitRead (byte-parity with read-window-range's --ask block); ZERO new
     // fetch (inp.ts1h is already in hand; the 5m grain is a best-effort local archive read via snap). The
@@ -876,7 +874,7 @@ async function runPositions() {
         const profH = hourProfile(inp.ts1h, { nights: 14 });
         const drH = profH ? deriveDiurnalRange(profH, {}) : null;
         // thread the /latest print AGE + staleness (row.quoteAgeMin/row.quickStale) into the live object so
-        // the reach-margin pace read refuses to run off a stale tick (the 64-min godsword anchor, 2026-07-21).
+        // the reach-margin pace read refuses to run off a stale tick (the 64-min godsword anchor).
         const aerLive = { lo: row.quickBuy ?? null, hi: row.quickSell ?? null,
           staleLo: !!row.quickStale?.buy, staleHi: !!row.quickStale?.sell,
           loAgeMin: row.quoteAgeMin?.buy ?? null, hiAgeMin: row.quoteAgeMin?.sell ?? null };
@@ -892,7 +890,7 @@ async function runPositions() {
             parts.push(`list ${fmt(aer.ask.level)} reached ${aer.ask.reachedDays}/${aer.ask.nDays}d (recent ${rc.recentHit ?? '—'}/${rc.recentDays ?? '—'}) · placement ${pct(aer.ask.placement)} of the ${aer.ask.nDays}-day daily-HIGH distribution`);
           }
           parts.push(`typical exit ~50% ${fmt(as.q50)} / ~75% ${fmt(as.q75)} / every-day ${fmt(as.everyDay)}${as.recent50 != null ? ` · recent-3 ~50% ${fmt(as.recent50)}` : ''}`);
-          // live instabuy — ALWAYS carries its AGE via the shared liveAgeTag (2026-08-09): `(Nm ago)` when
+          // live instabuy — ALWAYS carries its AGE via the shared liveAgeTag: `(Nm ago)` when
           // fresh, `⚠ Nm old` past QUICK_FRESH_MIN. Never read a stale print as a live tick (the godsword
           // 39.75m@64m lesson) — and, equally, never mistake an unchanged-but-current price for a stale one.
           if (row.quickSell != null) parts.push(`live instabuy ${fmt(row.quickSell)}${liveAgeTag(row.quoteAgeMin?.sell, { freshMin: QUICK_FRESH_MIN })}`);
@@ -910,15 +908,14 @@ async function runPositions() {
           // PLAN-DIURNAL-RECENCY-GUARD — flag when the profile's PEAK level is spike-inflated/stale, so a
           // held-lot exit anchored to an unreachable peak (the leather 4,375 anchor) shows its typical.
           //
-          // Chunk 2c fix (2026-08-13): this clause is rendered WITH the peak level it describes, in the
-          // peak-window bit — it must never dangle at the end of `parts`. The line's headline number is
-          // `list` (`thesisEntry.exitPrice ?? row.optSell`), and `aer.ask.level` IS that `list`; the clause
-          // is computed from `profH.peak.reality`, which describes `profile.peak.level` — a DIFFERENT
-          // number whenever a thesis declares an exit or the band top isn't the peak. Appended bare it
-          // read as `list 4,375 … ⚠ spike-top — typical ~1,828`, i.e. a typical for a price not on the
-          // line: the exact "one number wearing another's conditions" defect this guard exists to prevent,
-          // and the one `item-context.mjs` refuses by never clausing a DECLARED exitPrice. Found by review,
-          // shipped by Chunk 2, missed by the 2c sweep that was meant to catch it.
+          // Chunk 2c: this clause is rendered WITH the peak level it describes, in the peak-window bit —
+          // it must NEVER dangle at the end of `parts`. The line's headline number is `list`
+          // (`thesisEntry.exitPrice ?? row.optSell`), and `aer.ask.level` IS that `list`; the clause is
+          // computed from `profH.peak.reality`, which describes `profile.peak.level` — a DIFFERENT number
+          // whenever a thesis declares an exit or the band top isn't the peak. Appended bare it reads as
+          // `list 4,375 … ⚠ spike-top — typical ~1,828`, i.e. a typical for a price not on the line: the
+          // exact "one number wearing another's conditions" defect this guard exists to prevent, and the
+          // one `item-context.mjs` refuses by never clausing a DECLARED exitPrice.
           const peakLvl = profH && profH.peak ? profH.peak.level : null;
           const exitRC = realityClause(profH && profH.peak && profH.peak.reality, { side: 'ask', fmt, style: 'exit' });
           const peakTxt = `${peakWinTxt}${peakWinTxt && peakLvl != null ? ` · peak level ${fmt(peakLvl)}${exitRC ? ' ' + exitRC : ''}` : ''}`;
@@ -971,7 +968,7 @@ async function runPositions() {
     // fcHeld (the floorCeilingTrack just computed) drives the @floor floor-aware cue — caution on a breaking floor.
     pushSoftBuy(notes, { ts1h: inp.ts1h, live: row.quickBuy ?? null, itemId, fc: fcHeld, durable: durableFloorRead(vres) });
     // COD-3: on a CUT-family verdict (CUT / CUT-CANDIDATE / LIST-TO-CLEAR), surface the cut-and-rebid
-    // advisory so the agent stops re-deriving the friction arithmetic. TRAJECTORY-AWARE (Ben 2026-07-10):
+    // advisory so the agent stops re-deriving the friction arithmetic. TRAJECTORY-AWARE:
     // rebidAdvice reads the multi-week shape — a KNIFE says don't rebid; an OSCILLATING faller says rebid
     // at the diurnal trough & sell the daily peak; else the friction bar (tax + ½-spread below the clear)
     // governs. diurnal is null here (this booked-lots view doesn't fetch the 1h series) → the oscillating

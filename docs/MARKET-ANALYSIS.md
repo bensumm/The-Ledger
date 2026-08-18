@@ -181,7 +181,9 @@ PLACEHOLDER model (n≈3–14); `estBuy`/`estSell`/`estConfidence` ride `suggest
   closed ~24–48h before you read it; the ~10–27× under-report it showed in 2026-07 is history and now measures ~1.0×).
   Every volume-denominated floor is calibrated to the corrected scale. `--vol-source legacy` restores
   the raw read. Full story + the recalibrated floor values: the `marketfetch.mjs`
-  `loadAll24hRolling` header (the ONE home) + `PLAN-VOL24.md`. (The browser app still reads the broken `/24h` until a deferred step.)
+  `loadAll24hRolling` header (the ONE home) + `PLAN.md`'s VOL24 Status row. (The app half shipped at
+  0.74.0/0.74.2 — the Finder reads a daily two-sided volume and a measured zero no longer reads as
+  "no information".)
 - **Net/u** = after the 2% tax. **Regime** = the multi-day `regimeDrift` (flat/rising/falling), with
   a display-only **phase tag** folded in (`spike`/`decay`/`basing`, from `phase()`) — NOT a gate.
   Since R2 (PLAN-SIGNAL-RECENCY), `regimeDrift`'s flat/rising/falling comes from `floorCeilingTrack`'s
@@ -300,8 +302,11 @@ survives: **gate → validate → rank/grade → render** (reverse is the except
 
 **The cycle-period frame (PLAN-AMPLITUDE-SCAN §1).** band / **amplitude** / invest are ONE operation —
 buy the low of the N-period cycle, sell the high, capture the amplitude minus tax — at three cycle
-periods (2h / 24h / multi-week); the longer the hold, the more the pricing leans on historical
-trajectory. churn (a buy-limit-throttled volume×spread lap) and scalp (a falling-regime directional bet)
+periods (2h / **multi-day, ~4d** / multi-week); the longer the hold, the more the pricing leans on historical
+trajectory. ⚠ Amplitude's slot in that frame read **24h** until DT1 (2026-08-09) MEASURED the 24h premise
+and refuted it — completion within 24h given entry was 4.8%, median ~69h — and re-horizoned the lane to
+a multi-day horizon (`AMP_HOLD_DAYS_DEFAULT` in `js/amplitudescreen.mjs` is the live number,
+`--hold-days` overrides it). The survivors are the multi-DAY oscillator class, not a daily one. churn (a buy-limit-throttled volume×spread lap) and scalp (a falling-regime directional bet)
 sit OFF that axis. The three amplitude-axis lanes share a shape: an amplitude-of-cycle edge, a
 two-sided-liquidity + reach viability test, a trough-entry/peak-exit pricing doctrine, a knife/trend
 guard scaled to the period, and a capital-aware rank — they differ only in WHICH data grain defines the
@@ -933,9 +938,16 @@ simultaneous independent rungs on one item.
     judge). ~0.8% of the board passes. The old `range-churn — no timing edge` frame is GONE: it keyed
     on `hourConcentration.clean`, which was measured NOT to discriminate (clean=true dip +5.0pp vs
     clean=false +3.6pp), and it hid the levels along with the hours. See CHANGELOG 0.72.0.
-  All shapes append a liquidity/tranche segment (`vol/d · dip-pool · peak-pool · tranche comfortable/ceiling`,
-  retuned to 0.5%/1% of `volDay` off the n≈6 reach-relief knee, borrowed not validated for diurnal) and a
-  `⚠ buy limit … exceeds tranche ceiling` caveat when sized past it. **Up to one ADDITIONAL elevated AND one
+  All shapes append a liquidity/tranche segment (`vol/d · dip-pool · peak-pool · tranche ~X clean · ~Y
+  price-knee`, 0.5%/1% of `volDay` off the n≈6 reach-relief knee, borrowed not validated for diurnal) and a
+  `⚠ buy limit … exceeds the round-trip price-knee` caveat when sized past it. **Two things this segment is
+  NOT, both of which have been misread off it:** it is a PRICE-QUALITY knee, not a clearing cap (the borrowed
+  study measured price degradation with lot size, never whether the quantity fills), and it is a ROUND-TRIP
+  bound (`volDay` = min(hpv,lpv), so the tighter leg governs both numbers — a one-leg sell of held stock is
+  bounded by `peakPool` alone, which on a lopsided book is several times larger). Ground truth, n=2 items:
+  two one-leg sapling sells cleared 146 and 200 units at 4.0%/4.5% of min-side `volDay`, 8x/4x the printed
+  numbers, with no failure to fill; price quality at that size was not measured, so this refutes the clearing
+  reading and leaves the knee itself unmeasured. **Up to one ADDITIONAL elevated AND one
   additional depressed window may render** (PLAN-MULTI-PEAK-WINDOWS, 2026-07-23) as trailing `also ASK …/also
   BID … — second elevated/depressed window (n≈0, inform)` clauses on the SAME line — when `hourProfile`
   finds a SECOND local extremum per side clearing the `SECOND_PROMINENCE_FRAC` topographic-prominence gate

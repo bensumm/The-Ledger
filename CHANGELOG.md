@@ -10,6 +10,169 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The guard-list drift gate — and the 41k tokens that were never in context (2026-08-17)
+
+Started as "our outputs are too long, we miss things in the middle" and ended somewhere else entirely,
+because the premise did not survive a measurement.
+
+**The headline number was wrong by ~80×.** `run-tests.mjs` emits 164,611 chars of raw TAP on a green run
+(`stdio: 'inherit'`, 116 suites, ~2,573 lines of `duration_ms:`), and that was priced as ~41k tokens of
+context per verification sweep. It is not. The harness persists any output over ~30KB to a file and
+injects only the FIRST 2KB — measured from both sides: 29,000 bytes arrives whole with its tail sentinel
+visible; 160,700 and 195,300 do not. Real cost of a bare run is ~500 tokens.
+
+**The consequence inverts the diagnosis.** The plan had argued that the terminal aggregate
+(`✓ All 116 suite(s) passed`) protects against a lone failure vanishing in a wall of passes. That line is
+precisely the one never delivered — the preview is the head, so a bare run shows "Discovered 116 test
+suite(s)" plus the first ~28 subtests of suite #1 and stops. Green is knowable only by exit code; on RED
+the failing suite's assertion sits mid-file behind a second grep. The protected path was already free and
+the degraded path was the one nobody had priced. Also unremarked in every green run: 5 stderr lines,
+including a deliberate `⚠ suspected re-emit dropped` warning from `reconstruct.mjs` that is expected
+fixture output but says so nowhere.
+
+**What shipped instead is `lint-guard-lists.mjs`,** because chasing WHERE to apply the fix found a
+structural problem worth more than the token one. The repo documents its own CI in several places and
+those copies had drifted: `docs/FLOW.md` was missing `check-verdict-guards`, `lint-comments` and
+`lint-plan-refs` — the same three that had previously drifted out of `/cleanup` — and `CLAUDE.md` was
+missing `check-verdict-guards` outright. Both fixed here. The guard now treats `checks.yml` as the
+registry and fails if a governed doc stops naming a script that job runs.
+
+Two things it deliberately does NOT do, both learned by getting them wrong first. It is **job-scoped** to
+`checks` (confirmed via the ruleset API as the only required status check), because a job-blind read
+demands `smoke-test.mjs` of docs that correctly conditionalize it. And it matches a script name **with or
+without** the `.mjs` suffix: the first version required it and failed `docs/FLOW.md`, which names every
+guard bare and is correct as written — a false RED on a clean file, which is worse than a missed omission.
+Its own output says "pipeline/ci scripts within the `checks` job", never "the gating set", since it reads
+that job's script steps and not its two inline ones.
+
+**The original five-homes diagnosis was wrong in both directions** and only the review caught it: `/ship`
+and `/analyze` carry deliberately partial lists (a job description; a two-item pre-done checklist), so the
+guard as first specced would have failed two files that were fine — while `CLAUDE.md`, a genuine sixth
+home that was actually drifted, had been missed entirely. `GOVERNED_DOCS` is hand-kept, cannot be derived,
+and a new complete-list home is the guard's own blind spot; the header and README entry both say so.
+
+Every case in `guard-lists.test.mjs` drives the CLI and is **mutation-verified** — confirmed RED against a
+deliberately broken copy, including the job-blind and suffix-strict mutants. The first mutation harness
+reported "MUTANT SURVIVED" while its `sed` had silently failed to match, which is the third instance this
+session of a check reporting a result while examining nothing. That class is now the standing rule: a
+guard must refuse to report success on a zero-length read, and when counting something a guard also
+counts, take the guard's number.
+
+### The away-scoped review pass: a forked tax inverse, an invisible validator crash, and a skill teaching a deprecated sort (2026-08-14, 0.74.7)
+
+Rule 10 says scope one review AWAY from the region just worked, because the passes aimed at that region
+converge on their own tail. This wave's away pass was pointed at the app, the FIFO reconstruction and the
+skills — none of which the wave had touched — and it returned more than the two on-scope passes combined.
+
+**The Ledger's post-tax sell entry forked `breakEven()` and used the formula quotecore documents as
+wrong.** `js/ledger.js` turned a net-received price into a pre-tax listing with `Math.round(sell/0.98)`.
+That plain inverse is only correct in tax()'s linear middle; it is wrong in both FLAT regions. Below the
+50gp exemption it invents a gp (40 → 41). Above the per-unit cap it runs away: a 1.6b sell stored
+1,632,653,061 instead of 1,605,000,000, and since `reconstruct.mjs` re-applies the tax to the stored
+gross, **~27.7m gp of profit that never existed flowed into `closed[].realised`** — silently and
+permanently. The CLI twin never had the bug: `add-manual-fill.mjs --net` already calls the shared
+`breakEven`. CLAUDE.md names that function as the ONE definition of break-even, so this was a fork of a
+stated invariant rather than a novel bug. The app now calls the same function.
+
+**A crashing validator degraded to `pass` and reached no consumer anywhere.** The fail-open policy is
+deliberate — a crash must never start REJECTING rows — but the result was also invisible: `flags()` keeps
+non-pass, `informFlags()` needs `gatedStatus`, `leanValidators()` needs either, so a gate-mode validator
+could throw on every row, stop gating forever, and leave nothing in any surface or in the ledger. It is
+still fail-open, now with a `console.error` and a ledger entry. **Its regression test could not have caught
+this**: it imported `runValidators` and then asserted against a hand-rolled copy of the try/catch, so
+deleting the guard outright left it green. It now drives the real function through a throwing Proxy and is
+verified red against a mutant.
+
+**`/scan` taught a sort basis the code had already replaced.** The skill said the digest ranks by
+"deployable throughput (`capEff × deployable capital`)". It ranks by `rank` (net × P(fill) ÷ TTF); the old
+key survives only as a tie-break, and the block's own printed header says so. The replacement was measured,
+not stylistic — on a fully deployed book `rankKey` collapses to 0, the order fell through to scale-free
+`capEff`, and all eight rows came back C/D dust (Black knife at 9907%/d) with the only A− `fill-now` row
+buried in the appendix. An agent reading position as a capital signal had it backwards: the ordering is
+wallet-free and does not move with cash.
+
+Also corrected, each verified by running it rather than reading it: `--amp-ask-q`'s direction comment was
+backwards (`quantHigh(…, 0.75)` → 210 vs `0.25` → 230, so a HIGHER quantile is the MORE reachable, lower
+ask — the skill was right and the code comment was wrong); `phase()`'s header claimed the deployed app
+renders nothing off it and therefore needs no `APP_VERSION` bump, while `js/trends.js` imports and renders
+it, so the comment was instructing a process-rule-5 violation; `/cleanup` claimed to run "the same steps
+`checks.yml` runs" while omitting three gating guards (`check-verdict-guards`, `lint-comments`,
+`lint-plan-refs`), so it could report green immediately before a red push; `/scan` quoted a unit-liquidity
+floor at 50 that the VOL24 recalibration had moved to 3,500, a 70× stale literal in the same file that
+states the corrected value further down; and `money-format.js` carried a dead `grade()` export whose A–D
+scale ran OPPOSITE to the live S+…D desirability grade its neighbour colours. `check-dead-exports` could
+never have flagged that one and is right not to — its header states that name collisions bias toward LIVE,
+which is the correct trade for a guard whose false positives would get it switched off.
+
+### The cleanup wave: plan REDUCE, the comment ratchet, and eight guards that were reading less than they claimed (2026-08-14, 0.74.6)
+
+A hygiene wave with one theme that only became visible by counting: **every defect found in it was a
+guard, check, or count that under-reported — and reported a clean result while doing so.** Nine
+instances are now tallied in `PLAN.md`'s `Discovered` under "the guard-scope class"; that entry, not
+this one, is the durable home for the rule. What follows is what shipped.
+
+**Plans REDUCED 52 → 41.** Eleven plans whose last chunk had shipped were folded into `PLAN.md`'s Status
+table and deleted, per the fold-out discipline in `docs/PLANNING.md`. The eleventh was found by the
+lifecycle report rather than by the pass itself — `PLAN-OUTPUT-TABLE.md` said "SHIPPED … Nothing open
+here" and the REDUCE sweep still walked past it, which is the same under-count as everything else in
+this entry, applied to my own work. `lint-plan-lifecycle.mjs` now flags zero plans for review. The fold is not a summary — each
+row carries the finding, the honesty bounds, and the retractions, because for the closed-negative plans
+(DAY-LOW, VOL24, MWO, BLINDSPOT, RVA) the *reason a thing was not built* is the entire asset, and it is
+the thing a future agent would otherwise rebuild. Five plans that had no parseable `Status:` line at all
+now have one, written from CODE rather than from the plan's own headings — which mattered: the headings
+of `PLAN-PIPELINE-COMPOSITION` marked only PC1 and PC3 as done while PC2 had in fact shipped
+(`js/estimators.mjs` is a barrel over `js/estimators/`), and `PLAN-SCREEN-ARCHITECTURE` carried its
+state under the heading "STATUS UPDATE", which the lifecycle report's `Status:` regex cannot see.
+
+**The comment-doctrine ratchet: 547 → 274 dated references.** Comments describe code as it is now;
+dated narrative belongs here. The two lanes were verified by stripping comments and diffing the
+executable lines — `js/windowread.mjs` came out 916 = 916, byte-identical. That verification was itself
+the wave's most instructive failure: its first version "passed" by comparing two empty files, because a
+heredoc had mangled a backslash and the stripper died before producing output. A harness that reports
+success on a zero-length read is the same defect as a guard that reports success on an empty scope, and
+the rewritten stripper now hard-refuses at 0 lines.
+
+**`check-daemon-safety.mjs` was reading a quarter of the daemon fleet.** Its scope was a `readdirSync`
+of `pipeline/daemons/`, but **3 of the 4 registered daemons are implemented in `pipeline/commands/`** —
+including `watch-log.mjs`, a `local:true` resident that statically imports the git-writer module. It had
+been green for months. Scope is now REGISTRY-derived and an unresolvable registered name FAILS rather
+than silently dropping out. The import turns out to be safe, for reasons nobody had checked and the
+guard now pins rather than assumes: `sync-fills.mjs` exports only `regenerate`/`REPO_DIR`, and its
+invocation guard stops `main()` running on import — load-bearing, because `PUBLISH` is read from
+`process.argv` at module top level, so without it `node watch-log.mjs --publish` would fetch, commit and
+push. Widening scope immediately exposed a second defect: rule 2 treated a bare `--publish` as a git
+signal, but `screen-flip-niches.mjs --publish` only writes a local file and `dev-server.mjs` spawns
+exactly that. The flag was never the signal; the NAME `sync-fills` is. The guard shipped with no test;
+`pipeline/test/daemon-safety.test.mjs` now drives all four rules to red against fixtures.
+
+**`lint-skills.mjs` trusted a hand-kept list guarded by a report that is not in CI.** `SKILL_FILES` is a
+nine-entry array whose own comment named `lint-plan-lifecycle.mjs`'s skillDrift as its backstop — and
+that file is not in `checks.yml`, so nothing gating had ever compared the list to disk. A new skill could
+be added and never linted, under a green "every rule-block is tagged". `scopeDrift()` now fails the run
+on a mismatch in EITHER direction (unlisted skill; stale entry), before linting, since a wrong scope makes
+every count after it meaningless. `pipeline/test/lint-skills-scope.test.mjs` covers both directions plus
+the non-skill-subdirectory case.
+
+**The sync that was made non-skippable was failing silently.** SY1 moved "sync before every read" from
+prose into code precisely because the prose kept being skipped — but all three read surfaces stub
+`console.log` five lines before calling `runLocalSync`, and the helper reported both success AND failure
+through it. On the quiet default a crashing sync left the read quoting a frozen `positions.json` with no
+sign at all; measured at 0 bytes reaching stdout across a full run. Failure now goes to stderr, which no
+caller stubs, and the child's stderr is captured for the cause. The success line stays suppressible —
+that was always deliberate.
+
+**`/book`'s free-slot caveat stated its bound backwards, in three places.** A completed-but-uncollected
+offer drops out of the active-offer array and is never counted as an occupant, so reported `free` can
+only be too HIGH — an UPPER bound. The skill said "'N free' means 'at least N free'", which is the
+sizing-relevant direction and it was inverted. The test pinned the error in place by phrase-matching the
+wrong wording, so it was replaced with a behavioural assertion that fills a slot and watches reported
+`free` rise — a test that fails against the old implementation.
+
+Also: the tranche-ceiling relabel in `pipeline/lib/render/emit.mjs`; `MARGIN_MIN_DAYS`' comment no longer
+describes a mean-of-halves split that `projectTrajectory` replaced; `askExitRead`'s `@returns` lists
+`reachMargin`; and `docs/MARKET-ANALYSIS.md`'s cycle-period frame no longer calls amplitude a 24h lane
+after DT1 re-horizoned it (the 24h premise measured 4.8% completion given entry).
+
 ### The plan-reference gate, and four plans folded off the back of it (2026-08-14)
 
 `plans/` was the one doc tree with no existence guard. `lint-arch.mjs` governs only ARCHITECTURE.md and

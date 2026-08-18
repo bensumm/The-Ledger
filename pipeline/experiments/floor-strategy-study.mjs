@@ -10,7 +10,7 @@
  * aggregate over the same `observations` table supplies side VWAPs and volumes. Tax comes from
  * `js/money-math.js` — the ONE tax home; no money math is re-implemented here.
  *
- * PRIOR ART, READ IT FIRST: `plans/PLAN-DAY-LOW-SURFACING.md` measured this exact idea on 2026-08-10 and
+ * PRIOR ART, READ IT FIRST: `PLAN.md`'s `DL-0/DL-1–3` Status row measured this exact idea on 2026-08-10 and
  * CLOSED it as a negative. This study is an INDEPENDENT RE-MEASUREMENT on a different construction
  * (30d not 28d, new-low + position-in-range not a 4-bit vector, side-VWAP legs not daily medians), run
  * to see whether that closure survives a fresh look and to segment on the discriminators the prior pass
@@ -33,7 +33,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 // ── knobs (all fixed before any result was seen) ──────────────────────────────────────────────────
 const HORIZONS_N = [1, 3, 7, 14, 30];   // Ben's ask verbatim. The repo's own multi-week horizon is 28.
 const FWD = [1, 3, 7];                  // forward hold, days
-const PIR_RESTING = 0.15;               // "resting on" the low — matches PLAN-DAY-LOW-SURFACING
+const PIR_RESTING = 0.15;               // "resting on" the low — matches the DL-0 study
 const PRICE_FLOOR = 1000;               // gp; the prior study's penny-item artifact guard
 /* 3,500 is PLAN-VOL24's `FLOOR` (pipeline/lib/signal/gatecandidates.mjs:69), where it is applied to
    CORRECTED ROLLING-24h volume. Here it is applied to a 14-day median of daily min-side volume — a

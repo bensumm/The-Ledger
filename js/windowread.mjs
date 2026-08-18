@@ -1,14 +1,14 @@
 // windowread.mjs — the PURE window-range math shared by read-window-range.mjs (the CLI read)
-// and watch-positions.mjs (the per-offer window-context line). Extracted 2026-07-05 so watch could
-// print time-of-day context without duplicating the bucketing/quantile logic — one owner.
+// and watch-positions.mjs (the per-offer window-context line): ONE owner for the bucketing/quantile
+// logic, so no surface duplicates it.
 //
 // All functions are pure over an already-fetched 1h /timeseries array; no fetching here.
-// Window hours are LOCAL wall-clock — the machine clock IS Ben's wall clock (verified
-// 2026-07-05; only UTC-printing stamps like the old watch header ever suggested otherwise).
+// Window hours are LOCAL wall-clock — the machine clock IS Ben's wall clock (only UTC-printing
+// stamps ever suggest otherwise).
 //
 // The ONE tax-arithmetic call site this module uses (diurnalTimedLap's net/roi + instantNet/instantRoi)
 // is `netMargin` from js/money-math.js — imported here rather than hand-inlined, per PLAN-DIURNAL-TIMING
-// §1/§0 (the quote-items.mjs L341 `dr.ask - tax(dr.ask) - dr.bid` inlining was the thing NOT to repeat).
+// §1/§0: never re-inline tax arithmetic (`ask - tax(ask) - bid`) at a call site.
 // money-math.js imports nothing from here, so this stays a one-way arrow (no cycle).
 import { netMargin } from './money-math.js';
 
@@ -46,7 +46,7 @@ export const reachedDays = (his, ask) => his.filter(h => h >= ask).length;
 // book; trust deeper into the tail on a deep book) is now HALF-ENCODED: avgBoundRead below computes
 // and renders the deep-book half beside the reach count, so this gloss — including "a LOW bid
 // placement is a deep entry, not an extremity warning" — reaches the reader instead of living only in
-// this comment and in skill prose (which is exactly how it got skipped, 2026-08-05). What is still
+// this comment and in skill prose (which is exactly how it got skipped). What is still
 // judgment is the thin-book side and the size question. The calibrated liquidity-scaled "safe ≈ pXX"
 // threshold (AC3) did NOT ship — its gate failed (the Finding-2 knee is unobservable on our own
 // fills; see PLAN-REACH-CALIBRATION AC1 "GATE RESULT: NOT MET"), which is why avgBoundRead reports a
@@ -113,13 +113,12 @@ export function recentQuant(days, side, p, recentN = RECENT_NIGHTS) {
 // wrong on a ~655k/day commodity, where a routine patient bid lives exactly below every daily
 // min-of-means. A low N/M there means "below every hourly AVERAGE", NOT "never fills".
 //
-// This is the "Above-average is not a warning sign" doctrine (PLAN-REACH-CALIBRATION Finding 3) moved
-// OUT of skill prose INTO the surface that prints the number. It had been written down twice — in the
-// /scan skill and docs/MARKET-ANALYSIS.md §4 — and was skipped anyway: on 2026-08-05 a real read
-// killed Ruby dragon bolts (e), Seeking dragon arrow and Seeking amethyst arrow (349k–750k u/d, all
-// well clear of the floor) off bare `touched 0/14 · p0` lines. The correcting knowledge existed in
-// code too, but only in the estimator/rank layer (reachRelief, the AC5/AC6 churn exemption), never on
-// the validation surface an operator actually reads.
+// This is the "Above-average is not a warning sign" doctrine (PLAN-REACH-CALIBRATION Finding 3), homed
+// IN the surface that prints the number rather than in skill prose. Written down twice — in the /scan
+// skill and docs/MARKET-ANALYSIS.md §4 — it was skipped anyway, and a real read killed Ruby dragon
+// bolts (e), Seeking dragon arrow and Seeking amethyst arrow (349k–750k u/d, all well clear of the
+// floor) off bare `touched 0/14 · p0` lines. The correcting knowledge lives in the estimator/rank layer
+// too (reachRelief, the AC5/AC6 churn exemption), but that is not a surface an operator reads.
 //
 // ASYMMETRIC BY CONSTRUCTION — the whole point, not an implementation detail. Returns null below
 // `minVol` (callers pass the estimators' REACH_RELIEF_MIN_VOL, the SAME documented deep/thin boundary
@@ -130,8 +129,8 @@ export function recentQuant(days, side, p, recentN = RECENT_NIGHTS) {
 //
 // INFORM-ONLY, n≈0: gates nothing, prices nothing, moves no rank, grade or verdict. `gapFrac` is a
 // DESCRIPTIVE distance, to be read against AC2's measured 5m-max-vs-1h-avg smoothing bias (median
-// 0.36–0.56% across all volume buckets, ρ=+0.09, and itself only a LOWER BOUND — CHANGELOG
-// 2026-07-17). There is deliberately NO "fills if within X%" threshold: AC1's attempt to calibrate
+// 0.36–0.56% across all volume buckets, ρ=+0.09, and itself only a LOWER BOUND).
+// There is deliberately NO "fills if within X%" threshold: AC1's attempt to calibrate
 // achievability against our own fills FAILED its gate (PLAN-REACH-CALIBRATION AC1 "GATE RESULT: NOT
 // MET"), so a confident-looking number here would be exactly the n≈0 overreach process rule 4 forbids.
 export const AVG_BOUND_LOW_FRAC = 0.5;   // hit-fraction below this counts as a "low" count (mirrors validate.mjs's REACH_CAUTION_FRAC; PLACEHOLDER, n≈0)
@@ -175,8 +174,8 @@ export function formatAvgBound(ab, { fmt = String } = {}) {
 
 // --- level-reality guard (PLAN-DIURNAL-RECENCY-GUARD) ------------------------------------------
 // The recency primitives above catch stale/spike levels in the SCORED --ask/--bid reads, but the
-// diurnal PROFILE's own peak/dip LEVEL was emitted RAW — a recent 1-2 day spike drags the recent-N
-// median up (boots 07-21/22) and NOTHING flagged that the quoted peak wasn't reachable in the
+// diurnal PROFILE's own peak/dip LEVEL is emitted RAW — a recent 1-2 day spike drags the recent-N
+// median up (the boots anchor) and nothing else flags that the quoted peak isn't reachable in the
 // current regime. computeReality attaches a level-reality read to each emitted peak/dip. TWO failure
 // shapes, one object:
 //   • staleOptimistic — old-high-now-crashed (full window rosier than recent; from recencySplit).
@@ -341,8 +340,8 @@ export function trajectoryRead(days, { liveRef = null } = {}) {
 // --- phase-aligned floor + ceiling track (PLAN-DRIFT-VS-CRASH — the drift-vs-crash classifier) ---
 // trajectoryRead (above) collapses the window to ONE min-low `floor` + ONE max-high `ceiling` and reads
 // `shape` off the blended daily MIDS — which WASHES OUT the exact signal a crash-vs-cooldown call needs:
-// the FLOOR track (daily lows) and the CEILING track (daily highs) moving INDEPENDENTLY. Three real cases
-// this session's blend could not tell apart:
+// the FLOOR track (daily lows) and the CEILING track (daily highs) moving INDEPENDENTLY. Four real cases
+// a blended read cannot tell apart:
 //   • FANG (crash)       — ceiling stepping DOWN ~376k/day while the floor BROKE its 14-day low (17.46m):
 //                          decaying peaks + a floor break.
 //   • GODSWORD (crash)   — daily highs stepped 42.1m→40.2m over a week and the floor broke 39m→37.2m.
@@ -563,9 +562,9 @@ export function formatFloorCeiling(fc, fmt, { label = '', live = null, drift = n
     const hd = fmtHoldHorizon(drift.holdHorizonDays);
     const pk = drift.driftAdjustedPeak != null ? `~${fmt(Math.round(drift.driftAdjustedPeak))}` : '—';
     const tr = drift.driftAdjustedTrough != null ? `~${fmt(Math.round(drift.driftAdjustedTrough))}` : '—';
-    // P1 (2026-08-06): a projection computed WITHOUT the caller supplying diurnalForecast's guard inputs
-    // (reliable / phase / mom) is not the same object as a guarded one — the post-shock-shape and
-    // band-violation REFUSALS could not have fired. Say so inline rather than let it read identically.
+    // P1: a projection computed WITHOUT the caller supplying diurnalForecast's guard inputs (reliable /
+    // phase / mom) is not the same object as a guarded one — the post-shock-shape and band-violation
+    // REFUSALS could not have fired. Say so inline rather than let it read identically.
     const gu = (drift.guardsUnchecked && drift.guardsUnchecked.length) ? `, ⚠ guards unchecked: ${drift.guardsUnchecked.join('/')}` : '';
     parts.push(`drift-adj exit (~${hd} hold): peak ${pk} / trough ${tr} (projected level${drift.confidence ? `, conf ${drift.confidence}` : ''}, n≈0${gu} — inform, not a direction)`);
   }
@@ -580,11 +579,11 @@ export function formatFloorCeiling(fc, fmt, { label = '', live = null, drift = n
 // formatFloorCeiling: PURE, `fmt` (money-format) INJECTED so windowread stays dependency-free; returns
 // the note TEXT only (no sigil — the caller's NOTE_KIND owns that, like every other note renderer here).
 //
-// REPLACES hourlyDriftNote, deleted 2026-08-09 with the per-hour slope it rendered. The slope carried no
-// information (49.7% direction; beat predict-no-change on 6 of 380 items) — the full refutation and its
-// honesty limits are the tombstone in hourly-lmh.mjs. The decay sub-signal it used to carry as a trailing
-// clause is the piece that measured predictive (next-day ask reach 12.2% vs 30.8%), so it survives as the
-// whole note rather than an afterthought on a dead one.
+// There is NO per-hour drift slope here and don't rebuild one: it carried no information (49.7%
+// direction; beat predict-no-change on 6 of 380 items) and was deleted with its renderer
+// `hourlyDriftNote` — the full refutation and its honesty limits are the tombstone in hourly-lmh.mjs.
+// The decay sub-signal is the piece that measured predictive (next-day ask reach 12.2% vs 30.8%), so it
+// is the whole note rather than a trailing clause on a dead one.
 //
 // Renders ONLY when the decay actually FIRES (decaying === true) and an ask is in hand. A non-decaying,
 // null, or ask-less read ⇒ null: an honest absence, never a fake read, and never a line padded with a
@@ -596,21 +595,20 @@ export function formatFloorCeiling(fc, fmt, { label = '', live = null, drift = n
    caller owns (QUICK_FRESH_MIN at every current call site — passed in, NOT imported, so this stays a
    pure leaf with no new module edge).
 
-   WHY IT ALWAYS RENDERS (2026-08-09). The predecessor emitted an EMPTY string for anything at or under
-   the bar, so a fresh print and a 14-minute-old one looked identical — and, worse, two consecutive reads
-   returning the SAME number were indistinguishable between "nothing traded in between" (the normal case
-   on a thin book: a 449/day item prints roughly once every three minutes, and each side only updates on
-   its own transactions) and "we served a stale tick". That ambiguity cost a real misdiagnosis: two reads
-   minutes apart returned byte-identical live prices and were reported as a caching bug. There was none —
-   `/latest` on that path is UNCACHED (`cachedJget` is a straight passthrough unless COFFER_FETCH_CACHE=1,
-   which nothing sets; `FETCH_TTL.latest` is declared but inert), so both were live GETs and no new trade
-   had simply printed. The first correction of this misdiagnosis cited the 60s TTL as the mechanism —
-   also wrong, and caught only by review. What makes the age trustworthy is that `lowTime`/`highTime` are
-   TRADE timestamps: an unchanged price whose age keeps GROWING proves no trade printed.
-   Showing the age unconditionally makes an unchanged-but-current price self-evident.
+   WHY IT ALWAYS RENDERS. Emitting an EMPTY string at or under the bar makes a fresh print and a
+   14-minute-old one look identical — and, worse, makes two consecutive reads returning the SAME number
+   indistinguishable between "nothing traded in between" (the normal case on a thin book: a 449/day item
+   prints roughly once every three minutes, and each side only updates on its own transactions) and "we
+   served a stale tick". That ambiguity cost a real misdiagnosis — two reads minutes apart returned
+   byte-identical live prices and were reported as a caching bug. There is no cache on this path:
+   `/latest` is UNCACHED (`cachedJget` is a straight passthrough unless COFFER_FETCH_CACHE=1, which
+   nothing sets; `FETCH_TTL.latest` is declared but inert), so both were live GETs and no new trade had
+   simply printed — the TTL is not the mechanism either. What makes the age trustworthy is that
+   `lowTime`/`highTime` are TRADE timestamps: an unchanged price whose age keeps GROWING proves no trade
+   printed. Showing the age unconditionally makes an unchanged-but-current price self-evident.
 
-   The ⚠ escalation past `freshMin` is UNCHANGED — same bar, same wording, so the existing stale-print
-   doctrine (don't quote a price off a flagged tick; re-read the fresher side) reads exactly as before. */
+   The ⚠ escalation past `freshMin` carries the stale-print doctrine: don't quote a price off a flagged
+   tick; re-read the fresher side. */
 /* The fallback freshness bar. It MIRRORS `QUICK_FRESH_MIN` (js/quotecore.js) and cannot import it:
    quotecore imports THIS module (quotecore.js:37), so the edge would be a cycle. A drift guard in
    windowread.test.mjs asserts the two are equal, so this second home cannot silently diverge — every
@@ -619,20 +617,20 @@ export const LIVE_FRESH_MIN_FALLBACK = 15;
 
 export function liveAgeTag(ageMin, { freshMin = LIVE_FRESH_MIN_FALLBACK } = {}) {
   // A NEGATIVE age is physically impossible (clock skew, or a future-dated print). It is UNKNOWN, not
-  // fresh — the earlier version returned ' (<1m ago)' for -45, which is the exact "silently rendered as
-  // fresh" failure this helper exists to prevent.
+  // fresh — returning ' (<1m ago)' for -45 would be the exact "silently rendered as fresh" failure this
+  // helper exists to prevent.
   if (ageMin == null || !Number.isFinite(ageMin) || ageMin < 0) return ' (age n/a)';
-  // TWO separate requirements, and an intermediate version satisfied one by breaking the other:
+  // TWO separate requirements, and it is easy to satisfy either one by breaking the other:
   //   (a) the tag's fresh/stale word must match the RAW-age gate used elsewhere. `staleLo`/`staleHi`
   //       (read-window-range.mjs) are computed as `rawAge > QUICK_FRESH_MIN` and drive askExitRead's pace
-  //       REFUSAL. Comparing the tag on a rounded age broke this: at a raw 15.4 the tag said ' (15m ago)'
-  //       while the pace line on the SAME read said 'live print 15m stale' — opposite verdicts, one line
-  //       apart. That was a regression introduced by the previous fix, not an inherited flaw.
+  //       REFUSAL. Comparing the tag on a ROUNDED age breaks this: at a raw 15.4 the tag reads ' (15m
+  //       ago)' while the pace line on the SAME read reads 'live print 15m stale' — opposite verdicts,
+  //       one line apart.
   //   (b) a given displayed minute must not appear on both sides of the bar across reads. Comparing raw
-  //       while rounding the display let 14.6 print '(15m ago)' and 15.4 print '⚠ 15m old'.
+  //       while rounding the display lets 14.6 print '(15m ago)' and 15.4 print '⚠ 15m old'.
   // Both hold if the COMPARISON is raw (matching the gate) and the stale branch CEILINGS its number:
-  // 14.6 → '(15m ago)' fresh · 15.0 → '(15m ago)' fresh · 15.4 → '⚠ 16m old' stale. "15m" is now only
-  // ever fresh and any ⚠ number is ≥ freshMin+1. Ceiling (not round) on the stale side deliberately
+  // 14.6 → '(15m ago)' fresh · 15.0 → '(15m ago)' fresh · 15.4 → '⚠ 16m old' stale. "15m" is only ever
+  // fresh and any ⚠ number is ≥ freshMin+1. Ceiling (not round) on the stale side deliberately
   // overstates by <1m, which errs toward caution on a staleness warning.
   if (ageMin > freshMin) return ` ⚠ ${Math.ceil(ageMin)}m old`;
   return ageMin < 1 ? ' (<1m ago)' : ` (${Math.round(ageMin)}m ago)`;
@@ -697,10 +695,12 @@ export const FIVE_MIN_MIN_DAYS = 3;   // fewer scored 5m-grain window-days than 
 /**
  * askExitRead(stats, opts) — the ask-side typical-exit read off a windowStats result.
  * @param {object|null} stats     a windowStats() result over the 1h series (or null)
- * @param {object} opts { ask=null, stats5m=null, recentN=RECENT_NIGHTS, minFiveDays=FIVE_MIN_MIN_DAYS }
+ * @param {object} opts { ask=null, stats5m=null, recentN=RECENT_NIGHTS, minFiveDays=FIVE_MIN_MIN_DAYS,
+ *                        profile=null, live=null, now=new Date() }
  *   ask      — the list/exit level to score (null ⇒ summary-only, no scored/grain block)
  *   stats5m  — a windowStats() result over the 5m archive series (or null ⇒ no grain block)
- * @returns {null | { nDays, askSide:{q50,q75,everyDay,recent50,medVol}, ask:null|{level,reachedDays,nDays,placement,recency}, grain5m:null|{reachedDays,nDays,placement} }}
+ *   profile/live/now — passed straight through to the folded-in reachMargin (pace + recency reads)
+ * @returns {null | { nDays, askSide:{q50,q75,everyDay,recent50,medVol}, ask:null|{level,reachedDays,nDays,placement,recency,reachMargin}, grain5m:null|{reachedDays,nDays,placement} }}
  *   null when the 1h series has no traded window-highs (nothing to read — degrade, never a fake read).
  */
 export function askExitRead(stats, { ask = null, stats5m = null, recentN = RECENT_NIGHTS, minFiveDays = FIVE_MIN_MIN_DAYS, profile = null, live = null, now = new Date() } = {}) {
@@ -727,7 +727,7 @@ export function askExitRead(stats, { ask = null, stats5m = null, recentN = RECEN
   return { nDays: his.length, askSide, ask: scored, grain5m };
 }
 
-// --- reach-margin FADE check (the godsword/mask pair, 2026-07-20) -------------------------------
+// --- reach-margin FADE check (the godsword/mask pair) ------------------------------------------
 // The reach COUNT + placement percentile say "does this level print", but not whether the CUSHION over
 // (ask) / under (bid) the level is FADING — the signal that a "recent 3/3 reached" ask is quietly
 // settling ONTO a cooling peak (godsword: 40.6m reached 3/3 recent while the cushion collapsed +1.3m→
@@ -741,13 +741,13 @@ export function askExitRead(stats, { ask = null, stats5m = null, recentN = RECEN
 //                same-day "is today tracking the days that reached?" read; null when there's no live or
 //                no current-hour row (honest — no pace read at an unsampled hour). Emitted whenever data
 //                exists, sparse or not: sparse still informs a low-liquidity item, and it's a strong
-//                signal on a liquid one (Ben, 2026-07-20).
+//                signal on a liquid one (Ben).
 // SYMMETRIC: side='ask' scores dayHigh−level cushions + the high side; side='bid' scores level−dayLow +
 // the low side (a bid running too DEEP to fill is the mirror error). INFORM-ONLY (tier: context) — like
 // windowClear/askHeadroom it never moves the verdict, the quoted price, or a gate. n≈small, thresholds
 // are PLACEHOLDERS pending F1 (rule 4); it TEMPERS a tail price toward a reachable one, not a fill model.
 export const MARGIN_NIGHTS = 7;      // recent days considered for the cushion trend
-export const MARGIN_MIN_DAYS = 4;    // fewer scored recent days than this ⇒ trend null (can't split halves)
+export const MARGIN_MIN_DAYS = 4;    // fewer scored recent days than this ⇒ trend null; also the floor passed to projectTrajectory's own fit
 export const MARGIN_FADE_FRAC = 0.003; // |older→newer cushion delta| ≥ this × level flips stable→fading/extending (PLACEHOLDER, F1; 0.3% keeps night-to-night noise from over-firing "fading")
 export const PACE_TOL_FRAC = 0.001;  // live within this × level of the hour median counts as on-pace (PLACEHOLDER)
 
@@ -783,8 +783,8 @@ export function reachMargin(days, side, level, { recentN = RECENT_NIGHTS, margin
   // today's pace vs the reaching-day median at THIS hour-of-day (closure over side/level/live/profile/now)
   // STALE-LIVE GUARD: `live` may carry the driving side's freshness (staleLo/staleHi + loAgeMin/hiAgeMin,
   // set by the caller from row.quickStale/row.quoteAgeMin). A pace read off a stale /latest print is a
-  // FALSE "lagging/ahead" signal — the number isn't today's live price (the 64-min godsword anchor,
-  // 2026-07-21). When the driving side is stale we return a {stale} marker instead of a bogus comparison.
+  // FALSE "lagging/ahead" signal — the number isn't today's live price (the 64-min godsword anchor).
+  // When the driving side is stale we return a {stale} marker instead of a bogus comparison.
   function pace() {
     if (!profile || !Array.isArray(profile.hours) || !live) return null;
     const h = now.getHours();
@@ -834,7 +834,7 @@ export function asymPair(stats, { pLo = ASYM_P_LO, pHi = ASYM_P_HI, minDays = AS
     nDays,
     // pAsk/pBid's OWN denominators. windowStats drops days with no print, so his/lows can be SHORTER
     // than nDays — rendering `pAsk × nDays` then prints a count over days the fraction never scored
-    // (pAsk 10/12 → "12/14d"). Callers that display a tally must use these, not nDays (2026-08-12).
+    // (pAsk 10/12 → "12/14d"). Callers that display a tally must use these, not nDays.
     nAsk: stats.his.length,
     nBid: stats.lows.length,
   };
@@ -898,13 +898,13 @@ export function windowClearDiverges(clear, dayReachFrac = null, { minFrac = WINC
 // magnitudes (process rule 4). Kept module-internal for now (surfaced via the function returns);
 // promote to `export` when a cross-file consumer (DE2/DE3) actually imports one.
 //
-// LIQUIDITY BIAS — SURFACED BY DESIGN (Ben, 2026-07-15): a flat COMPETITION× makes this a LIQUID-CLASS
+// LIQUIDITY BIAS — SURFACED BY DESIGN (Ben): a flat COMPETITION× makes this a LIQUID-CLASS
 // tool. A thin book whose whole-window flow is under COMPETITION×qty at every level returns a null read
 // WITH A REASON ('insufficient-depth') — honest deflation for held-lot pricing, but it means depth
 // cannot rescue a thin item's buried edge (only surface liquid ones). A null NEVER degrades silently;
 // the caller reads the reason and says "reach fallback — book absorbs <N× your lot". F1 must validate
 // whether the flat ×4 systematically nulls a class we'd want to price (DE3 shadow-logs the reason+class).
-const DEPTH_COMPETITION_MULT = 4;    // required flow = COMPETITION × qty (queue-position safety factor; Ben-accepted 2026-07-15 conditional on the surfacing above)
+const DEPTH_COMPETITION_MULT = 4;    // required flow = COMPETITION × qty (queue-position safety factor; Ben-accepted conditional on the surfacing above)
 const DEPTH_TARGET_FRAC      = 0.75; // a level "clears" when ≥ this fraction of scored days absorb the lot (echoes EST_REACH_SAT_FRAC's "reachable-enough")
 const DEPTH_MIN_DAYS         = 5;    // fewer scored window-days than this ⇒ null 'thin-history' (mirrors ASYM_MIN_DAYS)
 const DEPTH_MIN_BUCKETS      = 2;    // a candidate level needs ≥ this many distinct supporting buckets at/beyond it (within-bucket misattribution guard)
@@ -931,9 +931,9 @@ function windowBuckets(series, { nights = 14, wStart, wEnd, now = new Date() } =
     .sort((a, b) => b[0].localeCompare(a[0])).slice(0, nights).reverse();
 }
 
-// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1 (2026-07-22): `depthDays` (DE1 per-day flow-beyond table) and
-// its `flowBeyond` helper were REMOVED (narrow removal — the DE1/DE6 percentile-depth INSPECTOR reads that
-// never fed a main decision surface). `clearableLevel`/`clearableAsk` (below) SURVIVE — clearableAsk still
+// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1: `depthDays` (the DE1 per-day flow-beyond table) and its
+// `flowBeyond` helper are GONE — a narrow removal of the DE1/DE6 percentile-depth INSPECTOR reads that
+// never fed a main decision surface. `clearableLevel`/`clearableAsk` (below) SURVIVE — clearableAsk still
 // powers the live DE3 `depthExit` shadow on watch-positions/quote-items. Revive from git if ever needed.
 
 /* clearableLevel — the ONE side-generic engine behind clearableAsk (DE1); the 'bid' path (DE6) is retained
@@ -982,9 +982,9 @@ function clearableLevel(series, side, { qty, competition = DEPTH_COMPETITION_MUL
 // DE3 (watch-positions line/shadow log); F1 (DE4) later promotes it into estimatePair's held-lot sell.
 export function clearableAsk(series, opts = {}) { return clearableLevel(series, 'ask', opts); }
 
-// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1 (2026-07-22): `clearableBid` (DE6 low-side mirror) was REMOVED
-// (narrow removal — the low-side depth inspector had no live consumer). `clearableAsk` above survives.
-// Revive from git (`clearableLevel(series, 'bid', opts)` — the engine's bid path is intact) if needed.
+// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1: `clearableBid` (the DE6 low-side mirror) is GONE — a narrow
+// removal, the low-side depth inspector had no live consumer. `clearableAsk` above survives. Revive from
+// git (`clearableLevel(series, 'bid', opts)` — the engine's bid path is intact) if needed.
 
 // --- pressure-driven reachable band (PLAN-DEPTH-EXIT Extension A, PB1) --------------------------
 // THE GAP the depth model left open (the Soul-rune 394 problem): clearableAsk reads 1h bucket
@@ -1008,7 +1008,7 @@ export function clearableAsk(series, opts = {}) { return clearableLevel(series, 
 // off a handful of units is NOISE, so reliability shrinks toward 0 as the thinner side's median
 // daily volume falls under PRESSURE_MIN_VOL and the headroom blends back to the smoothed center.
 // A liquid book predicts boldly (even above the last peak); a thin one degrades to conservative.
-// VALIDATED FOR REASONABLENESS ONLY (2026-07-15, n≈0 fills): one slope across 2gp–10k gp
+// VALIDATED FOR REASONABLENESS ONLY (n≈0 fills): one slope across 2gp–10k gp
 // commodities lands the deep bid inside the daily-low lower tail ([min…q25]: Coal 137/min 137 exact,
 // Adamantite 535 vs 533–548 cluster, Raw lobster 113 vs 112–116, Runite 10038 vs 9980–10162, Wine of
 // zamorak 869 vs 831–861), and the buy-heavy ask on Soul rune reads ~397–401 vs real 397 fills where
@@ -1054,14 +1054,14 @@ export function reachableBand(stats, { slope = PRESSURE_PHI_SLOPE, headroomMax =
   if (nDays < minDays || stats.lows.length < minDays || stats.his.length < minDays) return null;
   const baseLow = recentQuant(stats.days, 'bid', 0.5, recentN);
   const baseHigh = recentQuant(stats.days, 'ask', 0.5, recentN);
-  // PB5 (2026-07-15 live trial): the band WIDTH tracks the RECENT regime's dispersion, NOT the full
-  // window — a dip or reprice OLDER than the recent window must not inflate the band and push the floor
-  // below where the item currently trades (the Ranarr/anglerfish finding: full-window IQR anchored the
-  // deep bid to a stale dip/pre-reprice level the item had left). bandRecentN (7) is WIDER than the
-  // 3-night base center — a median is stable at n=3 but an IQR needs more points — so the width uses the
-  // recent HALF of the window while the center stays at recent-3. Falls back to the full-window arrays
-  // when the recent slice is too thin for an IQR (<2 points), so a short history degrades to the pre-PB5
-  // behavior rather than nulling.
+  // PB5: the band WIDTH tracks the RECENT regime's dispersion, NOT the full window — a dip or reprice
+  // OLDER than the recent window must not inflate the band and push the floor below where the item
+  // currently trades (the Ranarr/anglerfish finding: a full-window IQR anchored the deep bid to a stale
+  // dip/pre-reprice level the item had left). bandRecentN (7) is WIDER than the 3-night base center — a
+  // median is stable at n=3 but an IQR needs more points — so the width uses the recent HALF of the
+  // window while the center stays at recent-3. Falls back to the full-window arrays when the recent
+  // slice is too thin for an IQR (<2 points), so a short history degrades to the full-window width
+  // rather than nulling.
   const recentDays = stats.days.slice(-bandRecentN);
   const recentLows = recentDays.map(([, n]) => n.low).filter(v => v != null);
   const recentHis  = recentDays.map(([, n]) => n.hi).filter(v => v != null);
@@ -1083,7 +1083,7 @@ export function reachableBand(stats, { slope = PRESSURE_PHI_SLOPE, headroomMax =
 // LOCAL hour-of-day (0–23) across the last N days, so a caller can SEE where the daily dip and peak
 // print and derive a bid/ask from the shape rather than guessing a window up front. This is Ben's
 // default pricing method (peak-timing): bid at the recent dip-hour level, ask at the recent peak-hour
-// level. Two robustness guards are baked in, both learned the hard way (Ghrazi, 2026-07-09):
+// level. Two robustness guards are baked in, both learned the hard way (the Ghrazi anchor):
 //   • CLUSTER, don't point-pick — a single hour over ~7 nights is ≤7 samples (noisy). The dip/peak are
 //     the CONTIGUOUS run of hours near the extreme (Ben: "analyse the hourly output to define the range").
 //   • TREND-DOMINATES flag — when the multi-day floor drifts faster than the intraday swing is deep, a
@@ -1331,13 +1331,12 @@ export function hourProfile(series, { nights = 14, now = new Date(), recentN = R
         ? (x => devFn(x) != null && devFn(x) <= seedDev + pad && !primaryCluster.has(x.h))
         : (x => devFn(x) != null && devFn(x) >= seedDev - pad && !primaryCluster.has(x.h));
       const c = cluster(cand.h, within, levelFn);
-      // Chunk 2b (2026-08-12) — the SECONDARY window carries its own `reality` too. It was omitted when
-      // the guard landed (only peakObj/dipObj got one), which made every `·2` row structurally
-      // UNFLAGGABLE. That went unnoticed until a consumer started marking flagged levels: /schedule then
-      // printed `SELL peak·2 1,916` bare beside `SELL peak 1,904 *` under a legend that teaches "flagged
-      // levels are named" — while 1,916 is ALSO a spike-top (3/14 · p79 · typical ~1,879). A partial mark
-      // is worse than no mark: it certifies the unmarked row as clean. This is the split
-      // read-schedule.mjs:128-131 already warned about for the Ghrazi guard, one level down.
+      // Chunk 2b — the SECONDARY window carries its own `reality` too. Without it every `·2` row is
+      // structurally UNFLAGGABLE, and a PARTIAL mark is worse than no mark: it certifies the unmarked
+      // row as clean. /schedule printed `SELL peak·2 1,916` bare beside `SELL peak 1,904 *`, under a
+      // legend that teaches "flagged levels are named", while 1,916 was ALSO a spike-top (3/14 · p79 ·
+      // typical ~1,879). Same split read-schedule.mjs:128-131 warns about for the Ghrazi guard, one
+      // level down.
       return { ...spanOf(c.set), hours: c.hours, level: c.level, atHour: cand.h, prominenceFrac: cand.prominenceFrac,
         reality: computeReality(clusterDays(c.set), c.level, side === 'dip' ? 'bid' : 'ask') };
     }
@@ -1408,29 +1407,28 @@ export function deriveDiurnalRange(profile, { liveLo = null, liveHi = null } = {
 //               level is here now; '+X%' when live sits X% above the dip.
 //   buyNow    — the boolean distinguishing those two states.
 //
-// THE WINDOW IS NOT A REASON TO DELAY A RESTING BID (DT2, PLAN-DIURNAL-TRIAGE, 2026-08-09). This cue used
-// to tell the operator to "wait for the window to come round" when live sat above the dip. That advice was
-// measured HARMFUL for a resting offer. At the production dip level, P(touch inside the predicted window |
-// touched at all) is 71.2% versus 70.5% for a RANDOM window of the same width — the window carries
-// essentially nothing about WHEN a resting offer fills. A red team reached the same conclusion by a
-// different route: first-touch timing of a resting bid shows no window concentration (14.6% vs 15.9%).
-// Waiting therefore forfeits ~29% of bid fill-days at an IDENTICAL price. The window predicts WHERE the
-// extremes land, not WHEN an offer fills, so: a resting bid is placed AT THE LEVEL, now, and rests all
-// day; the dip hours are for ATTENDED market-taking only. Honesty limits: one 74-day era, one update
-// cycle, touch measured from hourly avgLow/avgHigh aggregates rather than executed fills (so it bounds a
-// real offer from above), item-day clustering ⇒ effective n well below nominal.
-// The cue KEY 'wait' is retained (callers and tests key on it) — its MEANING and wording changed, not its
-// identity. See SOFT_BUY_CUE_TEXT below.
-// SYMMETRIC with screen-flip-niches.mjs's digest soft-buy column — since DT4 (2026-08-10) the HOURS half
-// of that cell is GATED, so on ~99% of items it reads `no reliable hours`/`hours unverified` rather than
-// an HH:00–HH:00 span; both surfaces get their wording from the ONE softBuyHoursClause helper. The
-// @floor / +X% marker half is ungated and unchanged. (Old text: "same HH:00–HH:00 · @floor / +X% cell
-// format + the same SOFT_BUY_AT_FLOOR_PCT boundary" — accurate before the gate.) Both surfaces read consistently — the digest's
-// digestSoftBuy reconciles onto THIS helper (ONE implementation, not two). INFORM-ONLY (tier: context) —
-// n≈0, a HEURISTIC, never gates, never a verdict, never a screen.json/rank input (rule 4). A null/absent
-// profile (or no dip level) ⇒ null ⇒ the note simply doesn't render (degrade like trajectoryRead).
+// THE WINDOW IS NOT A REASON TO DELAY A RESTING BID (DT2, PLAN-DIURNAL-TRIAGE). Telling the operator to
+// "wait for the window to come round" when live sits above the dip is measured HARMFUL for a resting
+// offer. At the production dip level, P(touch inside the predicted window | touched at all) is 71.2%
+// versus 70.5% for a RANDOM window of the same width — the window carries essentially nothing about WHEN
+// a resting offer fills. A red team reached the same conclusion by a different route: first-touch timing
+// of a resting bid shows no window concentration (14.6% vs 15.9%). Waiting therefore forfeits ~29% of bid
+// fill-days at an IDENTICAL price. The window predicts WHERE the extremes land, not WHEN an offer fills,
+// so: a resting bid is placed AT THE LEVEL, now, and rests all day; the dip hours are for ATTENDED
+// market-taking only. Honesty limits: one 74-day era, one update cycle, touch measured from hourly
+// avgLow/avgHigh aggregates rather than executed fills (so it bounds a real offer from above), item-day
+// clustering ⇒ effective n well below nominal.
+// The cue KEY 'wait' is retained (callers and tests key on it) — it MEANS "rest the bid at the level",
+// not "delay". See SOFT_BUY_CUE_TEXT below.
+// SYMMETRIC with screen-flip-niches.mjs's digest soft-buy column — DT4 GATES the HOURS half of that
+// cell, so on ~99% of items it reads `no reliable hours`/`hours unverified` rather than an HH:00–HH:00
+// span; both surfaces get their wording from the ONE softBuyHoursClause helper, and the @floor / +X%
+// marker half is ungated. Both surfaces read consistently — the digest's digestSoftBuy reconciles onto
+// THIS helper (ONE implementation, not two). INFORM-ONLY (tier: context) — n≈0, a HEURISTIC, never
+// gates, never a verdict, never a screen.json/rank input (rule 4). A null/absent profile (or no dip
+// level) ⇒ null ⇒ the note simply doesn't render (degrade like trajectoryRead).
 //
-// FLOOR-AWARE cue (the fang under-read fix, Ben 2026-07-21): a bare '@floor · buy now' misreads a
+// FLOOR-AWARE cue (the fang under-read fix, Ben): a bare '@floor · buy now' misreads a
 // post-update dump — an item sitting at its diurnal floor EVERY day because it's falling — as a discount
 // (the fang dumped while the label stayed bullish). The fix does NOT re-derive a slope: it consults the
 // MULTI-DAY floorCeilingTrack `fc` the caller ALREADY computed one line away (pushTrajectory's fcTrack
@@ -1438,7 +1436,7 @@ export function deriveDiurnalRange(profile, { liveLo = null, liveHi = null } = {
 //   • fc.floorBreak.broke OR classification 'crash-risk'          → 'caution'   — @floor is a dump artifact,
 //                                                                    not a discount (the guard)
 //   • classification 'healthy-trend' | 'compressing-up' (rising)  → 'favorable' — a dip WITHIN an uptrend
-//   • anything else (ranging/cooling/mild-cooldown/flat), OR no    → 'buy now'   — today's unchanged behavior
+//   • anything else (ranging/cooling/mild-cooldown/flat), OR no    → 'buy now'   — the unqualified cue
 //     fc / too few days to classify
 // UPDATE-BLINDNESS CAVEAT (rule 4): 'favorable' is a PRICE-TREND read ONLY — blind to game-update/regime
 // breaks (a rising floor equally describes a PRE-update pump), so it is worded as a DESCRIPTION ("dip in
@@ -1451,21 +1449,20 @@ export const SOFT_BUY_AT_FLOOR_PCT = 0.5;   // live within this % over the dip f
 // the @floor floor-aware cue off the ALREADY-computed fc (NO re-derived slope — discrete floorBreak +
 // classification only). Missing fc / no classification ⇒ 'buy now' (honest degrade: no favorable/caution
 // claim without the floor read). Module-internal; the read carries the resolved `cue`, formatSoftBuy words it.
-// ── A (2026-08-06, the Snape grass entry) — the LEVEL half this cue was structurally blind to ────────
+// ── A (the Snape grass entry) — the LEVEL half this cue is otherwise structurally blind to ──────────
 // `fc` answers SHAPE over a 5-DAY window: which way are the floor and ceiling sloping? It cannot answer
 // LEVEL — is this price near durable support at all? On a 4-day-old spike those two disagree completely,
 // because the 5-day window sits ENTIRELY INSIDE the spike: the floor "rose +29/d" precisely BECAUSE the
 // item spiked, so the cue read `▲ favorable — dip in uptrend` while the 28-day floor check was
 // simultaneously flagging it at "1.68× typical swing above the 28d floor 960" on the same item, on the
 // same pass, three passes running. Snape grass was bought at 1,051 into a base whose pre-spike daily
-// HIGHS were 976–1,038, i.e. break-even (1,073) sat above the entire prior range. (That reason text
-// used to end "— not near durable support"; retired 2026-08-08, see SOFT_BUY_CUE_TEXT below.)
+// HIGHS were 976–1,038, i.e. break-even (1,073) sat above the entire prior range.
 //
-// RIPPLE (2026-08-08): this cue fires off floorValidator's STATUS, so retuning FLOOR_CAUTION_RANGES
-// 1.0 → 1.5 NARROWED it — a buy 1.0–1.5 swings over the floor no longer trips `unproven-base`. That is
-// intended: that band measured P(drawdown ≥ 1 swing) of 12.0% against 29.8% above it. The Snape grass
-// anchor sat at 1.68×, so the case this cue was BUILT for still fires. Re-check that anchor if the
-// constant moves again — composing a verdict means inheriting its thresholds, deliberately.
+// RIPPLE: this cue fires off floorValidator's STATUS, so it inherits FLOOR_CAUTION_RANGES — at 1.5 a buy
+// 1.0–1.5 swings over the floor does NOT trip `unproven-base`. That is intended: that band measured
+// P(drawdown ≥ 1 swing) of 12.0% against 29.8% above it. The Snape grass anchor sat at 1.68×, so the
+// case this cue was BUILT for still fires. Re-check that anchor if the constant moves — composing a
+// verdict means inheriting its thresholds, deliberately.
 //
 // The fix is a COMPOSITION, not a fourth implementation (Ben's explicit ask: don't run the same check in
 // several places and interpret it disjointedly). We take `floorValidator`'s ALREADY-COMPUTED result and
@@ -1516,7 +1513,7 @@ export function softBuyHoursClause(reliable, dipWindow, fmtHour, { style = 'full
     if (reliable === true) return `${hrs()} (may repeat)`;   // MAY — same reason as the full style below
     return reliable === false ? 'no reliable hours' : 'hours unverified';
   }
-  // "MAY repeat" (Ben, 2026-08-10) — NOT a hedge for its own sake. The gate correlates the two parity
+  // "MAY repeat" (Ben) — NOT a hedge for its own sake. The gate correlates the two parity
   // halves' 24h SHAPE VECTORS and never compares their dip/peak HOURS; measured, those halves agree on
   // the dip hour only 25.8% of the time. "repeats most days" asserted something never checked. The
   // weaker verb states what IS established (this item has a reproducible intraday shape) and invites a
@@ -1530,29 +1527,29 @@ export function softBuyHoursClause(reliable, dipWindow, fmtHour, { style = 'full
 // identically. The 'favorable' text carries its update-blindness caveat inline (never an imperative GO).
 export const SOFT_BUY_CUE_TEXT = {
   'buy now':   'buy now',
-  // DT2 (2026-08-09): was the bare word 'wait', meaning "wait for the dip window to come round". That is
-  // measured wrong for a RESTING offer — the window doesn't time fills (71.2% vs 70.5% random), so waiting
-  // forfeits ~29% of fill-days at the same price. The level is the decision; the hours are attended-taking
-  // context. Key kept as 'wait' so callers/tests don't churn; the wording no longer says to delay.
+  // DT2: the key reads 'wait' but must NOT say to delay. "Wait for the dip window to come round" is
+  // measured wrong for a RESTING offer — the window doesn't time fills (71.2% vs 70.5% random), so
+  // waiting forfeits ~29% of fill-days at the same price. The level is the decision; the hours are
+  // attended-taking context. The key stays 'wait' so callers/tests don't churn.
   'wait':      'rest the bid at the floor now — windows don\'t time fills',
   'favorable': '▲ favorable — dip in uptrend (price-trend only)',
   'caution':   '▽ caution — floor breaking ↓',
   // A: the 5d floor is RISING but the 28d durable-support check still cautions the level — a post-spike
   // retracement, not a proven base. Worded to say what it IS (unproven base) rather than just "careful",
   // and formatSoftBuy appends the swing multiple so the reader gets the number, not just the adjective.
-  // 2026-08-08: "not near durable support" was RETIRED from floorValidator's own reason — the floor it
-  // names prints only 6–8.5% of the time within 48h, so the DISTANCE carries information but the
-  // DESTINATION does not. This cue composes that verdict, so it must not re-assert what the source no
-  // longer claims. It says elevated-over-the-floor, which is what is actually measured.
+  // It must NOT say "not near durable support": floorValidator's own reason dropped that phrase because
+  // the floor it names prints only 6–8.5% of the time within 48h, so the DISTANCE carries information
+  // but the DESTINATION does not. This cue composes that verdict and cannot assert what the source does
+  // not claim. It says elevated-over-the-floor, which is what is actually measured.
   'unproven-base': '▽ caution — dip into an UNPROVEN base, still elevated over the durable floor',
 };
 
 // formatSoftBuy(read, opts) — the ONE one-line render off a softBuyRead result, shared so both surfaces
 // phrase it identically. Null read ⇒ null (no note). `fmtHour` defaults to the HH:00 formatter that
 // money-format's fmtHour produces, so windowread stays import-free; a caller may pass its own to match.
-// DT2 (2026-08-09): LEVEL-FIRST. The floor level leads the line and the dip window moved to a trailing
-// parenthetical explicitly labelled "attended", because the window does not time a resting offer's fill
-// (see softBuyRead's header for the measurement). `fmt` is injected like every other renderer here so
+// DT2: LEVEL-FIRST. The floor level leads the line and the dip window trails in a parenthetical
+// explicitly labelled "attended", because the window does not time a resting offer's fill (see
+// softBuyRead's header for the measurement). `fmt` is injected like every other renderer here so
 // windowread stays dependency-free; it formats the floor LEVEL, which is the number the operator acts on.
 export function formatSoftBuy(read, { fmtHour = h => String(h).padStart(2, '0') + ':00', fmt = String } = {}) {
   if (!read) return null;
@@ -1607,19 +1604,17 @@ export function diurnalPhase(profile, { now = new Date() } = {}) {
  * phaseFromLap(lap, { now }) — the ⏲ cycle-position token read off the peak window the lap ACTUALLY
  * RENDERS, rather than off a separately-fitted profile.
  *
- * WHY THIS EXISTS (DT4b review, 2026-08-10 — this was a shipped REGRESSION, not a tidy-up). DT4b made
- * a passing lap refit at the gate's window while the screen kept feeding `diurnalPhase` its own
- * nights=7 profile, and joined BOTH onto one printed line. `diurnalPhase` is a pure function of
- * `profile.peak.startH/endH` — the very span DT4b moved — so the line began contradicting itself:
- * id 6034 rendered "ASK 40 (peak 13:00–18:00) … hours repeat most days · ⏲ post-peak — cooling …
- * starter size" at 12:00, i.e. one hour BEFORE its own stated peak opened. 3 of the 4 ids cited as
- * that chunk's live verification did this; ~19% of gate-passers board-wide.
+ * WHY THIS EXISTS (DT4b). A passing lap refits at the gate's window; feeding `diurnalPhase` a
+ * separately-fitted nights=7 profile and joining BOTH onto one printed line makes the line contradict
+ * itself. Measured when it did: id 6034 rendered "ASK 40 (peak 13:00–18:00) … hours repeat most days ·
+ * ⏲ post-peak — cooling … starter size" at 12:00, i.e. one hour BEFORE its own stated peak opened — 3 of
+ * 4 live-verified ids, ~19% of gate-passers board-wide.
  *
- * The commit dismissed the risk with "phase is a cycle-position WORD, not a printed hour span, so it
- * is not gated". That reasoning was simply wrong, and it is recorded here because the shape recurs:
- * a field derived FROM a span is not insulated from that span moving. Deriving the token from the
- * lap's own `peakWindow` makes the two agree by construction, on any fit, forever — which is why this
- * is the fix rather than "also pass nights=14 at the call site".
+ * "Phase is a cycle-position WORD, not a printed hour span, so it is not gated" is the reasoning that
+ * lets this back in, and it is wrong — the shape recurs: A FIELD DERIVED FROM A SPAN IS NOT INSULATED
+ * FROM THAT SPAN MOVING. Deriving the token from the lap's own `peakWindow` makes the two agree by
+ * construction, on any fit, forever — which is why this is the fix rather than "also pass nights=14 at
+ * the call site".
  *
  * PURE, zero fetch. Null lap / degraded / no peak window ⇒ null (caller renders no token).
  */
@@ -1645,15 +1640,13 @@ export function phaseFromLap(lap, { now = new Date() } = {}) {
 export const HOURCONC_MIN_DAYS = 5;   // PLACEHOLDER, n≈0 — fewer scored days than this ⇒ can't judge concentration
 export const HOURCONC_MIN_R = 0.6;    // PLACEHOLDER, n≈0 — circular concentration floor for "clean"
 
-// DEMOTED 2026-08-10 (DT4). This function's `clean` verdict USED to decide whether formatTimedLap
-// printed the dip/peak hours — and its `false` arm withheld the BID/ASK LEVELS too, on ~97% of items.
-// It was then scored against held-out days and does NOT discriminate: clean=true (n=60) dip +5.0pp /
-// peak +4.4pp versus clean=false (n=1919) dip +3.6pp / peak +4.7pp — no gap, marginally BACKWARDS on
-// the peak side. windowReliability replaced it for that decision. `clean` is still computed, still
-// shadow-logged (suggestlog) and STILL GATES THE APP'S TRENDS ★ BADGE (js/trends.js) — that consumer
-// was deliberately not re-verdicted, because the measurement above is about hour-RANKING skill and
-// whether it also fails as a ★ criterion is a separate question nobody has asked. Do not read this
-// function's survival as evidence the flag works. See DT4-WINDOW-GATE-FINDINGS.md §3.
+// DEMOTED (DT4) — do NOT re-promote `clean` to a display gate. Scored against held-out days it does NOT
+// discriminate: clean=true (n=60) dip +5.0pp / peak +4.4pp versus clean=false (n=1919) dip +3.6pp / peak
+// +4.7pp — no gap, marginally BACKWARDS on the peak side. windowReliability owns that decision instead.
+// `clean` is still computed, still shadow-logged (suggestlog) and STILL GATES THE APP'S TRENDS ★ BADGE
+// (js/trends.js) — that consumer is deliberately un-re-verdicted, because the measurement above is about
+// hour-RANKING skill and whether it also fails as a ★ criterion is a separate question nobody has asked.
+// Do not read this function's survival as evidence the flag works. See DT4-WINDOW-GATE-FINDINGS.md §3.
 export function hourConcentration(series, { nights = 14, now = new Date() } = {}) {
   const pad2 = n => String(n).padStart(2, '0');
   const localDay = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -1691,79 +1684,62 @@ export function hourConcentration(series, { nights = 14, now = new Date() } = {}
 }
 
 // --- window RELIABILITY: the split-half gate on whether the dip/peak HOURS mean anything ---------
-// PLAN-DIURNAL-TRIAGE DT4. The triage measured that the diurnal window carries ~zero information for
-// the MEDIAN item (ungated capture ≈ 7–11bp against a 200bp tax), while a small identifiable minority
-// is genuinely cyclical. This is the statistic that tells the two apart, so a surface can print hours
-// only when they've earned it.
+// PLAN-DIURNAL-TRIAGE DT4. The triage measured that the diurnal window carries ~zero information for the
+// MEDIAN item (ungated capture ≈ 7–11bp against a 200bp tax), while a small identifiable minority is
+// genuinely cyclical. This is the statistic that tells the two apart, so a surface prints hours only
+// when they've earned it.
 //
 // THE STATISTIC. Split the kept days by PARITY (even/odd day index), run hourProfile on each half, and
 // Pearson-correlate the two 24-hour de-trended shape vectors — devLow against devLow, devHi against
 // devHi. Interleaving in TIME (not first-half/second-half) means both halves see the same regime, so
 // this measures RELIABILITY (does the shape reproduce?) and not stability (did the regime hold?). The
 // gate is min(rLow, rHi): a window is only as trustworthy as its weaker side, and that is the statistic
-// the DT4 study's headline was measured on. Must be recomputed LIVE, never whitelisted — half-to-half
-// persistence for borderline items is only ~59%.
+// the DT4 study's headline was measured on. Recompute LIVE, never whitelist — half-to-half persistence
+// for borderline items is only ~59%.
 //
-// WHY nights=14 AND NOT THE PROFILE'S OWN WINDOW — this is load-bearing, do not "simplify" it away.
-// The DT4 study computed the gate over a ~30-day fit period. The surfaces that render hours profile at
-// nights=7 (softBuyRead, the quote/screen diurnal note) or nights=14 (watch-positions held lots), and
-// the plan's spec said to take "2 extra hourProfile calls on the in-hand series". MEASURED 2026-08-10
-// over the 1h archive (4,156 items, 45d): at a 7-day window the gate is uncomputable for 4,156 of
-// 4,156 — seven days splits into halves of 4 and 3, and a 3-day half is below HOURPROFILE_MIN_DAYS, so
-// hourProfile returns null. The spec as written yields no gate at all. At 14 days it computes for ~78%
-// of items, which is why the window is pinned HERE rather than inherited from the caller's `nights`.
-// Callers pass the RAW in-hand 1h series (~15 days from the wiki /timeseries cap); this slices its own
-// window off it, independent of whatever `nights` the rendered profile used.
+// WHY nights=14 AND NOT THE PROFILE'S OWN WINDOW — load-bearing, do not "simplify" it away. The DT4
+// study computed the gate over a ~30-day fit period, while the surfaces render hours profiled at
+// nights=7 (softBuyRead, the quote/screen diurnal note) or nights=14 (watch-positions held lots).
+// MEASURED over the 1h archive (4,156 items, 45d): at a 7-day window the gate is uncomputable for 4,156
+// of 4,156 — seven days splits into halves of 4 and 3, and a 3-day half is below HOURPROFILE_MIN_DAYS,
+// so hourProfile returns null. At 14 days it computes for ~78% of items, which is why the window is
+// pinned HERE rather than inherited from the caller's `nights`. Callers pass the RAW in-hand 1h series
+// (~15 days from the wiki /timeseries cap); this slices its own window off it.
 //
-// THE THRESHOLD IS MEASURED AT THIS WINDOW, not transferred from the study. The 14-day gate selects a
+// THE THRESHOLD IS MEASURED AT THIS WINDOW, not transferred from the study: the 14-day gate selects a
 // LARGELY DIFFERENT item set than the 30-day one (only 25% of 30d-passers also pass at 14d), so the
-// study's +14.8pp could not simply be inherited. Re-running the study's TEST arm unchanged and varying
+// study's +14.8pp could not simply be inherited. Re-running the study's TEST arm unchanged, varying
 // ONLY the gate window (1,979 items scored by both, paired):
 //     gate window | PASS n | pass dip | pass peak | FAIL n | fail dip | fail peak | gap(dip)
 //         30d     |   100  |  +14.0pp |  +16.3pp  |  1879  |  +3.1pp  |  +4.0pp   | +10.9pp ± 2.1 (t≈5.2)
 //         14d     |    40  |  +17.3pp |  +17.4pp  |  1939  |  +3.3pp  |  +4.4pp   | +14.0pp ± 2.9 (t≈4.9)
-// Monotone across all five r buckets on both sides at both windows — but note the top 14d bucket is
-// n=4 (+30.0pp dip / +36.7pp peak), so the monotonicity is carried at its decisive end by anecdote
-// (rule 4). ~2% of items pass on that panel; ~0.8% on the live board, which is less selective.
+// Monotone across all five r buckets on both sides at both windows — but the top 14d bucket is n=4
+// (+30.0pp dip / +36.7pp peak), so the monotonicity is carried at its decisive end by anecdote (rule 4).
+// ~2% of items pass on that panel; ~0.8% on the live board, which is less selective. The lift is an
+// hour-RANKING result: 14d-fitted LEVELS are NOT measured to beat 7d-fitted ones.
 //
-// THE FIT-WINDOW TRANSFER GAP — found by review 2026-08-10, CLOSED by DT4b the same day.
-// The gate judges a 14-day shape; the lift was measured on a ~30-day FIT; but the surfaces that render
-// the window fitted it at nights=7 (screen's DIURNAL_NIGHTS, quote's diurnal note). So a passing item
-// showed a 7-day-fitted window carrying a 14-day-measured warrant. Measured over the archive
-// (gate-passers only, n=32): the 7d and 14d fits agree on the dip hour 34.4% of the time, the peak hour
-// 31.3%, and on the dip window SPAN only 18.8% — median |Δ| 1h, max 10h. Usually adjacent, so the
-// marker was not fabricated, but it was looser than "these exact hours were verified".
-// FIXED by `displayFitNights` (below): when — and ONLY when — this gate passes, the whole lap refits
-// over the gate's own window, so the hours rendered are the hours verified. The rejected alternative,
-// rendering 14d hours beside 7d LEVELS, is not implementable coherently: deriveDiurnalRange reads the
-// level OFF the dip/peak window, so the two cannot be split without naming a price that is not the
-// price at that hour. The other ~99% (reliable false/null) keep the caller's window untouched and
-// print no hours at all, so they have no gap to close. Confirmed on the live path 2026-08-10: four
-// real gate-passers (ids 1603/449/1607/6034) each rendered their 14d window, not their 7d one.
-// NOTE what this does NOT claim: 14d-fitted LEVELS are not measured to beat 7d-fitted ones. The fix
-// buys coherence between warrant and display — the lift table above is an hour-RANKING result and
-// says nothing about level quality (rule 4).
-// (PER-SIDE VARIANT, corrected 2026-08-10 after review — an earlier version of this comment stated
-// this BACKWARDS and used the error to justify the choice. The measured run: gating the peak side by
-// its OWN rHi scored +13.4pp; gating it by the LOW-side rLow scored +17.0pp; min(both) scored +17.4pp.
-// So the own-r variant scored LOWEST, and the genuinely interesting finding is the opposite of what was
-// written: the PEAK side is better selected by the LOW-side r than by its own. min(both) still wins or
-// ties on this panel, so the pre-registered statistic stands on its own merits and does NOT need the
-// per-side comparison to justify it. Treat the rLow-selects-peaks observation as unexplained and
-// unpinned — n≈83–101, overlapping subsets, found by inspection after the fact.)
+// THE FIT-WINDOW TRANSFER GAP — a gate that judges 14 days while the surface renders a 7-day fit — is
+// owned by `displayFitNights` below (refit when you can, disclose when you cannot). Its header carries
+// the measurements and the limits; they are not restated here.
 //
-// NOT REDUNDANT WITH hourConcentration's `clean` (measured, same run, same window). `clean` is what
-// currently decides whether formatTimedLap prints hours, and it does not discriminate: clean=true
-// (n=60) dip +5.0pp / peak +4.4pp versus clean=false (n=1919) dip +3.6pp / peak +4.7pp — no gap, and
-// marginally BACKWARDS on the peak side. This gate separates inside it: among clean=true items, the
-// ones failing here run dip +2.6pp / peak +1.8pp (n=52) while the ones passing run +20.7pp / +21.5pp
-// (n=8). See DT4-WINDOW-GATE-FINDINGS.md.
+// PER-SIDE VARIANT (measured): gating the peak side by its OWN rHi scored +13.4pp; gating it by the
+// LOW-side rLow scored +17.0pp; min(both) scored +17.4pp. The own-r variant scores LOWEST and the PEAK
+// side is better selected by the LOW-side r than by its own — so do NOT "fix" min() into a per-side r.
+// min(both) still wins or ties on this panel, so the pre-registered statistic stands on its own merits
+// and does not need the per-side comparison to justify it. Treat the rLow-selects-peaks observation as
+// unexplained and unpinned — n≈83–101, overlapping subsets, found by inspection after the fact.
 //
-// INFORM-ONLY, n≈0 for any gp claim. This gates DISPLAY of the hours and nothing else — it never
-// moves a level, a grade, a rank, a verdict or screen.json. What it buys is measured as within-day
-// HOUR RANKING ("the dip hour printed below the day's median"), which is NOT "a resting bid there
-// fills more often" — the triage measured the resting-offer question directly and found ~nothing, so
-// the hours remain ATTENDED-taking context either way (DT2).
+// NOT REDUNDANT WITH hourConcentration's `clean` (measured, same run, same window): `clean` does not
+// discriminate — clean=true (n=60) dip +5.0pp / peak +4.4pp versus clean=false (n=1919) dip +3.6pp /
+// peak +4.7pp, no gap and marginally BACKWARDS on the peak side. This gate separates INSIDE it: among
+// clean=true items the ones failing here run dip +2.6pp / peak +1.8pp (n=52) while the ones passing run
+// +20.7pp / +21.5pp (n=8). See DT4-WINDOW-GATE-FINDINGS.md.
+//
+// INFORM-ONLY, n≈0 for any gp claim. This gates DISPLAY of the hours and nothing else — never a level,
+// a grade, a rank, a verdict or screen.json. What it buys is measured as within-day HOUR RANKING ("the
+// dip hour printed below the day's median"), which is NOT "a resting bid there fills more often" — the
+// triage measured the resting-offer question directly and found ~nothing, so the hours remain
+// ATTENDED-taking context either way (DT2).
 export const WINDOW_RELIABLE_R = 0.6;          // min(rLow,rHi) at/above this ⇒ the hours are worth printing (PLACEHOLDER — the curve is smooth, this is a wording boundary not a cliff)
 export const WINDOW_RELIABLE_NIGHTS = 14;      // the gate window, PINNED — see "WHY nights=14" above; a 7-day window is uncomputable for ~100% of items
 export const WINDOW_RELIABLE_MIN_HOURS = 6;    // shared hours-of-day both halves scored, below which a correlation means nothing
@@ -1841,97 +1817,58 @@ export function windowReliability(series, { nights = WINDOW_RELIABLE_NIGHTS, now
 }
 
 /**
- * displayFitNights — DT4b (2026-08-10): CLOSES the fit-window transfer gap documented in
- * windowReliability's header. ONE home for the rule "which window does a DISPLAYED diurnal
- * window get fitted over".
- *
- * ROUTING — CLOSED 2026-08-10 (DT4b follow-up). This block previously read "ROUTING IS A CONVENTION,
- * NOT AN ENFORCED INVARIANT", naming two surfaces that rendered gated hours WITHOUT routing through
- * this function and agreed with the gate only because their own constants happened to equal
- * WINDOW_RELIABLE_NIGHTS — an unpinned coincidence with no test on it. Both are now handled, by the
- * TWO different mechanisms the situation actually calls for:
- *   `read-schedule.mjs`     — ROUTES. Its `PROFILE_NIGHTS` is now `WINDOW_RELIABLE_NIGHTS` (imported,
- *                             not a literal) and its worker calls displayFitNights, so a passing row
- *                             is fitted over the days the gate judged. Output is byte-identical today;
- *                             the point is that it stays correct if the gate window ever moves.
- *   `read-window-range.mjs` — DISCLOSES, deliberately. Its window is `--nights`, the caller's explicit
- *                             question; silently refitting it would make the flag a lie. Its default is
- *                             now pinned to WINDOW_RELIABLE_NIGHTS, and when an explicit --nights moves
- *                             the fit off the gate's window it prints `fitWindowMismatchNote` instead.
- *   `js/trends.js`          — ROUTES BY DEFAULT (the third surface, found while closing the other two:
- *                             its lookback toggle offered only 7d/28d, so the displayed fit NEVER
- *                             matched the gate). 14d added and defaulted; 7d/28d now disclose.
- * The rule has one home and two renderings — refit when you can, disclose when you cannot.
- *
- * ⚠ "THREE SURFACES, ALL HANDLED" IS FALSE — corrected 2026-08-10 after review. Those three are the
- * ones that render a GATED hour claim (hours shown alongside the gate's verdict). At least four OTHER
- * live sites render diurnal HOUR SPANS off their own literal window, ungated and undisclosed:
- *     js/trends.js `renderForecast`        — hourProfile(...,{nights:7}) → diurnalForecast → the
- *                                            "(HH:00–HH:00)" in the Forward-forecast readout. Forty
- *                                            lines below the block DT4c fixed, in the same file.
- *     quote-items.mjs (window-clear note)  — "in the HH–HH peak window", nights:7
- *     quote-items.mjs (big-ticket held lot)— "· peak window HH–HH", literal nights:14
- *     screen-flip-niches.mjs (window-clear)— same note at DIURNAL_NIGHTS = 7
- * None is wrong TODAY in the way DT4b was — they make no reliability claim — but they are the same
- * shape, and a reader of this header would have been told they were covered. They are not. Nothing is
- * machine-enforced either: no guard stops a new surface fitting its own window silently. If you add
- * one, pick a mechanism above; if you change WINDOW_RELIABLE_NIGHTS, grep `hourProfile(` repo-wide
- * rather than trusting any count written here.
- *
- * THE GAP IT CLOSES. The gate judges a 14-day shape (its window is pinned — a 7-day window is
- * uncomputable for ~100% of items). The surfaces rendered the window at nights=7. So a passing
- * item printed a 7-day-fitted span carrying a 14-day-measured warrant, and MEASURED over the
- * archive (gate-passers, n=32) those two fits agree on the dip hour only 34.4% of the time and
- * on the SPAN only 18.8%. The marker was not fabricated (median |Δ| 1h) but it was looser than
- * "these exact hours were verified", which is what the marker says.
- *
- * WHY THE FIT MOVES RATHER THAN THE WORDING. The alternative — print the gate's 14d hours beside
- * the caller's 7d levels — is incoherent in principle: deriveDiurnalRange derives the BID/ASK LEVELS
- * *from* the dip/peak windows, so a 14d hour paired with a 7d level can name a price that is not the
- * price at that hour. So when the gate passes, the WHOLE lap refits at the gate's window.
- *   (CALIBRATED after review. An earlier version said the two "cannot be separated", full stop, and
- *   that overstates it — the reason was load-bearing in three places, so it is worth being exact.
- *   Each hour's `lowRecent`/`hiRecent` comes from `recentSet = allDays.slice(-recentN)`, which does
- *   NOT depend on `nights`; measured across 3,233 items, only 10.9% of shared hour-entries differ
- *   between a 7d and a 14d fit. The mixed render is therefore implementable and would agree ~89% of
- *   the time. The coupling is real but NARROW, and this fix stands on the coherence numbers in the ⚠
- *   block below — not on an impossibility that isn't one.)
- *
- * WHAT THIS DOES AND DOES NOT CHANGE. It changes the fit ONLY when `reliable === true` — and that
- * is precisely the branch in which hours are displayed at all (false/null render "levels only", so
- * they have no gap to close and keep the caller's window untouched). ~0.8% of a live board passes.
- * DO NOT "simplify" this into a blanket nights=14 for the callers: that would move the levels of
- * the other ~99%, which no measurement here covers. (Byte-identity for non-passers is not an
- * assumption — it was checked over 8,000 lap pairs, pre- vs post-change, and 0 non-passers differ.)
- *
- * ⚠ WHAT THIS IS **NOT** — CORRECTED 2026-08-10 AFTER REVIEW, READ THIS BEFORE CITING THE CHUNK.
- * An earlier version of this header (and of the DT4b commit message) claimed the fix means "the hours
- * rendered are the hours verified". THAT IS FALSE, and it is the kind of false-for-a-good-reason claim
- * this repo keeps shipping. `windowReliability` correlates the two parity halves' 24-element de-trended
- * SHAPE VECTORS. It never compares their dip/peak HOURS, and a pooled 14-day fit is a third object that
- * neither half produced. Measured over the 31 live gate-passers:
- *     the two halves agree on the dip hour     8/31 = 25.8%   (peak hour 6/31 = 19.4%)
- *     median circular |Δ| between half dip hours   3h         (peak 2h)
- *     halves with ZERO dip-hour-set overlap    13/31 = 42%
- *     pooled 14d dip hour matches NEITHER half  9/31 = 29%
- * id 6034 — r=0.90, the strongest passer on the board — has even-half dip 20:00 vs odd-half dip 08:00,
- * 12 hours apart, and still renders "hours repeat most days".
- *
- * WHAT IS ACTUALLY TRUE: the displayed fit now uses the same DAYS the gate examined, and the rendered
- * hour set is measurably CLOSER to what the gate saw than the 7-day fit was (mean Jaccard against the
- * two halves 0.475 at 14d vs 0.352 at 7d; better on 20 items, worse on 5, tied on 6). That is a real
- * improvement and it is the whole of the claim. It is NOT a verification of the specific hours shown.
- *
- * HONEST LIMIT (rule 4). 14d-fitted levels are not measured to beat 7d-fitted ones; the lift numbers in
- * windowReliability's header are an hour-RANKING result. And note the 34.4%/18.8% cross-fit agreement
- * quoted there cuts BOTH ways: two subwindows of the same passing item disagreeing that often is itself
- * evidence the argmin hour is not very reproducible — which is an open question about the MARKER's
- * wording ("hours repeat most days"), not just about which window feeds it. Flagged, not silently
- * reworded: the gate's measured lift is real, so the marker earns its place; only its phrasing
- * overclaims. Ben's call.
- *
- * PURE, zero fetch (windowReliability is pure and is computed once here, not twice).
+ * displayFitNights (DT4b) — ONE home for the rule "which window does a DISPLAYED diurnal window get
+ * fitted over". PURE, zero fetch (windowReliability is computed once here, not twice).
  * @returns {{ reliability, fitNights }}
+ *
+ * THE GAP IT CLOSES. The gate judges a 14-day shape (pinned — a 7-day window is uncomputable for ~100%
+ * of items) while a surface may fit its window at nights=7, so a passing item prints a 7-day-fitted span
+ * carrying a 14-day-measured warrant. MEASURED over the archive (gate-passers, n=32) the two fits agree
+ * on the dip hour only 34.4% of the time, the peak hour 31.3%, and on the SPAN only 18.8% (median |Δ|
+ * 1h, max 10h) — not fabricated, but looser than "these exact hours were verified". So when the gate
+ * passes the WHOLE lap refits at the gate's window: deriveDiurnalRange derives the BID/ASK LEVELS *from*
+ * the dip/peak windows, so a 14d hour paired with a 7d level can name a price that is not the price at
+ * that hour. That coupling is real but NARROW, not an impossibility — `lowRecent`/`hiRecent` come from
+ * `allDays.slice(-recentN)`, independent of `nights`, and across 3,233 items only 10.9% of shared
+ * hour-entries differ between a 7d and a 14d fit — so this rests on the coherence numbers below, not on
+ * a mixed render being unbuildable.
+ *
+ * SCOPE. The fit moves ONLY when `reliable === true`, precisely the branch where hours are displayed at
+ * all (false/null render "levels only" and keep the caller's window). ~0.8% of a live board passes. DO
+ * NOT "simplify" this into a blanket nights=14 for callers: that moves the levels of the other ~99%,
+ * which no measurement here covers. Byte-identity for non-passers is checked, not assumed (8,000 lap
+ * pairs, 0 differ).
+ *
+ * ROUTING — one rule, two renderings: refit when you can, disclose when you cannot. read-schedule.mjs
+ * ROUTES (`PROFILE_NIGHTS` is `WINDOW_RELIABLE_NIGHTS`, imported not a literal, and its worker calls
+ * displayFitNights, so a gate-window move is safe); js/trends.js ROUTES BY DEFAULT (14d in the lookback
+ * toggle, defaulted; 7d/28d disclose); read-window-range.mjs DISCLOSES deliberately — its window is
+ * `--nights`, the caller's explicit question, so a silent refit would make the flag a lie (default
+ * pinned to WINDOW_RELIABLE_NIGHTS, else `fitWindowMismatchNote`).
+ * ⚠ NOT "EVERY SURFACE": those three render a GATED hour claim. At least four OTHER live sites render
+ * diurnal HOUR SPANS off their own literal window, ungated and undisclosed — js/trends.js
+ * `renderForecast` (nights:7 → diurnalForecast → the "(HH:00–HH:00)" readout), quote-items.mjs's
+ * window-clear note (nights:7) and big-ticket held-lot line (nights:14), screen-flip-niches.mjs's
+ * window-clear note (DIURNAL_NIGHTS = 7). None makes a reliability claim, so none is wrong today, but
+ * nothing is machine-enforced. Adding a surface, pick a mechanism above; changing
+ * WINDOW_RELIABLE_NIGHTS, grep `hourProfile(` repo-wide.
+ *
+ * ⚠ WHAT THIS IS **NOT** — READ BEFORE CITING THE CHUNK. It does NOT mean "the hours rendered are the
+ * hours verified"; that claim is FALSE. `windowReliability` correlates the two parity halves' 24-element
+ * de-trended SHAPE VECTORS — it never compares their dip/peak HOURS, and a pooled 14-day fit is a third
+ * object neither half produced. Over the 31 live gate-passers: the halves agree on the dip hour 8/31 =
+ * 25.8% (peak 6/31 = 19.4%), median circular |Δ| 3h (peak 2h), 13/31 = 42% share ZERO dip-hours, and the
+ * pooled 14d dip hour matches NEITHER half on 9/31 = 29%. id 6034 — r=0.90, the strongest passer on the
+ * board — has even-half dip 20:00 vs odd-half dip 08:00, 12h apart, and still renders "hours repeat most
+ * days". WHAT IS TRUE: the displayed fit uses the same DAYS the gate examined and its hour set is
+ * measurably CLOSER to what the gate saw than a 7-day fit (mean Jaccard against the two halves 0.475 at
+ * 14d vs 0.352 at 7d; better on 20, worse on 5, tied on 6). That is the whole of the claim.
+ *
+ * HONEST LIMIT (rule 4). 14d-fitted levels are not measured to beat 7d-fitted ones — the lift numbers in
+ * windowReliability's header are an hour-RANKING result. And the 34.4%/18.8% agreement above cuts BOTH
+ * ways: two subwindows of one passing item disagreeing that often is itself evidence the argmin hour is
+ * not reproducible — an open question about the MARKER's wording ("hours repeat most days"), flagged
+ * rather than silently reworded. Ben's call.
  */
 export function displayFitNights(series, { nights = 7, now = new Date() } = {}) {
   const reliability = windowReliability(series, { now });
@@ -1957,14 +1894,14 @@ export function displayFitNights(series, { nights = 7, now = new Date() } = {}) 
  *
  * PURE, zero fetch. @returns {string|null}
  */
-/* ⚠ CALLERS MUST PASS THE **ACTUAL** FIT, NOT THE REQUESTED ONE (corrected 2026-08-10 after review).
+/* ⚠ CALLERS MUST PASS THE **ACTUAL** FIT, NOT THE REQUESTED ONE.
    `hourProfile` silently CAPS `nights` to the days actually present: ask for 30 on a 365-point 1h
-   series and you get 16. The first version of this note took the caller's requested window, so
-   `--nights 30` printed "fitted over 30d" about a 16-day fit — a false window claim inside the very
-   note that exists to prevent false window claims. Pass `prof.nights`.
+   series and you get 16. Passing the caller's REQUESTED window makes `--nights 30` print "fitted over
+   30d" about a 16-day fit — a false window claim inside the very note that exists to prevent false
+   window claims. Pass `prof.nights`.
    Same for `gateNights`: pass `reliability.daysUsed`, not the constant. The gate also windows to what
    exists (13 on a handful of live items), and the line printed beside this one already quotes daysUsed,
-   so defaulting to the constant made two adjacent lines contradict each other. */
+   so defaulting to the constant makes two adjacent lines contradict each other. */
 export function fitWindowMismatchNote({ fitNights, gateNights = WINDOW_RELIABLE_NIGHTS, degraded = false,
                                         flag = '--nights', remedy = null } = {}) {
   if (degraded) return null;
@@ -2058,14 +1995,13 @@ export function diurnalTimedLap(series, {
   // scores that window's OWN level via the SAME recencySplit primitive over its OWN window-scoped
   // windowStats slice — the exact peakStats/askReach pattern, one window over. Never fabricates a read off
   // an absent window (a length-1 peaks/dips ⇒ a length-1 reaches array). INFORM-only, n≈0 — nothing gates.
-  // PLAN-DIURNAL-RECENCY-GUARD Chunk 2c — reaches transport (2026-08-12) — each entry also carries the `reality` of ITS OWN
-  // level. The arrays shipped with a fixed four-key shape (level/window/reach/pool) that dropped it, and
-  // that omission — not the renderer — is why `emit.mjs`'s `also ASK …` clause printed a secondary level
-  // bare: the emit site reads `lap.askReaches[1]`, and the lap carried `peakReality`/`dipReality` for the
-  // PRIMARIES only (the return statement below), so there was nothing at the emit site to render. R5 made
-  // the reality EXIST on profile.peaks[1]/dips[1]; this makes it ARRIVE. Nothing is recomputed here —
-  // index 0 reuses profile.peak/dip.reality (the same objects that return exposes, by identity) and
-  // index 1 reuses the reality `buildSecondary` already attached in hourProfile.
+  // PLAN-DIURNAL-RECENCY-GUARD Chunk 2c — reaches transport: each entry ALSO carries the `reality` of
+  // ITS OWN level. A four-key shape (level/window/reach/pool) that drops it is why `emit.mjs`'s
+  // `also ASK …` clause prints a secondary level bare — the emit site reads `lap.askReaches[1]`, while
+  // `peakReality`/`dipReality` on the return below cover the PRIMARIES only, so there is nothing at the
+  // emit site to render. R5 makes the reality EXIST on profile.peaks[1]/dips[1]; this makes it ARRIVE.
+  // Nothing is recomputed here — index 0 reuses profile.peak/dip.reality (the same objects the return
+  // exposes, by identity) and index 1 reuses the reality `buildSecondary` attached in hourProfile.
   //
   // THE ONE INVARIANT, and the reason the bid side is asymmetric: **a non-null `reality` on a reaches
   // entry always describes THAT ENTRY'S OWN `level`.** `deriveDiurnalRange` REPRICES `bid` to the live
@@ -2080,8 +2016,8 @@ export function diurnalTimedLap(series, {
   // The gate is DELIBERATELY conservative, and the converse of the invariant does NOT hold: `bid >= liveLo`
   // is INCLUSIVE, so a row where live sits exactly ON the dip level is flagged 'live' while `dr.bid` is
   // still numerically the dip level — reality would have described it, and the clause is dropped anyway.
-  // Measured at ~1.4% of laps in a 2026-08-12 sweep, and it fails in the safe direction (a missing clause,
-  // never a wrong one). The exact predicate is `dr.bid !== profile.dip.level`; it is NOT used here because
+  // Measured at ~1.4% of laps, and it fails in the safe direction (a missing clause, never a wrong one).
+  // The exact predicate is `dr.bid !== profile.dip.level`; it is NOT used here because
   // all three sites (this one, R1's `→ BID`, R2's `!r.repriced`) must agree, and tightening one alone
   // would leave three gates with two meanings. Tighten them together or not at all — pinned in
   // pipeline/test/dt4-timedlap-coverage.test.mjs so the boundary is documented, not accidental.
@@ -2123,17 +2059,16 @@ export function diurnalTimedLap(series, {
     // the renderer keys on (true/false/null — see windowReliability).
     // DT4b: `fitNights` is the window this lap was ACTUALLY fitted over — the gate's own 14 when the
     // gate passed, the caller's `nights` otherwise. Exposed so a caller can state its own basis rather
-    // than assume the one it passed in. (The older comment here claimed levels are unaffected by the
-    // gate; that is no longer true and was the fit-window transfer gap — on a PASSING item the levels
-    // now come from the verified window, because hours and levels are one fit. See displayFitNights.)
+    // than assume the one it passed in. On a PASSING item the gate moves the LEVELS too, not just the
+    // hours: hours and levels are one fit. See displayFitNights.
     reliability, reliable: reliability.reliable, fitNights, degraded: false,
   };
 }
 
-// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2 (2026-07-22): the Extension-B per-hour demand-CYCLE
-// classifier — `hourlyPressure` (DC1 per-hour track), `pressureWindow` (the buy/sell window grower),
-// `demandRegime` (DC1/DC3 regime + windows), and their PRESSURE_REGIME_S / DEMAND_CLUSTER_FRAC constants
-// — were REMOVED (narrow removal: these powered only the --pressure DC2 inspector block + the scan's
-// DC3 inform annotation, never a gate/rank/screen.json). `demandPressure` (PB1) + `reachableBand`
+// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2: the Extension-B per-hour demand-CYCLE classifier —
+// `hourlyPressure` (DC1 per-hour track), `pressureWindow` (the buy/sell window grower), `demandRegime`
+// (DC1/DC3 regime + windows), and their PRESSURE_REGIME_S / DEMAND_CLUSTER_FRAC constants — is GONE
+// (a narrow removal: these powered only the --pressure DC2 inspector block + the scan's DC3 inform
+// annotation, never a gate/rank/screen.json). `demandPressure` (PB1) + `reachableBand`
 // (Extension A) SURVIVE above (they are the pressure sell-model's price source). `spanOf` is kept — it's
 // shared with hourProfile's dip/peak windows. Revive the cycle read from git history if ever needed.
