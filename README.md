@@ -460,8 +460,18 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `OSC_HOLD_HORIZON_DAYS` GENERIC fallback (re-documented there as such) — the rendered clause already shows
   the actual horizon used, so nothing is silently mis-scaled.
   `validateNicheSpec` + `pipeline/test/flip-niches.test.mjs` are the CONFORMANCE suite (structural contract +
-  no-throw + determinism over the replay archetypes). Imports only `tax` from money-math.js + `PATH_KEYS` from
-  held-item-strategy.mjs. NOT yet app-imported → no APP_VERSION bump),
+  no-throw + determinism over the replay archetypes). `admitMinNet` + the exported `belowAdmitNet()` are the
+  per-flip-niche floor on the DISPLAYED net — the second render-stage drop in `screen-flip-niches.mjs`, beside
+  the older one that reads the thesis's posted pair. The two prices disagree whenever the sell model moves the
+  exit, which is how a row ranked on a positive raw margin reached the table showing a negative one. `0` gates,
+  `null` opts out — and `null` is CORRECT for value/amplitude/reverse, which render on their own branches and
+  never reach the gate, so a floor there would be dormant metadata claiming a protection that never runs (value
+  shipped with a dormant `0` for exactly one pass). Held/watchlist rows are exempt at the call site.
+  `pipeline/test/admit-min-net.test.mjs` pins the predicate — every case mutation-verified RED against a
+  reverted fix, including the `<=` boundary and the null-means-do-not-drop contract — but it exercises the pure
+  function only; the drop site itself is still covered by nothing, which is how a `est`-vs-`estShown` mix-up got
+  as far as review. Imports only `tax` from money-math.js + `PATH_KEYS` from held-item-strategy.mjs. NOT
+  app-imported → no APP_VERSION bump on changes here),
   `quote.js` (browser orchestrator that fetches one
   item's series and renders the standard quote table), `fillslog.js` (File System
   Access API writer for `coffer-manual.log` + tombstones), `github.js` (M1 — mobile

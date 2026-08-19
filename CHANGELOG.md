@@ -10,6 +10,68 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The scan printed losing trades as top candidates — a per-flip-niche floor on the pair we actually show (2026-08-18)
+
+The screen has always dropped a row that cannot make money. It was reading the wrong price to decide.
+
+`er.net` is the after-tax net at the thesis's POSTED pair — the raw basis the rank is built on, and
+PLAN-ESTIMATOR-HONEST-SELL's declared-correct one. `estimatePair`'s `estNet` is the honest net at the
+pair the table PRINTS. They diverge whenever the sell model moves the exit, and nothing downstream
+re-read the printed pair — so a churn row ranked on a raw +41/u rendered a sell netting **-6/u** and
+graded **S+**, top score in the scan. Two more beside it: -48 (S+) and -23 (S-). Grade follows rank,
+so the grade inherited the raw number and never saw the shown one.
+
+That reached the desk. The `/scan` trim keeps rows >= B- and its own wording says "D-grade/BE-floored
+tail" — it ASSUMES floored implies low grade. These rows break the assumption and get pasted.
+
+**Fix: `spec.admitMinNet`, a per-flip-niche floor on the displayed net,** checked beside the existing
+posted-pair gate. Per-flip-niche because the lanes differ — band is per-unit and already gates on
+MIN_ROI, churn is the deliberate sub-MIN_ROI volume lane, so its floor belongs at zero rather than at a
+margin. `null` opts a lane out: value, amplitude and reverse each render on their own branch and never
+reach the gate, so a floor there would be dormant metadata claiming a protection that does not run.
+
+**It exempts held and watchlist rows.** `gateCandidates` reserves them a slot and carries a falling
+bypass specifically so they always surface here, and a held row is MORE likely to read sub-BE — it
+survives via that bypass, which is exactly where the sell fold collapses the exit. Dropping one would
+silently undo the reserve.
+
+**It names what it removes, and logs it.** `skipped N unprofitable at the shown pair: Item (net -9/u
+shown) · …`, plus `below-shown-net N` in the `--stats` decomposition. Each dropped row is still written
+to `suggestions.jsonl` under an `admitSkip` marker (the `subFloor` precedent): these are the rows where
+the two estimators disagree most, which is precisely the sample Ring-3's "does forward beat the fold"
+gate needs, and censoring them would quietly starve the evidence meant to settle the question.
+
+This ships on n<=0 evidence, and the reason that is safe is not that we measured it — it is that a
+wrong drop is visible the moment it happens. An invisible filter cannot be checked.
+
+**Scale, honestly.** A controlled A/B on one warm cache moved 128 rows to 123 with nothing added, but
+that is one anecdote. Replayed over the ledger with the repo's own `netMargin`, the gate would have
+dropped **857 of 9,109 rows (9.4%) — band 8.1%, churn 15.2%**, including 107 S+ rows. It also churns:
+188 of 208 affected items flip `estNet` sign between passes, so a drop is often transient and
+self-heals next pass. That cuts both ways — it is why the error cost is low, and why roughly one table
+row in eleven now changes membership pass to pass.
+
+**Two caveats the A/B does not cover.** The table cannot gain rows (the slice happens at admit,
+pre-render), but the digest pool is collected post-drop, so a drop CAN promote row 9 into the top 8.
+And a flip-niche emptied entirely by this gate prints an empty table without triggering
+`subFloorFallback`, which fires on an empty gate pool upstream.
+
+**What this deliberately does NOT do.** It does not touch `rank`, `grade`, or `screen.json` ordering,
+and it bumps no `APP_VERSION` — `js/flip-niches.mjs` lives in `js/` but no app module imports it, so
+nothing deployed changed. Re-pricing the rank off the honest exit is Ring-3 in
+PLAN-ESTIMATOR-HONEST-SELL — DEFERRED and gated on Gate-C forward-beats-fold evidence plus a rank knife
+guard that does not exist. An earlier draft of this work proposed exactly that, and would also have
+broken a deliberate test pin (`'churn rank untouched by ask-reach'`). The row-level contradiction is
+fixed at the surface that shows it; the ranking question stays where it was already scoped.
+
+Prior art worth knowing: PLAN-DIGEST-SIGNAL-AND-SCAN-PERF (2026-08-07) diagnosed the neighbouring
+problem correctly and shipped almost none of it — every decision chunk was gated behind a measurement
+chunk (DS0, "log the digest's computed fields"), DS0 never shipped, and DS4 (the filter) was shelved
+when its gate did not clear. Confirmed at scale: zero ledger rows carry `digest` / `reachFrac` /
+`crossable` / `marginTrend`. Gating action on measurement that never arrives is how nothing moved for
+five months; the standing rule (`gate-on-error-cost-not-n`) says gate on whether the error is VISIBLE
+when you act, which is what the named footer and the `admitSkip` log buy.
+
 ### The guard-list drift gate — and the 41k tokens that were never in context (2026-08-17)
 
 Started as "our outputs are too long, we miss things in the middle" and ended somewhere else entirely,

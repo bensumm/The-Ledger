@@ -96,7 +96,7 @@ import { amplitudeShadow } from '../lib/render/suggestlog.mjs';   // A5 — the 
 // P4c: the niches are DECLARATIVE strategy specs. screen-flip-niches.mjs derives its mode-name lists from
 // the registry (the names live in ONE place — flip-niches.mjs) and reads each spec's inferred default
 // entry path for the suggestions ledger + the per-row path annotation.
-import { FLIP_NICHES, MODE_KEYS, ALL_MODE_KEYS, driftInformNote } from '../../js/flip-niches.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 6 — driftInformNote = the per-thesis drift-adjusted-exit INFORM note (registry-driven, NO if(mode===) branch; off the shared driftExitFrom, NO fetch)
+import { FLIP_NICHES, MODE_KEYS, ALL_MODE_KEYS, driftInformNote, belowAdmitNet } from '../../js/flip-niches.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 6 — driftInformNote = the per-thesis drift-adjusted-exit INFORM note (registry-driven, NO if(mode===) branch; off the shared driftExitFrom, NO fetch)
 import { enumeratePaths, weighPaths } from '../../js/held-item-strategy.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
 import { rateItem, GRADE_CUTOFFS, REACH_GRADE_CAP_FRAC, CONF_THIN_N_FLOOR } from '../lib/signal/rating.mjs';   // G1: the four grade caps live INSIDE rateItem (applyGradeCaps) — the render site passes cap values/flags and never calls capGrade itself. REACH_GRADE_CAP_FRAC = the digest's reach ✓/✗ read; CONF_THIN_N_FLOOR (G6) = the (thin) confidence-marker tooltip.
 import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow, timedLapShadow, excludedShadow } from '../lib/render/suggestlog.mjs';   // RC-S2: pressure co-log on survivors (five-way head-to-head off the in-hand 1h series); shared asym reshaper; PLAN-DIURNAL-TIMING DT4: timedLap shadow reshaper
@@ -1111,7 +1111,9 @@ export function buildScreenNicheReport({ headerLines = [], table = null, estExpl
 function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, qcache, map, series5m, series6h, series1h, v24, daily, { partition = false, dailyRanges = {} } = {}) {
   const rows = [];
   const dist = {};
-  const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0, negNet: 0, notFalling: 0, partition: 0 };  // post-fetch discard reasons (--stats)
+  const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0, negNet: 0, subBeNet: 0, notFalling: 0, partition: 0 };  // post-fetch discard reasons (--stats)
+  const skippedNames = [];
+  const skippedRows = [];   // the same drops, kept for the ledger — see the admitSkip marker at logSuggestions  // rows dropped by spec.admitMinNet — NAMED in the footer, never a silent drop
   const rejReasons = {};   // P2: reject reason → count, for the `rejected: N (top reasons)` footer
   const cautionNotes = []; // P2: one flagged-caution note per item (the row still shows)
   const informNotes = [];  // inform-mode validator findings (trajectory/reach analysis) — decision support, never a drop
@@ -1437,6 +1439,26 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // the pinned gateCandidates→rankAndSlice→surviveMode funnel + the replay goldens are unaffected.
     // Held/asked/watchlist rows never reach renderMode (their surfaces never hide), so they're auto-exempt.
     if (er.net <= 0) { disc.negNet++; continue; }
+    // Step 2b: the same test against the pair we actually PRINT. Step 2 above reads the thesis's posted
+    // pair; this reads estimatePair's net at the rendered Est. buy/Est. sell, which differs whenever the
+    // sell model moves the exit. Why the second gate exists, and why the floor is per-niche: the
+    // `admitMinNet` entry in js/flip-niches.mjs's spec vocabulary, the ONE home. Dropped rows are NAMED in
+    // the `skipped:` footer — a filter you cannot see is a filter you cannot check.
+    // `estShown`, not `est`: `est` is the neutral reach-fold SHADOW kept for the retro co-log, while the
+    // table renders `estShown` (the active sell model, which `--est-sell` can change). Gating on the
+    // shadow would drop rows on a price the run never printed and spare rows it did.
+    // HELD/WATCHLIST rows are EXEMPT, and that is load-bearing rather than tidy: gateCandidates gives
+    // them a reserved slot and a falling-bypass precisely so they always surface here, and a held item is
+    // MORE likely to read sub-BE (it survives via that bypass, which is where the sell fold collapses the
+    // exit). Dropping one would silently undo the reserve. They are shown; the row's own annotation says
+    // the exit is under water.
+    if (estShown && !HELD_IDS.has(s.id) && !WATCHLIST_IDS.has(s.id)
+        && belowAdmitNet(FLIP_NICHES[mode], estShown.estNet)) {
+      disc.subBeNet++;
+      skippedNames.push(`${name} (net ${fmt(estShown.estNet)}/u shown)`);
+      skippedRows.push({ row, id: s.id, est: estShown });
+      continue;
+    }
     // Step 6a: partition churn from band in --mode all so they don't show identical
     // rows. band is the PER-UNIT lane — its gate already requires ROI ≥ MIN_ROI; churn is the VOLUME /
     // low-margin lane. When BOTH run, drop from churn any row whose after-tax per-unit ROI (at the same
@@ -1687,7 +1709,17 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       // EF1 shadows (PLAN-ESTIMATOR-FIDELITY, lean/YS2): the dead-bid repriced-entry alternative (a),
       // the placement-bounded exemption-drop marker + the pre-bound rank (b) — the R-1 visible-swap pair.
       repriced: r.er.repriced ? { bid: r.er.repriced.bid, ask: r.er.repriced.ask, net: r.er.repriced.net, pFill: round2(r.er.repriced.pFill), rank: Math.round(r.er.repriced.rank) } : undefined,
-      exemptionBounded: r.er.exemptionBounded || undefined, rankPre: r.rankPre ?? undefined })));
+      exemptionBounded: r.er.exemptionBounded || undefined, rankPre: r.rankPre ?? undefined }))
+    // The admitMinNet drops are LOGGED, not censored — same reasoning as the sub-floor marker above.
+    // They are the rows where the two estimators disagree most, which is exactly the sample Ring-3's
+    // "does forward beat the fold" gate needs; dropping them from the ledger would quietly starve the
+    // evidence that is meant to settle the question. `admitSkip` marks them so a reader can never take
+    // one for a surfaced suggestion. No grade — these are dropped before the row is rated.
+    .concat(skippedRows.map(r => suggestionEntry(r.row, {
+      itemId: r.id, cls: liqClass(r.row), volDay: r.row.volDay, volSrc: VOL_SRC_LABEL,
+      verdict: null, grade: null, posture: POSTURE, admitSkip: 'below-shown-net',
+      estBuy: r.est ? r.est.estBuy : null, estSell: r.est ? r.est.estSell : null, estConfidence: estConfLean(r.est),
+    }))));
       // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2: the DC3 `demandRegime` shadow field was REMOVED with demandRegime.
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
@@ -1756,6 +1788,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   if (disc.reject > 0) {
     const top = Object.entries(rejReasons).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([why, n]) => `${why}×${n}`).join(', ');
     footerLines.push(`rejected: ${disc.reject}${top ? ` (${top})` : ''}`);
+  }
+  // The admitMinNet drop, NAMED. A filter you cannot see is a filter you cannot check — and the whole
+  // reason this drop is safe to make on n≈0 is that a wrong one is visible the moment it happens.
+  if (skippedNames.length) {
+    footerLines.push(`skipped ${skippedNames.length} unprofitable at the shown pair: ${skippedNames.join(' · ')}`);
   }
   // C: BUCKET, don't sort. To "would we put severe at the top or the
   // bottom?" the honest answer is that ordering fourteen identically-formatted lines just picks
@@ -1934,7 +1971,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   }
   if (STATS) {
     const fetched = survivors.length, kept = rows.length;
-    const reasons = `falling ${disc.falling}` + (mode === 'scalp' ? `, not-falling ${disc.notFalling}` : '') + (partition ? `, band-lane partition ${disc.partition}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '') + `, validator-reject ${disc.reject}, validator-caution ${disc.caution}, neg-net ${disc.negNet}`;
+    const reasons = `falling ${disc.falling}` + (mode === 'scalp' ? `, not-falling ${disc.notFalling}` : '') + (partition ? `, band-lane partition ${disc.partition}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '') + `, validator-reject ${disc.reject}, validator-caution ${disc.caution}, neg-net ${disc.negNet}, below-shown-net ${disc.subBeNet}`;
     extraSections.push({ type: 'lines', blank: false, lines: [`stats: gated ${cand.length} | fetched ${fetched} | survivors ${kept} | yield ${fetched ? Math.round(kept / fetched * 100) : 0}% | discarded: ${reasons}`] });
   }
   // The trailing blank line that separated niches (the pre-VZ4 `console.log('')`) rides as a final

@@ -533,7 +533,7 @@ export function timedLapShadow(lap) {
 // the prediction is just the item's dominant class from buildVelocityIndex(outcomes.json), which the join
 // recomputes for free. The MEASURED velocityClass (velocity.mjs, off a real round-trip) is a different
 // thing and is still live.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDay, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap, pathA, via, preRank, prePool, askPlacement, repriced, exemptionBounded, rankPre } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, admitSkip, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDay, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap, pathA, via, preRank, prePool, askPlacement, repriced, exemptionBounded, rankPre } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -588,6 +588,7 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // P6c — which floor the EMPTY-RESULT SUB-FLOOR FALLBACK relaxed, so readers can segment or exclude
   // sub-floor rows instead of mistaking them for qualified suggestions. Pinned by subfloor.test.mjs.
   if (subFloor != null)      e.subFloor = subFloor;
+  if (admitSkip != null)     e.admitSkip = admitSkip;   // spec.admitMinNet drop — logged, never surfaced; see screen-flip-niches.mjs
   // R7 (PLAN-SIGNAL-RECENCY) — which grade CEILING bound the printed letter: legibility plus retro
   // segmentation of which cap most often clamps a would-be-higher letter.
   if (cappedBy != null)      e.cappedBy = cappedBy;

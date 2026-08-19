@@ -1067,9 +1067,21 @@ response an agent needs). Current per-script behavior (facts, not doctrine):
   `--positions` adds Held@/Break-even/Verdict + the shared `item-context.mjs` chain (offers book,
   read-only watch-state + hold thesis, `renderHeldVerdict`, the read-only `Paths` block, the rebid
   advisory, the stale-declared-exit flag). Verdict vocabulary: `pipeline/MONITORING.md` step 4.
-- **`screen-flip-niches.mjs`** — one gate stack (above) + `--mode` swaps the step-3 edge; a render-stage
-  net>0 surface gate drops any row whose after-tax net at its posted pair is ≤ 0 (held/asked/watchlist
-  exempt). `--posture` tunes the stack (§3). `--mode all` also runs the DL4 dip-nomination pass
+- **`screen-flip-niches.mjs`** — one gate stack (above) + `--mode` swaps the step-3 edge; TWO render-stage
+  net>0 surface gates drop any row that cannot make money. The
+  first reads the after-tax net at the thesis's POSTED pair (`er.net`, the raw basis the rank is built on).
+  The second (`spec.admitMinNet`, per-niche) reads `estimatePair`'s honest net at the pair actually
+  PRINTED. They disagree whenever the sell model moves the exit — a churn row ranked on a raw +41/u
+  rendered a shown sell netting −6/u and still graded S+, because grade follows rank and nothing re-read
+  the displayed pair. The second gate NAMES what it dropped in a `skipped: …` footer rather than dropping
+  silently: it runs on n≈0, so a wrong drop has to be visible to be safe, and each dropped row is still
+  written to `suggestions.jsonl` carrying an `admitSkip` marker so the calibration sample is not censored.
+  It EXEMPTS held and watchlist rows — `gateCandidates` reserves them a slot precisely so they always
+  surface, and a held row is more likely to read sub-BE — and `null` opts a flip-niche out entirely
+  (value/amplitude/reverse render on their own branches and never reach it). **The first gate has NO such
+  exemption**: a held row whose posted pair nets ≤ 0 is still dropped there, which is long-standing
+  behaviour and not what the code comment beside it claims. Neither gate touches rank, grade, or
+  `screen.json` ordering. `--posture` tunes the stack (§3). `--mode all` also runs the DL4 dip-nomination pass
   (`nominateDip` → `dip-watchlist.json`, the "B feeds A" half). A flip-niche empty at the floors re-runs
   beneath it (`subFloorFallback`, grade-capped `C (sub-floor)`, stdout-only). Writing repo-root
   `screen.json` (the app Scan tab) is **DEFAULT-ON every run** (2026-07-16) — `--no-publish` opts out

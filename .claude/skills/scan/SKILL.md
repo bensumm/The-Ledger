@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 2.9
+version: 3.0
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -27,7 +27,15 @@ noise, not a candidate; pasting the WHOLE script table including its D-grade/BE-
 every pass is what made a reply "unreadable" in practice. **Trim before pasting**: keep every
 row that's genuinely gradeable (roughly B- and above, or any row you're about to discuss in the
 judgment pass), and collapse the rest into ONE line — `Skipped: N D-grade/BE-floored rows
-(negligible net): Item, Item, …` — at the bottom, per `actionable-first-dead-last`. This is a
+(negligible net): Item, Item, …` — at the bottom, per `actionable-first-dead-last`.
+**Do NOT read the grade as a profitability check while trimming.** That phrasing above assumes
+BE-floored ⇒ low grade; it isn't so. Grade follows `rank`, which is built on the raw thesis pair, so
+a row can grade **S+ while the sell price the table PRINTS nets negative** (measured: three churn rows
+at S+/S+/S− on displayed nets of −6, −48, −23, all surviving a ≥B− trim). The screen now drops those
+at render (`spec.admitMinNet`) and names them in its own `skipped: N unprofitable at the shown pair`
+footer — **relay that footer line**; it is the tool telling you what it removed, and a wrong removal is
+only catchable if you pass it on. Grades are a scoring heuristic for elevating candidates, not a
+verdict on whether a trade makes money (Ben, 2026-08-18) — read `Net/u` for that. This is a
 row-count trim, not a column/number edit — nothing about a KEPT row's numbers changes, and
 nothing is silently dropped (the skipped names are still named, just not as full rows). **The
 `--digest` block (§1) does NOT replace this trim rule** — the digest is a SEPARATE, narrower

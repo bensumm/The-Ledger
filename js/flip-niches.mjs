@@ -205,6 +205,15 @@ function churnEdge(inp, t) {
                                    value-low (handled in the term-structure valueGate, not surviveMode).
      gate        'band' (default — the shared liquidity+edge pre-fetch stack) | 'value' (the
                  term-structure valueGate in js/valuescreen.mjs; gateCandidates routes on this).
+     admitMinNet the PER-NICHE profitability floor on the DISPLAYED pair. The existing render gate drops a
+                 row whose `er.net` (the RAW thesis pair the rank is built on) is non-positive; this drops a
+                 row whose ESTIMATED pair — the prices actually printed and transacted on — nets at or below
+                 this. The two can disagree: a churn row can rank on a raw +41/u while the shown sell nets
+                 -6/u, and a row we would print at a loss is not a candidate in any lane. PER-NICHE because
+                 the lanes differ (band is per-unit and already gates on MIN_ROI; churn is the deliberate
+                 sub-MIN_ROI volume lane, so its floor belongs at zero, not at a margin). null disables it.
+                 Dropped rows are NAMED in the `skipped:` footer, never silently — a drop has to be
+                 visible to be safe to make.
      validators  the PER-THESIS validator PLAN (Ben 2026-07-09 — no longer dormant metadata; screen-flip-niches.mjs
                  now drives runValidators off THIS instead of the full registry). Each entry is either a
                  bare key string (gate mode) or { key, mode:'gate'|'inform', window? }:
@@ -260,6 +269,7 @@ export const FLIP_NICHE_LIST = Object.freeze([
     // QUALITY note — NOT a bid-misses signal; that claim was falsified 2026-08-08, see the
     // recentDirection MEASURED block in js/quotecore.js); NOT on scalp (accepts fallers by thesis —
     // direction is the point, not a caution) or value (a buy-hold-the-cycle move, not a bid-fill play).
+    admitMinNet: 0,
     validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'dip-posture', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
     // PLAN-OSCILLATION-CYCLE Chunk 6 — the drift-adjusted band top, priced LOWER on a down-drifting item
     // (informs, never gates: the item is NOT excluded, its sell target is just the drift-shifted top).
@@ -270,6 +280,7 @@ export const FLIP_NICHE_LIST = Object.freeze([
     key: 'churn', label: 'Churn', inAll: true,   // the high-volume buy-limit-cycle commodity lane
     edge:churnEdge, rank: 'velocity', confirm: null,
     falling: 'exclude', gate: 'band',
+    admitMinNet: 0,
     validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'dip-posture', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
     // PLAN-OSCILLATION-CYCLE Chunk 6 — a "don't buy near the drift-adjusted weekly high" MAGNITUDE caution
     // (never a gate; the caution phrasing is folded into the label so the render stays one code path).
@@ -288,6 +299,7 @@ export const FLIP_NICHE_LIST = Object.freeze([
     // scalp on a non-falling item is just a band flip band already owns. trajectory + floor stay INFORM
     // (never veto a scalp for being a faller; its stop lives in the path engine / offerVerdict, not a gate).
     falling: 'accept', gate: 'band',
+    admitMinNet: 0,
     validators: [{ key: 'floor', mode: 'inform' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
     // PLAN-OSCILLATION-CYCLE Chunk 6 — sharpen the exit-pricing note on scalp's already-accepted falling
     // regimes (admission UNCHANGED): the exit is the drift-adjusted level, not yesterday's peak.
@@ -313,6 +325,7 @@ export const FLIP_NICHE_LIST = Object.freeze([
     // 8h flip check: it finds WHEN the recent-week low prints so the entry is timed (Hydra/Berserker).
     // value-amplitude is value's own recent-week cycle+proximity check. All inform in the n≈0 rollout.
     falling: 'knife-guard', gate: 'value',
+    admitMinNet: null,   // renderValueMode is its OWN branch — never reaches the render-stage net gate, so a floor here would be dormant
     validators: [
       { key: 'floor', mode: 'gate' },
       { key: 'reach', mode: 'inform', window: { windowHours: 24, nights: 14 } },
@@ -369,6 +382,7 @@ export const FLIP_NICHE_LIST = Object.freeze([
     // self-contained (amplitudeGate + the hourProfile trend / trajectory knife guard), so — like value's
     // floor/limit — these sit dormant in the console path. reach is a full-day daily TIMING read (24h /
     // 14 nights, from the spec), all inform in the n≈0 rollout.
+    admitMinNet: null,   // renderAmplitudeMode is its OWN branch — never reaches the render-stage net gate, so a floor here would be dormant
     validators: [
       { key: 'floor', mode: 'gate' },
       { key: 'reach', mode: 'inform', window: { windowHours: 24, nights: 14 } },
@@ -399,9 +413,12 @@ export const FLIP_NICHE_LIST = Object.freeze([
     //   estimator/priceBasis/fillShape mirror amplitude (a daily peak→dip lap, surface-computed pair, exempt
     //     from the ask-reach discount) — all dormant here since reverse doesn't rank through the standard spine.
     //   validators:[] — reverseFlipGate does its OWN gating; the standard validator registry doesn't apply.
+    //   admitMinNet:null — same reason: reverse renders on its own branch and never reaches the render-stage
+    //     net gate, so a floor here would be dormant metadata claiming a protection that never runs.
     key: 'reverse', label: 'Reverse-flip', inAll: false,
     edge: reverseEdge, rank: 'velocity', confirm: null,
     falling: 'accept', gate: 'reverse',
+    admitMinNet: null,
     validators: [],
     defaultPath: PATH_KEYS.VALUE_HOLD, estimator: 'amplitude', priceBasis: 'daily', fillShape: 'symmetric',
   },
@@ -523,4 +540,13 @@ export function validateNicheSpec(spec) {
     }
   }
   return errs;
+}
+
+/* belowAdmitNet(spec, estNet) → true when a row must be dropped as unprofitable AT THE PRICES WE PRINT.
+   `estNet` is estimatePair's net at the rendered Est. buy/Est. sell, never the raw thesis pair the rank is
+   built on; the `admitMinNet` entry above governs why. A null floor or a null net both mean "do not drop" —
+   absent information is not evidence of a bad trade. `<=` is deliberate: a zero-net trade is work for nothing. */
+export function belowAdmitNet(spec, estNet) {
+  const floor = spec && spec.admitMinNet;
+  return floor != null && estNet != null && estNet <= floor;
 }
