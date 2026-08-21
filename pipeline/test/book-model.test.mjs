@@ -152,6 +152,78 @@ ok('sizer: CAPITAL binds when it is the smallest bound', () => {
   assert.equal(s.refuse, false);
 });
 
+// --- sizer: the spread-vs-tax REASON on netIfCycled's sign (2026-08-20) ------------------------
+// WHY: netIfCycled's old label ("net if cycled once") named an outcome without its basis. Both legs
+// are LIVE (unitCost = quickBuy, mark = quickSell), so it CAPTURES the spread and goes negative only
+// when the spread is thinner than the tax — but an agent read a negative as a verdict on the flip and
+// rejected six real candidates. The render now prints the reason; these pin it.
+// Every case was confirmed RED against a reverted predicate; the mutant each kills is named inline.
+
+ok('sizer: spreadVsTax follows the NET SIGN, not a percentage comparison', () => {
+  // THE case the field exists for. breakEven() is ceil(buy/0.98) in the uncapped region, so unitCost
+  // 100 -> be 103, and mark 103 is a netPerUnit of ZERO while spreadPct (3.00%) still reads well ABOVE
+  // taxPct (1.94%). A comparator built by comparing the two percentages prints "spread 3% > 1.9% tax"
+  // beside a net of 0 — a reason that contradicts its own number.
+  // MUTANT: spreadVsTax = spreadPct > taxPct ? '>' : '<'  — red (yields '>', expected '=').
+  const be = breakEven(100);
+  assert.equal(be, 103);
+  const s = sizeTranche({ itemId: 1, name: 'X', capital: 1_000_000, unitCost: 100,
+    limit: 1000, limitRemaining: 500, dailyVol: 100_000, mark: 103, breakEven: be });
+  assert.equal(s.netPerUnit, 0);
+  assert.ok(s.spreadPct > s.taxPct, 'precondition: the percentages disagree with the sign here');
+  assert.equal(s.spreadVsTax, '=');
+});
+
+ok('sizer: a spread WIDER than the tax reads > and nets positive', () => {
+  // MUTANT: hardcode '<' — red.
+  const s = sizeTranche({ itemId: 1, name: 'X', capital: 1_000_000_000, unitCost: 1000,
+    limit: 1000, limitRemaining: 500, dailyVol: 100_000, mark: 1100, breakEven: breakEven(1000) });
+  assert.ok(s.netPerUnit > 0);
+  assert.equal(s.spreadVsTax, '>');
+  assert.ok(s.spreadPct > 9 && s.spreadPct < 11);          // ~10% spread
+  assert.ok(s.taxPct > 1.9 && s.taxPct <= 2);              // ~2% tax
+});
+
+ok('sizer: a spread THINNER than the tax reads < — the churn case that was misread', () => {
+  // Vial of blood's real shape: buy 8,302 / sell 8,425 is a 1.5% spread against a 2% tax.
+  // MUTANT: hardcode '>' — red.
+  const s = sizeTranche({ itemId: 1, name: 'X', capital: 1_000_000_000, unitCost: 8302,
+    limit: 13_000, limitRemaining: 13_000, dailyVol: 85_000, mark: 8425, breakEven: breakEven(8302) });
+  assert.ok(s.netPerUnit < 0);
+  assert.equal(s.spreadVsTax, '<');
+});
+
+ok('sizer: a sub-50gp mark is TAX-EXEMPT — taxPct 0, not a fabricated 2%', () => {
+  // money-math tax() returns 0 under 50gp. A hardcoded 2% would print a tax that is not charged.
+  // MUTANT: taxPct = 2 — red.
+  const s = sizeTranche({ itemId: 1, name: 'X', capital: 1_000_000, unitCost: 30,
+    limit: 1000, limitRemaining: 500, dailyVol: 100_000, mark: 40, breakEven: breakEven(30) });
+  assert.equal(s.taxPct, 0);
+  assert.equal(s.spreadVsTax, '>');
+});
+
+ok('sizer: an ABSENT mark yields NULL reason fields — never a fabricated 0%', () => {
+  // MUTANT: default spreadPct/taxPct to 0 — red. A 0% spread beside a 0% tax is a readable-looking
+  // claim about a price we do not have; the render must drop the clause entirely instead.
+  const s = sizeTranche({ itemId: 1, name: 'X', capital: 1_000_000, unitCost: 100,
+    limit: 1000, limitRemaining: 500, dailyVol: 100_000, mark: null, breakEven: breakEven(100) });
+  assert.equal(s.spreadPct, null);
+  assert.equal(s.taxPct, null);
+  assert.equal(s.spreadVsTax, null);
+  assert.equal(s.netPerUnit, null);
+  assert.equal(s.netIfCycled, null);
+});
+
+ok('sizer: a REFUSED size still carries the reason keys as null (stable shape)', () => {
+  const s = sizeTranche({ itemId: 1, name: 'X', capital: 1_000_000, unitCost: 100,
+    limit: null, limitRemaining: null, dailyVol: 100_000, mark: 120, breakEven: breakEven(100) });
+  assert.equal(s.refuse, true);
+  for (const k of ['netPerUnit', 'spreadPct', 'taxPct', 'spreadVsTax']) {
+    assert.ok(k in s, k + ' must be present on the refuse path');
+    assert.equal(s[k], null);
+  }
+});
+
 ok('sizer: BUY-LIMIT binds when remaining is the smallest bound', () => {
   const s = sizeTranche({ itemId: 1, name: 'X', capital: 1_000_000_000, unitCost: 100,
     limit: 1000, limitRemaining: 5, dailyVol: 10_000_000, mark: 120, breakEven: breakEven(100) });

@@ -26,6 +26,7 @@
  * watch-positions.mjs's SUMMARY footer for the same input, so the two capital surfaces can't drift.
  * Break-even is the ONE tax-capped breakEven() from js/quotecore.js — never a second tax-math home. */
 import { breakEven } from '../../../js/quotecore.js';
+import { tax } from '../../../js/money-math.js';   // the ONE tax fn — the sizer only READS it to explain its own sign
 import { bookUtilization, totalCapital } from './capital-utilization.mjs';
 import { reverseFlipPendingEntries, reverseFlipCycleNotes } from '../../../js/reverseflip.mjs';   // RF4 — declared reverse-flip cycle surfacing (pure)
 
@@ -48,7 +49,31 @@ export const CLEARABILITY_FRAC = 0.005;
  *   capital      = floor(capital / unitCost) — how many units the deployable gp buys at the acquire price.
  * recommendedQty = min of the present bounds; `binding` names which one is the min (the single most
  *   useful line of the sizer). netIfCycled = recommendedQty × (mark − breakEven) — the SAME after-tax
- *   per-unit margin view (2) shows (breakEven already bakes in the 2% GE tax + TAXCAP). */
+ *   per-unit margin view (2) shows (breakEven already bakes in the 2% GE tax + TAXCAP).
+ *
+ * WHAT netIfCycled IS, stated because it HAS been misread: unitCost is quickBuy (latest.low) and mark
+ * is quickSell (latest.high), so on a WELL-ORDERED feed it is the impatient round trip and goes
+ * negative when the spread is thinner than the tax. A negative means "too thin to flip impatiently",
+ * NEVER "this flip loses money" — the patient exit is a different number and lives in the screen's
+ * Est. sell. An agent read one of these as a verdict on the flip and rejected six real candidates.
+ *
+ * `netPerUnit` / `spreadPct` / `taxPct` / `spreadVsTax` are computed and DELIBERATELY NOT RENDERED.
+ * A labelled render was written and pulled after review found three defects that make the obvious
+ * wording false, and they are recorded here so the next attempt does not repeat them:
+ *   (1) quickBuy <= quickSell is NOT an invariant. `js/quotecore.js` only DETECTS the violation
+ *       (`inverted` -> reliableReason='feed-inversion'); 16% of the live snapshot and ~9-10% at the
+ *       liquidity gate have low > high, and this file never consults `row.reliable`. On those rows the
+ *       round trip really does cross the spread, and spreadPct goes negative.
+ *   (2) taxPct is wrong for BONDS, which are exempt from the 2% tax and pay a 10%-of-guide retrade fee
+ *       (`js/money-math.js`). `tax(mark)` here is bond-blind, as is the `breakEven(unitCost)` the
+ *       caller passes, so a bond's figures are wrong by roughly 6x and a rendered "2% tax" is a lie.
+ *   (3) The two percentages have DIFFERENT DENOMINATORS — spread over the buy, tax over the sell — so
+ *       the true crossover is tax/(1-tax) ~= 2.041%, not 2%. Any row whose spread lands in that band
+ *       reads "spread 2% < 2% tax". This is a band, not a rounding edge.
+ * What survives review, and the reason the tests below are kept: `spreadVsTax` is derived from
+ * netPerUnit's SIGN, never from comparing the two percentages, so the comparator cannot contradict the
+ * number it sits beside. That distinction is the whole lesson and it is pinned by 6 cases in
+ * book-model.test.mjs, each verified RED against its named mutant. */
 export function sizeTranche({
   itemId, name, capital, unitCost, limit, limitRemaining, dailyVol, mark, breakEven: be,
   clearFrac = CLEARABILITY_FRAC,
@@ -57,7 +82,8 @@ export function sizeTranche({
   // Repo rule (buy-limit-caps-every-size): a null limit is UNKNOWN — refuse to size, never treat as unlimited.
   if (limit == null) {
     return { ...base, buyLimitBound: null, clearabilityBound: null, capitalBound: null,
-      recommendedQty: null, binding: null, netIfCycled: null, refuse: true, refuseReason: 'unknown-limit' };
+      recommendedQty: null, binding: null, netPerUnit: null, netIfCycled: null,
+      spreadPct: null, taxPct: null, spreadVsTax: null, refuse: true, refuseReason: 'unknown-limit' };
   }
   const buyLimitBound = (limitRemaining == null) ? null : Math.max(0, limitRemaining);
   const clearabilityBound = (dailyVol != null && dailyVol > 0) ? Math.floor(dailyVol * clearFrac) : null;
@@ -73,11 +99,28 @@ export function sizeTranche({
   for (const [label, v] of bounds) {
     if (recommendedQty == null || v < recommendedQty) { recommendedQty = v; binding = label; }
   }
-  const netIfCycled = (recommendedQty != null && mark != null && be != null)
-    ? Math.round(recommendedQty * (mark - be)) : null;
+  const netPerUnit = (mark != null && be != null) ? mark - be : null;
+  const netIfCycled = (recommendedQty != null && netPerUnit != null)
+    ? Math.round(recommendedQty * netPerUnit) : null;
+  // The REASON for netIfCycled's sign (see header): spread captured vs tax paid — the spread as a % of
+  // the buy, the tax as a % of the sell. Null whenever a leg is missing; never a fabricated 0%. NOT
+  // RENDERED — see the header's three defects before wiring these to any surface. spreadPct is
+  // NEGATIVE on a crossed feed and taxPct is bond-blind; neither is guarded here.
+  const spreadPct = (mark != null && unitCost > 0) ? ((mark - unitCost) / unitCost) * 100 : null;
+  const taxPct    = (mark != null && mark > 0) ? (tax(mark) / mark) * 100 : null;
+  // spreadVsTax is derived from netPerUnit's SIGN, never from comparing spreadPct to taxPct. Those two
+  // disagree across a whole BAND, not merely at a rounding edge: the percentages have different
+  // denominators (header defect 3), so every spread in (taxPct, ~2.041%] reads above the tax while the
+  // net is <= 0. breakEven()'s ceil(buy/0.98) adds a second source of the same disagreement — unitCost
+  // 100 gives be 103, so a mark of 103 is a netPerUnit of ZERO while spreadPct (3.00%) reads above
+  // taxPct (1.94%). Comparing the percentages would print "spread 3% > 1.9% tax" beside a net of 0.
+  // The sign cannot. That is the ONE property of this block that survived review — keep it.
+  const spreadVsTax = (netPerUnit == null || spreadPct == null || taxPct == null) ? null
+    : netPerUnit > 0 ? '>' : netPerUnit < 0 ? '<' : '=';
 
   return { ...base, buyLimitBound, clearabilityBound, capitalBound,
-    recommendedQty, binding, netIfCycled, refuse: false, refuseReason: null };
+    recommendedQty, binding, netPerUnit, netIfCycled, spreadPct, taxPct, spreadVsTax,
+    refuse: false, refuseReason: null };
 }
 
 /* buildBook({ groups, offers, cash, marks, sizer, now }) -> { slots, capital, lots, sizer? }. PURE.
