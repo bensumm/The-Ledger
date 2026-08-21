@@ -723,7 +723,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (watch, quote `--positions`) AND DISCOVERY (screen survivors, quote per-item): `reachable` rides every row
   with an in-hand 1h series; `depthExit` rides only held rows (real qty in hand — the DE7 fetch-budget rule
   keeps depth off the screen). All three shadow shapes come from ONE reshaper home
-  (`suggestlog.mjs reachableShadow`/`depthExitShadow`/`asymShadow`). _(The screen's lean `demandRegime`
+  (`suggestlog.mjs reachableShadow`/`depthExitShadow`/`asymShadow`). The `asym` leg also rides the screen
+  rows the `spec.admitMinNet` gate DROPS (the `admitSkip` marker, PP0): those rows are kept in the ledger
+  precisely because they are where the reach-fold pair and the asym pair disagree most, and without the
+  `asym` field they could not answer that question. ⚠ ON-DISK CAVEAT: every `admitSkip` row written before
+  PP0 carries no `asym` at all, and a churn (`fillShape:'symmetric'`) skip row legitimately omits it at any
+  date — split a join on mode AND date, never read absence as "no asym read". `suggestlog.mjs`'s DATA
+  CAVEATS block is the ONE home for that split. _(The screen's lean `demandRegime`
   `◈ demand` shadow/note was REMOVED 2026-07-22, PLAN-REMOVE-DEPTH-PRESSURE-READS — git-revivable.)_ A screen row also carries
   the **`expGpDay`**/**`expGpDayLegacy`** shadow pair (PLAN-CAPITAL-THROUGHPUT, 2026-07-14): the ACTIVE
   capital-aware attention-floor throughput (`min(limit, deployablePool/mid)×2 × net`, where ×2 is

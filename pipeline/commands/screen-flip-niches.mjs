@@ -1456,7 +1456,10 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
         && belowAdmitNet(FLIP_NICHES[mode], estShown.estNet)) {
       disc.subBeNet++;
       skippedNames.push(`${name} (net ${fmt(estShown.estNet)}/u shown)`);
-      skippedRows.push({ row, id: s.id, est: estShown });
+      // PP0: asymEr rides along so the ledger entry below can log the SAME asym shadow a surfaced row
+      // carries. It is in scope here — computed earlier in this same `for (const s of survivors)`
+      // iteration — and is null on a symmetric/churn row, which logs as absent, never as a value.
+      skippedRows.push({ row, id: s.id, est: estShown, asymEr });
       continue;
     }
     // Step 6a: partition churn from band in --mode all so they don't show identical
@@ -1715,9 +1718,15 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // "does forward beat the fold" gate needs; dropping them from the ledger would quietly starve the
     // evidence that is meant to settle the question. `admitSkip` marks them so a reader can never take
     // one for a surfaced suggestion. No grade — these are dropped before the row is rated.
+    // The `asym` shadow is logged here for the SAME reason and by the same reshaper the surfaced rows
+    // use: the disagreement this sample exists to settle is reach-fold-vs-asym, so a dropped row whose
+    // asym pair is missing cannot answer it. Absent on a symmetric (churn) row — asymEr is null there and
+    // suggestionEntry omits the field; an absent read must never be logged as a fabricated pair.
+    // Pinned by pipeline/test/admit-skip-asym.test.mjs.
     .concat(skippedRows.map(r => suggestionEntry(r.row, {
       itemId: r.id, cls: liqClass(r.row), volDay: r.row.volDay, volSrc: VOL_SRC_LABEL,
       verdict: null, grade: null, posture: POSTURE, admitSkip: 'below-shown-net',
+      asym: asymShadow(r.asymEr),
       estBuy: r.est ? r.est.estBuy : null, estSell: r.est ? r.est.estSell : null, estConfidence: estConfLean(r.est),
     }))));
       // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2: the DC3 `demandRegime` shadow field was REMOVED with demandRegime.

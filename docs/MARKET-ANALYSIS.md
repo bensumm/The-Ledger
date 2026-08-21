@@ -1076,6 +1076,10 @@ response an agent needs). Current per-script behavior (facts, not doctrine):
   the displayed pair. The second gate NAMES what it dropped in a `skipped: …` footer rather than dropping
   silently: it runs on n≈0, so a wrong drop has to be visible to be safe, and each dropped row is still
   written to `suggestions.jsonl` carrying an `admitSkip` marker so the calibration sample is not censored.
+  A dropped row also carries the `asym` shadow (PP0) — the disagreement this sample exists to settle is
+  reach-fold-vs-asym, and until that field was threaded the dropped rows could not answer it. Absent on a
+  churn skip row by design (symmetric fill shape ⇒ no asym pair) and on every row logged before it shipped;
+  `pipeline/lib/render/suggestlog.mjs`'s DATA CAVEATS block is the ONE home for that on-disk split.
   It EXEMPTS held and watchlist rows — `gateCandidates` reserves them a slot precisely so they always
   surface, and a held row is more likely to read sub-BE — and `null` opts a flip-niche out entirely
   (value/amplitude/reverse render on their own branches and never reach it). **The first gate has NO such

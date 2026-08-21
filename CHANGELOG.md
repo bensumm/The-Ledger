@@ -10,6 +10,55 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The gate's own calibration sample was missing the field it exists to settle (PP0, 2026-08-21)
+
+`spec.admitMinNet` drops a screen row that loses money at the pair we print, and deliberately writes each
+drop to `suggestions.jsonl` under an `admitSkip` marker — the comment above that site says these rows are
+kept because they are "exactly the sample" the forward gate needs. They weren't. All 44 dropped rows on
+disk carried `asym: null`, because the skip entry threaded `estBuy`/`estSell`/`estConfidence` and nothing
+else, while every SURFACED row logged `asymShadow(r.asymEr)`.
+
+The question that sample exists to answer is reach-fold-vs-asym: those two estimates price the same item
+at two different entry aggressions and disagree hardest exactly on the rows the gate deletes. Without the
+asym leg a dropped row cannot answer it. One field, threaded through the push that was already retaining
+the row. Same rows dropped, same footer, same behaviour.
+
+Verified by running it, not by reading it: of the 11 skip rows logged since, the 7 `band` rows all carry a
+populated pair and the 4 `churn` rows all correctly omit it (churn is `fillShape:'symmetric'`, so no asym
+pair is ever computed). One of the seven logged `ask 2683` against `pAskAt 2606` — a guarded row, which is
+precisely the case `pAskAt`/`pBidAt` exist to keep recoverable, and it is now recoverable on dropped rows.
+
+The on-disk discontinuity is recorded in `suggestlog.mjs`'s DATA CAVEATS block, the one home for that
+class: absence means "not threaded yet" before this, or "churn" at any date — never "no asym read".
+
+### The sizer's net line: a relabel written, reviewed, and PULLED (2026-08-20)
+
+`read-book.mjs`'s tranche sizer prints `net if cycled once (sell …)`, and an agent — this one — read it as
+a verdict on the flip itself and rejected six real candidates on it, cutting a deploy recommendation to
+about an eighth of what the scan table supported. A relabel was written to name the figure's basis beside
+its sign. Three independent review passes then found the rationale false, and it was reverted rather than
+landed. The findings are worth more than the change would have been:
+
+- **The stated invariant does not exist.** The rationale rested on `quickBuy <= quickSell` being pinned by
+  `js/quotecore.js`. It is not — quotecore only DETECTS the violation (`inverted` → `feed-inversion`), and
+  16% of the live snapshot (~9-10% at the liquidity gate) has `low > high`. `read-book.mjs` never consults
+  `row.reliable`, so those rows size and print normally. The refuting test was one grep and it was skipped.
+- **The label would have asserted a false tax regime on bonds**, which are exempt from the 2% tax and pay a
+  10%-of-guide retrade fee. The arithmetic error pre-existed; printing "2% tax" beside it would have been new.
+- **The two percentages have different denominators** — spread over the buy, tax over the sell — so the true
+  crossover is ~2.041%, and a whole band of rows would have printed "spread 2% < 2% tax".
+- **Two supporting facts were also wrong**: "a 900% spread tops the gated set" (the gated maximum is 500%;
+  the 900%+ rows sit at ~zero volume, i.e. a different population), and a statistic labelled as being at
+  "the scan's own liquidity gate" that used one branch of a two-branch disjunction.
+
+What was KEPT: `netPerUnit`/`spreadPct`/`taxPct`/`spreadVsTax` in the pure model, unrendered, and the six
+mutant-verified tests that pin the one property which survived review — `spreadVsTax` is derived from the
+NET SIGN, never from comparing the two percentages, so the comparator can never contradict the number it
+sits beside. `book-model.mjs`'s header records all three defects so the next attempt doesn't repeat them.
+
+The process note is the durable part: every one of these passed all twelve CI gates. Green is not evidence
+that a claim in a comment is true.
+
 ### The scan printed losing trades as top candidates — a per-flip-niche floor on the pair we actually show (2026-08-18)
 
 The screen has always dropped a row that cannot make money. It was reading the wrong price to decide.

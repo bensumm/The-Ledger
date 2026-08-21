@@ -135,8 +135,8 @@
  *     across that boundary without splitting on it.
  *   · timedLap.peakReality / dipReality / bidBasis — absent before 2026-08-12. The reality flag was rendered but
  *     never written until then, so the guard is unmeasurable on older rows: absent ≠ clean.
- *   · asym.pAskAt / pBidAt — null on pairs predating the field, so guarded and unguarded rows cannot be told
- *     apart there (guarded ≈ 2 of 7 asym rows measured live).
+ *   · asym — pAskAt/pBidAt null on pairs predating them ⇒ guarded/unguarded indistinguishable there. The WHOLE object is absent on
+ *     admitSkip rows before 2026-08-21 (first 44 unthreaded) and on ANY churn skip row (symmetric ⇒ none computed): split on mode AND date.
  *   · grade — absent on all rows before 2026-07-12.
  */
 import fs from 'node:fs';
