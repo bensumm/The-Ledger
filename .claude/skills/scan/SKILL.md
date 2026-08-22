@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 3.0
+version: 3.1
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -829,8 +829,11 @@ This is the tribal layer the script can't do — apply ALL of these:
   instead of raw turnover, rotates in starved candidates on a bounded exploration reserve, and
   reports every excluded candidate with a reason instead of dropping it silently. When you see this
   line, name the best-excluded item to Ben if it's genuinely close — that's the whole point of the
-  line existing. `--admission legacy` restores the old raw-gp-flow reserve (rollback/comparison
-  only, never the default). Full diagnosis + design: `PLAN-SCREEN-ARCHITECTURE.md`.
+  line existing. `--admission legacy` restores the old raw-gp-flow thin-lane rank (rollback/comparison
+  only, never the default). ONE reason means something different and should NOT be relayed as a lost
+  edge: `watch-reserve-full` (PP-R) means a WATCHLIST item lost the bounded watch reserve — it is still
+  quoted and graded in the always-shown Watchlist section below, so read it there rather than reporting
+  it as crowded out. Full diagnosis + design: `PLAN-SCREEN-ARCHITECTURE.md`.
 - **"Skip despite high grade."** Grade cutoffs are placeholders (`rating.mjs`); a good
   letter on a ghost-spread / thin / tax-eaten row is still a skip — say why in one line.
 - **Lane management — scale what's printing, rotate what's stalling (v1.8, 2026-07-05,
@@ -894,8 +897,11 @@ This is the tribal layer the script can't do — apply ALL of these:
   or mention a falling row. But `--mode scalp` ACCEPTS fallers (a deliberate intraday flip expects a
   falling wide band) and `--mode value` KNIFE-GUARDS (rejects a decay knife, accepts a flat/basing
   value-low) — do NOT call a scalp/value faller a mistake; the spec surfaced it on purpose. Exception
-  for the EXCLUDE flip-niches: items Ben holds, explicitly asks about, or **watchlists** → always show,
-  with price-to-clear.
+  for the EXCLUDE flip-niches: items Ben holds or explicitly asks about → always show, with
+  price-to-clear. ⚠ **Watchlisted items are NOT in that exception** — only HELD rows carry
+  `surviveMode`'s falling bypass, so a falling watchlist item is still excluded from the flip-niche
+  tables and appears only in the Watchlist section below (which is exactly what the next bullet says).
+  PP-R's watch reserve buys a watchlisted row a FETCH slot, never a pass through the regime doctrine.
 - **Watchlist section (S3): always report, honestly.** The script appends a Watchlist table (from
   repo-root `watchlist.json`) that is exempt from every floor/gate; each row carries a Note saying
   what a gate would have hidden (below-floor / thin / one-sided / falling). Never silently drop a

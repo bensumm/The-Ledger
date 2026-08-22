@@ -1447,11 +1447,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // `estShown`, not `est`: `est` is the neutral reach-fold SHADOW kept for the retro co-log, while the
     // table renders `estShown` (the active sell model, which `--est-sell` can change). Gating on the
     // shadow would drop rows on a price the run never printed and spare rows it did.
-    // HELD/WATCHLIST rows are EXEMPT, and that is load-bearing rather than tidy: gateCandidates gives
-    // them a reserved slot and a falling-bypass precisely so they always surface here, and a held item is
-    // MORE likely to read sub-BE (it survives via that bypass, which is where the sell fold collapses the
-    // exit). Dropping one would silently undo the reserve. They are shown; the row's own annotation says
-    // the exit is under water.
+    // HELD/WATCHLIST rows are EXEMPT, and that is load-bearing rather than tidy. HELD: an unbounded
+    // reserved fetch slot from the pool ranker (rankAndSlice/pickFetchPool) plus surviveMode's falling
+    // bypass — which is also why it is MORE likely to read sub-BE. WATCHLIST: a reserved slot too,
+    // bounded at WATCH_RESERVE_DEFAULT on the band stack, but NO falling bypass (surviveMode gets `held`
+    // only) and 'watch-reserve-full' past the bound. Dropping either would silently undo the reserve.
     if (estShown && !HELD_IDS.has(s.id) && !WATCHLIST_IDS.has(s.id)
         && belowAdmitNet(FLIP_NICHES[mode], estShown.estNet)) {
       disc.subBeNet++;
@@ -2408,8 +2408,8 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
     for (const l of baseLines) console.log(`  ↳ ${l}`);
   }
   // F-B: report the watchlist reserve honestly (0 when nothing on watchlist.json needed it — byte-identical wording otherwise).
-  const watchReserved = survivors.filter(s => s.watched).length;
-  console.log(`\nadmitted ${cand.length} (Stage-1 proxy) · fetched ${survivors.length} (top ${AMP_TOP_DEFAULT} by amplitude proxy${watchReserved ? ` + ${watchReserved} watchlist-reserved` : ''}) · shown ${shown} · dropped Stage-2: no-history ${dropped.noHistory}, amp-below-floor ${dropped.ampFloor}, bid-unreachable ${dropped.bidReach}, ask-unreachable ${dropped.askReach}, trend ${dropped.trend}, knife ${dropped.knife}, margin-below-floor ${dropped.marginFloor}, unaffordable ${dropped.unaffordable} (can't afford ≥1 unit at ${fmtP(AMP_CAPITAL)})`);
+  const watchReservedCount = survivors.filter(s => s.watched).length;   // not `watchReserved` — that name is now an exported fn in gatecandidates.mjs
+  console.log(`\nadmitted ${cand.length} (Stage-1 proxy) · fetched ${survivors.length} (top ${AMP_TOP_DEFAULT} by amplitude proxy${watchReservedCount ? ` + ${watchReservedCount} watchlist-reserved` : ''}) · shown ${shown} · dropped Stage-2: no-history ${dropped.noHistory}, amp-below-floor ${dropped.ampFloor}, bid-unreachable ${dropped.bidReach}, ask-unreachable ${dropped.askReach}, trend ${dropped.trend}, knife ${dropped.knife}, margin-below-floor ${dropped.marginFloor}, unaffordable ${dropped.unaffordable} (can't afford ≥1 unit at ${fmtP(AMP_CAPITAL)})`);
   console.log('⚠ thin — NO fast exit: these big-tickets are thin BY CONSTRUCTION (that\'s why the band screen misses them), so a large concentrated position can\'t be unwound quickly if the thesis breaks. INFORM, not a gate — size to your risk tolerance.');
   // DT1b: say WHY a row has no measured rate. "No number" and "a number we're not showing" must not look
   // the same, and a silent fallback to the 0.5 prior would read as a confident coin-flip.

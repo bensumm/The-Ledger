@@ -62,9 +62,9 @@
  *              NOT a shadow: this pair is the DEFAULT console column set (`--raw` restores Quick+Optimistic)
  *              yet stays OUT of screen.json, so the app still renders Quick/Optimistic.
  *
- * ADMISSION PROVENANCE (screen renderMode rows; absent under `--admission legacy` and on quote/watch)
- *   via?       how the row won its fetch slot: 'reserve' (value/gear/mid-tier reserve) | 'explore' (the rotating
- *              exploration lottery); ABSENT = ranked-in/held, the natural-experiment baseline.
+ * ADMISSION PROVENANCE (screen renderMode rows; absent on quote/watch)
+ *   via?       fetch slot won by: 'reserve' (value/gear/mid-tier) | 'explore' (rotating lottery) | 'watch' (PP-R's
+ *              band-stack watchlist reserve, the ONE also emitted under `--admission legacy`). ABSENT = ranked-in/held.
  *   preRank? / prePool?  1-based position in the niche's pre-fetch ordering and that pool's size ("would have
  *              ranked 12th of 178"), stamped by admission.mjs pickFetchPool. ⚠ The ORDERING SCORE differs per
  *              niche (band/churn: expGpDay × softFactor × trackBoost; value: valueScore; amplitude: ampProxy),

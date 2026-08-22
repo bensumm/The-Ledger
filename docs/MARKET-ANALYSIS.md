@@ -354,6 +354,16 @@ more history WITHOUT widening the gate's daily-range/reach/recency read (a delib
 separation). HONESTY: the wiki `/timeseries?timestep=1h` endpoint returns only ~16 calendar days, so
 `OSC_DETECTOR_NIGHTS` effectively caps near ~15d on real data — a sample-size fix BOUNDED by the endpoint,
 not a calibration. All still n≈0.
+PP-R extended the watchlist reserve to the BAND stack (band/churn/scalp), which had none — a
+watchlisted-but-unheld item ranking below the fetch cutoff never reached a flip-niche TABLE, and its
+candidates never even carried the `watched` flag the reserve selects on. Scope: the item was still
+quoted, graded and published by the always-on watchlist pass (§S3); what it lost is the lane — the
+churn/band partition, the Path-A sort, the per-flip-niche validator stack, the digest and its
+per-flip-niche `screen.json` row. Unlike amplitude's it is
+BOUNDED (`WATCH_RESERVE_DEFAULT`), sized off the logged count of watchlist candidates that cleared the
+gate and were still excluded per pass — not off the watchlist's length, which the reserve can never
+reach. Excluded-past-the-bound rows report `watch-reserve-full`. Reaching the fetch pool remains just
+that: the row still faces the falling doctrine and every post-fetch gate.
 F-B (2026-07-22) added a WATCHLIST RESERVE to the Stage-1 fetch-pool cut (`AMP_TOP_DEFAULT=40`,
 `pipeline/lib/signal/gatecandidates.mjs`/`admission.mjs`): a big-ticket on `watchlist.json` now bypasses the
 Stage-1 amplitude-proxy floor and gets a guaranteed fetch slot even if it ranks below the top-40, so it
@@ -1080,8 +1090,11 @@ response an agent needs). Current per-script behavior (facts, not doctrine):
   reach-fold-vs-asym, and until that field was threaded the dropped rows could not answer it. Absent on a
   churn skip row by design (symmetric fill shape ⇒ no asym pair) and on every row logged before it shipped;
   `pipeline/lib/render/suggestlog.mjs`'s DATA CAVEATS block is the ONE home for that on-disk split.
-  It EXEMPTS held and watchlist rows — `gateCandidates` reserves them a slot precisely so they always
-  surface, and a held row is more likely to read sub-BE — and `null` opts a flip-niche out entirely
+  It EXEMPTS held and watchlist rows — the fetch-pool ranker (`rankAndSlice`/`pickFetchPool`, NOT
+  `gateCandidates`) reserves them a slot so they reach this gate, and a held row is more likely to read
+  sub-BE because only HELD rows also get `surviveMode`'s falling bypass. "Always" is the wrong word for a
+  watchlist row on the band stack: its reserve is BOUNDED (`WATCH_RESERVE_DEFAULT`, PP-R), so past the
+  bound it is reported `watch-reserve-full` instead — and `null` opts a flip-niche out entirely
   (value/amplitude/reverse render on their own branches and never reach it). **The first gate has NO such
   exemption**: a held row whose posted pair nets ≤ 0 is still dropped there, which is long-standing
   behaviour and not what the code comment beside it claims. Neither gate touches rank, grade, or

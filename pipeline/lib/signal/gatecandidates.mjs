@@ -15,7 +15,8 @@
  *   2. rankAndSlice(mode, cand, dailySeries, opts) + proxyDrift + softFactor — the fetch-pool
  *      ORDERING (never displayed): proxy-drift deprioritizes probable fallers (softFactor), a bounded
  *      "rising reserve" front-loads the highest-proxy risers (the absorbed `rising` niche, Steps 3+4),
- *      thin gp-flow qualifiers get a bounded reserve, then TOP-N slice.
+ *      thin gp-flow qualifiers get a bounded reserve, then TOP-N slice, and `watchReserved` (shared with
+ *      admission.mjs's default path) prepends a BOUNDED slice of watchlist.json items the slice cut.
  *   3. surviveMode(mode, row, phase, opts) — the POST-FETCH doctrine renderMode applies to each
  *      fetched row: falling-exclusion (+ --phase-rescue basing rescue), the scalp falling-confirm, and
  *      overnight-posture filters. Returns {keep, discardReason, rescued}; discardReason maps 1:1 to
@@ -102,6 +103,42 @@ export const THIN_RESERVE_DEFAULT = 6;
 // RISING_RESERVE_DEFAULT (Steps 3+4) — fetch-pool slots reserved for the highest-proxyDrift risers, the
 // absorbed `rising` niche mechanism (see rankAndSlice). Small + bounded (a named PLACEHOLDER, rule 4).
 export const RISING_RESERVE_DEFAULT = 6;
+// WATCH_RESERVE_DEFAULT (PP-R) — fetch-pool slots reserved for repo-root watchlist.json items on the
+// BAND stack (band/churn/scalp — every `gate:'band'` spec). The amplitude gate has had a watch reserve
+// since F-B; the band path had NONE, so a watchlisted-but-not-held item ranking below the
+// expGpDay×softFactor cutoff never reached a NICHE TABLE.
+//
+// ⚠ SCOPE — what was lost was the niche row, NOT the item. runWatchlist quotes, grades and publishes
+// every watchlist id on every scan (pre-fetching any the niche pools missed), so the item was always
+// priced and always visible in its own section. What it missed is everything keyed to the niche lane:
+// the churn/band partition, the Path-A sort, the per-niche validator stack, the digest, and its
+// per-niche screen.json row. Do not restate this as "the item was never priced" — that is false and the
+// watchlist section disproves it.
+//
+// BOUNDED, unlike amplitude's — the bound caps a prepend whose only structural limit is the watchlist's
+// own length (60 today), which is what makes an unbounded copy unwise on a lane that also carries the
+// thin/rising/gear/mid-tier reserves. The cost is never those 60: the reserve can only re-admit
+// candidates ALREADY past Stage 1. Measured on ONE basis — the 88 band passes logged in
+// suggestions.jsonl between the `--top 90` change and this chunk — the per-pass count of watchlist
+// candidates that cleared the gate and were still excluded ran mean 7.2, p50 8, p90 12, max 15; across
+// the full logged history, which includes the earlier top-40 pool, max 24. The bound is that
+// all-history max, so on the current pool it is a CEILING WITH HEADROOM that has never once bound: no
+// logged pass, on any basis, exceeded it. That is a deliberate choice, not a measured operating point.
+//
+// Headroom is cheap because the marginal cost is not a whole fetch. Every reserve-admitted row is by
+// definition a watchlist item runWatchlist would have quoted anyway (5m + 6h); admitting it to the
+// niche pool moves those two calls earlier and adds only the survivor-only /1h leg — one request per
+// admitted id — plus, under --mode all, 0-2 additional UNIQUE ids, since amplitude's own watch reserve
+// is usually fetching the same ones (measured over three live snapshots: deduped survivor union
+// 174 -> 175, 162 -> 162, 175 -> 177).
+//
+// Sized for full coverage rather than a tighter bound for one reason: FPS's own measurement found the
+// pre-fetch ranker is NOT predictive of what an item scores once fetched. Ranking watchlist items
+// against each other and truncating is therefore the same failure this reserve exists to prevent, so it
+// should bind as rarely as the fetch budget allows. If it ever does bind, the slots go to the highest
+// expGpDay (the lane's own edge key) and pickFetchPool reports the remainder `watch-reserve-full` —
+// never a silent drop. PLACEHOLDER (rule 4): a growing watchlist re-opens the question.
+export const WATCH_RESERVE_DEFAULT = 24;
 export const TOP_DEFAULT = 40;
 // P5 — the value niche's HARD top-N (§F flood control: the gated pool WILL be large; never dump it).
 export const VALUE_TOP_DEFAULT = 25;
@@ -308,7 +345,12 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
     // it would classify churn items as gear and poison the reserve with the exact population it exists to
     // keep out — a plausible-looking result, not a crash. The structural gate already computes the same
     // hpv+lpv (structural-admission.mjs:125), so both admission paths agree on this field.
-    return { id, limitVol, volDay: hpv + lpv, mid, limit, expGpDay, expGpDayLegacy, activeWin, thin, held };
+    // `watched` — on the candidate for the SAME reason `held` is: the watch reserve in rankAndSlice /
+    // pickFetchPool reads it, and clampUnionFetch treats a watched row as protected. It was set only by
+    // gateAmplitudeCandidates, so on this (band/churn/scalp) path every candidate read `undefined` and the
+    // reserve had nothing to select — the reserve and this field ship together or neither works.
+    const watched = watchedIds.has(id);
+    return { id, limitVol, volDay: hpv + lpv, mid, limit, expGpDay, expGpDayLegacy, activeWin, thin, held, watched };
   };
   // GATE routing (PLAN-LANE-ADMISSION Chunk B) — independent of --admission (which is pool ORDERING,
   // not membership). Default 'legacy' → the unchanged eachLiquidCandidate admission. 'structural' swaps
@@ -452,7 +494,7 @@ export function subFloorLabel(fb) {
 // and front-loading the highest-proxy risers into a bounded reserve so a riser isn't buried below flats
 // (the absorbed `rising` mechanism, Steps 3+4). `opts.thinReserve`/`opts.risingReserve`/`opts.top`
 // default to screen-flip-niches.mjs's defaults (screen passes the CLI values explicitly); fixtures can drive them.
-export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESERVE_DEFAULT, risingReserve = RISING_RESERVE_DEFAULT, top = TOP_DEFAULT, valueReserve = VALUE_RESERVE_DEFAULT } = {}) {
+export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESERVE_DEFAULT, risingReserve = RISING_RESERVE_DEFAULT, top = TOP_DEFAULT, valueReserve = VALUE_RESERVE_DEFAULT, watchReserve = WATCH_RESERVE_DEFAULT } = {}) {
   // P5 value niche (§F): rank the WHOLE gated pool by the composite valueScore and take a HARD top-N.
   // The pool is expected large; the shortlist is bounded (renderValueMode prints admitted-vs-shown).
   // PLAN-FETCH-POOL-SCALING chunk 1 — a VALUE RESERVE (mirrors the thin/rising/watch reserves): the
@@ -474,18 +516,23 @@ export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESER
   }
   // A2 — the amplitude niche: rank the whole Stage-1 pool by the attenuated daily-amplitude PROXY and take
   // a HARD top-N to fetch (the exact Stage-2 gate confirms per survivor in renderAmplitudeMode).
-  // F-B — a WATCHLIST RESERVE, mirroring the held-reserve shape above (unbounded — watchlist.json is a
-  // small, user-curated set, never a flood risk): any `watched` candidate that fell outside the top-N by
-  // proxy still gets a guaranteed fetch slot, PREPENDED (not reshuffling the ranked top-N itself). This is
-  // deliberately a reserve, not a bigger AMP_TOP_DEFAULT — raising the top-N would cost one more live
-  // per-item fetch for EVERY candidate in the widened band on EVERY scan, forever, to fix a handful of
-  // named items; a small reserve costs fetches ONLY for the items actually on the watchlist.
+  // F-B — a WATCHLIST RESERVE, mirroring the held-reserve shape above: any `watched` candidate that fell
+  // outside the top-N by proxy still gets a guaranteed fetch slot, PREPENDED (not reshuffling the ranked
+  // top-N itself). This is deliberately a reserve, not a bigger AMP_TOP_DEFAULT — raising the top-N would
+  // cost one more live per-item fetch for EVERY candidate in the widened band on EVERY scan, forever, to
+  // fix a handful of named items; a reserve costs fetches ONLY for the items actually on the watchlist.
+  // ⚠ UNBOUNDED, and its original "watchlist.json is a small set, never a flood risk" justification no
+  // longer holds unexamined: the file now carries 60 entries and a live pool measured 17 watched
+  // candidates through the Stage-1 gate, 10 of them outside the top-N — a +25% fetch bill on this niche,
+  // and structurally it could prepend more rows than AMP_TOP_DEFAULT reserves into. Not currently harmful
+  // (every extra fetch is a named item), so it is left AS IS deliberately rather than folded into the
+  // band stack's bounded WATCH_RESERVE_DEFAULT — which today would be a no-op here (10 ≤ its bound).
   if (FLIP_NICHES[mode] && FLIP_NICHES[mode].gate === 'amplitude') {
     const sorted = cand.slice().sort((a, b) => (b.ampProxy - a.ampProxy) || (a.id - b.id));
     const topN = sorted.slice(0, top);
     const topIds = new Set(topN.map(c => c.id));
-    const watchReserve = cand.filter(c => c.watched && !topIds.has(c.id));
-    return [...watchReserve, ...topN];
+    const watchReserveRows = cand.filter(c => c.watched && !topIds.has(c.id));
+    return [...watchReserveRows, ...topN];
   }
   for (const c of cand) c.proxyDrift = proxyDrift(dailySeries[c.id]);
   // Thin gp-flow qualifiers are held OUT of the main ranking and given a bounded RESERVE instead.
@@ -516,7 +563,29 @@ export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESER
   const heldIdsInPool = new Set(heldSurvivors.map(c => c.id));
   const rest = nonThin.filter(c => !riserIds.has(c.id) && !heldIdsInPool.has(c.id));
   const reserved = cand.filter(c => c.thin && !heldIdsInPool.has(c.id)).sort((a, b) => (b.limitVol * b.mid) - (a.limitVol * a.mid)).slice(0, thinReserve);
-  return [...heldSurvivors, ...reserved, ...risers, ...rest].slice(0, top + heldSurvivors.length);
+  const pool = [...heldSurvivors, ...reserved, ...risers, ...rest].slice(0, top + heldSurvivors.length);
+  return [...watchReserved(cand, pool, watchReserve), ...pool];
+}
+
+// WATCH RESERVE (PP-R) — the band stack's counterpart to the amplitude gate's watchlist reserve, and the
+// same shape as every other reserve in this file: rank the remainder by its own key, take a BOUNDED slice,
+// PREPEND it, never reshuffle the ranked pool. It runs on the ALREADY-SLICED pool so it is strictly
+// additive — a watchlisted candidate that ranked in is a no-op, and one that fell outside gets a
+// guaranteed NICHE-LANE slot instead of being visible only in the always-on watchlist section (which
+// prices it either way — see WATCH_RESERVE_DEFAULT's scope note before restating this as "never priced").
+// The rank key is `expGpDay` — the lane's own edge number, so when the bound binds the biggest measured
+// edge takes the slots (the alternative, gp-flow, is the dimension admission.mjs's founding ruling
+// rejected). Reaching the fetch pool is NOT admission to the table: the row still faces surviveMode's
+// falling doctrine and every post-fetch gate, exactly like a ranked-in row.
+// Shared by rankAndSlice and pickFetchPool (admission.mjs) so the two admission paths cannot drift —
+// the double-maintenance shape the value reserve already warns about.
+export function watchReserved(cand, admitted, limit = WATCH_RESERVE_DEFAULT) {
+  if (!(limit > 0)) return [];                                  // 0 / negative ⇒ no reserve (byte-identical to pre-PP-R)
+  const inPool = new Set((admitted || []).map(c => c.id));
+  return cand.filter(c => c.watched && !inPool.has(c.id))
+    .sort((a, b) => ((b.expGpDay || 0) - (a.expGpDay || 0)) || (a.id - b.id))
+    .slice(0, limit)
+    .map(c => ({ ...c, via: 'watch' }));                         // provenance tag (value/gear use via:'reserve', exploration via:'explore')
 }
 
 // --- post-fetch doctrine: does this fetched+quoted row SURVIVE its niche/posture? ------------------

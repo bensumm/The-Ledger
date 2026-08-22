@@ -10,6 +10,77 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### A watchlisted item could not reach a band table at all — the reserve that was supposed to guarantee it only existed on one branch (PP-R, 2026-08-21)
+
+`screen-flip-niches.mjs` states that held and watchlist rows "always surface here" because
+`gateCandidates` gives them a reserved slot and a falling-bypass. That was true of held rows and true of
+watchlist rows on the amplitude flip-niche. On the band stack — band, churn and scalp, every
+`gate:'band'` spec — it was false twice over: `rankAndSlice`'s `watchReserve` lives inside the
+`gate === 'amplitude'` branch, which returns early, and the band path below it never stamped `watched`
+onto a candidate in the first place. So a watchlisted-but-unheld item that ranked below the
+`expGpDay × softFactor` cutoff left the fetch pool, and the only trace was an `excluded` ledger line
+reading `thin-reserve-full`.
+
+**What that did and did not cost, stated precisely, because the first draft of this entry got it wrong.**
+It did NOT mean the item went unpriced: `runWatchlist` quotes, grades and publishes every watchlist id on
+every scan, pre-fetching any the flip-niche pools missed, so the row was always visible in its own
+section. What it lost is the LANE — the churn/band partition, the Path-A sort, the per-flip-niche
+validator stack, the digest, and its per-flip-niche `screen.json` row. "Never priced" was an overclaim
+refuted by this repo's own ledger, and the fix is worth having on the narrower, true statement.
+
+The anchor case needs the same discipline. `Webweaver bow (u)` (27652) logged ZERO band rows on all four
+days a scan ran between 2026-08-15 and 2026-08-20 while its watchlist row logged on all four — but of the
+~14 band passes in that window it appears in the band `excluded` ledger on exactly TWO (08-15T01:11 and
+08-20T22:55, both `thin-reserve-full`). On the rest it is absent from `excluded` entirely, meaning it
+never entered the gated pool at all: it failed band's Stage-1 edge gate, upstream of any reserve, which
+is also why the default `--min-roi` cannot reproduce it today. So this reserve is the demonstrated cause
+of 2 of those ~14 misses, not all of them. The rest is an edge-gate question and belongs to a different
+chunk.
+
+Fixed with a reserve in the shape of every other reserve in that file — rank the remainder by its own
+key, take a bounded slice, PREPEND it, never reshuffle the ranked pool — plus the missing `watched` stamp
+on the band candidate, and the same call wired into `admission.mjs`'s `pickFetchPool`, which is the
+DEFAULT admission path: fixing only `rankAndSlice` would have shipped a reserve that runs solely under
+`--admission legacy`. Two knock-ons worth naming. Stamping `watched` also makes every watchlisted band
+survivor `isProtected` in `clampUnionFetch`, so under `--scale-pool` (the only path that runs it) they are
+now immune to `total-fetch-max` trimming — harmless while the protected set stays far below the 150 cap,
+but it is a change to the trim set, not only to the reserve. And `subFloorFallback` re-gates without
+`watchedIds`, so the reserve is a no-op on the empty-flip-niche fallback branch.
+
+The bound is measured, not assumed. The amplitude reserve is unbounded on the stated grounds that
+"watchlist.json is a small, user-curated set, never a flood risk"; the file now holds 60 entries, and an
+unbounded prepend on a lane that already carries four other reserves has no limit but that file's length.
+The cost is not 60 either — the reserve can only re-admit candidates already past Stage 1. On ONE basis,
+the 88 band passes between the `--top 90` change and this chunk, the per-pass count of watchlist
+candidates that cleared the gate and were still excluded ran mean 7.2, p50 8, p90 12, max 15; across the
+full logged history, which includes the earlier top-40 pool, max 24. `WATCH_RESERVE_DEFAULT` is that
+all-history max — a ceiling with headroom that **has never once bound on any logged pass**, which is a
+deliberate choice and not a measured operating point. Full coverage over a tighter bound for one reason:
+FPS measured that the pre-fetch ranker is not predictive of what an item scores once fetched, so ranking
+watchlist items against each other and truncating repeats the failure the reserve exists to prevent. If
+it ever binds, the losing row is reported `watch-reserve-full` rather than folded into the generic lane
+bucket.
+
+Headroom is cheap because the marginal cost is not a whole fetch. Every reserve-admitted row is a
+watchlist item `runWatchlist` would have quoted anyway (5m + 6h legs); admitting it to the flip-niche pool
+moves those calls earlier and adds only the survivor-only /1h leg. Verified by running the path — a paired
+live `--mode all` run over an identical 156-candidate gated pool: band fetch pool 94 → 102, band table
+58 → 63 rated rows, ZERO rows displaced, the five new rows being Masori body, Basilisk jaw, Avernic
+defender hilt, Dragon claws and Sanguinesti staff (uncharged). The DEDUPED cross-flip-niche survivor
+union — the thing that actually costs requests — grew by 0–2 ids across three live snapshots (174 → 175,
+162 → 162, 175 → 177), because amplitude's own watchlist reserve is already fetching most of those ids.
+On a `--min-roi 0.2` pair that admits 27652 to the gated pool, it goes from absent to a rated band row
+carrying its `◆ asym fill` note (deep-bid 14.57m → ask 15.30m, net 427k/u), which is the row
+PLAN-PATIENT-PAIR was written about.
+
+Eleven cases in `pipeline/test/watch-reserve.test.mjs`: ten name the mutant they kill and one is an
+explicit scope pin that names none. All ten mutants were applied to the fixed code and confirmed red,
+including "copy amplitude's unbounded reserve" and "fix only the legacy path". Two cases initially
+survived their own mutant — one was being rescued by the explore/gear/mid-tier reserves, the other used a
+one-element array where `.slice(0,-1)` is accidentally correct — and were rewritten until the mutant
+killed them. Pipeline-only; nothing under `js/`, `index.html` or `styles.css` changed, so no
+`APP_VERSION` bump.
+
 ### The gate's own calibration sample was missing the field it exists to settle (PP0, 2026-08-21)
 
 `spec.admitMinNet` drops a screen row that loses money at the pair we print, and deliberately writes each

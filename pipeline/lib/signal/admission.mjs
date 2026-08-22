@@ -11,8 +11,10 @@
  * invisibility, not a bigger reserve. Full diagnosis: PLAN-SCREEN-ARCHITECTURE.md.
  *
  * This module is the NEW default admission path (`pickFetchPool`), switched on in
- * screen-flip-niches.mjs. `rankAndSlice` (gatecandidates.mjs) is UNCHANGED, still fixture/golden-
- * pinned, and stays selectable via `--admission legacy` for rollback — nothing here erases it.
+ * screen-flip-niches.mjs. `rankAndSlice` (gatecandidates.mjs) keeps the three lane fixes below OUT of the
+ * legacy path, is still golden-pinned, and stays selectable via `--admission legacy` for rollback. It is
+ * NOT frozen, though — a fix that must hold on BOTH paths lands in both (the value reserve; PP-R's watch
+ * reserve, which changed its signature and return value), so do not restate it as "unchanged".
  *
  * Three fixes over the legacy thin/rising/top-N reserve stack:
  *   1. SC2 — the thin lane ranks on `expGpDay` (the after-tax, already-Bar-E-robustified realistic
@@ -36,7 +38,7 @@
  * PLAN-SCREEN-ARCHITECTURE.md's SC5 names the join-outcomes-based check before this graduates
  * beyond "worth trying."
  */
-import { proxyDrift, softFactor, THIN_RESERVE_DEFAULT, RISING_RESERVE_DEFAULT, TOP_DEFAULT, VALUE_RESERVE_DEFAULT } from './gatecandidates.mjs';
+import { proxyDrift, softFactor, THIN_RESERVE_DEFAULT, RISING_RESERVE_DEFAULT, TOP_DEFAULT, VALUE_RESERVE_DEFAULT, WATCH_RESERVE_DEFAULT, watchReserved } from './gatecandidates.mjs';
 import { classifyVolLane } from './structural-admission.mjs';   // MT2 — the EXISTING gear/churn discriminator; never a second one
 
 // --- track record (boost-only admission prior) -------------------------------------------------
@@ -193,6 +195,7 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
   const {
     thinReserve = THIN_RESERVE_DEFAULT, risingReserve = RISING_RESERVE_DEFAULT, top = TOP_DEFAULT,
     valueReserve = VALUE_RESERVE_DEFAULT, exploreReserve = EXPLORE_RESERVE_DEFAULT, trackIndex = null, now = Date.now(),
+    watchReserve = WATCH_RESERVE_DEFAULT,
     gearReserve = GEAR_RESERVE_DEFAULT,
     midTierReserve: midTierReserveRaw = MID_TIER_RESERVE_DEFAULT, midTierOffset: midTierOffsetRaw = MID_TIER_OFFSET_DEFAULT,
     midTierLimitCut = MID_TIER_LIMIT_CUT,
@@ -245,8 +248,8 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
     sorted.forEach((c, i) => { c.preRank = i + 1; c.prePool = sorted.length; });
     const topN = sorted.slice(0, top);
     const topIds = new Set(topN.map(c => c.id));
-    const watchReserve = cand.filter(c => c.watched && !topIds.has(c.id));
-    const survivors = [...watchReserve, ...topN];
+    const watchReserveRows = cand.filter(c => c.watched && !topIds.has(c.id));   // UNBOUNDED here; the band stack's is bounded (WATCH_RESERVE_DEFAULT) — see that constant
+    const survivors = [...watchReserveRows, ...topN];
     const survivorIds = new Set(survivors.map(c => c.id));
     return { survivors, excluded: cand.filter(c => !survivorIds.has(c.id)).map(c => ({ ...c, reason: 'amplitude-top-n' })) };
   }
@@ -353,13 +356,25 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
     .slice(midTierOffset, midTierOffset + midTierReserve)   // paging; safeSlot-guarded, and an offset at/past
     .map(c => ({ ...c, via: 'reserve' }));                  // the pool size slices to [] by plain JS semantics
 
-  const survivors = [...held, ...thinAdmitted, ...exploredThin, ...risers, ...velocityAdmitted, ...exploredVelocity, ...gearReserved, ...midTierReserved];
+  const ranked = [...held, ...thinAdmitted, ...exploredThin, ...risers, ...velocityAdmitted, ...exploredVelocity, ...gearReserved, ...midTierReserved];
+  // WATCH RESERVE (PP-R) — the band stack had no watchlist reserve on EITHER admission path, so a
+  // watchlisted item that lost the thin/velocity ranking never reached a niche TABLE (runWatchlist still
+  // quoted and graded it in its own section — the lost thing is the lane, not the price; the amplitude
+  // branch above has had a reserve since F-B). Same bounded, additive, prepend-only shape; the
+  // selection itself is gatecandidates.mjs's `watchReserved`, shared so this path and the legacy
+  // rankAndSlice cannot drift apart (the double-maintenance the value reserve already warns about).
+  const watchAdmitted = watchReserved(cand, ranked, watchReserve);
+  const survivors = [...watchAdmitted, ...ranked];
 
   // --- exclusion report (SC1) — every gated candidate NOT admitted, with a reason. ---
   const admittedIds = new Set(survivors.map(c => c.id));
   const excluded = cand
     .filter(c => !admittedIds.has(c.id))
-    .map(c => ({ ...c, reason: c.thin ? 'thin-reserve-full'
+    // A watchlisted candidate that is STILL excluded lost the bounded watch reserve itself — say so
+    // rather than folding it into the generic lane bucket, so the bound is visible when it binds
+    // (SC1's never-a-silent-drop contract; same reasoning as `mid-tier-limit-unknown`).
+    .map(c => ({ ...c, reason: c.watched ? 'watch-reserve-full'
+      : c.thin ? 'thin-reserve-full'
       : ((c.proxyDrift ?? 0) > 0 ? 'rising-reserve-full'
       : (midTierEligible(c) && c.limit == null ? 'mid-tier-limit-unknown' : 'top-n-full')) }))
     .sort((a, b) => (b.expGpDay || 0) - (a.expGpDay || 0));
