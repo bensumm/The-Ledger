@@ -1253,6 +1253,9 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       asymRead = st ? asymPair(st) : null;
       if (asymRead) asymEr = asymEstimate(FLIP_NICHES[mode], row, asymRead);
     }
+    // PP2: rendered HERE, once, because estimatePair's extra needs it too (the BE-floored cell names the
+    // patient pair inline). Still the ONE formatAsymFill call for this row — the ◆ note below reuses `af`.
+    const af = asymEr ? formatAsymFill(asymEr, asymRead) : null;
     // PLAN-OUTPUT-TABLE: the diurnal profile + the reconciliation estimate (Est. buy/sell) — computed
     // off the DEFAULT row (before any --asym reprice) from data ALREADY in hand (the Leg-B 1h series,
     // the bid/ask reach reads above) — zero new fetch. prof/dr are stored on the row and REUSED by the
@@ -1329,6 +1332,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       bidReach: reachExtra, askReach: askReachExtra,
       diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
       asym: asymRead,
+      asymEst: asymEr, asymFill: af,   // PP2: the guarded pair + its pre-rendered clause — the BE-floored cell names them inline (js/ can't import emit.mjs)
       dayHigh: dayHighFrom5m(series5m && series5m.get(s.id)),
       reachable,   // PB4: the pressure-exit price source (ignored unless the flag is on)
       askMargin,   // R5: the ask cushion trend — a fading top tightens the sell fold (mirage fix)
@@ -1426,7 +1430,6 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // fills), the ask is the near-certain exit. Under --asym these ARE the quoted numbers (say so).
     if (asymEr) {
       const roi = asymEr.bid > 0 ? (asymEr.net / asymEr.bid * 100).toFixed(1) : null;
-      const af = formatAsymFill(asymEr, asymRead);   // ONE home for the clause wording (lib/render/emit.mjs); defaults to fmtP — full gp on a price an offer is placed at
       if (af) asymNotes.push(`${name}: ${af.bidTxt} → ${af.askTxt} · net ${fmt(asymEr.net)}/u${roi != null ? ` (${roi}%)` : ''} · asym-rank ${fmtP(Math.round(asymEr.rank))}${ASYM ? ' — QUOTED (--asym)' : ''}`);
     }
     // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2: no DC3 demand-tilt inform note here — it went with

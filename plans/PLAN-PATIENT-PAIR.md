@@ -1,6 +1,7 @@
 # PLAN-PATIENT-PAIR — stop deleting a row because ONE of its two estimates says no
 
-Status: PP0 + PP-R in flight. PP2 next. PP1 DEFERRED (see §6). Owner: this session.
+Status: **PP0 SHIPPED** (`ca3939e`) · **PP-R SHIPPED** (`02417e4`) · PP2 BUILT (working tree, not yet committed) · PP1 DEFERRED (§6)
+· the §7 measurement is the next real step after PP2.
 Hardened by an adversarial review pass; **§1 was rewritten after that pass refuted the original
 causal story.** Read §1 before proposing anything — the obvious diagnosis was wrong.
 
@@ -77,26 +78,31 @@ already measured as not beating null.)
 
 ## 3. Chunks
 
-### PP0 — log `asym` on skipped rows  *(in flight)*
+### PP0 — log `asym` on skipped rows  *(SHIPPED `ca3939e`)*
 The skip site logs only `estBuy`/`estSell`/`estConfidence`; **all 44 `admitSkip` rows carry
 `asym: null`** while surviving rows log `asymShadow(r.asymEr)`. The comment above that site promises
 these drops are kept because they are "exactly the sample" the forward gate needs — and the one
 field that sample needs is missing. Add `asymEr` to the `skippedRows` push and the shadow to the
 entry. Logging completeness only: same rows dropped, same footer, same behaviour.
 
-### PP-R — band-mode watchlist reserve  *(in flight)*
-Mirror the existing held/thin/rising reserve shapes so a watched candidate outside top-N still gets
-a fetch slot, and make the false comment at 1452 true rather than deleting it.
+### PP-R — band-mode watchlist reserve  *(SHIPPED `02417e4`)*
 
-**The reserve MUST be bounded and the bound measured.** Do not copy amplitude's unbounded reserve:
-its own comment justifies being unbounded because "watchlist.json is a small, user-curated set",
-but the watchlist now holds **60 entries** against `TOP_DEFAULT = 40`. An unbounded reserve could
-prepend more items than the pool it reserves into. The true cost is not 60 — it is the count of
-watchlist items that reach `cand` (i.e. already passed Stage-1) and fall outside top-N. Size the
-bound from that measurement. `AMP_TOP_DEFAULT` is also 40, so **amplitude's own reserve may already
-be mis-sized** — flag, do not silently fold in.
+Shipped at `WATCH_RESERVE_DEFAULT = 24`. Two findings refuted the scoping above and are worth
+keeping: `watched` was never stamped on band candidates (only `gateAmplitudeCandidates` set it), so
+a reserve keyed on it would have been a no-op that reads as implemented; and `ADMISSION` defaults to
+`'unified'`, so a `gatecandidates.mjs`-only change would run only under `--admission legacy` — the
+shared `watchReserved()` is called from both paths and a test pins both.
 
-### PP2 — both pairs in the BE-floored cell  *(next)*
+Measured after shipping, and NOT matching the review notes: the anchor came in `via:'watch'` at
+preRank 67/195 on one pass and RANKED IN unaided at 47/136 hours later, and live yield on a default
+band pass was **1 reserved row of 66**. The mechanism is load-bearing on some passes; the row-count
+deltas in the review were snapshot-specific and do not reproduce. Do not quote them.
+
+**OPEN:** amplitude's reserve is still UNBOUNDED and measured **17 prepends onto a 40-slot pool**
+live (+42% fetches/scan) — higher than the 10 the review found. Adopting the band bound would be a
+no-op at 24 today and caps the growth. Deliberately not folded in; it is a separate decision.
+
+### PP2 — both pairs in the BE-floored cell  *(built; uncommitted working tree)*
 `js/estimators/cells.mjs` already branches on `c.beFloored`, already has the amber class and already
 names the bound floor. Extend that ONE branch to carry the patient alternative inline.
 
@@ -117,17 +123,24 @@ Scope facts established during hardening:
   comments hold for `foldExempt`.
 - Wording must satisfy §2d and must not let +427k/u read as achievable: it is a level proposal on a
   bid that fills ~4/14 days, carrying a tautological probability.
-- **BLOCKER on the obvious implementation — `cells.mjs` CANNOT import `formatAsymFill`.** The
+- **RESOLVED — the module move is NOT needed.** `formatAsymFill(ae, ap)` already takes BOTH the
+  guarded `asymEstimate` and the unguarded `asymPair` and names price vs level separately, with 8
+  tests pinning it, so §2d needs no new decision — reuse the clause. And both callers ALREADY
+  compute it (`screen-flip-niches.mjs:1429`, `quote-items.mjs:465`), so they hand it through
+  `estimatePair`'s existing `extra` and `cells.mjs` only PLACES it. That keeps `formatAsymFill`'s
+  home, its tests, and the js/↛pipeline direction intact. The blocker below is why the obvious
+  alternative was rejected; it is kept as the reason, not as open work.
+- **Why the obvious implementation is wrong — `cells.mjs` CANNOT import `formatAsymFill`.** The
   hardening pass recommended routing the clause through `formatAsymFill`, which is correct on
   honesty grounds and impossible as written: that function lives in `pipeline/lib/render/emit.mjs`,
   and **there are ZERO `js/` → `pipeline/` imports in the repo.** The browser loads `js/` only;
   `pipeline/` is not served, so such an import is a runtime 404 in the deployed app (the `smoke`
-  job's exact failure class). Resolution: **move `formatAsymFill` into `js/windowread.mjs`** and
-  re-export it from `emit.mjs` for the existing pipeline callers. That is where its siblings already
-  live — `formatAvgBound`, `formatFloorCeiling` and `formatSoftBuy` are all in `js/windowread.mjs`
-  with the same injected-`fmt` signature, so `formatAsymFill` is the odd one out and the move
-  corrects existing drift rather than inventing a new home. This makes PP2 a module move plus a
-  render change, not a one-branch edit — scope accordingly.
+  job's exact failure class). ~~Resolution: move `formatAsymFill` into `js/windowread.mjs`.~~ That
+  move was REJECTED by the bullet above and NOT made: passing the rendered clause through `extra`
+  keeps the function, its 8 tests and the js/↛pipeline direction where they are. `formatAsymFill`
+  being the odd one out among `formatAvgBound`/`formatFloorCeiling`/`formatSoftBuy` (all in
+  `js/windowread.mjs` with the same injected-`fmt` signature) is real, pre-existing drift — it is a
+  separate cleanup, not PP2's, and PP2 stayed a one-branch edit.
 - **No caller changes needed for the data.** `extra.asym` already receives the full `asymPair`
   output (`asymRead` at screen `:1331`, `ap` at quote `:555`); the contract comment naming
   `{ highReachAsk }` documents only what is currently CONSUMED, not what is passed. Note the passed

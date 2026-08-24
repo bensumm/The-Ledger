@@ -132,7 +132,7 @@ function reachRead(r) {
 
 /* estimatePair(spec, row, extra, { nudge, sellModel, pressureExit }) → { estBuy, estSell, estNet, estRoi,
    be, estSellFloorBind, pFill, estSellForward, forwardPeak, forwardTrough, forwardConfidence,
-   holdHorizonDays, confidence } | null.
+   holdHorizonDays, patient, confidence } | null.
    PLAN-ESTIMATOR-HONEST-SELL E1 — THE HONESTY FIX: estSell is NO LONGER overwritten to break-even. Because
    netMargin(buy, breakEven(buy)) ≡ +1 for the whole price range, any BE-clamped "+1 (BE X)" was a clamp
    ARTIFACT hiding a possibly-real edge (the operator read it and SKIPPED). estSell now keeps the model's
@@ -147,6 +147,12 @@ function reachRead(r) {
      askReach  { reachedDays, nDays, recentHit?, recentDays? }  patient ask REACH counts (full + recent-3)
      diurnal   { bid, ask }        deriveDiurnalRange's dip/peak-window levels
      asym      { highReachAsk }    asymPair's near-certain exit level (deepBid is NEVER consumed — rev3)
+     asymEst   asymEstimate result  PP2: the GUARDED patient pair (`asym` above is the UNGUARDED one) —
+                                   only `.net` is read, for the display-only `patient` block below.
+     asymFill  { bidTxt, askTxt }  PP2: formatAsymFill's clause pair, PRE-RENDERED by the caller. It lives
+                                   in pipeline/lib/render/emit.mjs and js/ never imports pipeline/ (the
+                                   browser would 404), so the honest price-vs-measured-level wording is
+                                   passed in as text rather than reimplemented here.
      askMargin { trend }          R5: the ask-side reachMargin CUSHION trend (fading|stable|extending) — a
                                    `fading` trend tightens the sell fold even on a clean reach (the mirage
                                    fix). Absent → no fade (byte-identical). reach-fold reads only .trend.
@@ -287,6 +293,13 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
       estSellForward = forwardPeak;   // the sell "list at X" is the projected next peak
     }
   }
+  // PP2 — the PATIENT alternative, DISPLAY-ONLY. A BE-floored fold prints "nothing to price above
+  // break-even" while the asym pair on the SAME row can be positive; carrying it here lets the cell say
+  // so instead of leaving it in a footer two lines below (the anchor incident: a real trade dismissed).
+  // NOT a rev3 reversal: rev3 bars the deep bid from estBuy because that is an expected-price number.
+  // This is render text beside the estimate — estBuy/estSell/estNet are untouched.
+  const patient = (extra.asymFill && extra.asymEst && num(extra.asymEst.net) != null)
+    ? { bidTxt: extra.asymFill.bidTxt, askTxt: extra.asymFill.askTxt, net: extra.asymEst.net } : null;
   const confidence = {
     bid: cBid, ask: cAsk,
     beFloored, declaredAnchored, doctrine,
@@ -312,6 +325,7 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
     estSellFloorBind,   // E1: break-even as a DISPLAY FACT when the honest sell is sub-BE (else null) — a caution, not a substitution
     pFill,              // E1: the reused askReachFactor P(fill) (never forked), a first-class field
     estSellForward, forwardPeak, forwardTrough, forwardConfidence, holdHorizonDays,   // E1: the forward "list at X" (null when extra.forward absent — degrade)
+    patient,            // PP2: display-only { bidTxt, askTxt, net } for the BE-floored cell (null when the caller passed no asym clause)
     confidence,
   };
 }

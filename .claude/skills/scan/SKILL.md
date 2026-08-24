@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 3.1
+version: 3.2
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -57,6 +57,27 @@ default** — there is NO default-hidden middle tier, so surface the context foo
 drop them to "keep it short." A note family only stops being surfaced once real sessions evidence
 it's consistently unused (a future ruling, never a per-pass call). The tier registry lives in
 `pipeline/lib/render/render.mjs`'s header — the ONE registry; don't restate tiers here.
+
+- **The `◆ asym fill` counts are QUANTILE CONSTANTS read back, not per-item fill rates — relay the
+  whole clause, never just the price and the tally.** _(judgment: honesty discipline over an
+  inform-only note; the wording is enforced in `pipeline/lib/render/emit.mjs` `formatAsymFill`, the ONE
+  home)_ `js/windowread.mjs`'s `asymPair` scores each level against the SAME array the level was drawn
+  from, so `pAsk` comes back 0.86 on 89.9% of 8,300 logged rows and `pBid` 0.29 on 86.5% — 12/14 and
+  4/14, the `ASYM_P_LO`/`ASYM_P_HI` quantiles restated. Treat "printed 12/14d" as a rank position in an
+  in-sample window, never as a probability the offer fills, and never build a ranking or a
+  recommendation on it. Two more things ride with that: the ask ordering guard BINDS on ~70% of rows
+  (measured 69.7%, 1,380/1,979), which is why the clause splits `ask X (= live instabuy, above the Y
+  level that printed N/14d)` — the price and the level the count belongs to are DIFFERENT numbers and
+  relaying one as the other is the specific error this wording exists to prevent; and the deep bid is
+  touched roughly 4 days in 14, so it is a resting level to leave sitting, not a fill to plan around.
+- **A BE-floored `Est. sell` cell is not the whole verdict — read the `patient:` clause inside it
+  (PP2).** _(judgment: read-the-row discipline; rendered by `js/estimators/cells.mjs`)_ When the
+  reach-fold lands under break-even the cell says `reach-fold floored to BE X — nothing to price above
+  break-even` AND, when the patient pair is positive, appends `· patient: deep-bid … → ask … · net
+  +N/u — resting levels, in-sample counts, not a fill rate`. The two halves disagree on purpose: the
+  fold says the transact-now pair loses, the patient half says a resting bid into a patient ask does
+  not. Relay both. Taking the floored half alone as "no trade" is exactly the mistake that dismissed a
+  ~1.4m trade, and the caveats in the rule above apply in full to the patient number.
 
 **The deployable figure is SHOWN, not modelled — if it's wrong, correct it at the SOURCE (PLAN-CAPITAL-DEPLOYABILITY L3, Ben 2026-07-26).** _(judgment: capital-transparency doctrine; mechanic in `derive-cash-tiers.mjs` + the `suspectBidNote` flag on `read-book`/`run-loop`/`screen --capital`)_ The scan's default capital is the DERIVED `deployablePool` (free cash + reclaimable deep-bid escrow), and the surfaces now PRINT its composition (`free X · + reclaimable Y from N deep bids`) plus a `⚠ N restart-suspect bid(s) may be included — verify in-game` flag when a restart-blind bid may have inflated it. The tool does NOT model or auto-correct this number — that machinery was deliberately SHELVED (one reliable human-in-the-loop beats an unattended guard: `gate-on-error-cost-not-n`). So when the shown deployable is wrong, fix it at the SOURCE, never by patching a derived view (`fix-at-the-source-not-derived-view`): **re-anchor** (`node pipeline/commands/derive-cash.mjs <amount>`) when the free-cash baseline has drifted, or a **manual-log correction / phantom-bid clear** when a bid shown as reclaimable is actually gone. The conversational loop IS the override — Ben says the number's wrong, I route the correction to the anchor/log, and the next read is right.
 

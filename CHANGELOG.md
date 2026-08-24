@@ -10,6 +10,51 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The BE-floored cell said "no trade" while the same row's footer said +427k/u (PP2, 0.74.8, 2026-08-22)
+
+A screen/quote row rendered `Est. sell 15.30m (reach-fold floored to BE 15.42m — nothing to price above
+break-even)` → net **−114.7k/u**, and two lines below, on the same row, the `◆ asym fill` note read
+`deep-bid 14.57m → ask 15.30m · net 427k/u`. Both numbers were correct and both came out of the same
+pass. A reader took the CELL as the verdict and dismissed a trade worth ~1.4m. Nothing was missing from
+the output; the information was mis-placed — the number that contradicted the verdict sat below the fold
+in a different section, keyed by item name rather than attached to the row it contradicted.
+
+PP2 carries the patient alternative INTO the `beFloored` branch of `estPairCells`. A real run now reads
+`… nothing to price above break-even, 3/3) · patient: deep-bid 14,395 (touched 4/14d — rest as
+optionality) → ask 15,066 (printed 12/14d) · net +370/u — resting levels, in-sample counts, not a fill
+rate`. Because `estPairCells` is the ONE cell builder, this reaches the screen, the per-item quote and
+the held-lot `--positions` review from a single edit.
+
+**Three measured facts govern the wording, and they are why the clause is not phrased as an
+opportunity.** `pAsk` is 0.86 on 89.9% of 8,300 logged rows and `pBid` is 0.29 on 86.5% — those are the
+`ASYM_P_LO`/`ASYM_P_HI` quantile constants read back out, since `asymPair` scores each level against the
+same array it was drawn from, so the counts are in-sample rank positions, not fill rates. The ask
+ordering guard binds on 69.7% of rows, so the quoted price is frequently NOT the level the count was
+measured at. And the deep bid is touched roughly 4 days in 14 — resting optionality, not a fill. The
+clause therefore reuses `formatAsymFill`'s existing wording verbatim (already the one home for the
+price-vs-measured-level split) and appends `resting levels, in-sample counts, not a fill rate`. No
+execution verb: `quotecore.js` already measured `quickBuy`/`quickSell` as not being click-prices.
+
+**Why the text is passed in rather than rendered locally.** `formatAsymFill` lives in
+`pipeline/lib/render/emit.mjs`, and there are zero `js/` → `pipeline/` imports in the repo: `js/` is what
+the browser loads and `pipeline/` is not served, so such an import is a runtime 404 in the deployed app —
+exactly what the `smoke` job exists to catch. Both callers already computed the clause for the `◆` note,
+so it is hoisted a few lines and handed to `estimatePair` through the existing optional `extra` object
+(`asymFill` + `asymEst`); `pair.mjs` surfaces it as a display-only `patient` field. Still ONE
+`formatAsymFill` call per row.
+
+**This does not overturn rev3.** `pair.mjs` forbids folding the deep bid into `estBuy` because a deep
+flush bid is rest-and-see optionality and never belongs inside an expected-price number. A render-only
+field is not an expected-price number; `estBuy`/`estSell`/`estNet`/`pFill`/`confidence` come out
+identical with and without the new inputs, and a test pins that by mutating `estBuy` to the deep bid and
+going red.
+
+Scope discipline: only the `beFloored` branch changed, and that was proved rather than asserted — 86,400
+rendered rows across 22 branch combinations (pressure, declared-exit, fold-exempt, fade, forward and
+their combinations) diffed against the pre-change builder, with zero differences outside
+`beFloored`-with-a-positive-patient rows. A positive net is required for the clause to print at all: a
+patient pair that also loses is not an alternative, only noise on a row that is already crowded.
+
 ### A watchlisted item could not reach a band table at all — the reserve that was supposed to guarantee it only existed on one branch (PP-R, 2026-08-21)
 
 `screen-flip-niches.mjs` states that held and watchlist rows "always surface here" because

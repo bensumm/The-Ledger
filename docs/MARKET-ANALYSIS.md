@@ -103,7 +103,11 @@ reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Oper
   below r≈1.29 both bases lose to not gating at all, so never read that column as a filter. When the
   fold sits below break-even the cell **ANNOTATES**
   it (`reach-fold floored to BE X — nothing to price above break-even`) rather than substituting the
-  number; `estSellFloorBind` carries that BE as a display fact. A **forward "list at X"** rides alongside —
+  number; `estSellFloorBind` carries that BE as a display fact. **PP2 (2026-08-22): that same cell also names the
+  PATIENT alternative** when the row has a positive asym pair (`· patient: deep-bid … → ask … · net +N/u
+  — resting levels, in-sample counts, not a fill rate`), so the floored half is no longer the only thing
+  the cell says — the wording is `formatAsymFill`'s, and its counts are in-sample quantile ranks, never
+  fill rates. A **forward "list at X"** rides alongside —
   the phase-aware `driftExitFrom` projected exit (`~Nd hold`, confidence ordinal, `forward n≈0` inform),
   shown when the caller passed its in-hand `hourProfile`+`windowStats().days` (`extra.forward`; absent →
   degrade, no fetch). The reach-fold is labeled **secondary/phase-blind** (the correct read for a

@@ -42,7 +42,9 @@ function buyTok(c) {
    render from this ONE builder so the cell text can't drift). Confidence rides IN the price cells
    (Ben's rule): buy carries its touch fraction (recent-3 primary) + an optional AC1 placement percentile,
    sell its reach fraction OR a `(declared)` marker when anchored to a thesis exit; a bound BE floor is
-   named on the sell cell (amber) — that row's estimate is saying "no trade at model prices". */
+   named on the sell cell (amber) — that row's estimate is saying "no trade at model prices", and PP2
+   appends the PATIENT alternative (est.patient) there when one is positive, so "no trade" is never the
+   whole story the reader gets. */
 export function estPairCells(est) {
   if (!est) return [{ t: '—' }, { t: '—' }, { t: '—' }, { t: '—' }];
   const c = est.confidence;
@@ -88,11 +90,17 @@ export function estPairCells(est) {
   // product, which is why the same row can show two different percentages.)
   const pTok = (est.estNet != null && est.pFill != null && c.ask && !c.foldExempt)
     ? ` · P(ask)~${Math.round(est.pFill * 100)}%` : '';
+  // PP2 — on the BE-floored branch ONLY, name the PATIENT alternative, so "nothing to price above
+  // break-even" is not the whole story when the asym pair on the same row is positive. Wording is
+  // formatAsymFill's (the ONE home for price-vs-measured-level honesty; the ask guard binds on ~70% of
+  // rows), passed in as text. Positive net only, and the tail names what the counts are NOT.
+  const patSeg = (c.beFloored && est.patient && est.patient.net > 0)
+    ? ` · patient: ${est.patient.bidTxt} → ${est.patient.askTxt} · net +${fmtP(est.patient.net)}/u — resting levels, in-sample counts, not a fill rate` : '';
   const netTxt = est.estNet == null ? '—'
     : `${est.estNet > 0 ? '+' : ''}${fmtP(est.estNet)} (${est.estRoi != null ? (est.estRoi >= 0 ? '+' : '') + est.estRoi.toFixed(1) + '%' : '—'})${pTok}`;
   return [
     { t: `${fmtP(est.estBuy)} (${buyTok(c)})` },
-    { t: `${fmtP(est.estSell)}${sellSuffix}${fwdSeg}`, c: c.beFloored ? 'amber' : (c.pressureExit ? 'gain' : (c.declaredAnchored ? 'gain' : undefined)) },
+    { t: `${fmtP(est.estSell)}${sellSuffix}${fwdSeg}${patSeg}`, c: c.beFloored ? 'amber' : (c.pressureExit ? 'gain' : (c.declaredAnchored ? 'gain' : undefined)) },
     { t: netTxt, c: est.estNet == null ? undefined : (est.estNet >= 0 ? 'gain' : 'loss') },
     { t: fmtP(est.be), c: 'mini' },
   ];

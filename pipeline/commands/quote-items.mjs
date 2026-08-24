@@ -460,9 +460,11 @@ async function runItems() {
     const ast = inp.ts1h ? windowStats(inp.ts1h, { nights: 14, wStart: 0, wEnd: 0 }) : null;
     const ap = ast ? asymPair(ast) : null;
     const ae = ap ? asymEstimate(FLIP_NICHES.band, row, ap) : null;
+    // ONE home for the clause wording (lib/render/emit.mjs); defaults to fmtP — full gp on a price an offer
+    // is placed at. PP2 hoisted it out of the note block: extraEst below passes it to the BE-floored cell.
+    const af = ae ? formatAsymFill(ae, ap) : null;
     if (ae) {
       const roi = ae.bid > 0 ? (ae.net / ae.bid * 100).toFixed(1) : null;
-      const af = formatAsymFill(ae, ap);   // ONE home for the clause wording (lib/render/emit.mjs); defaults to fmtP — full gp on a price an offer is placed at
       if (af) notes.push({ kind: 'asym', itemId: id, text: `asym fill: ${af.bidTxt} → ${af.askTxt} · net ${fmt(ae.net)}/u${roi != null ? ` (${roi}%)` : ''} (placeholder quantiles, n≈${ap.nDays})` });
     }
     // PLAN-OUTPUT-TABLE: the reconciliation estimate off the SAME in-hand reads (windowStats touch/
@@ -553,6 +555,7 @@ async function runItems() {
       bidReach, askReach,
       diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
       asym: ap, declaredExit,
+      asymEst: ae, asymFill: af,   // PP2: the guarded pair + its pre-rendered clause — the BE-floored cell names them inline (js/ can't import emit.mjs)
       dayHigh: dayHighFrom5m(inp.ts5m),
       // PLAN-LIQUIDITY-REACH: on a held lot, the reach relief sizes off the REAL lot qty, not the buy-limit
       // proxy (absent → estimatePair degrades to row.limit, byte-identical for a bare "how's X" read).
