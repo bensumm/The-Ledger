@@ -149,7 +149,9 @@ export function askReachFactor(askReach, relief = 0, { prefer = 'full' } = {}) {
    optionality", the patience-on-cancel-and-cut doctrine), never a weight. P_ask IS the fill weight —
    the exit is the flip's big assumption (Part I's whole diagnosis).
    ORDERING GUARDS (§II.2): the pair returned keeps bid ≤ quickBuy and ask ≥ quickSell (the min/max
-   guards), so a quoted asym pair can never break optBuy ≤ quickBuy ≤ quickSell ≤ optSell. When the ask
+   guards), so a quoted asym pair can never break optBuy ≤ quickBuy or quickSell ≤ optSell. Those two
+   are what the min/max guards bound against; they do NOT establish quickBuy ≤ quickSell, which a
+   crossed feed breaks and which quotecore labels rather than rejects. When the ask
    guard BINDS (live instabuy above the high-reach level) the exit is a transact-now sell, so the
    reported pAsk (measured at the unguarded quantile) is a floor, not exact — documented, not patched
    (F1 calibrates). RE-EXAMINED 2026-08-12 — and the "floor" claim in the sentence above is NOT

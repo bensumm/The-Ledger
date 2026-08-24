@@ -53,8 +53,11 @@ const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
      estBUY is ORDERING-CLAMPED (≤ qb = row.quickBuy = latest.low, the live INSTASELL, where your buy
        fills). A model chooses only its outer floor (buyLo).
      ORIENTATION — these two labels were REVERSED throughout this file, and a caller (read-window-range's
-       synthetic row) built its pair from them: that inverts the feed, inflates break-even and fakes
-       `beFloored`. A synthetic row must be checked against quotecore's definitions, not against prose here.
+       synthetic row) built its pair from them. `clamp` is `max(a, min(b, x))`, so qb is a CEILING: the
+       swap RAISED it to the instabuy, un-capping the buy and inflating break-even with it. The damage is
+       `min(optBuy, qb_wrong) − min(optBuy, qb_right)` — ZERO whenever optBuy sits at or under the
+       instasell, the full spread only as it reaches the instabuy. Check a caller against quotecore's
+       definitions, not against prose here.
      The asymPair DEEP bid is NEVER folded into estBuy (rev3) — a deep flush bid is rest-and-see
        OPTIONALITY (the separate `◆ asym` line), never inside an expected-price number.
 

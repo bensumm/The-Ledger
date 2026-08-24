@@ -9,7 +9,10 @@
    - Optimistic = patient 2h-band edges over the last 24×5m points, ROBUSTIFIED (Bar E, robustBand): the
      p10 low / p90 high on a dense side (≥ BAND_EDGE_MIN_SAMPLE prints), the raw extremum on a sparse one,
      so a lone flier can't inflate the surfaced edge. The MOMENTUM tell keeps the true raw min/max.
-   INVARIANT (guaranteed by construction below): optBuy ≤ quickBuy ≤ quickSell ≤ optSell.
+   INVARIANT (guaranteed by construction below): optBuy ≤ quickBuy and quickSell ≤ optSell.
+   The MIDDLE relation is NOT one: a crossed feed (quickBuy > quickSell) is a real market condition
+   this file DETECTS at the reliability check and labels 'feed-inversion' — measured at ~17% of a
+   live snapshot — and `ordered:false` is how it travels. Code downstream must stay total on it.
    The 2026-07-03 bug that inflated an edge 2.5× came from mixing bases (24h percentiles vs
    live quotes). Here the optimistic edges are CLAMPED against the SAME live quote, so the
    optimistic side can never be worse than the quick side — the mixing can't happen.

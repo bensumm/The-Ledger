@@ -21,8 +21,9 @@
  *       PLUS Held@ / Break-even columns + a HOLD / list-at-X / CUT verdict per row.
  *
  * ALL quote/tax/regime math comes from js/quotecore.js (imported) — this file only fetches
- * and formats. The ordering invariant optBuy ≤ quickBuy ≤ quickSell ≤ optSell is guaranteed
- * by computeQuote; a ⚠ basis flag prints if a feed inversion ever breaks it.
+ * and formats. computeQuote guarantees optBuy ≤ quickBuy and quickSell ≤ optSell; the MIDDLE
+ * relation is not guaranteed — a crossed feed (quickBuy > quickSell) is a real condition it detects
+ * and labels 'feed-inversion', at ~17% of a live snapshot, and a ⚠ basis flag prints on it.
  */
 import fs from 'node:fs';
 import path from 'node:path';

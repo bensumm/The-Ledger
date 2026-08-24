@@ -10,7 +10,7 @@
  * floors — the pressure ask is still ordering-clamped (sell ≥ live), still BE-floored, and a declared
  * thesis exit still wins the sell leg at the shell (only the BUY goes pressure then). A pressure deep bid
  * MAY sit below the band low (that's the point), so buyLo = -Infinity — but the shell still ceils it at
- * the live instabuy (qb). The reliability-gated peak-cap (PB4's ruled decision): a FULLY-reliable read may
+ * the live instasell (qb). The reliability-gated peak-cap (PB4's ruled decision): a FULLY-reliable read may
  * exceed the observed 24h high (sellHi = Infinity); a reliability<1 read keeps the dayHigh cap (the
  * thin-book mirage guard). When no valid reachable band is present the model DEGRADES to the neutral
  * reach-fold proposal byte-for-byte (the flag is a no-op without a band).

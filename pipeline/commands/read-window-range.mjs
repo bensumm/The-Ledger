@@ -686,9 +686,13 @@ for (const want of positionals) {
     const synthRow = {
       // ORIENTATION, and it was INVERTED here until now: quotecore defines quickBuy = latest.low (the
       // instasell — where your BUY fills) and quickSell = latest.high (the instabuy — where your SELL
-      // fills), and estimatePair's clamps are written for THAT. Feeding the swap raised estBuy to the
-      // instabuy, raised break-even with it, and manufactured `beFloored` on rows the screen prices as
-      // profitable — breaking the byte-parity-with-the-screen this whole block exists to guarantee.
+      // fills), and estimatePair's clamps are written for THAT. The swap RAISED the buy CEILING to the
+      // instabuy (clamp is max(a,min(b,x)) — qb caps, it does not push), un-capping the buy, inflating
+      // break-even and manufacturing `beFloored` on rows the screen prices as profitable. It is a no-op
+      // whenever optBuy sits at or under the instasell, the common case. It moved estSell too, via qs as
+      // the fold floor. NOTE the block header's "byte-parity with the screen" is aspirational, not true:
+      // the screen also passes diurnal/asym/dayHigh/placement and an anchorNudge this row has none of,
+      // so relief is structurally 0 here. Orientation was one divergence among several.
       quickBuy: latest.low, quickSell: latest.high,
       optBuy: BID != null ? BID : (lows.length ? quantLow(lows, 0.5) : latest.low),
       optSell: askScoreLevel != null ? askScoreLevel : (his.length ? quantHigh(his, 0.5) : latest.high),

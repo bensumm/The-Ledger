@@ -46,8 +46,14 @@ function underwaterSeries(end, n, hi, lo, vol) {
 }
 // A hand-built computeQuote-shaped row: full control of mom/reliable/quickSell so the position stage
 // + renderer are exercised on a KNOWN market state (computeQuote itself is pinned in quotecore.test).
+// UN-CROSSED: this read `quickBuy: 92, quickSell: 90` — a CROSSED feed — while declaring
+// `ordered: true, reliableReason: 'ok'`. computeQuote cannot emit that row (it labels the crossing
+// `feed-inversion` and sets ordered:false), and the declared metadata CANCELLED momVerdict's Gate-0
+// (`row.ordered === false` → NO_READ), which exists so a crossed feed can never print a decisive
+// verdict however the row was built. Nine tests here build on this fixture, so the guard was
+// disabled for all of them. Same failure mode as the FWD_ROW fixture that hid the fwdCtx swap.
 const heldRow = (o = {}) => ({
-  quickBuy: 92, quickSell: 90, optBuy: 90, optSell: 96, rawBandLo: 90, rawBandHi: 96,
+  quickBuy: 90, quickSell: 92, optBuy: 90, optSell: 96, rawBandLo: 90, rawBandHi: 96,
   mom: 'clean', reliable: true, ordered: true, reliableReason: 'ok',
   rising: false, falling: false, regimeLabel: 'flat', mid: 91, volDay: 500,
   regime: { ok: true, driftPct: 0 }, ...o,

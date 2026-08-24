@@ -9,18 +9,18 @@
  *   propose(ctx) → { estBuy, buyLo, estSell, sellHi, confidence }
  *     estBuy   — the proposed buy leg (raw, PRE-nudge/clamp). The model owns the BUY doctrine.
  *     buyLo    — the model's buy FLOOR for the shell's clamp. The shell ALWAYS ceils the buy at the
- *                live instabuy (qb) regardless — buyLo only lets a model widen the floor DOWN (pressure
+ *                live INSTASELL (qb = quotecore's quickBuy = latest.low, where a buy fills) regardless — buyLo only lets a model widen the floor DOWN (pressure
  *                bids below the band low: buyLo = -Infinity). reach-fold floors at the band low.
  *     estSell  — the model's INTRINSIC sell proposal (raw, PRE-nudge/clamp). The shell overrides this
  *                with a declared thesis exit when one is passed (declared governs the sell leg for EVERY
  *                model — the operator's plan wins); the model never sees/handles declaredExit.
  *     sellHi   — the model's sell CEILING for the shell's clamp (Infinity = uncapped). The shell ALWAYS
- *                floors the sell at the live instasell (qs) regardless.
+ *                floors the sell at the live INSTABUY (qs = quickSell = latest.high, where a sell fills) regardless.
  *     confidence — the per-model evidence the cell/shadow render off: { bid, ask, relief, pressureExit }.
  *                The shell adds the model-free flags (beFloored, declaredAnchored, doctrine).
  *
  * NON-SKIPPABLE FLOORS a model CANNOT bypass (they live in the estimatePair SHELL, applied after propose):
- *   • the ORDERING clamps — buy ≤ live instabuy (qb), sell ≥ live instasell (qs). A model may only choose
+ *   • the ORDERING clamps — buy ≤ live INSTASELL (qb), sell ≥ live INSTABUY (qs). A model may only choose
  *     its OUTER bound (buyLo / sellHi); the inner live bound is the shell's and is non-negotiable.
  *   • the BE FLOOR — estSell is never emitted below breakEven(estBuy) (the ONE model-free honesty anchor).
  *   • the declared-exit anchor + the anchor round-number nudge (shell spine).

@@ -1,7 +1,9 @@
 # PLAN-PATIENT-PAIR — stop deleting a row because ONE of its two estimates says no
 
-Status: **PP0 SHIPPED** (`ca3939e`) · **PP-R SHIPPED** (`02417e4`) · PP2 BUILT (working tree, not yet committed) · PP1 DEFERRED (§6)
-· the §7 measurement is the next real step after PP2.
+Status: **PP0 SHIPPED** (`ca3939e`) · **PP-R SHIPPED** (`02417e4`) · **PP2 SHIPPED** (`21e442e`) ·
+**§7 MEASURED** (`join-asym-outcomes.mjs`) · PP1 DEFERRED, and §7 makes it harder to justify (§6).
+**Read §7 before proposing anything downstream — the round trip measures 4.3%, and 1.5% on the
+big-ticket class this plan was written about.**
 Hardened by an adversarial review pass; **§1 was rewritten after that pass refuted the original
 causal story.** Read §1 before proposing anything — the obvious diagnosis was wrong.
 
@@ -183,7 +185,46 @@ absolute floor is doing all the discriminating work on a placeholder value. Buil
 before seeing what PP-R alone recovers means sizing that floor against a population nobody has
 characterised. Cheap to revisit; expensive to un-ship a cluttered section.
 
-## 7. The measurement this all points at — SCHEDULED, not deferred indefinitely
+## 7. The measurement — RUN, and it answers the question against us
+
+**SHIPPED as `pipeline/commands/join-asym-outcomes.mjs`.** Full numbers + limits live in README's
+entry for it (the ONE home); the decision-relevant summary:
+
+| | logged (quantile read-back) | MEASURED |
+| --- | --- | --- |
+| `pBid` — deep bid touched ≤24h | 31.1% | **17.8%** |
+| `pAsk` — ask reached ≤24h given the touch | 86.8% | **24.2%** |
+| round trip (both legs) | — | **4.3%** |
+
+39,110 rows over 766 items. The logged column is the `ASYM_P_LO`/`ASYM_P_HI` constants read back out
+(§2b), so the gap is the SIZE OF THE FICTION, not an estimator's error — do not report it as
+"62pp optimistic".
+
+**§7's open question is answered, and not in our favour. DT1 generalises, and bites hardest exactly
+where the anchor lived.** Big-ticket rows enter MORE often (23.1% vs 16.8%) and convert far LESS:
+**6.4%** exit-given-entry and a **1.5%** round trip, against sub-big-ticket's 28.6% / 4.8%. DT1's own
+headline was 4.8% completion at 24h. So the Webweaver bow was a good OUTCOME from a bad-odds setup —
+the branch §7 named and nobody could distinguish. Extending the horizon does not rescue it: the round
+trip is 6.3% at 48h, 9.0% at 96h, 10.8% at 7d.
+
+**What this does to the plan.** PP2 ships a patient clause that is now measured to complete ~4% of the
+time within a day. The clause's wording already refuses to read as achievable (§2d forced it through
+`formatAsymFill`, which names counts as counts and not as a fill rate), so it is not FALSE — but the
+honest next move is to carry the measured round-trip rate into that text, not the in-sample day
+counts. That is a real chunk and it is NOT yet written.
+
+**PP1 is now harder to justify, not easier.** Its floor was to be sized against a population nobody
+had characterised (§6). That population is characterised now, and the round trip on the big-ticket
+class it targets is 1.5%. Revisit §5's floor shape only against these numbers.
+
+**A REJECTED ESTIMATOR, and it is the most transferable thing here.** The first design scored a
+random-offset matched null and produced −36.0pp, CI [−42.7, −29.1] over 369 items — an overwhelming
+"entry is adverse selection" result that was an ARTIFACT OF THE STARTING PRICE: the null arm begins at
+99.8% of the row's ask level, the conditional arm at 93.8%. It was caught by asking what would refute
+it before writing it down, which cost one script. The shipped contrast is time-matched instead. Do not
+reinstate a null matched on neither the starting price nor the clock.
+
+## 7b. The original brief, kept for the record
 
 `join-asym-outcomes.mjs`, in the mould of the existing `join-reach-basis.mjs` /
 `join-depth-outcomes.mjs`: given the deep bid was **actually touched** on day D, was the high ask

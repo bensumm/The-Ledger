@@ -10,6 +10,42 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The patient pair's probabilities, measured for the first time — and they are ~4% (PLAN-PATIENT-PAIR §7, 2026-08-24)
+
+`pipeline/commands/join-asym-outcomes.mjs` forward-scores the asym pair's two legs off the 1h archive:
+was the deep bid actually TOUCHED, and if so was the high ask REACHED within H hours? Every level comes
+from a logged row, scored forward only. This is the piece PLAN-PATIENT-PAIR called the only work in it
+that produces evidence rather than visibility.
+
+Over 39,110 rows and 766 items at the locked decisive spec (entry ≤24h, exit ≤24h from the touch):
+entry **17.8%** against a logged `pBid` of 31.1%; exit-given-entry **24.2%** against a logged `pAsk` of
+**86.8%**; **round trip 4.3%**. The logged column is the `ASYM_P_LO`/`ASYM_P_HI` quantile constants read
+back out — PLAN §2b established that `asymPair` scores each level against the same array it was drawn
+from — so this measures THE SIZE OF A FICTION, not an estimator's error. Reporting it as "the model was
+62pp optimistic" would be wrong in a way that flatters the model.
+
+**The open question §7 was written to settle is answered, against us.** DT1 (2026-08-09) put completion
+within 24h given entry at 4.8% and that sank the amplitude lane's daily premise; the Webweaver anchor
+was an overnight big-ticket move, so either DT1 did not reach that class or the anchor was a good
+outcome from a bad-odds setup. It is the second. Big-ticket rows enter MORE often (23.1% vs 16.8%) and
+convert far less — **6.4%** exit-given-entry and a **1.5%** round trip against sub-big-ticket's
+28.6%/4.8%. Horizon does not rescue it: 6.3% at 48h, 9.0% at 96h, 10.8% at 7d.
+
+**The rejected estimator is the most transferable part, and it is recorded in the header.** The first
+design scored a MATCHED NULL — the same item and level over a horizon-length window at random offsets —
+and reported −36.0pp, CI [−42.7, −29.1] over 369 items. That reads as overwhelming adverse selection
+and is an artifact of the STARTING PRICE: the conditional arm always begins where the market just
+traded down to the deep bid, the null arm begins wherever. Measured directly, the null arm starts at
+**99.8%** of the row's ask level and the conditional arm at **93.8%** — the null was largely scoring
+windows that began at or above the ask, where "reached" is free. It was caught by naming the refuting
+test before writing the number down, which cost one script. The shipped contrast is time-matched: round
+trip versus ask-reached-anywhere-in-the-same-window, where `hit ⊆ askOnly` holds by construction, so it
+is a decomposition rather than a horse race.
+
+Honesty limits, all in the header: touched/reached ≠ filled — no queue position, no partial fills, no
+competition at the level, so every absolute rate bounds a real offer from ABOVE; one era, one update
+cycle, band-dominated; CIs resample ITEMS, not rows. It GATES NOTHING — threshold work belongs to F1.
+
 ### The live pair was fed to the estimator upside-down at two sites (0.74.9, 2026-08-24)
 
 `js/quotecore.js` defines `quickBuy = latest.low` (the instasell — where your BUY fills) and
@@ -20,19 +56,33 @@ against it.
 
 **Site 1 — `read-window-range.mjs`'s synthetic row.** That command does not build a `computeQuote` row;
 it hand-assembles one from `latest`, and it assembled `quickBuy: latest.high, quickSell: latest.low`.
-The clamps then pushed `estBuy` UP to the instabuy and carried break-even up with it, so the fold line
+The mechanism is the opposite of "a clamp pushed the price up" — `clamp(x,a,b)` is `max(a, min(b,x))`,
+so `qb` is a CEILING and the swap RAISED it from the instasell to the instabuy, *un-capping* a buy
+reach-fold had already proposed at `optBuy`. Break-even rose with the uncapped buy, so the fold line
 reported `beFloored` — "nothing to price above break-even" — on rows the screen prices as profitable.
-The failure was silent in every way that matters: no crash, no null, all twelve CI gates green, and the
-surrounding block's own comment claiming byte-parity with the screen. On the A/B (identical inputs,
-orientation the only variable) `beFloored` flips false→true and break-even moves +64,440.
+
+**The damage is conditional, and an earlier draft of this entry quoted its maximum as if it were
+typical.** `estBuy` goes from `min(optBuy, instasell)` to `min(optBuy, instabuy)`, so it is exactly
+zero whenever `optBuy` sits at or below the instasell — the common case, since `optBuy` is normally the
+window's median low. It grows to the full spread only as `optBuy` reaches the instabuy. On the fixture
+spread (19,236,849 / 19,300,000) that is **0 → 64,440**, and the top of that range is
+`breakEven(high) − breakEven(low)` — an arithmetic identity of the spread, not an independent
+measurement. The swap also moved `estSell` (−15,035 on the same fixture) via `qs` as the fold floor,
+which the first write-up missed entirely by treating this as buy-side only.
+
+The failure was silent in every way that matters: no crash, no null, all twelve CI gates green.
 
 **Site 2 — the shell's forward ctx, found while correcting site 1's comment.** `pair.mjs` built
 `{ liveLo: qs, liveHi: qb }` where every other call site in the repo passes
 `{ liveLo: row.quickBuy, liveHi: row.quickSell }` — fifteen-plus of them, and `js/forecast.mjs`'s own
 `@param` reads "live instasell/instabuy". It bites only on forecast's TREND-ONLY branches, which anchor
-the trough to `liveLo` and the peak to `liveHi`; on a trend-dominated item the swap moved each by exactly
-one spread, and adversely in both directions — the bid up, the drift-adjusted exit down. Measured on a
-63,151-wide big-ticket spread: exit peak −63,151 on a faller, entry trough +63,151 on a riser.
+the trough to `liveLo` and the peak to `liveHi`. Those two branches are MUTUALLY EXCLUSIVE
+(`trendPerHour > 0` vs `< 0`), so exactly one side moves per item, by one spread, in the adverse
+direction: a faller's exit peak reads one spread LOW, a riser's entry trough one spread HIGH. Measured
+on a 63,151-wide spread: −63,151 and +63,151 respectively. An earlier draft said "each" and "both
+directions", which describes an item that cannot exist. Scope note the first draft also missed:
+`forwardTrough` is never rendered — only `estConfLean` shadow-logs it — so the trough half corrupted
+the F1 corpus and was never a bid anyone saw. Only `forwardPeak` (the "list at X") reached an operator.
 
 **Why no test caught site 2.** `pipeline/test/estimators.test.mjs`'s `shellFwdCtx` helper — the
 delegation pin that replays "the exact ctx the SHELL builds" — mirrored the swap, and its `FWD_ROW`
@@ -43,7 +93,25 @@ assertion passed. Both are corrected; all 67 estimator checks still pass.
 out of `computeQuote` by CALLING it rather than restating it, asserts the direction of the damage rather
 than a bare number, and pins each of the two call sites separately — the synthetic row by source scan
 (its block does live fetches and is not unit-callable), the shell by delegation against a
-correctly-oriented `driftExitFrom`. Every case was verified non-vacuous by restoring the mutant it names.
+correctly-oriented `driftExitFrom`.
+
+**Its non-vacuity claim was itself false and is corrected here.** The first version of this entry said
+every case was verified against the mutant it names; two were. Applying each named mutant shows cases
+1, 5, 6 and 8 go red and cases 2, 3, 4 and 7 do not — and deleting BOTH ordering clamps outright leaves
+seven of the eight green, so only case 5 holds them. Case 4 cannot be repaired: reach-fold's top
+reference is `max(optSell, quickSell)`, so its proposal is already ≥ `qs` and the sell floor never
+binds under this model. Each case now states its own status, and the redundancy is recorded as the
+fact it is.
+
+Same class, same pass: the reversed labels also live in `js/estimators/sell-models/reach-fold.mjs`
+(three sites) and `pressure.mjs` (one) — and reach-fold owns the SELL-MODEL CONTRACT header a new
+model author works from, so blaming pair.mjs's prose alone was incomplete. `js/quotecore.js`'s own
+header still asserted the ordering invariant this change declared false, four lines above the
+definition the new test reads as the authority; `quote-items.mjs` and `js/estimators/reach.mjs`
+restated it too. All corrected. And `pipeline/test/item-context.test.mjs`'s `heldRow` fixture was
+CROSSED (`quickBuy: 92, quickSell: 90`) while declaring `ordered: true` — cancelling `momVerdict`'s
+Gate-0 for the nine tests built on it, which is the FWD_ROW failure mode again, in a file this
+commit's sweep never reached.
 
 `docs/MARKET-ANALYSIS.md`'s "ordering invariant" is corrected in the same pass: `optBuy ≤ quickBuy` and
 `quickSell ≤ optSell` are real, but the middle `quickBuy ≤ quickSell` is not — a crossed feed is a
