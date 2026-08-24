@@ -47,9 +47,14 @@ const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
        exit is a HELD-LOT sell plan, so a caller passes it ONLY for an item it HOLDS; the pure DISCOVERY
        screen (band/churn/value) NEVER passes it.
      estSELL is BE-FLOORED always (never < breakEven — the ONE model-free honesty anchor; the floor binding
-       IS the estimate saying "no trade") and ORDERING-CLAMPED (≥ the live instasell). A model chooses only
-       its outer ceiling (sellHi); the live floor + BE floor are the shell's and non-negotiable.
-     estBUY is ORDERING-CLAMPED (≤ the live instabuy). A model chooses only its outer floor (buyLo).
+       IS the estimate saying "no trade" AT THAT ENTRY, never a verdict on the item) and ORDERING-CLAMPED
+       (≥ qs = row.quickSell = quotecore's latest.high, the live INSTABUY, where your sell fills). A model
+       chooses only its outer ceiling (sellHi); the live floor + BE floor are the shell's, non-negotiable.
+     estBUY is ORDERING-CLAMPED (≤ qb = row.quickBuy = latest.low, the live INSTASELL, where your buy
+       fills). A model chooses only its outer floor (buyLo).
+     ORIENTATION — these two labels were REVERSED throughout this file, and a caller (read-window-range's
+       synthetic row) built its pair from them: that inverts the feed, inflates break-even and fakes
+       `beFloored`. A synthetic row must be checked against quotecore's definitions, not against prose here.
      The asymPair DEEP bid is NEVER folded into estBuy (rev3) — a deep flush bid is rest-and-see
        OPTIONALITY (the separate `◆ asym` line), never inside an expected-price number.
 
@@ -234,8 +239,12 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
     const nb = nudge('bid', estBuy); if (nb && num(nb.price) != null) estBuy = nb.price;
     const na = nudge('ask', estSell); if (na && num(na.price) != null) estSell = na.price;
   }
-  // ORDERING clamps — the shell's, non-negotiable: buy ≤ the live instabuy (qb); sell ≥ the live
-  // instasell (qs). A model only chose the OUTER bound (buyLo can dip below the band low for a pressure
+  // ORDERING clamps — the shell's, non-negotiable: buy ≤ the live INSTASELL (qb = quotecore's quickBuy =
+  // latest.low, where your BUY fills); sell ≥ the live INSTABUY (qs = quickSell = latest.high, where your
+  // SELL fills). These two labels were REVERSED here, and read-window-range built its synthetic row from
+  // the wrong ones — inverting the pair, inflating break-even and faking `beFloored`. Check a caller's
+  // orientation against quotecore, not against this sentence.
+  // A model only chose the OUTER bound (buyLo can dip below the band low for a pressure
   // deep bid; sellHi can be Infinity for a fully-reliable pressure ask or a declared exit above the band).
   estBuy = Math.round(clamp(estBuy, buyLo, qb));
   estSell = declaredAnchored ? Math.max(Math.round(estSell), qs) : Math.round(clamp(estSell, qs, sellHi));
@@ -273,7 +282,9 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
   // FORWARD "list at X" (PLAN-ESTIMATOR-HONEST-SELL E1) — the phase-aware forward-projected exit LEVEL, homed
   // in the SHELL (the sell-model ctx carries no profile/days). driftExitFrom off the caller's in-hand
   // hourProfile + windowStats().days (extra.forward — ZERO new fetch); the diurnal ctx is built from the live
-  // pair (liveLo = the instasell qs, liveHi = the instabuy qb) + the row's momentum/reliability and the
+  // pair (liveLo = qb = the instasell, liveHi = qs = the instabuy — SWAPPED here until now, off the same
+  // reversed labels; forecast anchors its trend-only trough to liveLo and peak to liveHi, so the swap
+  // moved both by one spread, adversely) + the row's momentum/reliability and the
   // forward bundle's resolved `phase` (the row carries no phase — see the fwdCtx note below). Absent
   // extra.forward → all forward fields null (honest degrade); on a KNIFE driftExitFrom returns a labeled
   // trend-only level (no crash, no new detector call site). holdHorizonDays is the forward number's own tunable.
@@ -283,7 +294,7 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
     // phase comes off the FORWARD BUNDLE, not `row` — computeQuote returns no `phase` field, so the old
     // `row.phase` was always undefined and forecast's spike/decay refusal never fired here. This module is
     // pure (no series), so the caller that owns the 6h series resolves phase() and passes the value in.
-    const fwdCtx = { liveLo: qs, liveHi: qb, mom: row.mom ?? null, reliable: row.reliable, phase: fwd.phase ?? null, now: fwd.now };
+    const fwdCtx = { liveLo: qb, liveHi: qs, mom: row.mom ?? null, reliable: row.reliable, phase: fwd.phase ?? null, now: fwd.now };
     const dae = driftExitFrom(fwd.profile, fwd.days ?? null, fwdCtx, fwd.holdHorizonDays != null ? { holdHorizonDays: fwd.holdHorizonDays } : {});
     if (dae) {
       forwardPeak = num(dae.driftAdjustedPeak);

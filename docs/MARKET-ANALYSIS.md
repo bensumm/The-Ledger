@@ -37,8 +37,10 @@ Every read is ONE table, the **table v2** column set:
   not a literal top-of-book snapshot** — a small same-day live-fill check (n=4, 2026-07-17) found
   it can sit on the wrong side of the live spread at execution time; full writeup + evidence is
   the header comment in `js/quotecore.js` (the one home), not restated here.
-- **Ordering invariant.** On ONE consistent basis, `optBuy ≤ quickBuy ≤ quickSell ≤ optSell`. A
-  break on MIXED bases is a bug — fix the script. On consistent bases a break is a real **momentum
+- **Ordering invariant.** On ONE consistent basis, `optBuy ≤ quickBuy` and `quickSell ≤ optSell`. A
+  break on MIXED bases is a bug — fix the script. The middle pair is NOT an invariant: `quickBuy >
+  quickSell` is a CROSSED FEED, which `js/quotecore.js` detects and labels `feed-inversion` rather than
+  rejecting, and which ~16% of a live snapshot carries. Code that assumes the order must stay total on it. On consistent bases a break is a real **momentum
   tell** (the live price left its own 2h band), surfaced as the **Momentum** column off the
   *pre-clamp* comparison: `quickBuy < optBuy` = breaking down / active pullback (don't buy in; on a
   held big-ticket it's a CUT trigger that fires before the multi-day regime confirms); `quickSell >

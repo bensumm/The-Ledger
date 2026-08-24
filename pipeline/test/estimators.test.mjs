@@ -807,7 +807,7 @@ ok('PART B de-bias: liquid book lifts the top reference toward dayHigh (capped A
 
 /* --- PLAN-ESTIMATOR-HONEST-SELL E1–E4: the honest sell read (pFill reuse · forward degrade/delegation) --- */
 // a minimal hand-built hourProfile diurnalForecast accepts (a clean afternoon peak, no drift), + the live pair.
-const FWD_ROW = { quickBuy: 1010, quickSell: 1000, optBuy: 950, optSell: 1100 };
+const FWD_ROW = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
 const FWD_NOW = new Date('2026-07-22T10:00:00');
 const mkProfile = (over = {}) => ({
   nights: 10, amplitude: 100, trendPerDay: 0, trendDominates: false,
@@ -819,7 +819,7 @@ const mkProfile = (over = {}) => ({
   ...over,
 });
 // the exact ctx the SHELL builds from the live pair (documented in pair.mjs) — the delegation pin replays it.
-const shellFwdCtx = (row, now) => ({ liveLo: row.quickSell, liveHi: row.quickBuy, mom: row.mom ?? null, reliable: row.reliable, phase: row.phase, now });
+const shellFwdCtx = (row, now) => ({ liveLo: row.quickBuy, liveHi: row.quickSell, mom: row.mom ?? null, reliable: row.reliable, phase: row.phase, now });
 
 /* THE DON'T-FORK PIN, rewritten by RB-3 (PLAN-RECENCY-BASIS §1.7).
    BEFORE: this test asserted `e.pFill === askReachFactor(ar)` under the name "byte-identical … the SAME

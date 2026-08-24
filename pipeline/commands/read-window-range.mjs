@@ -684,9 +684,14 @@ for (const want of positionals) {
     const askScoreLevel = ASK != null ? ASK : (EXIT != null ? EXIT : null);   // an explicit sell/exit level
     // synthetic row: live pair from latest; opt edges from the scored levels (or the window ~50% quantile).
     const synthRow = {
-      quickBuy: latest.high, quickSell: latest.low,
-      optBuy: BID != null ? BID : (lows.length ? quantLow(lows, 0.5) : latest.high),
-      optSell: askScoreLevel != null ? askScoreLevel : (his.length ? quantHigh(his, 0.5) : latest.low),
+      // ORIENTATION, and it was INVERTED here until now: quotecore defines quickBuy = latest.low (the
+      // instasell — where your BUY fills) and quickSell = latest.high (the instabuy — where your SELL
+      // fills), and estimatePair's clamps are written for THAT. Feeding the swap raised estBuy to the
+      // instabuy, raised break-even with it, and manufactured `beFloored` on rows the screen prices as
+      // profitable — breaking the byte-parity-with-the-screen this whole block exists to guarantee.
+      quickBuy: latest.low, quickSell: latest.high,
+      optBuy: BID != null ? BID : (lows.length ? quantLow(lows, 0.5) : latest.low),
+      optSell: askScoreLevel != null ? askScoreLevel : (his.length ? quantHigh(his, 0.5) : latest.high),
     };
     const extra = {};
     // ask/exit reach → askReach (full hit + recent split); same field remap the screen does at its :583.

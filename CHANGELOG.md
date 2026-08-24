@@ -10,6 +10,46 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The live pair was fed to the estimator upside-down at two sites (0.74.9, 2026-08-24)
+
+`js/quotecore.js` defines `quickBuy = latest.low` (the instasell — where your BUY fills) and
+`quickSell = latest.high` (the instabuy — where your SELL fills), and `estimatePair`'s ordering clamps
+are written for exactly that. `js/estimators/pair.mjs` had the two labels REVERSED in its own prose, in
+three places. Prose is not usually load-bearing — here it was, because two pieces of code were written
+against it.
+
+**Site 1 — `read-window-range.mjs`'s synthetic row.** That command does not build a `computeQuote` row;
+it hand-assembles one from `latest`, and it assembled `quickBuy: latest.high, quickSell: latest.low`.
+The clamps then pushed `estBuy` UP to the instabuy and carried break-even up with it, so the fold line
+reported `beFloored` — "nothing to price above break-even" — on rows the screen prices as profitable.
+The failure was silent in every way that matters: no crash, no null, all twelve CI gates green, and the
+surrounding block's own comment claiming byte-parity with the screen. On the A/B (identical inputs,
+orientation the only variable) `beFloored` flips false→true and break-even moves +64,440.
+
+**Site 2 — the shell's forward ctx, found while correcting site 1's comment.** `pair.mjs` built
+`{ liveLo: qs, liveHi: qb }` where every other call site in the repo passes
+`{ liveLo: row.quickBuy, liveHi: row.quickSell }` — fifteen-plus of them, and `js/forecast.mjs`'s own
+`@param` reads "live instasell/instabuy". It bites only on forecast's TREND-ONLY branches, which anchor
+the trough to `liveLo` and the peak to `liveHi`; on a trend-dominated item the swap moved each by exactly
+one spread, and adversely in both directions — the bid up, the drift-adjusted exit down. Measured on a
+63,151-wide big-ticket spread: exit peak −63,151 on a faller, entry trough +63,151 on a riser.
+
+**Why no test caught site 2.** `pipeline/test/estimators.test.mjs`'s `shellFwdCtx` helper — the
+delegation pin that replays "the exact ctx the SHELL builds" — mirrored the swap, and its `FWD_ROW`
+fixture was itself crossed (`quickBuy: 1010, quickSell: 1000`), so the two inversions cancelled and the
+assertion passed. Both are corrected; all 67 estimator checks still pass.
+
+`pipeline/test/estimator-orientation.test.mjs` (new, 8 cases) pins the contract. It reads the definition
+out of `computeQuote` by CALLING it rather than restating it, asserts the direction of the damage rather
+than a bare number, and pins each of the two call sites separately — the synthetic row by source scan
+(its block does live fetches and is not unit-callable), the shell by delegation against a
+correctly-oriented `driftExitFrom`. Every case was verified non-vacuous by restoring the mutant it names.
+
+`docs/MARKET-ANALYSIS.md`'s "ordering invariant" is corrected in the same pass: `optBuy ≤ quickBuy` and
+`quickSell ≤ optSell` are real, but the middle `quickBuy ≤ quickSell` is not — a crossed feed is a
+condition `quotecore` detects and labels `feed-inversion`, and it is ~16% of a live snapshot, not a bug
+to fix in the script.
+
 ### The BE-floored cell said "no trade" while the same row's footer said +427k/u (PP2, 0.74.8, 2026-08-22)
 
 A screen/quote row rendered `Est. sell 15.30m (reach-fold floored to BE 15.42m — nothing to price above
