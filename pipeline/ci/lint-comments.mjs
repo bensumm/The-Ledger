@@ -89,10 +89,10 @@ const trailingComment = line => {
 const CAVEAT_MARKER_RE = /DATA CAVEATS?/;
 
 /** Walk ROOTS for .js/.mjs sources, repo-relative and sorted for deterministic output. */
-function sources() {
+function sources(root = ROOT) {
   const out = [];
   const walk = dir => {
-    const abs = path.join(ROOT, dir);
+    const abs = path.join(root, dir);
     if (!fs.existsSync(abs)) return;
     for (const e of fs.readdirSync(abs, { withFileTypes: true })) {
       const rel = `${dir}/${e.name}`;
@@ -104,13 +104,31 @@ function sources() {
   return out.sort();
 }
 
-/** Per-file doctrine metrics: dated history refs, longest contiguous comment run, and volume. */
-function measure(rel) {
-  const lines = fs.readFileSync(path.join(ROOT, rel), 'utf8').split('\n');
+/**
+ * Per-file doctrine metrics: dated history refs, longest contiguous comment run, and volume.
+ *
+ * Tracks `/* … *\/` OPEN/CLOSE state rather than matching each line's leading token. A line-shape test
+ * misses every block interior not written with a leading `*` — 3,424 such lines across 80 files here,
+ * including the whole of js/quotecore.js's canonical header — and counted them as CODE, so writing
+ * prose RAISED the file's allowance. Two lines of essay bought one line of comment.
+ *
+ * A trailing `code(); // note` counts as one comment AND one code line. Counting it as neither (the
+ * first version) rewarded moving prose from leading to trailing position: it lowered `comments` and
+ * raised `code` at once, so an expanded copy of a REFUSED file passed at a pinned ceiling of 0.
+ * Counting it as both makes that migration exactly neutral, which is the honest reading.
+ */
+function measure(rel, root = ROOT) {
+  const lines = fs.readFileSync(path.join(root, rel), 'utf8').split('\n');
   let dated = 0, block = 0, run = 0, blockAt = 0, runAt = 0, inCaveats = false, comments = 0, code = 0;
+  let inBlock = false;
   const datedLines = [];
   lines.forEach((line, i) => {
-    if (COMMENT_LINE_RE.test(line)) {
+    const t = line.trim();
+    let isComment = false;
+    if (inBlock) { isComment = true; if (t.includes('*/')) inBlock = false; }
+    else if (t.startsWith('/*')) { isComment = true; if (!t.includes('*/')) inBlock = true; }
+    else if (t.startsWith('//')) isComment = true;
+    if (isComment) {
       if (run === 0) { runAt = i + 1; inCaveats = false; }   // a new block clears the caveat scope
       run++; comments++;
       if (CAVEAT_MARKER_RE.test(line)) inCaveats = true;
@@ -118,9 +136,12 @@ function measure(rel) {
     } else {
       if (run > block) { block = run; blockAt = runAt; }
       run = 0; inCaveats = false;
-      if (line.trim()) code++;
+      if (t) code++;
       const tail = trailingComment(line);
-      if (tail && DATED_RE.test(tail)) { dated++; datedLines.push(i + 1); }
+      if (tail) {
+        comments++;
+        if (DATED_RE.test(tail)) { dated++; datedLines.push(i + 1); }
+      }
     }
   });
   if (run > block) { block = run; blockAt = runAt; }
@@ -132,15 +153,25 @@ const allowance = m => Math.max(Math.round(NEW_FILE_CAPS.ratio * m.code), NEW_FI
 const ratioOver = m => m.comments > allowance(m);
 const overDoctrine = m => m.dated > NEW_FILE_CAPS.dated || m.block > NEW_FILE_CAPS.block || ratioOver(m);
 
-const loadBaseline = () =>
-  fs.existsSync(BASELINE) ? JSON.parse(fs.readFileSync(BASELINE, 'utf8')) : { files: {} };
+const loadBaseline = (file = BASELINE) =>
+  fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : { files: {} };
+// A baseline entry with no `comments` field fails CLOSED at 0. Treating it as "no ceiling" made
+// deleting one JSON key a cheaper red-build reflex than typing --force, and the deletion laundered the
+// regression silently — the exact move the bless refusal exists to block.
+const ceilingComments = b => (b && b.comments != null ? b.comments : 0);
 
 function main() {
   const argv = process.argv.slice(2);
   const mode = argv.includes('--bless') ? 'bless' : argv.includes('--report') ? 'report' : 'check';
+  // --root/--baseline exist so pipeline/test/lint-comments.test.mjs can drive every branch against a
+  // fixture tree, the way guard-lists.test.mjs drives its guard. Without them this was the only CI
+  // guard with no test, and the only way to exercise it was mutating the live repo.
+  const argVal = name => { const i = argv.indexOf(name); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : null; };
+  const root = argVal('--root') || ROOT;
+  const baselineFile = argVal('--baseline') || (root === ROOT ? BASELINE : path.join(root, 'comment-budget.json'));
 
-  const files = sources();
-  const measured = new Map(files.map(f => [f, measure(f)]));
+  const files = sources(root);
+  const measured = new Map(files.map(f => [f, measure(f, root)]));
   const totals = [...measured.values()].reduce(
     (a, m) => ({ dated: a.dated + m.dated, worst: Math.max(a.worst, m.block), comments: a.comments + m.comments, code: a.code + m.code }),
     { dated: 0, worst: 0, comments: 0, code: 0 });
@@ -150,13 +181,17 @@ function main() {
     // the looser new-file cap and can silently drift up to it. Dated refs ratchet EXACTLY (a file at
     // zero stays at zero); block length ratchets to max(current, doctrine cap), so an over-budget
     // header is pinned where it is while a compliant file keeps normal room to edit its contract.
-    const prev = loadBaseline();
+    const prev = loadBaseline(baselineFile);
     const out = { files: {} }, raised = [];
+    // A path in the baseline with no file on disk is a DELETION or a RENAME. A rename otherwise resets
+    // the ratchet silently: the new path is "new code", passes the allowance, and blesses at whatever
+    // count it carries — a 1 → 91 ceiling increase landing green with no --force.
+    const vanished = Object.keys(prev.files).filter(f => !measured.has(f));
     for (const [f, m] of measured) {
       const ceiling = { dated: m.dated, block: Math.max(m.block, NEW_FILE_CAPS.block), comments: m.comments };
       const was = prev.files[f];
-      if (was && (ceiling.dated > was.dated || ceiling.block > was.block || ceiling.comments > was.comments)) {
-        raised.push(`${f}: dated ${was.dated}→${ceiling.dated}, block ${was.block}→${ceiling.block}, comments ${was.comments}→${ceiling.comments}`);
+      if (was && (ceiling.dated > was.dated || ceiling.block > was.block || ceiling.comments > ceilingComments(was))) {
+        raised.push(`${f}: dated ${was.dated}→${ceiling.dated}, block ${was.block}→${ceiling.block}, comments ${ceilingComments(was)}→${ceiling.comments}`);
       } else if (!was && overDoctrine(m)) {
         // Without this a single bless grandfathers brand-new over-doctrine code at whatever it
         // happens to be — the hole that lets volume in. "New code meets the doctrine" only holds if
@@ -169,12 +204,14 @@ function main() {
     // quietly raise the ceiling past whatever just broke it — so raising is opt-in and always listed.
     if (raised.length && !argv.includes('--force')) {
       for (const r of raised) console.error(`✗ would RAISE ${r}`);
+      for (const v of vanished) console.error(`  (baseline entry with no file on disk — deleted or RENAMED: ${v})`);
       console.error(`\n✗ bless refused — ${raised.length} ceiling(s) would go UP. The ratchet only lowers. Clean the file, or re-run with --force if the increase is genuinely intended.`);
       process.exit(1);
     }
-    fs.writeFileSync(BASELINE, `${JSON.stringify(out, null, 2)}\n`);
+    fs.writeFileSync(baselineFile, `${JSON.stringify(out, null, 2)}\n`);
     for (const r of raised) console.log(`  ⚠ raised (forced) ${r}`);
-    const over = [...measured.values()].filter(m => m.dated || m.block > NEW_FILE_CAPS.block || ratioOver(m)).length;
+    for (const v of vanished) console.log(`  ⚠ dropped (no file on disk — deleted or renamed) ${v}`);
+    const over = [...measured.values()].filter(overDoctrine).length;
     console.log(`✓ comment-budget baseline written — ${Object.keys(out.files).length} file(s) pinned, ${over} over doctrine, ${totals.dated} dated ref(s), worst block ${totals.worst}.`);
     return;
   }
@@ -190,17 +227,17 @@ function main() {
     return;
   }
 
-  const base = loadBaseline();
+  const base = loadBaseline(baselineFile);
   const violations = [];
   for (const [f, m] of measured) {
-    const b = base.files[f];
+    const b = base.files[f];   // eslint-disable-line no-unused-vars — read below for every axis
     const cap = b ? { dated: b.dated, block: b.block } : NEW_FILE_CAPS;
     const kind = b ? 'ratchet' : 'new-file';
     if (m.dated > cap.dated) violations.push({ f, rule: `${kind}-dated`, msg: `${m.dated} dated history ref(s) in comments, ceiling ${cap.dated} (line${m.datedLines.length > 1 ? 's' : ''} ${m.datedLines.slice(0, 6).join(', ')}${m.datedLines.length > 6 ? ', …' : ''}) — history belongs in CHANGELOG.md` });
     if (m.block > cap.block) violations.push({ f, rule: `${kind}-block`, msg: `longest comment block is ${m.block} lines at :${m.blockAt}, ceiling ${cap.block} — a block this long is a document, not a comment` });
     // Baselined files ratchet on the absolute count; new files, having none, answer to the ratio.
-    if (b && b.comments != null && m.comments > b.comments) {
-      violations.push({ f, rule: 'ratchet-volume', msg: `${m.comments} comment lines, ceiling ${b.comments} — this file's prose may only come out; trim elsewhere to add here` });
+    if (b && m.comments > ceilingComments(b)) {
+      violations.push({ f, rule: 'ratchet-volume', msg: `${m.comments} comment lines, ceiling ${ceilingComments(b)} — this file's prose may only come out; trim elsewhere to add here` });
     } else if (!b && ratioOver(m)) {
       violations.push({ f, rule: 'new-file-volume', msg: `${m.comments} comment lines against ${m.code} code (ratio ${ratioOf(m).toFixed(2)}), allowance ${allowance(m)} — behavior belongs in code; keep intent brief or absent` });
     }
@@ -211,7 +248,7 @@ function main() {
     console.error(`\n✗ comment-doctrine FAILED — ${violations.length} violation(s). Comments describe the code as it is now; dated narrative goes to CHANGELOG.md. After a genuine cleanup, re-baseline with --bless.`);
     process.exit(1);
   }
-  const tracked = Object.keys(base.files).length;
+  const tracked = Object.keys(base.files).filter(f => measured.has(f)).length;   // not entries for files that are gone
   console.log(`✓ comment-doctrine passed — ${files.length} source file(s); ${tracked} grandfathered at or below their ceiling; ${totals.dated} dated ref(s) remain (ratchet only lowers).`);
 }
 

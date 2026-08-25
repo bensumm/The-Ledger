@@ -35,7 +35,7 @@
  */
 import assert from 'node:assert/strict';
 import { gateCandidates, rankAndSlice, proxyDrift, softFactor, VALUE_TOP_DEFAULT, surviveMode,
-  scaleSlots, CAP_REF, gateReverseFlipCandidates } from '../lib/signal/gatecandidates.mjs';
+  scaleSlots, CAP_REF, gateReverseFlipCandidates, subFloorFallback } from '../lib/signal/gatecandidates.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -111,6 +111,22 @@ ok('attention floor: a HELD sub-floor liquid item is EXEMPT, same as thin — an
   assert.equal(held.length, 1, 'held bypasses the attention floor');
   assert.equal(held[0].held, true);
   assert.equal(held[0].thin, false, 'the held exemption is NOT the thin path — it stays a normal liquid row');
+});
+
+// The sub-floor fallback must carry held/watched through. It dropped them by calling gateCandidates
+// with three args, and the sub-floor pool is capped at SUBFLOOR_TOP — the thinnest table there is.
+ok('subFloorFallback preserves held/watched through the relaxation ladder', () => {
+  const thinBig = { 7: rec(17_000_000, 18_000_000, 10) };   // 10 x ~17.5m = 175m, under GP_FLOOR
+  const tbands = { 7: band(17_000_000, 18_000_000, 6) };
+  const c = ctx(thinBig, {}, tbands);
+  assert.equal(gateCandidates('band', c, baseT, new Set([7]), new Set([7])).length, 0,
+    'empty at the configured floors — the precondition that fires the fallback');
+  const fb = subFloorFallback('band', c, baseT, new Set([7]), new Set([7]));
+  assert.equal(fb.relaxed, 'liquidity');
+  assert.equal(fb.cand[0].held, true, 'held survives the ladder');
+  assert.equal(fb.cand[0].watched, true, 'watched survives the ladder');
+  const bare = subFloorFallback('band', c, baseT);
+  assert.equal(bare.cand[0].held, false, 'and defaults stay empty when genuinely not passed');
 });
 
 ok('rankAndSlice: a held survivor gets an UNBOUNDED reserved slot — never crowded out by the top-N cutoff', () => {

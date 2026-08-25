@@ -305,9 +305,10 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
   if (spec.gate === 'reverse') return gateReverseFlipCandidates(ctx.reversePool || [], ctx.reverseCtxById || {}, t);   // RF2 — the OWNED-item reverse-flip gate (pool + per-id ctx come off `ctx`, not v24)
   const { map, bands } = ctx;
   // The per-mode step-3 edge callback — IDENTICAL for both gates; only the ADMISSION iterator differs.
-  // Extracted to a const (was inline) so `--gate structural` can feed the SAME fn to
-  // eachStructuralCandidate without touching spec.edge. Under `--gate legacy` (t.GATE !== 'structural',
-  // the default) this is the byte-identical eachLiquidCandidate call the replay goldens pin.
+  // Extracted to a const (was inline) so the structural gate can feed the SAME fn to
+  // eachStructuralCandidate without touching spec.edge. When `t.GATE` is not 'structural' (the default —
+  // it is set only by structural-admission.test.mjs; there is NO `--gate` CLI flag, nothing parses one)
+  // this is the byte-identical eachLiquidCandidate call the replay goldens pin.
   const edgeFn = ({ id, hpv, lpv, limitVol, avgHigh, avgLow, mid, thin }) => {
     const limit = map.byId[id]?.limit ?? null;
 
@@ -464,7 +465,7 @@ export function gateReverseFlipCandidates(pool, ctxById = {}, t = DEFAULT_THRESH
    keeps its normal `_none_` output). The VALUE niche is out of scope: its floors are its own
    term-structure amplitude gate (+ §F flood control with an admitted-vs-shown footer), not the
    MIN_GPD/GP_FLOOR pair this ladder relaxes — and it's provisional/off-by-default (n≈0). */
-export function subFloorFallback(mode, ctx, t = DEFAULT_THRESHOLDS) {
+export function subFloorFallback(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new Set(), watchedIds = new Set()) {
   const spec = FLIP_NICHES[mode];
   // Only the shared band gate stack has the MIN_GPD/GP_FLOOR ladder this relaxes. value + amplitude own
   // their own floors (term-structure / daily-amplitude gate) and are provisional/off-app — out of scope.
@@ -478,7 +479,10 @@ export function subFloorFallback(mode, ctx, t = DEFAULT_THRESHOLDS) {
       relax: { ...t, MIN_GPD: 0, GP_FLOOR: 0 } },
   ];
   for (const step of ladder) {
-    const cand = gateCandidates(mode, ctx, step.relax);
+    // heldIds/watchedIds thread through: dropping them here read every candidate back as
+    // held:false/watched:false, disabling the held first-slot, the watch reserve and clampUnionFetch's
+    // protection on the ONE pass whose pool is capped at SUBFLOOR_TOP.
+    const cand = gateCandidates(mode, ctx, step.relax, heldIds, watchedIds);
     if (cand.length) return { cand, relaxed: step.key, floorDesc: step.floorDesc };
   }
   return null;

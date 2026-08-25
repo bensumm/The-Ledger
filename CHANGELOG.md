@@ -10,13 +10,77 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Two adversarial review passes, and most of what they found was mine
+
+Two reviewers ran against the previous commit — one briefed to attack it directly, one scoped
+deliberately AWAY from it, per the rule that a pass re-auditing the region just worked converges on
+its own tail. The away-scoped pass found the more dangerous defect; the direct pass found that the
+guard shipped an hour earlier was wrong in the same direction it was built to catch.
+
+**The read path — a held lot could vanish from the one table that was thinnest.**
+`subFloorFallback` called `gateCandidates` with three arguments against a five-argument signature, so
+`heldIds`/`watchedIds` fell back to empty sets and every candidate on that branch read
+`held:false, watched:false`. Downstream that silently disabled three protections at once: the held
+lot's unconditional first slot, the watchlist reserve, and `clampUnionFetch`'s protected-row check.
+It fires exactly when a niche gates to ZERO candidates and the pool is capped at five — so the
+"a held item can't silently vanish" exception was off precisely when the table was thinnest. The same
+bug is documented as already-fixed once on the amplitude path; it came back on the fallback branch,
+which is why this one lands with a mutation-verified test rather than just a patch.
+
+**The quiet default deleted four decision surfaces from every output channel.** Quiet is the default
+and `/scan` tells agents to read the JSON dump — but AMPLITUDE, INVEST, WATCHLIST, WATCH CLOSELY and
+the Dip pool render as raw `console.log` streams, and `main()` stubs `console.log`. They reached
+neither stdout nor the dump. `--mode value` was the worst case: the summary line advertised 30
+candidates while the dump it named was `reports: []`. Fixed by capturing the stream rather than
+restructuring five renderers, so stdout stays byte-identical; the dump now carries all of them, plus
+the digest (which still stays out of `screen.json` — that scope lock is about the app, not the dump).
+Two degradation warnings were being swallowed by the same stub, one of them three lines under a
+comment promising "never a silent drop"; both now use `realLog`.
+
+**The digest rendered one item twice.** Band and amplitude are not partitioned against each other, and
+a watchlisted item holds a reserved fetch slot in every niche pool, so an item surviving both renders
+was collected twice — burning two of eight triage slots, evicting a real candidate, and printing two
+rows that disagreed with no column saying which niche produced which. Deduped by id at the pool.
+
+**And the guard from the previous commit was measuring the wrong thing.** Its volume axis tested each
+line's leading token, so a `/* … */` body written without a leading `*` matched nothing and scored as
+CODE. Because the allowance is a multiple of code, **writing prose raised the file's own budget** —
+two lines of essay bought one line of comment. 3,424 lines across 80 of 154 files, including the
+entirety of `js/quotecore.js`'s canonical header. Corrected, the repo measures **0.90 comment:code,
+median 0.85** — not the 0.60/0.5 that got written into the last entry and into README.
+
+Three more holes in the same guard, all confirmed by execution: a trailing comment counted toward
+neither axis, so migrating prose from leading to trailing position *improved* every volume reading at
+once and an expanded copy of a REFUSED file passed pinned at zero; a baseline entry with the
+`comments` key deleted escaped both branches AND blessed without `--force`, making one JSON deletion a
+cheaper red-build reflex than the flag; and a rename reset the ratchet silently, landing a 1 → 91
+ceiling increase green. All four now fail closed, and a rename is named at bless.
+
+**The real fix is that it now has a test.** It was the only guard in `checks.yml` with none, and
+structurally could not have one — `ROOT` and `BASELINE` were hard-coded, so the only way to exercise
+it was mutating the live repo, which is exactly how it shipped broken. `--root`/`--baseline` plus
+`pipeline/test/lint-comments.test.mjs`: 11 cases, every one mutation-verified red against the
+behaviour it pins.
+
+**Corrections to the previous entry, which reviewers falsified.** "The worst of the 137 files carrying
+more than a handful of code lines" — 137 is reachable at exactly one cutoff and it is the only cutoff
+that makes the claim true; the superlative is withdrawn rather than re-cut. "Executable lines
+byte-identical" — the tokens were identical, one line differed in its trailing comment, which is the
+very mechanism of the finding above. "Invisible to all three axes at once" — the dated axis catches
+`desk-cadence.mjs` on its three dated refs; it was never invisible to all three.
+
+The re-bless is a METRIC migration, not a cleanup: 134 ceilings rose because the counter changed, and
+every one is listed in the forced bless. The guard's own file now sits at 0.70, over the cap it applies
+to new code — grandfathered, and disclosed in README rather than quietly excepted.
+
+Pipeline-only; no `APP_VERSION` bump. All 12 gates green.
+
 ### The comment ratchet could not see the thing it was built to stop (pipeline-only)
 
 The comment-doctrine guard measured two axes — dated references and longest contiguous block — and
 was structurally blind to the one that matters most: how much comment there is at all. The proof
 arrived by accident. `pipeline/lib/signal/digest.mjs`, extracted one commit earlier, shipped with 75
-comment lines over 32 code lines — a **2.34 ratio, the worst of the 137 files in the repo carrying
-more than a handful of code lines** — and `lint-comments` passed it GREEN, because a compact, undated 19-line header violates neither existing axis. A guard
+comment lines over 32 code lines — a **2.34 ratio** — and `lint-comments` passed it GREEN, because a compact, undated 19-line header violates neither existing axis. A guard
 reporting clean on the exact regression it exists to prevent is worth more as evidence than as a gate.
 
 Owner ruling behind the fix: **behavior belongs in CODE.** A comment captures intent only if
@@ -27,9 +91,9 @@ History goes to CHANGELOG via a short pointer.
 ratchet on the ABSOLUTE comment count, not the ratio — a ratio ceiling goes red when you DELETE
 code, which is not a regression. New files, having no baseline to count down from, answer to an
 ALLOWANCE of `max(0.5 x code, 20 lines)`. The first draft used a bare ratio behind a `code >= 40`
-minimum, and that cutoff was measured to exempt the worst shape in the tree: `js/desk-cadence.mjs`,
-36 comment lines standing over two lines of constants, invisible to all three axes at once. The
-allowance form has no such hole.
+minimum, and that cutoff was measured to exempt an essay standing over two constants
+(`js/desk-cadence.mjs`). The allowance form does not have that particular hole — it had others, found
+by review the same day and repaired in the follow-up entry above.
 
 `--bless` also stopped grandfathering NEW over-doctrine files silently — the hole that let volume in,
 since "new code meets the doctrine" only holds if admitting it to the baseline is itself deliberate.
@@ -41,7 +105,7 @@ byte-unchanged; and a synthetic 21-comment/2-code module drove the new-file refu
 last case is the one a `code >= 40` guard would have waved through.
 
 **The doctrine applied to the code shipping it.** `digest.mjs` went 75 comment lines → 14 (ratio 2.34
-→ 0.44) with its executable lines byte-identical — what came out was the extraction rationale already
+→ 0.44) with no executable token changed (one line differs, in its trailing comment) — what came out was the extraction rationale already
 recorded verbatim in this file, the restated study numbers that live in README's `join-reach-basis.mjs`
 entry, and plan-code archaeology naming chunks rather than behavior. `lint-guard-lists.mjs` lost eight
 header lines, including a stale "ELEVEN script steps" claim against a job that now runs twelve — a

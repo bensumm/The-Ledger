@@ -336,10 +336,32 @@ const VERBOSE = A.verbose === true;
 // the niche tables, ranked by capital-efficiency. OFF by default (protects the AO1 quiet-default + the
 // --verbose firehose contract, both untouched). It prints REGARDLESS of --verbose (an agent asking for
 // the digest wants stdout) via `realLog` in main(), on its own `if (DIGEST)` gate independent of VERBOSE.
-// CONSOLE-ONLY: never written to screen.json / the last-report dump — no APP_VERSION bump (scope lock).
+// Never written to screen.json — no APP_VERSION bump (the app scope lock); it does ride the dump.
 const DIGEST = A.digest === true;
 const REPORTS = [];   // per-niche screen-report objects for this pass (renderMode niches only)
 function emitReport(report) { REPORTS.push(report); console.log(renderReport(report)); }   // console.log is a no-op unless --verbose
+// AMPLITUDE / INVEST / WATCHLIST / WATCH CLOSELY / Dip pool render as raw console.log streams rather
+// than report objects, so under the quiet DEFAULT they reached neither stdout nor the dump the /scan
+// skill directs agents to read — a surface present in no output channel at all. Capturing the stream
+// puts it in the dump while leaving stdout byte-identical. Each surface prints its own `##` header, so
+// the captured lines are self-describing and no title is injected. Handles an async fn: restoring the
+// sink synchronously around an `await` would hand it back mid-flight and drop every later line.
+function captureReport(fn) {
+  const sink = console.log;
+  const lines = [];
+  const finish = () => {
+    console.log = sink;
+    const body = lines.join('\n').split('\n');
+    if (body.some(l => l.trim())) REPORTS.push({ kind: 'screen', generatedAt: null, sections: [{ type: 'lines', lines: body, blank: false }] });
+    for (const l of lines) sink(l);   // sink = main()'s no-op under quiet, the real logger under --verbose
+  };
+  console.log = (...a) => lines.push(a.map(String).join(' '));
+  let out;
+  try { out = fn(); } catch (err) { finish(); throw err; }
+  if (out && typeof out.then === 'function') return out.then(v => { finish(); return v; }, err => { finish(); throw err; });
+  finish();
+  return out;
+}
 const PUBLISH_EXPLICIT = A.publish === true;
 let PUBLISH = A['no-publish'] === true ? false : true;
 // PC3 — the SELL-TOP MODEL selection (--est-sell reach-fold|pressure). Replaces the bespoke --pressure-exit
@@ -912,7 +934,21 @@ export function buildDigestBlock(pool = DIGEST_ROWS, { series1h = null } = {}) {
   // being ranked is the opportunity's quality, which does not change with the size of the wallet.
   // capEff and deploy both REMAIN as displayed columns; only the sort basis changed.
   const key = r => (r.crossable === false ? -Infinity : (r.rank != null ? r.rank : -Infinity));
-  const sorted = [...pool].sort((a, b) =>
+  // Collapse duplicate ids, keeping the higher-ranked row. One item CAN be collected twice: band and
+  // amplitude are not partitioned against each other (only band<->churn is, via partitionChurn), and a
+  // watchlisted item holds a reserved fetch slot in EVERY niche pool — so an item surviving both renders
+  // is pushed from both sites. Two rows for one item burn two of DIGEST_TOP's slots, evict a real
+  // candidate, and disagree (different capEff/reach/trend) with no column naming which niche produced
+  // which. Order-preserving, so ties break exactly as before. This also makes the identity-based
+  // `shown` check below correct: post-dedup no two distinct rows share an id.
+  const best = new Map();
+  for (const r of pool) {
+    if (r.id == null) continue;
+    const prev = best.get(r.id);
+    if (!prev || key(r) > key(prev)) best.set(r.id, r);
+  }
+  const deduped = pool.filter(r => r.id == null || best.get(r.id) === r);
+  const sorted = [...deduped].sort((a, b) =>
     (key(b) - key(a)) || ((b.rankKey ?? -Infinity) - (a.rankKey ?? -Infinity)) || ((b.capEff ?? -Infinity) - (a.capEff ?? -Infinity)));
   let main = sorted.slice(0, DIGEST_TOP);
   // POLISH 1: guaranteed big-ticket slice, appended only when the main block under-represents them.
@@ -2834,7 +2870,7 @@ async function main() {
     // pool rides the same bulk data already loaded at gate time and the same per-item fetch path a normal
     // niche uses, capped at SUBFLOOR_TOP (≤5 — strictly fewer fetches than any non-empty niche's top-N).
     if (!cand.length && FLIP_NICHES[m].gate === 'band') {
-      const fb = subFloorFallback(m, ctx, THRESHOLDS);
+      const fb = subFloorFallback(m, ctx, THRESHOLDS, HELD_IDS, WATCHLIST_IDS);
       if (fb) {
         const { survivors, excluded } = admit(m, fb.cand, { thinReserve: thinReserveN, top: SUBFLOOR_TOP, valueReserve: valueReserveN, gearReserve: GEAR_RESERVE, midTierReserve: MID_TIER_RESERVE, midTierOffset: MID_TIER_OFFSET });
         gated[m] = { cand: fb.cand, survivors, excluded, subFloor: fb };
@@ -2856,7 +2892,7 @@ async function main() {
         gated[n.mode].survivors = n.survivors;
         for (const t of n.trimmed) gated[n.mode].excluded.push({ ...t, reason: 'total-fetch-max' });
       }
-      console.log(`⚠ TOTAL_FETCH_MAX: cross-niche fetch union clamped to ${unionSize} (cap ${TOTAL_FETCH_MAX}); trimmed ${trimmedCount} — ${clamped.filter(n => n.trimmed.length).map(n => `${n.mode} −${n.trimmed.length}`).join(', ')}`);
+      realLog(`⚠ TOTAL_FETCH_MAX: cross-niche fetch union clamped to ${unionSize} (cap ${TOTAL_FETCH_MAX}); trimmed ${trimmedCount} — ${clamped.filter(n => n.trimmed.length).map(n => `${n.mode} −${n.trimmed.length}`).join(', ')}`);
     }
   }
 
@@ -2909,7 +2945,9 @@ async function main() {
   if (ARCHIVE_REGIME) printArchiveRegimeBanner('survivor pool; watchlist quotes below add more', realLog);
   // PART II: --asym is loudly experimental — repriced quotes + asym sort on the 'asym'-fillShape niches.
   if (ASYM) console.log(`⚠ --asym EXPERIMENTAL (F1-ungraduated): band/scalp QUOTED prices are the asymmetric deep-bid → high-reach-ask pair and the sort is net × P_ask ÷ TTF — placeholder quantiles (n≈14), NOT the calibrated default. churn/value unchanged.`);
-  if (coverageWindows < DAILY_COLD) console.log(`(⚠ regime-proxy archive is COLD — only ${coverageWindows}/${Math.round(DAILY_DAYS * 24 / DAILY_STEP_H)} windows; fetch-pool ordering is degraded until it warms up)`);
+  // realLog, not console.log: a degradation disclosure a verbosity flag can suppress is not a disclosure
+  // (printArchiveRegimeBanner's rule, applied at one site and missed at this one).
+  if (coverageWindows < DAILY_COLD) realLog(`(⚠ regime-proxy archive is COLD — only ${coverageWindows}/${Math.round(DAILY_DAYS * 24 / DAILY_STEP_H)} windows; fetch-pool ordering is degraded until it warms up)`);
   console.log('');
   await loadModules();   // PM1: discover pipeline/modules/*.mjs once (empty/absent dir → zero probes → byte-identical)
   // Step 6a: churn is partitioned from band (drops the band-lane ROI ≥ MIN_ROI rows) ONLY when both
@@ -2923,32 +2961,39 @@ async function main() {
   try { dailyRanges = loadDailyRangeBulk(14, { ids: [...ids] }).ranges || {}; }
   catch (err) { console.error('(path-A: daily-range load failed — ' + ((err && err.message) || err) + ')'); }
   const niches = {};
+  // value/amplitude go through captureReport: they print raw and build no report object, so without it
+  // their rows exist in no output channel under the quiet default.
   for (const m of RUN_MODES) niches[m] = FLIP_NICHES[m].gate === 'value'
-    ? renderValueMode(gated[m], qcache, map, series6h, series1h, guide, daily)   // P5 — the value niche's own term-structure table
+    ? captureReport(() => renderValueMode(gated[m], qcache, map, series6h, series1h, guide, daily))   // P5 — the value niche's own term-structure table
     : FLIP_NICHES[m].gate === 'amplitude'
-    ? renderAmplitudeMode(gated[m], qcache, map, series6h, series1h, guide, daily)   // A2 — the amplitude niche's own daily-cycle table; DT6 — `daily` threaded in for the base-position note; series6h — phase() for the drift ctx (was fail-open on `row.phase`)
+    ? captureReport(() => renderAmplitudeMode(gated[m], qcache, map, series6h, series1h, guide, daily))   // A2 — the amplitude niche's own daily-cycle table; DT6 — `daily` threaded in for the base-position note; series6h — phase() for the drift ctx (was fail-open on `row.phase`)
     : renderMode(m, gated[m], qcache, map, series5m, series6h, series1h, v24, daily, { partition: m === 'churn' && partitionChurn, dailyRanges });
   // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST (Workstream C): print the ONE cross-niche decision digest, collected
   // during the niche renders above (the watchClosely precedent). --digest-gated + printed via `realLog` so it
   // appears even under the AO1 quiet default (console.log is a no-op there) — its own gate, independent of
-  // --verbose. CONSOLE-ONLY: never written to screen.json / the last-report dump (the console-only scope lock).
-  if (DIGEST) realLog('\n' + buildDigestBlock(DIGEST_ROWS, { series1h }) + '\n');
+  // --verbose. It DOES ride the last-report dump; the scope lock it stays behind is screen.json / the app.
+  if (DIGEST) {
+    const digestBlock = buildDigestBlock(DIGEST_ROWS, { series1h });
+    REPORTS.push({ kind: 'screen', generatedAt: null, sections: [{ type: 'lines', lines: digestBlock.split('\n'), blank: false }] });
+    realLog('\n' + digestBlock + '\n');
+  }
   // YP2 (#2) WATCH CLOSELY — items entering a transition state (basing faller / spike on rising vs
-  // falling lows), collected across the fetched pool. Descriptive prompts, NOT buy signals;
-  // deliberately stdout-only (no screen.json / app render — that surfacing is #5).
-  if (watchClosely.size) {
+  // falling lows), collected across the fetched pool. Descriptive prompts, NOT buy signals; kept out of
+  // screen.json / the app render (that surfacing is #5), but captured into the dump.
+  if (watchClosely.size) captureReport(() => {
     console.log(`## WATCH CLOSELY — ${watchClosely.size} item(s) in a transition state (descriptive, not a buy signal)`);
     for (const e of watchClosely.values()) console.log(`- ${e.name}: ${e.state} — ${e.note}`);
     console.log('');
-  }
+  });
   // DL4: nominate flush-suitable dip candidates into dip-watchlist.json — only in the routine `--mode all`
   // scan Ben runs (not a single-niche run), best-effort so a failure never breaks the scan output.
-  if (MODE === 'all') { try { runDipNominations(v24, bands, map, qcache, series5m); } catch (err) { console.error('(dip-nominate: pass failed — ' + ((err && err.message) || err) + ')'); } }
-  const watchlist = await runWatchlist(map, ctx, guide, latest, qcache, series5m);   // S3: always-scanned watchlist
+  if (MODE === 'all') { try { captureReport(() => runDipNominations(v24, bands, map, qcache, series5m)); } catch (err) { console.error('(dip-nominate: pass failed — ' + ((err && err.message) || err) + ')'); } }
+  const watchlist = await captureReport(() => runWatchlist(map, ctx, guide, latest, qcache, series5m));   // S3: always-scanned watchlist
 
   // --publish: self-describing per-niche snapshot for the app's Scan tab. `headers` travels WITH the
-  // rows so a stale published file can never mismatch app-side header code; cells are byte-identical
-  // to the tables above (same stdCells / rating path) so the app renders exactly what the scan said.
+  // rows so a stale published file can never mismatch app-side header code. Cells are the raw `r.cells`
+  // layout — deliberately the `--raw` Quick/Optimistic view in grade order, NOT the estimator view the
+  // console prints by default, so the two legitimately differ per row (see the STDOUT-ONLY note above).
   if (PUBLISH) {
     const outPath = join(REPO_ROOT, 'screen.json');   // the ROOT-LOCKED published snapshot (fixed by the REPO_ROOT R3 correction above)
     // P5: the VALUE niche has its OWN column set (VALUE_HEADERS) + is console-only (PLAN-VALUE decision
@@ -2993,7 +3038,7 @@ async function main() {
   // AO1: always write the pass's report objects to the last-report dump (one file per invocation), then
   // unless --verbose surface the ONE summary line + path in place of the suppressed markdown.
   const rel = writeLastReport('screen', REPORTS);
-  if (!VERBOSE) realLog(`# screen (quiet default; --verbose for the table) — mode ${MODE}: ${RUN_MODES.map(m => `${m} ${Array.isArray(niches[m]) ? niches[m].length : 0}`).join(', ')} → ${rel} (value niche is console-only, excluded)`);
+  if (!VERBOSE) realLog(`# screen (quiet default; --verbose for the table) — mode ${MODE}: ${RUN_MODES.map(m => `${m} ${Array.isArray(niches[m]) ? niches[m].length : 0}`).join(', ')} → ${rel} (value/amplitude stay out of screen.json — the app — but ride the dump)`);
 }
 
 // Run only when invoked directly (`node pipeline/commands/screen-flip-niches.mjs …`); importing the module (e.g. the

@@ -2252,26 +2252,47 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (2) BLOCK — the longest contiguous comment run. (3) VOLUME — comment lines against code lines, added
     2026-08-25 because the first two are structurally blind to it: a freshly extracted module shipped at a
     **2.34 comment:code ratio and passed both GREEN**, since a compact, undated 19-line header violates
-    neither. Repo-wide the ratio measured 0.60 at the time and the per-file median sat near 0.5, which
-    is where the new-file cap was set — new code must be at least as lean as the typical file.
+    neither.
+    **COUNTING — read this before trusting a number it prints.** The first version of the volume axis used a
+    line-shape test (`/^\s*(\/\/|\/\*|\*)/`) and was itself wrong in the same direction it was built to
+    catch. A `/* … */` body written WITHOUT a leading `*` matched nothing, so it scored as CODE — and since
+    the allowance is a multiple of code, **writing prose RAISED the file's own budget**: two lines of essay
+    bought one line of comment. That is 3,424 lines across 80 of 154 files, including the whole of
+    `js/quotecore.js`'s canonical header. It now tracks block OPEN/CLOSE state. A trailing `code(); // note`
+    counts as one comment AND one code line: crediting it as neither (the first version did) actively REWARDED
+    moving prose from leading to trailing position, because that lowers `comments` and raises `code` at once —
+    an expanded copy of a REFUSED file passed at a pinned ceiling of zero. Counting it as both makes the
+    migration exactly neutral. **Corrected, the repo measures 0.90 comment:code with a per-file median of
+    0.85** — not the 0.60/0.5 the broken counter reported.
+    **The 0.5 new-file cap is therefore deliberately BELOW the repo's own median, not equal to it.** The
+    status quo is the thing being corrected, so matching it would be no rule at all; the cap is set where
+    code written to the doctrine actually lands. That is an existence proof rather than an aspiration —
+    `pipeline/lib/signal/digest.mjs` and `lint-guard-lists.mjs`, the two files cleaned to the doctrine in the
+    same wave, both measure 0.47 on the corrected counter. It does mean ~two thirds of existing files would
+    fail the allowance if they were new; they are grandfathered on the absolute ratchet instead.
     **The three axes ratchet differently, and the asymmetry is deliberate.** Dated refs and block length pin
     against `comment-budget.json` — every scanned file sits at its current count and may only improve. Volume
     pins on the ABSOLUTE comment count rather than the ratio, because a ratio ceiling would go red when you
     DELETE code, which is not a regression; the practical effect is that a governed file's prose may only come
     out, so adding a comment line means trimming one. The RATIO applies to NEW files only, where there is no
     baseline to count down from, and as an ALLOWANCE — `max(0.5 x code, 20 lines)` — never a bare ratio behind
-    a minimum-file-size gate. That distinction was measured, not assumed: a plain `code >= 40` cutoff exempts
-    the worst shape in the tree, a 36-line essay standing over two lines of constants (`js/desk-cadence.mjs`),
-    which the allowance form catches. Scans `js/`, `pipeline/{lib,commands,ci,daemons,probes}`, excluding
+    a minimum-file-size gate, because a `code >= N` cutoff would exempt the worst shape there is: an essay
+    standing over two constants. (`js/desk-cadence.mjs`, 38 comment lines over 2 code, is the live example at
+    ratio 19.0 — the allowance would refuse it as new code, but it is baselined, so it is pinned where it
+    stands rather than caught.) Scans `js/`, `pipeline/{lib,commands,ci,daemons,probes}`, excluding
     `*.test.mjs`. `--report` ranks offenders without failing and prints each file's ratio; `--bless`
-    re-baselines after a genuine cleanup and REFUSES, without `--force`, both to raise any ceiling AND to
-    grandfather a NEW file that is over doctrine — the second closes a hole where one bless silently admitted
-    fresh over-budget code at whatever it happened to be. A magnitude budget, never a semantic check — it
-    cannot tell a good 39-line contract header from a bad one, only stop them growing. DISCLOSED EVASIONS:
-    narrative carrying no date is invisible to (1); blank-line splitting halves (2); (3) counts LEADING
-    comment lines only, so trailing `code(); // …` prose is unseen by it, though a DATED trailing comment is
-    still caught by (1), which is why trailing comments are scanned at all. Consumes nothing; exit 1 +
-    per-file violations),
+    re-baselines after a genuine cleanup and REFUSES, without `--force`, to raise any ceiling, to grandfather
+    a NEW file that is over doctrine, or to proceed past a baseline entry whose `comments` field is missing —
+    that field FAILS CLOSED at 0, because treating it as "no ceiling" made deleting one JSON key a cheaper
+    red-build reflex than typing `--force`, and the deletion laundered the regression silently. A bless also
+    NAMES any baseline entry with no file on disk, since a rename otherwise resets the ratchet: the new path
+    reads as new code and blesses at whatever it carries. `--root`/`--baseline` drive it against a fixture
+    tree; `pipeline/test/lint-comments.test.mjs` covers all of the above and every case is mutation-verified.
+    A magnitude budget, never a semantic check — it cannot tell a good 39-line contract header from a bad one,
+    only stop them growing. DISCLOSED EVASIONS: narrative carrying no date is invisible to (1); blank-line
+    splitting halves (2); a `//`-looking line inside a template literal is miscounted (measured: zero here);
+    and the guard's own file sits at 0.70, over the cap it applies to new code — grandfathered, disclosed
+    rather than hidden. Consumes nothing; exit 1 + per-file violations),
   - `lint-guard-lists.mjs` (the guard-list drift gate, run in the cheap `checks` job — the ONE home for its
     design + limits. The repo documents its own CI in several places, and those copies drifted: three guards
     were gating while absent from `/cleanup`, and the SAME three were absent from `docs/FLOW.md`, while

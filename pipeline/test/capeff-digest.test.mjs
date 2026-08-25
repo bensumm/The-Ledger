@@ -165,6 +165,30 @@ ok('tie on the rank key breaks by capEff then rank descending', () => {
   const out = buildDigestBlock(pool);
   assert.ok(out.indexOf('Bravo') < out.indexOf('Alpha'), 'higher rank should sort first on a rank-key tie');
 });
+// An item can reach DIGEST_ROWS from two niches: band and amplitude are not partitioned against each
+// other, and a watchlisted item holds a reserved fetch slot in every pool. The duplicate burned two of
+// the eight display slots and the two rows disagreed on capEff/reach/trend.
+ok('collapses duplicate ids, keeping the higher-ranked row', () => {
+  const lo = { ...mkRow('Webweaver bow (u)', 0.73, 10), id: 27652 };
+  const hi = { ...mkRow('Webweaver bow (u)', 0.85, 99), id: 27652 };
+  const other = { ...mkRow('Other', 50, 50), id: 1 };
+  const out = buildDigestBlock([lo, hi, other]);
+  const rows = out.split('\n').filter(l => /Webweaver/.test(l));
+  assert.equal(rows.length, 1, `expected ONE Webweaver row, got ${rows.length}`);
+  assert.match(rows[0], /0\.85/, 'kept the higher-ranked row');
+});
+ok('rows with no id are never collapsed together', () => {
+  const out = buildDigestBlock([mkRow('Anon1', 10), mkRow('Anon2', 9)]);
+  assert.ok(out.includes('Anon1') && out.includes('Anon2'), 'both id-less rows must survive');
+});
+ok('the big-ticket appendix never repeats an item already in the main block', () => {
+  const pool = Array.from({ length: 12 }, (_, i) => ({ ...mkRow(`Item${i}`, 100 - i, 100 - i), id: i }));
+  pool[0].bigTicket = true;   // a big-ticket that ALREADY ranks into the main top-8
+  const out = buildDigestBlock(pool);
+  const hits = out.split('\n').filter(l => /\| Item0 \|/.test(l));
+  assert.equal(hits.length, 1, `Item0 rendered ${hits.length} times`);
+});
+
 ok('DEPLOYABLE WEIGHT demotes a cheap high-% row below a big-ticket at large deployable capital', () => {
   // the exact failure the follow-up fixes: Lead-ore-shaped dust (capEff 1072%/d, but only ~60k deployable)
   // must sort BELOW a Magus-shaped big-ticket (capEff 2.1%/d, but the whole 140m bankroll deployable).
