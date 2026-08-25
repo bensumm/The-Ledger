@@ -2666,8 +2666,16 @@ runner once, so **adding a test file is the whole job** — nothing else wires i
 same rule for `js/` and `pipeline/lib/` subjects: put the test beside the file (tests for `js/`
 subjects live under `pipeline/`, which is where the runner globs — the `quotecore.test.mjs`/
 `format.test.mjs` precedent).
-**The runner gates on EXIT CODE, so a suite that prints nothing still stamps a `✓`.** That is not
-hypothetical: `quote-items.mjs` no-op'd global `console.log` at IMPORT scope, and every test importing
+**CLOSED — the runner now fails a suite that produced NO OUTPUT.** It captures each child's
+stdout/stderr (re-emitting them verbatim, so the pass-through contract is unchanged) and rejects a
+suite whose combined output is empty or whitespace-only. Pinned by `pipeline/test/run-tests-silence.test.mjs`,
+verified against a deliberately silent canary suite: `✗ … — SILENT: exited 0 but produced no output`,
+runner exit 1. **It is a FLOOR, not a ceiling** — it proves a suite SPOKE, never that what it asserted
+was meaningful; a suite whose regression check never calls the function it guards still passes.
+Fixing this also required moving the runner's own body behind an entrypoint guard: it ran at IMPORT
+scope, so importing `isSilent` from the new test spawned all 122 suites — one of which is that test —
+and recursed without bound. Same class as the defect below, inside the guard written to catch it.
+The history that motivated it: `quote-items.mjs` no-op'd global `console.log` at IMPORT scope, and every test importing
 `buildQuoteReport` inherited it — `render.test.mjs` (31 checks) and `reverseflip-surfacing.test.mjs` (13)
 each emitted **zero bytes**, exited 0, and were indistinguishable from an empty file. The assertions did
 run and the suites did gate, so nothing was silently broken; nothing was silently VISIBLE either. **Rule:

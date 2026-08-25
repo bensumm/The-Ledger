@@ -10,6 +10,40 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The test runner can now see a silent suite — and its own body was running at import scope (pipeline-only)
+
+First of the ship-first items out of the pipeline-separation audit. `run-tests.mjs` graded 122 suites
+on exit code alone with `stdio: 'inherit'`, so it never held the bytes and could not tell a suite that
+ran its assertions from one that ran none. That is not a hypothetical: `render.test.mjs` (31
+assertions) emitted **zero bytes** and collected a green tick for an unknown period, because a module
+it imports stubbed global `console.log` at import scope.
+
+The runner now CAPTURES each child's output, re-emits it verbatim (the documented pass-through
+contract is unchanged), and fails any suite whose combined stdout+stderr is empty or whitespace-only.
+Verified against a deliberately silent canary: `✗ test/zz-silent-canary.test.mjs — SILENT: exited 0
+but produced no output, so nothing here shows an assertion ran`, runner exit 1; canary removed,
+`✓ All 123 suite(s) passed.` **This is a floor, not a ceiling** — it proves a suite SPOKE. A
+regression check that never calls the function it guards still passes, and the audit says so.
+
+**Building it surfaced the same defect inside the guard.** The runner's entire body ran at IMPORT
+scope, so importing `isSilent` from the new test spawned all 122 suites — one of which is that test,
+which imports the runner again. Unbounded recursion, discovered by running it. The body now sits
+behind the entrypoint guard every command in `pipeline/commands/` already uses, with the predicate
+exported at module scope. That makes two modules in two commits doing work merely because they were
+imported; the audit's rule — a library module must never act at import scope — is now evidenced twice.
+
+`pipeline/test/run-tests-silence.test.mjs` (5 cases) pins the predicate, the whitespace rule, the
+either-stream rule, an end-to-end spawn of a real silent child, and a source scan that the runner
+still captures rather than inherits. A source scan rather than an invocation because the runner is a
+CLI that spawns 123 children; asserting this by running it would be circular.
+
+Rejected on the way: a shared test harness that would have made the check count counter-produced
+across all 122 suites. Ten suites already emit TAP from Node's built-in runner, so a house format
+would have needed a hand-maintained exemption list — the exact rot the audit exists to remove. The
+~20-line runner change takes most of the value; reading TAP is the follow-on.
+
+Pipeline-only; no `APP_VERSION` bump. All 12 gates green.
+
 ### A test suite printed zero bytes and still passed, and a measured capital claim was wrong (pipeline-only)
 
 **`pipeline/test/render.test.mjs` emitted 0 bytes, exited 0, and collected a `✓` from `run-tests.mjs`.**
