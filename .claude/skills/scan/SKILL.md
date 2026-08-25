@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 3.2
+version: 3.3
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -65,11 +65,20 @@ it's consistently unused (a future ruling, never a per-pass call). The tier regi
   from, so `pAsk` comes back 0.86 on 89.9% of 8,300 logged rows and `pBid` 0.29 on 86.5% — 12/14 and
   4/14, the `ASYM_P_LO`/`ASYM_P_HI` quantiles restated. Treat "printed 12/14d" as a rank position in an
   in-sample window, never as a probability the offer fills, and never build a ranking or a
-  recommendation on it. Two more things ride with that: the ask ordering guard BINDS on ~70% of rows
-  (measured 69.7%, 1,380/1,979), which is why the clause splits `ask X (= live instabuy, above the Y
+  recommendation on it. Two more things ride with that: the ask ordering guard BINDS on ~71% of rows
+  (recomputed 71.1%, 2,133/3,001 — it read 69.7% off a smaller pool; the denominator grows with accrual,
+  so treat the ~70% shape as the durable claim and re-derive the digits rather than quoting them), which is why the clause splits `ask X (= live instabuy, above the Y
   level that printed N/14d)` — the price and the level the count belongs to are DIFFERENT numbers and
   relaying one as the other is the specific error this wording exists to prevent; and the deep bid is
   touched roughly 4 days in 14, so it is a resting level to leave sitting, not a fill to plan around.
+  **And the measurement now exists — relay the footer line, it is the number Ben actually needs.**
+  `join-asym-outcomes.mjs` forward-scored the pair off the 1h archive over 39,110 rows / 766 items:
+  the deep bid is touched **17.8%** of the time within 24h (logged `pBid` claims 31.1%), the ask is
+  reached **~24%** given that touch (logged `pAsk` claims 86.8%), and the **round trip completes
+  4.3%** — **1.5% on big-ticket**. The screen prints that once as a trailing `◆ asym fill —` footer
+  under the per-row notes; it is a CLASS rate over 766 items, never this row's, and touched/reached ≠
+  filled so it bounds a real offer from ABOVE. Read it as: the patient pair is a level worth resting
+  at, not a trade to plan a day around, and on a big-ticket item least of all.
 - **A BE-floored `Est. sell` cell is not the whole verdict — read the `patient:` clause inside it
   (PP2).** _(judgment: read-the-row discipline; rendered by `js/estimators/cells.mjs`)_ When the
   reach-fold lands under break-even the cell says `reach-fold floored to BE X — nothing to price above

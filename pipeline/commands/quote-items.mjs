@@ -54,7 +54,7 @@ import { buysByItem, limitWindow } from '../lib/capital/limits.mjs';   // LM1 �
 import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/market/guideanchor.mjs';   // YP1 advisory
 import { buildItemContext, renderHeldVerdict, renderPathLine, staleBookBanner } from '../lib/market/item-context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line; COD-4 — the shared positions.json-age banner
-import { depthReachClause, formatTimedLap, formatAsymFill } from '../lib/render/emit.mjs';   // PB4 — the shared two-lens depth-floor/pressure clause (rendered beside the pressure prices); PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site); formatAsymFill — the shared ◆ asym fill clause pair (screen emits the same line)
+import { depthReachClause, formatTimedLap, formatAsymFill, asymClassRateNote } from '../lib/render/emit.mjs';   // PB4 — the shared two-lens depth-floor/pressure clause (rendered beside the pressure prices); PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site); formatAsymFill — the shared ◆ asym fill clause pair (screen emits the same line)
 import { loadState, ALERT_PERSIST_MS } from '../lib/thesis/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/thesis/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 additive reverse-flip pending block (read-only)
@@ -290,12 +290,22 @@ export function buildQuoteReport({
   reverseFlipLines = [],  // RF4 — the additive reverse-flip pending block (positions; [] on an empty store → no section)
 } = {}) {
   const sections = [];
+  // The asym class rate rides ONCE, appended after every per-row asym note, and only when one exists.
+  // Homed here rather than at the push site because `notes` is the single flat array both modes render
+  // from, and the wording is emit.mjs's (never restated). Non-mutating: the caller's array is not
+  // appended to in place.
+  // MEASURED, not assumed: --positions emits ZERO asym notes today (the asym block lives in runItems()
+  // only, and the positions estimatePair call passes no asymEst/asymFill), so this is live on the ITEMS
+  // path and correctly silent on positions. The gate is what makes that honest rather than a bug — no
+  // asym row, no class rate. It becomes live on positions the moment that path passes the asym pair.
+  const noteItems = notes.some(n => n && n.kind === 'asym')
+    ? [...notes, { kind: 'asym', text: `asym fill — ${asymClassRateNote()}` }] : notes;
   if (mode === 'positions') {
     if (header) sections.push({ type: 'lines', lines: [header], blank: false });
     if (pressureBanner) sections.push({ type: 'lines', lines: [pressureBanner + '\n'], blank: false });
     if (staleBanner) sections.push({ type: 'lines', lines: [staleBanner + '\n'], blank: false });
     sections.push({ type: 'table', headers, rows, blank: false });
-    sections.push({ type: 'notes', items: notes, blank: true, keepEmpty: true });
+    sections.push({ type: 'notes', items: noteItems, blank: true, keepEmpty: true });
     if (convLines.length) sections.push({ type: 'lines', lines: ['', 'Conviction (shared watch-state):', ...convLines], blank: false });
     if (pathLines.length) sections.push({ type: 'lines', lines: ['', 'Paths (persistence-gated dominant per held lot — decision support, placeholder weights):', ...pathLines], blank: false });
     if (rebidLines.length) sections.push({ type: 'lines', lines: ['', 'Rebid advisory (cut-and-rebid friction bar + multi-week trajectory — support, never overrides the verdict):', ...rebidLines], blank: false });
@@ -305,7 +315,7 @@ export function buildQuoteReport({
     if (pressureBanner) sections.push({ type: 'lines', lines: [pressureBanner + '\n'], blank: false });
     sections.push({ type: 'table', headers, rows, blank: false });
     if (estExplainer) sections.push({ type: 'lines', lines: [estExplainer], blank: false });
-    sections.push({ type: 'notes', items: notes, blank: true, keepEmpty: true });
+    sections.push({ type: 'notes', items: noteItems, blank: true, keepEmpty: true });
   }
   return { kind: 'quote', generatedAt: null, sections };
 }
@@ -466,7 +476,7 @@ async function runItems() {
     const af = ae ? formatAsymFill(ae, ap) : null;
     if (ae) {
       const roi = ae.bid > 0 ? (ae.net / ae.bid * 100).toFixed(1) : null;
-      if (af) notes.push({ kind: 'asym', itemId: id, text: `asym fill: ${af.bidTxt} → ${af.askTxt} · net ${fmt(ae.net)}/u${roi != null ? ` (${roi}%)` : ''} (placeholder quantiles, n≈${ap.nDays})` });
+      if (af) notes.push({ kind: 'asym', itemId: id, text: `asym fill: ${af.bidTxt} → ${af.askTxt} · net ${fmt(ae.net)}/u${roi != null ? ` (${roi}%)` : ''} (in-sample quantiles, n≈${ap.nDays})` });
     }
     // PLAN-OUTPUT-TABLE: the reconciliation estimate off the SAME in-hand reads (windowStats touch/
     // reach at the patient pair, the diurnal dip/peak levels, the asym high-reach ask) — zero new

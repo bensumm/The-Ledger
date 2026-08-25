@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.60
+version: 1.61
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -45,9 +45,23 @@ sections plus your own prose:
   `ASYM_P_LO`/`ASYM_P_HI` quantiles read back, not per-item measurements. "printed 12/14d" is a rank
   position in an in-sample window; it is not a fill probability, and the deep bid is touched about 4
   days in 14 — a level to leave resting, not a fill to plan a lot around. The ask ordering guard binds
-  on ~70% of rows (69.7% measured), which is why the clause names the quoted price and the measured
+  on ~71% of rows (recomputed 71.1%, 2,133/3,001; it read 69.7% off a smaller pool — the ~70% shape is
+  the durable claim, the digits accrue), which is why the clause names the quoted price and the measured
   level separately (`ask X (= live instabuy, above the Y level that printed N/14d)`); collapsing those
-  two numbers into one is the error the wording exists to prevent. On a held lot the same clause now
+  two numbers into one is the error the wording exists to prevent.
+  **CORRECTED — the patient clause does NOT reach a held lot, and will not until this surface grows
+  `Est.` columns.** This table's headers are Quick/Optimistic + Held@/Break-even/Verdict; there is no
+  `Est. sell` cell here, and the patient clause lives inside that cell. The class-rate footer is
+  likewise absent, because it gates on a `kind:'asym'` note and this surface pushes none. Two separate
+  mechanisms — do not expect either to appear because the other is fixed. So read the clause on
+  `/scan` and a per-item quote, and do NOT go looking for it here (tracked in `PLAN.md`s folded
+  PLAN-PATIENT-PAIR section, open item 1). What follows describes it where it does render.
+  **And the pair is now MEASURED, which is what to carry into any read of it:** over 39,110 rows /
+  766 items the deep bid is touched **17.8%** within 24h against a logged `pBid` of 31.1%, the ask is
+  reached **~24%** given the touch against a logged `pAsk` of 86.8%, and the round trip completes
+  **4.3%** — **1.5% on big-ticket** — which is where nearly all held CAPITAL sits even when it is a minority of
+  lots by count, so it is the number that governs a held-lot read. touched/reached ≠ filled,
+  so those bound a real offer from above (`join-asym-outcomes.mjs`). Where it renders, the clause
   appends to a sub-break-even `Est. sell` cell (`· patient: … · net +N/u — resting levels, in-sample
   counts, not a fill rate`), so `nothing to price above break-even` is only half of what that cell
   says: the fold reports the transact-now pair losing, the patient half reports a resting bid into a

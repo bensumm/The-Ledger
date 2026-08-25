@@ -20,7 +20,7 @@ import { buildQuoteReport } from '../commands/quote-items.mjs';
 import { buildScreenNicheReport } from '../commands/screen-flip-niches.mjs';
 import { mdTable } from '../lib/render/cli.mjs';
 import { quoteCells as canonicalQuoteCells, cellText } from '../../js/quotecore.js';
-import { formatTimedLap } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT2
+import { formatTimedLap, asymClassRateNote } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT2; asymClassRateNote — the class-rate footer buildQuoteReport appends (derived, not pasted)
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -194,8 +194,8 @@ const ITEMS_NOTE_PAIRS = [
     '  ℹ forecast: not profitably buyable now (live 139 > ~138 to clear BE at 141) → buyable ~8h (00:00)'],
   [{ kind: 'askHeadroom', text: 'ask headroom: robust p90 shaved a traded in-band top — ladder up' },
     '  ⤴ ask headroom: robust p90 shaved a traded in-band top — ladder up'],
-  [{ kind: 'asym', text: 'asym fill: deep-bid 127 (fills ~5/14d — rest as optionality) → ask 140 (prints ~12/14d) · net 11/u (8.7%) (placeholder quantiles, n≈14)' },
-    '  ◆ asym fill: deep-bid 127 (fills ~5/14d — rest as optionality) → ask 140 (prints ~12/14d) · net 11/u (8.7%) (placeholder quantiles, n≈14)'],
+  [{ kind: 'asym', text: 'asym fill: deep-bid 127 (fills ~5/14d — rest as optionality) → ask 140 (prints ~12/14d) · net 11/u (8.7%) (in-sample quantiles, n≈14)' },
+    '  ◆ asym fill: deep-bid 127 (fills ~5/14d — rest as optionality) → ask 140 (prints ~12/14d) · net 11/u (8.7%) (in-sample quantiles, n≈14)'],
   [{ kind: 'windowClear', text: 'window-clear: ask 141 prints 2/14 in the 20:00–00:00 peak window — days-reach ≠ lap-clear (placeholder, n≈0)' },
     '  ℹ window-clear: ask 141 prints 2/14 in the 20:00–00:00 peak window — days-reach ≠ lap-clear (placeholder, n≈0)'],
   [{ kind: 'reachRelief', text: 'reach relief: liquid book (8.01m/d, buy limit ~0.2% of flow) softens the ask-reach fold 75% (PLACEHOLDER, n=1)' },
@@ -204,13 +204,21 @@ const ITEMS_NOTE_PAIRS = [
     '  ◇ depth floor 138 · reachable 141 for ×10000'],
 ];
 
+/* buildQuoteReport appends the class-rate footer ONCE whenever any note is kind:'asym' (PLAN-PATIENT-PAIR
+   §7 — the per-row counts are in-sample tallies; the measured round trip is a CLASS rate and belongs in a
+   footer, not on a row). It is DERIVED from emit.mjs here rather than pasted, so a wording change moves
+   the golden with it instead of turning this into a byte-string maintenance chore. The POS_NOTE_PAIRS
+   fixtures carry no asym note, which is why the positions goldens below are untouched — that asymmetry is
+   real: --positions emits no asym notes today. */
+const ASYM_CLASS_LINE = '  ◆ asym fill — ' + asymClassRateNote();
+
 const itemsHeaders = ['Item', 'Guide', 'Est. buy', 'Est. sell', 'Net/u (ROI)', 'BE', 'Vol/d', 'Momentum', 'Regime', 'Probes'];
 const itemsRows = [['Nature rune', '139', '137 (3/3)', '141 (1/3)', '+2 (+1.5%)', '140', '8.01m/d', '–', 'Rising +7%', '📈froth healthy-reprice']];
 const ITEMS_EXPLAINER = '(Est. buy/sell are ESTIMATES — … --raw restores the model-free Quick/Optimistic columns.)';
 
 ok('VZ3 items: report renders byte-identical to the pre-VZ3 console.log sequence (non-RAW, probe col)', () => {
   const notes = ITEMS_NOTE_PAIRS.map(p => p[0]);
-  const noteStrings = ITEMS_NOTE_PAIRS.map(p => p[1]);
+  const noteStrings = [...ITEMS_NOTE_PAIRS.map(p => p[1]), ASYM_CLASS_LINE];
   const report = buildQuoteReport({ mode: 'items', headers: itemsHeaders, rows: itemsRows, estExplainer: ITEMS_EXPLAINER, notes });
   assert.equal(renderReport(report), preVZ3ItemsGolden({ pressureBanner: null, headers: itemsHeaders, rows: itemsRows, estExplainer: ITEMS_EXPLAINER, noteStrings }));
 });
@@ -219,7 +227,7 @@ ok('VZ3 items --raw: no Est. explainer line; table then notes still byte-identic
   const rawHeaders = ['Item', 'Guide', 'Quick', 'Optimistic', 'Vol/d', 'Momentum', 'Regime'];
   const rawRows = [['Nature rune', '139', '137 → 140 · +1 (+0.7%)', '137 → 141 · +2 (+1.5%)', '8.01m/d', '–', 'Rising +7%']];
   const notes = ITEMS_NOTE_PAIRS.map(p => p[0]);
-  const noteStrings = ITEMS_NOTE_PAIRS.map(p => p[1]);
+  const noteStrings = [...ITEMS_NOTE_PAIRS.map(p => p[1]), ASYM_CLASS_LINE];
   const report = buildQuoteReport({ mode: 'items', headers: rawHeaders, rows: rawRows, estExplainer: null, notes });
   assert.equal(renderReport(report), preVZ3ItemsGolden({ pressureBanner: null, headers: rawHeaders, rows: rawRows, estExplainer: null, noteStrings }));
 });
@@ -227,7 +235,7 @@ ok('VZ3 items --raw: no Est. explainer line; table then notes still byte-identic
 ok('VZ3 items: --pressure-exit banner rides on top, byte-identical', () => {
   const banner = '⚠ --pressure-exit: Est. buy/sell + rank use the UN-CALIBRATED pressure model (TRIAL …).';
   const notes = ITEMS_NOTE_PAIRS.map(p => p[0]);
-  const noteStrings = ITEMS_NOTE_PAIRS.map(p => p[1]);
+  const noteStrings = [...ITEMS_NOTE_PAIRS.map(p => p[1]), ASYM_CLASS_LINE];
   const report = buildQuoteReport({ mode: 'items', pressureBanner: banner, headers: itemsHeaders, rows: itemsRows, estExplainer: ITEMS_EXPLAINER, notes });
   assert.equal(renderReport(report), preVZ3ItemsGolden({ pressureBanner: banner, headers: itemsHeaders, rows: itemsRows, estExplainer: ITEMS_EXPLAINER, noteStrings }));
 });

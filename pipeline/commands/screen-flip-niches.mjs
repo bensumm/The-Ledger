@@ -75,7 +75,7 @@ import { resolve, loadPipelineConfig, refusePublishIfNonNeutral, shadowModelsOf 
 import { open as openArchive } from '../lib/market/archive.mjs';   // AF5b — READONLY handle for --archive-regime's 6h read (open() runs schema DDL unless readonly; never take that path on the live DB)
 import { sixHourReader, archiveSeries, LIVE_TS6H_BUCKETS, REGIME_MIN_6H_BUCKETS } from '../lib/market/archive-series.mjs';   // archiveSeries (DT1b) = the ts→timestamp adapter the amplitude walk-forward reads long 1h history through; AF5b — the ONE 6h seam, its 365-bucket pin (phase() depth stability) and the depth floor below which it serves live.
 import { renderReport, renderHtmlTable } from '../lib/render/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer: a niche's table + footer notes build a screen-report printed via renderReport. renderHtmlTable = the Stage-2 HTML twin published into screen.json for the app's Scan tab.
-import { formatTimedLap, formatBasePosition, formatAsymFill } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT2 — the ONE shared diurnalTimedLap renderer (also DT3's future quote/watch call site); DT6 — the base-position note renderer; formatAsymFill — the shared ◆ asym fill clause pair (quote emits the same line)
+import { formatTimedLap, formatBasePosition, formatAsymFill, asymClassRateNote } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT2 — the ONE shared diurnalTimedLap renderer (also DT3's future quote/watch call site); DT6 — the base-position note renderer; formatAsymFill — the shared ◆ asym fill clause pair (quote emits the same line)
 // P1: the pure candidate-selection + survival doctrine lives in lib/gatecandidates.mjs —
 // gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice plus renderMode's post-fetch surviveMode.
 // screen-flip-niches.mjs passes its CLI THRESHOLDS / sizing explicitly; fixtures drive them in
@@ -1830,8 +1830,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   for (const n of windowClearNotes) footerLines.push(`ℹ window-clear — ${n} — days-reach ≠ lap-clear (placeholder, n≈0)`);
   for (const n of driftNotes) footerLines.push(`ℹ drift-exit — ${n}`);
   // PART II: the asym-fill inform block — decision support only (P_bid = optionality annotation, never a
-  // rank input by default; placeholder quantiles n≈14; the shadow `asym` ledger field is the F1 A/B data).
+  // rank input by default; the shadow `asym` ledger field is the F1 A/B data). The class-rate line is
+  // emitted ONCE, after the rows, and only when a row actually printed: it is a 766-item rate, so
+  // per-row placement would read as this item's fill probability. Wording is emit.mjs's, never restated.
   for (const n of asymNotes) footerLines.push(`◆ asym fill — ${n}`);
+  if (asymNotes.length) footerLines.push(`◆ asym fill — ${asymClassRateNote()}`);
   // EF1(a): the dead-bid repriced-entry alternative — additive decision support; the row's headline
   // rank/sort are untouched (R-1) and the optimistic number carries its sell-leg reach evidence inline.
   for (const n of repriceNotes) footerLines.push(`↻ repriced entry — ${n}`);

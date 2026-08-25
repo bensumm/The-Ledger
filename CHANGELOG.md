@@ -130,8 +130,19 @@ in a different section, keyed by item name rather than attached to the row it co
 PP2 carries the patient alternative INTO the `beFloored` branch of `estPairCells`. A real run now reads
 `… nothing to price above break-even, 3/3) · patient: deep-bid 14,395 (touched 4/14d — rest as
 optionality) → ask 15,066 (printed 12/14d) · net +370/u — resting levels, in-sample counts, not a fill
-rate`. Because `estPairCells` is the ONE cell builder, this reaches the screen, the per-item quote and
-the held-lot `--positions` review from a single edit.
+rate`. Because `estPairCells` is the ONE cell builder, this reaches the screen and the per-item quote
+from a single edit.
+
+**CORRECTED 2026-08-24 — it does NOT reach the held-lot `--positions` review, and that sentence
+originally said it did.** The one-builder argument is sound about the RENDER and says nothing about
+the DATA. The reason is simpler and more final than the first correction claimed: **`--positions`
+renders no `Est.` columns at all** — its headers are `[...QUOTE_HEADERS, 'Held@', 'Break-even',
+'Verdict']` and `estPairCells` runs only inside `runItems()` — and the patient clause lives inside
+the estSell cell, so there is no cell for it to attach to. The first correction said the cause was
+the positions `estimatePair` not being passed `asymEst`/`asymFill`; that is true but is not the
+binding constraint, and acting on it alone would have changed nothing visible. Verified against a
+real dumped positions report rather than by reading the code twice. Carried as open item 1 of
+PLAN.md's folded PLAN-PATIENT-PAIR section, now split into the two independent pieces it actually is.
 
 **Three measured facts govern the wording, and they are why the clause is not phrased as an
 opportunity.** `pAsk` is 0.86 on 89.9% of 8,300 logged rows and `pBid` is 0.29 on 86.5% — those are the

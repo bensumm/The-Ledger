@@ -17,7 +17,9 @@
  * Synthetic fixtures only. Run: `node pipeline/test/emit.test.mjs` (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { heldNoteBlock, heldListAt, depthReachClause, formatAsymFill } from '../lib/render/emit.mjs';
+import fs from 'node:fs';
+import { heldNoteBlock, heldListAt, depthReachClause, formatAsymFill, asymClassRateNote,
+  ASYM_RT_24H_PCT, ASYM_RT_24H_BIG_PCT, ASYM_MEASURED_ROWS } from '../lib/render/emit.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -215,6 +217,42 @@ ok('formatAsymFill: degrades to null rather than inventing a count', () => {
   assert.equal(formatAsymFill(AE, null), null);
   assert.equal(formatAsymFill({ ...AE, ask: null }, AP), null, 'no ask ⇒ nothing to say');
   assert.equal(formatAsymFill(AE, { ...AP, nAsk: 0, nBid: 0, nDays: 0 }), null, 'no scored days ⇒ no denominator');
+});
+
+
+/* asymClassRateNote — the ONE-TIME class-rate footer (PLAN-PATIENT-PAIR §7). It exists because the
+   per-row counts are in-sample tallies and a reader had to supply "so how often does this complete?"
+   from nowhere. The measured answer is ~4.3%, so the wording has to survive being read by someone
+   who wants it to be good news. */
+ok('asymClassRateNote: names the measured rate, both strata, and refuses to be a per-row number', () => {
+  const t = asymClassRateNote();
+  assert.match(t, /4\.3%/, 'the pooled round trip is named');
+  assert.match(t, /1\.5%/, 'the big-ticket stratum is named — it is the class the plan was written about');
+  assert.match(t, /CLASS rate, not this row/, 'MUTANT: drop the class-vs-row disclaimer — red. 766 items, not this item');
+  assert.match(t, /touched\/reached ≠ filled/, 'MUTANT: drop the upper-bound caveat — red');
+  assert.match(t, /IN-SAMPLE/, 'MUTANT: call the per-row counts a fill rate — red');
+  assert.doesNotMatch(t, /placeholder/i, 'they are no longer placeholders; they are measured, and measured wrong');
+});
+
+ok('asymClassRateNote: the numbers come from the exported constants, never a restated literal', () => {
+  // This assertion was WRONG before, and green: it claimed "MUTANT: hardcode 4.3 in the template" would
+  // go red, and hardcoding it left all checks passing — because interpolating a constant and pasting its
+  // current value produce the identical STRING. A false mutant claim in a guard's own comment is the
+  // failure class the repo's rule 10 anchors on, so the check is now on the SOURCE, where the difference
+  // actually lives. MUTANT: replace either \${ASYM_RT_24H_PCT} or \${ASYM_RT_24H_BIG_PCT} in emit.mjs's
+  // template with its literal value — red. Verified by applying exactly that.
+  const src = fs.readFileSync(new URL('../lib/render/emit.mjs', import.meta.url), 'utf8');
+  const body = src.slice(src.indexOf('export function asymClassRateNote'));
+  const fn = body.slice(0, body.indexOf('\n}'));
+  assert.ok(fn.includes('${ASYM_RT_24H_PCT}'), 'the pooled rate must be INTERPOLATED, not pasted');
+  assert.ok(fn.includes('${ASYM_RT_24H_BIG_PCT}'), 'the big-ticket rate must be INTERPOLATED, not pasted');
+  assert.doesNotMatch(fn, /\d+\.\d+%/, 'no bare decimal percentage literal may appear in the template');
+  // and the rendered text still carries them (escaped — an unescaped '.' here matched "~4X3%").
+  const esc = x => String(x).replace('.', '\\.');
+  assert.match(asymClassRateNote(), new RegExp(`~${esc(ASYM_RT_24H_PCT)}% within 24h`));
+  assert.match(asymClassRateNote(), new RegExp(`~${esc(ASYM_RT_24H_BIG_PCT)}% on`));
+  assert.ok(ASYM_RT_24H_BIG_PCT < ASYM_RT_24H_PCT,
+    'the big-ticket stratum converts WORSE than pooled — that ordering is the finding, not a typo');
 });
 
 console.log(`\nAll ${pass} checks passed.`);

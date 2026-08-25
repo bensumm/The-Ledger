@@ -334,3 +334,35 @@ export function formatAsymFill(ae, ap, { fmt: fmtFn = fmtP } = {}) {
     : `ask ${a.p} (printed ${hA}/${nA}d)`;
   return { bidTxt, askTxt };
 }
+
+/* THE MEASURED CLASS RATE — join-asym-outcomes.mjs (PLAN-PATIENT-PAIR §7).
+ * formatAsymFill's per-row counts are IN-SAMPLE quantile tallies over the days that fitted the
+ * quantiles. That is stated on each row, but a reader still has to supply "…and so how often does
+ * this actually complete?" from nowhere. These are that number, forward-measured off the 1h archive.
+ *
+ * It belongs in a FOOTER, emitted ONCE per surface, and not on the row — it is a CLASS rate over
+ * 766 items, not this item's. Attaching it per-row would read as a per-item fill probability, which
+ * is the exact error the row wording already works to avoid.
+ *
+ * touched/reached ≠ filled (no queue position, no partials, no competition at the level), so these
+ * bound a real offer from ABOVE. One era, one update cycle, band-dominated. Re-derive with
+ * `node pipeline/commands/join-asym-outcomes.mjs` — do not hand-edit these to a remembered number. */
+export const ASYM_RT_24H_PCT = 4.3;          // round trip: bid touched ≤24h, THEN ask reached ≤24h
+export const ASYM_RT_24H_BIG_PCT = 1.5;      // the same, restricted to ask ≥ BIG_TICKET_GP
+// The SAMPLE GROWS every scan — these were 39,110/766 when first measured and 39,176/768 a few hours
+// later, so the note RENDERS them rounded (~39k / ~770). The rates are stable at this precision; an
+// exact tally in rendered prose is stale by the next morning and nothing in CI can see it (lint-docs
+// pins doc↔source, never source↔reality).
+export const ASYM_MEASURED_ROWS = 39176;
+export const ASYM_MEASURED_ITEMS = 768;
+
+/* asymClassRateNote() → the one-time footer sentence. A function rather than a template literal so
+ * the numbers cannot be restated at a call site; every surface that prints an asym note prints THIS. */
+export function asymClassRateNote() {
+  return `the counts above are IN-SAMPLE quantile tallies, NOT fill rates — measured forward, this `
+    + `shape completes a round trip ~${ASYM_RT_24H_PCT}% within 24h (~${ASYM_RT_24H_BIG_PCT}% on `
+    + `big-ticket) over ~${Math.round(ASYM_MEASURED_ROWS / 1000)}k rows / ~${Math.round(ASYM_MEASURED_ITEMS / 10) * 10} items. `
+    + `A CLASS rate, not this row's; touched/reached ≠ filled, so it bounds a real offer from above. `
+    + `Re-derive: join-asym-outcomes.mjs`;
+}
+

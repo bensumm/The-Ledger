@@ -1885,6 +1885,27 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `watch-positions.mjs`'s two direct `hourProfile`+`deriveDiurnalRange` call sites (the shadow-log
     bid/ask co-log, the `diurnalAsk` cycle-fallback exit) for `diurnalTimedLap` — those are VALUE
     consumers, not note-render sites, so only the computation moved, not the output shape).
+    **`asymClassRateNote()` + `ASYM_RT_24H_PCT` / `ASYM_RT_24H_BIG_PCT` / `ASYM_MEASURED_ROWS` /
+    `ASYM_MEASURED_ITEMS`** (PLAN-PATIENT-PAIR §7, 2026-08-24) — the ONE-TIME class-rate FOOTER that rides
+    under the per-row clauses above. `formatAsymFill`'s counts are in-sample tallies, which each row says;
+    what no row could say is how often the shape actually completes. `join-asym-outcomes.mjs` measured it:
+    round trip **~4.3%** within 24h, **~1.5%** big-ticket. It is a FUNCTION, not a template literal, so no
+    call site can restate the wording, and it is emitted ONCE per surface — `screen-flip-niches.mjs` pushes
+    it into `footerLines` gated on `asymNotes.length`, `quote-items.mjs`'s `buildQuoteReport` appends it to a
+    LOCAL copy of `notes` gated on any `kind:'asym'` item (non-mutating; the caller's array is untouched).
+    **Footer, never per-row, on purpose**: it is a class rate over ~770 items and attaching it to a row
+    would read as that row's fill probability — the exact error the row wording works to avoid. The n's
+    RENDER ROUNDED (`~39k rows / ~770 items`) because the sample grows with every scan and an exact tally
+    in prose is stale by morning; `lint-docs`' constant-drift check pins doc↔source and cannot see
+    source↔reality, so re-derive with the script rather than hand-editing to a remembered number.
+    **`--positions` gets neither this footer nor the patient clause** — it pushes no `kind:'asym'` note and
+    renders no `Est.` columns; two independent reasons, see PLAN.md's folded PLAN-PATIENT-PAIR open item 1.
+    Pinned by `pipeline/test/emit.test.mjs` (2 cases; the interpolation pin is a SOURCE scan, because
+    asserting the rendered text cannot distinguish an interpolated constant from its pasted value — the
+    first version of that case claimed to catch exactly that mutant and was green against it) and by
+    `pipeline/test/render.test.mjs`'s byte-exact golden, which pins that the footer is appended once, last,
+    with the `◆` sigil, deriving the expected line from this function rather than pasting it.
+
     **`formatAsymFill(ae, ap, {fmt})` (2026-08-12)** is the ONE home for the `◆ asym fill` clause pair —
     `quote-items.mjs` and `screen-flip-niches.mjs` both emit that line and had written the wording twice.
     Returns `{bidTxt, askTxt}`; it exists so a reach COUNT is never printed against a price it was not

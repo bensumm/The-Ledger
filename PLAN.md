@@ -502,7 +502,67 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   (`41cc041`). Detail in those commits + CHANGELOG. `PLAN-{SCHEDULE,DASHBOARD,MULTI-PEAK-WINDOWS}.md`
   deleted per the fold-and-delete lifecycle.
 
+## PLAN-PATIENT-PAIR — FOLDED (2026-08-24). Shipped, measured, and the measurement says stop.
+
+The per-topic file is deleted; `git show 00344fb:plans/PLAN-PATIENT-PAIR.md` has the full text. It
+began with a real anchor — `Webweaver bow (u)`, a 3-unit trade someone banked ~1.4m on overnight,
+which our screen graded A- while its cell read `Est. sell 15.30m (reach-fold floored to BE 15.42m —
+nothing to price above break-even)`, net −114.7k/u, two lines above an `◆ asym fill` note reading
+`net 427k/u` on the same row.
+
+**SHIPPED:** PP0 (`ca3939e`, log `asym` on skipped rows — the sample feed) · PP-R (`02417e4`,
+band-mode watchlist reserve, `WATCH_RESERVE_DEFAULT = 24`) · PP2 (`21e442e`, the BE-floored cell
+names the patient alternative inline).
+
+**THE MEASUREMENT (§7, `join-asym-outcomes.mjs`, `00344fb`) IS THE OUTCOME THAT MATTERS.** Over
+39,110 rows / 766 items: the deep bid is touched **17.8%** within 24h (logged `pBid` claims 31.1%),
+the ask is reached **24.2%** given the touch (logged `pAsk` claims 86.8%), **round trip 4.3%** —
+and **1.5% on big-ticket**, the class the whole plan was written about. DT1 generalises; the anchor
+was a good OUTCOME from a bad-odds setup, which is the branch §7 named and nobody could distinguish.
+Horizon does not rescue it (6.3% at 48h, 9.0% at 96h, 10.8% at 7d). Those rates are now carried into
+the surfaces as a one-time `◆ asym fill —` footer (`emit.mjs` `asymClassRateNote()`, the ONE home).
+
+**DO NOT RE-PROPOSE (each measured, not argued):** a `max(shownNet, asymNet)` gate (656 of 671
+shown-net-≤0 rows have positive asym net — a repeal, not a filter) · a ranking objective on
+`pAsk`/`pBid` (they are the `ASYM_P_LO`/`ASYM_P_HI` quantiles read back off the same array, 0.86 on
+89.9% of rows and 0.29 on 86.5%) · an asym-amplitude gate (≥3% on 90.8% of items) · a random-offset
+matched null for the outcome study (it measured −36.0pp "adverse selection" and was an artifact of
+the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the conditional arm).
+
+**STILL OPEN, both carried here:**
+1. **The patient clause does not reach `--positions`, and neither does the class-rate footer.** Two
+   INDEPENDENT reasons, both verified against a real dumped positions report — an earlier version of
+   this item named only a third thing ("the positions `estimatePair` passes no `asymEst`/`asymFill`"),
+   which is true but would not have fixed either symptom if acted on:
+   **(a) positions renders no `Est.` cells at all.** Its headers are `[...QUOTE_HEADERS, 'Held@',
+   'Break-even', 'Verdict']` (`quote-items.mjs` ~:712) — Quick/Optimistic, not Est. buy/sell — and
+   `estPairCells` is called only inside `runItems()`. The patient clause lives INSIDE the estSell cell
+   (`js/estimators/cells.mjs`), so there is no cell for it to attach to. (The positions
+   `estimatePair` call at ~:831 is also inside `if (PRESSURE_EXIT)`, so on the default path it never
+   runs, and its `ts1hP` is block-scoped to that branch — the unconditional series is `inp.ts1h`.)
+   **(b) positions pushes no `kind:'asym'` note,** which is what the class-rate footer gates on
+   (`quote-items.mjs` ~:301). Passing the pair into `estimatePair` creates no note, so the footer
+   would still not appear. These are two different mechanisms and an earlier draft conflated them.
+   The work is therefore TWO independent pieces: build the asym pair for held lots off `inp.ts1h` and
+   push a `kind:'asym'` note (that alone lights the footer), and separately decide whether the
+   held-lot table should carry `Est.` columns at all (that is what the clause needs). NOT DONE —
+   the second half changes what the held-lot review displays and is its own decision.
+2. **PP1 (a named patient section for non-watchlisted rows) — DEFERRED, and §7 argues against it.**
+   Its floor was to be sized against a population nobody had characterised; that population is
+   characterised now and its round trip is 1.5%. Revisit only against these numbers.
+
 ## Discovered
+
+- **`pipeline/test/render.test.mjs` prints NOTHING and still passes — a whole suite is invisible in CI.**
+  `node pipeline/test/render.test.mjs` emits 0 bytes and exits 0; `run-tests.mjs` prints `✓` over that
+  silence. Cause verified by a discriminating run rather than inferred: `quote-items.mjs` sets
+  `if (!VERBOSE) console.log = () => {}` **at import time, globally** (~:128), and the test imports it for
+  `buildQuoteReport`. Running `node pipeline/test/render.test.mjs --verbose` prints all 31 checks. So the
+  assertions DO run and the suite does gate via exit code — but nobody can see it, and any future
+  contributor reading the runner has no way to tell a silent pass from an empty file. Any other test that
+  imports `quote-items.mjs` inherits the blackout. Found 2026-08-24 by an away-scoped review pass. The fix
+  is to stop a library import from mutating global `console`; not done here because it touches a
+  load-bearing quiet-by-default path (AO1) that several surfaces depend on.
 
 - **UNFIXED, NEEDS BEN'S CALL: four reconstruction defects that would REWRITE the realised book (found
   2026-08-14 by an away-scoped review; deliberately NOT changed).** These sit in `collapseOffers` /
