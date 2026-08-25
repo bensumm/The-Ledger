@@ -547,13 +547,32 @@ the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the co
    push a `kind:'asym'` note (that alone lights the footer), and separately decide whether the
    held-lot table should carry `Est.` columns at all (that is what the clause needs). NOT DONE —
    the second half changes what the held-lot review displays and is its own decision.
+- **The held-lot `◆ asym fill` note — BUILT, REVERTED, and the two defects are the spec for redoing it.**
+  Pushing a `kind:'asym'` note from `runPositions()` off the already-computed `astHeld` works and costs
+  no fetch (verified: shape-identical `windowStats` call, footer fires once, degrades cleanly to zero
+  notes when the 1h series is null). It was reverted for two display defects, both confirmed by running it:
+  **(a) it prints a positive net at a price below the lot's own break-even.** `asymEstimate`'s
+  `netMargin(bid, ask)` uses the asym DEEP BID, not the held basis, so a real run showed
+  `ask 108.72m · net 1.56m/u (1.5%)` two cells from `Break-even 112.55m`. The fix is the annotation the
+  sibling `pressureExit` note already carries on this surface (`below BE X — cut/damage-control price,
+  not a profit`); the items path gets its equivalent free from `estPairCells`' `beFloored` branch, which
+  `--positions` never reaches because it renders no `Est.` columns.
+  **(b) the class-rate footer does not land under the notes it qualifies.** `buildQuoteReport` appends it
+  at the tail of the whole `notes` array, so on a 4-lot book it sat 63 lines below the first asym note,
+  beneath a different item, with no item name while every other note on that surface is `Name: …`. Its
+  text opens "the counts above are…", which then spans four items. Needs either per-item placement or an
+  explicit section break — a design decision, not a one-liner.
+  **(c) and the positions path co-logs no `asym` field**, so rows from this surface would be invisible to
+  the very script the footer names. `asymShadow` is already imported and `aeHeld` is in scope at the
+  `suggestionEntry` push; `docs/MARKET-ANALYSIS.md` states the held-row five-estimator co-log doctrine.
+
 2. **PP1 (a named patient section for non-watchlisted rows) — DEFERRED, and §7 argues against it.**
    Its floor was to be sized against a population nobody had characterised; that population is
    characterised now and its round trip is 1.5%. Revisit only against these numbers.
 
 ## Discovered
 
-- **`pipeline/test/render.test.mjs` prints NOTHING and still passes — a whole suite is invisible in CI.**
+- **FIXED — `pipeline/test/render.test.mjs` printed NOTHING and still passed.**
   `node pipeline/test/render.test.mjs` emits 0 bytes and exits 0; `run-tests.mjs` prints `✓` over that
   silence. Cause verified by a discriminating run rather than inferred: `quote-items.mjs` sets
   `if (!VERBOSE) console.log = () => {}` **at import time, globally** (~:128), and the test imports it for

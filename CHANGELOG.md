@@ -10,6 +10,43 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### A test suite printed zero bytes and still passed, and a measured capital claim was wrong (pipeline-only)
+
+**`pipeline/test/render.test.mjs` emitted 0 bytes, exited 0, and collected a `✓` from `run-tests.mjs`.**
+`quote-items.mjs` no-op'd global `console.log` at IMPORT scope, so any test importing `buildQuoteReport`
+inherited the blackout — `render.test.mjs` (31 checks) and `reverseflip-surfacing.test.mjs` (13) both ran
+their assertions unobserved. The suites did gate via exit code (a mutation test at the old code confirms
+it: flipping the `◆` sigil still exited 1 with 6,482 bytes on stderr) — but an empty file would have
+looked identical, and nothing in CI could tell them apart.
+
+The no-op now installs INSIDE the entrypoint guard that already keeps a live market read from firing on
+import. A CLI run is byte-identical — the mutation still covers this module and every library it calls,
+which is what quiet-by-default (AO1) needs — and an importer gets an unmodified `console`. Verified by
+running all six paths (bare quote, `--positions`, and `--verbose` for each, plus the early-return) at
+both revisions and diffing: identical stdout, empty stderr. A repo-wide sweep for import-scope mutation
+of `console.*` / `globalThis` / `process.env` / prototypes found this was the ONLY offender; the two
+sibling commands that stub `console.log` already do it inside `main()`. **The rule it leaves behind: a
+library module must never mutate global `console` at import scope.**
+
+**Separately, a capital claim shipped in 0.74.9 was wrong and is corrected.** The `/positions` skill said
+the 1.5% big-ticket round-trip figure is "where nearly all held CAPITAL sits". Measured over
+`positions.json`'s 438 closed lots and 5.19b gp deployed, capital in lots whose UNIT price clears
+`BIG_TICKET_GP` — which is the definition `join-asym-outcomes.mjs` actually strata on — is **60.1%**, not
+"nearly all". By whole-lot value it is 82.1%, and those are two different thresholds that the sentence
+silently equated. On the current open book it is **0.0%**, so the applicable column today is the pooled
+4.3%. The claim was asserted from plausibility and never measured.
+
+**A held-lot `◆ asym fill` note was built alongside this and REVERTED before landing.** It rendered
+correctly and cost no extra fetch, but on a surface that prints a Break-even column it showed
+`ask 108.72m · net 1.56m/u (1.5%)` against a break-even of 112.55m — a positive net at a price 3.83m
+BELOW break-even, because `asymEstimate` computes its net against the asym deep bid, not the lot's
+basis. The sibling `pressureExit` note on the same surface annotates exactly this case
+(`below BE X — cut/damage-control price, not a profit`); the asym note had no such branch, and the
+items-path equivalent gets it from `estPairCells`' `beFloored` branch, which `--positions` never
+reaches. A second defect rode with it: the one-time class-rate footer is appended at the tail of the
+whole note array, so on a 4-lot book it landed 63 lines below the first asym note, under a different
+item, carrying no item name. Both are recorded as open work rather than shipped.
+
 ### The patient pair's probabilities, measured for the first time — and they are ~4% (PLAN-PATIENT-PAIR §7, 2026-08-24)
 
 `pipeline/commands/join-asym-outcomes.mjs` forward-scores the asym pair's two legs off the 1h archive:

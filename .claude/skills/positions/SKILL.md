@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.61
+version: 1.62
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -59,7 +59,11 @@ sections plus your own prose:
   **And the pair is now MEASURED, which is what to carry into any read of it:** over 39,110 rows /
   766 items the deep bid is touched **17.8%** within 24h against a logged `pBid` of 31.1%, the ask is
   reached **~24%** given the touch against a logged `pAsk` of 86.8%, and the round trip completes
-  **4.3%** — **1.5% on big-ticket** — which is where nearly all held CAPITAL sits even when it is a minority of
+  **4.3%** — **1.5% on big-ticket**. MEASURED, because an earlier version of this line asserted big-ticket
+  is "where nearly all held capital sits" and that was never checked: over 438 closed lots / 5.19b gp,
+  capital in lots whose UNIT price clears `BIG_TICKET_GP` (the definition the study strata on) is **60.1%**;
+  by whole-lot VALUE it is 82.1% — two different thresholds, do not equate them. **Check the book before
+  choosing a column** — on an open book with no ≥10m-per-unit lot the applicable figure is the pooled 4.3%,
   lots by count, so it is the number that governs a held-lot read. touched/reached ≠ filled,
   so those bound a real offer from above (`join-asym-outcomes.mjs`). Where it renders, the clause
   appends to a sub-break-even `Est. sell` cell (`· patient: … · net +N/u — resting levels, in-sample

@@ -122,10 +122,10 @@ const tokens = args.filter(a => !a.startsWith('--'));
 // is optional). --verbose opts INTO the markdown stdout (the "paste this to Ben" case); the report
 // object is ALWAYS written to the last-report dump either way. Implemented by no-op'ing console.log
 // unless --verbose (keeps `realLog` for the summary); the report is captured for the dump at the
-// single renderReport emission point.
+// single renderReport emission point. The no-op is installed INSIDE the entrypoint guard at the foot
+// of this file — see the comment there for why module scope was the wrong home.
 const VERBOSE = args.includes('--verbose');
 const realLog = console.log;
-if (!VERBOSE) console.log = () => {};
 
 // LM1: per-item 4h buy-limit windows, built ONCE per run from the repo-root fills.json (local file, no
 // fetch). Empty map (absent/unreadable) ⇒ every item has zero in-window buys ⇒ byte-identical output.
@@ -297,7 +297,9 @@ export function buildQuoteReport({
   // MEASURED, not assumed: --positions emits ZERO asym notes today (the asym block lives in runItems()
   // only, and the positions estimatePair call passes no asymEst/asymFill), so this is live on the ITEMS
   // path and correctly silent on positions. The gate is what makes that honest rather than a bug — no
-  // asym row, no class rate. It becomes live on positions the moment that path passes the asym pair.
+  // asym row, no class rate. A held-lot version was BUILT and REVERTED: on a surface that prints a
+  // Break-even column, asymEstimate's net is computed against the asym deep bid, not the lot's basis,
+  // so it rendered a positive net at a price BELOW the break-even two cells to its left.
   const noteItems = notes.some(n => n && n.kind === 'asym')
     ? [...notes, { kind: 'asym', text: `asym fill — ${asymClassRateNote()}` }] : notes;
   if (mode === 'positions') {
@@ -1033,6 +1035,13 @@ async function runPositions() {
 // Entrypoint guard (matches watch-positions.mjs / screen-flip-niches.mjs): importing this module for a
 // unit test (buildQuoteReport off fixtures) must NOT fire a live market read / hit the API.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  // AO1's quiet default is applied HERE, not at module scope. It is a global mutation of `console.log`
+  // — silencing this module AND every library it calls — which is correct for a CLI process and wrong
+  // for an importer. At module scope it leaked into every test that imports buildQuoteReport:
+  // render.test.mjs printed ZERO BYTES and exited 0, and run-tests.mjs stamped a ✓ over the silence,
+  // so 31 assertions ran unobserved and an empty suite would have looked identical. Same guard the
+  // live read already sits behind, so the CLI blackout is byte-for-byte what it was.
+  if (!VERBOSE) console.log = () => {};
   if (POSITIONS_MODE) await runPositions();
   else await runItems();
 }

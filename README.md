@@ -2666,6 +2666,13 @@ runner once, so **adding a test file is the whole job** — nothing else wires i
 same rule for `js/` and `pipeline/lib/` subjects: put the test beside the file (tests for `js/`
 subjects live under `pipeline/`, which is where the runner globs — the `quotecore.test.mjs`/
 `format.test.mjs` precedent).
+**The runner gates on EXIT CODE, so a suite that prints nothing still stamps a `✓`.** That is not
+hypothetical: `quote-items.mjs` no-op'd global `console.log` at IMPORT scope, and every test importing
+`buildQuoteReport` inherited it — `render.test.mjs` (31 checks) and `reverseflip-surfacing.test.mjs` (13)
+each emitted **zero bytes**, exited 0, and were indistinguishable from an empty file. The assertions did
+run and the suites did gate, so nothing was silently broken; nothing was silently VISIBLE either. **Rule:
+a library module must never mutate global `console` at import scope** — a quiet-mode override belongs
+inside the entrypoint guard, where the two sibling commands already had theirs.
 
 ## Local development
 
