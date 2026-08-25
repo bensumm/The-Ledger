@@ -2243,20 +2243,35 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     redirects the registry-derived half too, which is how `pipeline/test/daemon-safety.test.mjs` drives every
     rule to red. Exits non-zero naming the offending file:line),
   - `lint-comments.mjs` + `comment-budget.json` (the COMMENT-DOCTRINE ratchet, run in the cheap `checks` job —
-    the CI half of the owner ruling that a comment describes the code AS IT IS NOW plus the context an LLM
-    needs to interpret it, while historical narrative belongs in `CHANGELOG.md`. Two structural proxies per
-    source file: the count of `YYYY-MM-DD` refs in comments (leading AND trailing; dates inside quoted spans
-    are example data and excluded, as are dates under a `DATA CAVEATS` marker in the same block — those are
-    provenance about a data file's CURRENT contents, which a joiner needs at the schema and cannot move to
-    CHANGELOG), and the longest contiguous comment block. RATCHETS against `comment-budget.json`: every
-    scanned file is pinned at its current count and may only improve; a file ABSENT from the baseline is new
-    and must meet `NEW_FILE_CAPS` (2 dated, 40 block) outright. Scans `js/`, `pipeline/{lib,commands,ci,daemons,probes}`,
-    excluding `*.test.mjs`. `--report` ranks offenders without failing; `--bless` re-baselines after a genuine
-    cleanup and REFUSES to raise any ceiling without `--force`, so the instinctive response to a red build
-    cannot launder the regression that caused it. A magnitude budget, never a semantic check — it cannot tell
-    a good 39-line contract header from a bad one, only stop them growing; narrative carrying no date, and
-    blank-line block splitting, are disclosed evasions it does not catch. Consumes nothing; exit 1 + per-file
-    violations),
+    the ONE home for its design + limits, and the CI half of the owner ruling that **behavior belongs in
+    CODE**: a comment carries brief intent only when absolutely necessary, otherwise none at all, and
+    historical narrative belongs in `CHANGELOG.md`. THREE structural proxies per source file. (1) DATED
+    REFS — the count of `YYYY-MM-DD` in comments (leading AND trailing; dates inside quoted spans are example
+    data and excluded, as are dates under a `DATA CAVEATS` marker in the same block — those are provenance
+    about a data file's CURRENT contents, which a joiner needs at the schema and cannot move to CHANGELOG).
+    (2) BLOCK — the longest contiguous comment run. (3) VOLUME — comment lines against code lines, added
+    2026-08-25 because the first two are structurally blind to it: a freshly extracted module shipped at a
+    **2.34 comment:code ratio and passed both GREEN**, since a compact, undated 19-line header violates
+    neither. Repo-wide the ratio measured 0.60 at the time and the per-file median sat near 0.5, which
+    is where the new-file cap was set — new code must be at least as lean as the typical file.
+    **The three axes ratchet differently, and the asymmetry is deliberate.** Dated refs and block length pin
+    against `comment-budget.json` — every scanned file sits at its current count and may only improve. Volume
+    pins on the ABSOLUTE comment count rather than the ratio, because a ratio ceiling would go red when you
+    DELETE code, which is not a regression; the practical effect is that a governed file's prose may only come
+    out, so adding a comment line means trimming one. The RATIO applies to NEW files only, where there is no
+    baseline to count down from, and as an ALLOWANCE — `max(0.5 x code, 20 lines)` — never a bare ratio behind
+    a minimum-file-size gate. That distinction was measured, not assumed: a plain `code >= 40` cutoff exempts
+    the worst shape in the tree, a 36-line essay standing over two lines of constants (`js/desk-cadence.mjs`),
+    which the allowance form catches. Scans `js/`, `pipeline/{lib,commands,ci,daemons,probes}`, excluding
+    `*.test.mjs`. `--report` ranks offenders without failing and prints each file's ratio; `--bless`
+    re-baselines after a genuine cleanup and REFUSES, without `--force`, both to raise any ceiling AND to
+    grandfather a NEW file that is over doctrine — the second closes a hole where one bless silently admitted
+    fresh over-budget code at whatever it happened to be. A magnitude budget, never a semantic check — it
+    cannot tell a good 39-line contract header from a bad one, only stop them growing. DISCLOSED EVASIONS:
+    narrative carrying no date is invisible to (1); blank-line splitting halves (2); (3) counts LEADING
+    comment lines only, so trailing `code(); // …` prose is unseen by it, though a DATED trailing comment is
+    still caught by (1), which is why trailing comments are scanned at all. Consumes nothing; exit 1 +
+    per-file violations),
   - `lint-guard-lists.mjs` (the guard-list drift gate, run in the cheap `checks` job — the ONE home for its
     design + limits. The repo documents its own CI in several places, and those copies drifted: three guards
     were gating while absent from `/cleanup`, and the SAME three were absent from `docs/FLOW.md`, while

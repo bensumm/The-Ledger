@@ -1,38 +1,37 @@
 #!/usr/bin/env node
 /* lint-comments.mjs — the COMMENT DOCTRINE ratchet.
  *
- * THE DOCTRINE (owner ruling): a comment describes the code AS IT IS NOW, plus whatever context an
- * LLM needs to interpret it efficiently — the contract, the units, the invariant, the one-line
- * "this was measured and failed, don't rebuild it" pointer. HISTORY IS NOT A COMMENT. Dated
- * narratives ("corrected 2026-08-09", "this line used to read X", per-field provenance logs) belong
- * in CHANGELOG.md, which is the ONE home for how the code got here.
+ * THE DOCTRINE (owner ruling): behavior belongs in CODE. A comment carries BRIEF intent only when
+ * absolutely necessary — the contract, the units, the invariant, a one-line "measured and failed,
+ * don't rebuild it" pointer — otherwise none at all. Agent-traceable, not prose. HISTORY IS NOT A
+ * COMMENT: dated narrative belongs in CHANGELOG.md, the ONE home for how the code got here.
  *
- * WHY a guard: prose in this repo outweighs code, and comment bloat is self-reinforcing — each
- * correction appends a dated clause rather than rewriting the claim, so headers grow monotonically
- * and the load-bearing contract gets buried in provenance. Two structural proxies catch that class
- * without any semantic judgement:
- *   (1) DATED REFERENCES — a `YYYY-MM-DD` inside a comment is, essentially always, history.
- *   (2) BLOCK LENGTH — a contiguous comment run past ~40 lines is a document, not a comment.
+ * Three structural proxies, no semantic judgement:
+ *   (1) DATED REFERENCES — a `YYYY-MM-DD` in a comment is, essentially always, history.
+ *   (2) BLOCK LENGTH — a contiguous run past ~40 lines is a document, not a comment.
+ *   (3) VOLUME — comment lines against code lines. The axis (1) and (2) are blind to: a compact,
+ *       undated 19-line header passed both while carrying 2.3x more comment than code.
  *
- * WHAT it enforces — a RATCHET, not a cliff. Existing debt is grandfathered at its current count in
- * `comment-budget.json`; a file may only ever improve. That makes a long cleanup safe (no regression
- * while it proceeds) without blocking work on files nobody is cleaning yet. A file ABSENT from the
- * baseline is NEW code and must meet the doctrine outright (NEW_FILE_CAPS below).
+ * A RATCHET, not a cliff. Existing debt is grandfathered in `comment-budget.json` and may only ever
+ * improve, so a long cleanup is safe without blocking files nobody is cleaning yet. A file ABSENT
+ * from the baseline is NEW code and must meet NEW_FILE_CAPS outright.
  *
- * HONEST LIMITS (a line-shape heuristic, not a parser). A leading line counts as comment when it
+ * VOLUME RATCHETS ON THE ABSOLUTE COUNT, NOT THE RATIO — a ratio ceiling would go red when you
+ * DELETE code, which is not a regression. The ratio caps NEW files only, where there is no baseline
+ * to count down from, and as an ALLOWANCE (max of ratio x code, FLOOR_LINES) rather than a minimum
+ * file size: a hard size cutoff would exempt the worst shape there is, a 36-line essay over two
+ * lines of constants, which is what a plain `code >= N` guard was measured to let through.
+ *
+ * HONEST LIMITS — a line-shape heuristic, not a parser. A leading line counts as comment when it
  * matches /^\s*(\/\/|\/\*|\*)/, so a `//`-looking line inside a template literal can be miscounted
- * (measured: zero such lines in this repo). Dated TRAILING comments are counted too — not counting
- * them would make `code(); // 2026-08-09 this used to be 2` the obvious evasion the moment the
- * leading budget bites. Known remaining evasions, none silent-proof:
- *   · narrative with NO date is invisible on the dated axis (block length is the only backstop);
- *   · one genuinely blank line every N lines splits a block and halves the block metric.
- * Neither is worth a parser. This measures MAGNITUDE, never meaning — it cannot tell a good 39-line
- * contract header from a bad one, only stop them growing. Do NOT grow it into a semantic/LLM check
- * (same standing constraint as lint-docs.mjs / check-daemon-safety.mjs).
+ * (measured: zero in this repo). Known evasions, none silent-proof: undated narrative is invisible
+ * to (1); one blank line every N lines halves (2); (3) counts LEADING lines only, so trailing
+ * `code(); // …` prose is unseen by it — a DATED trailing comment is still caught by (1), which is
+ * why trailing comments are scanned at all. This measures MAGNITUDE, never meaning. Do NOT grow it
+ * into a semantic/LLM check (same standing constraint as lint-docs / check-daemon-safety).
  *
- * The block cap suits ordinary modules; a schema/ledger module legitimately needs a longer contract
- * block, which the per-file ratchet accommodates but a genuinely NEW such module would not — expect
- * to bless one deliberately rather than shrinking a real contract to fit.
+ * A genuinely new schema/ledger module may need a longer block than the cap allows; bless it
+ * deliberately rather than shrinking a real contract to fit.
  *
  * CLI:
  *   node pipeline/ci/lint-comments.mjs            check against the baseline (CI mode)
@@ -40,10 +39,9 @@
  *   node pipeline/ci/lint-comments.mjs --bless    rewrite the baseline to current counts
  *   node pipeline/ci/lint-comments.mjs --bless --force   also allow ceilings to go UP
  *
- * `--bless` is how a cleanup pass lowers the ratchet: clean a file, re-bless, and the new lower
- * count becomes the ceiling. It only ever writes counts already true on disk, and it REFUSES to
- * raise a ceiling without `--force` — otherwise the instinctive response to a red build (re-bless)
- * would launder the regression that turned it red.
+ * `--bless` only ever writes counts already true on disk, and REFUSES to raise a ceiling — or to
+ * grandfather a NEW file that is over doctrine — without `--force`, so a red build's instinctive
+ * re-bless cannot launder the regression that turned it red.
  *
  * CONSTRAINTS (checks.yml, /ship §4): fast, offline, deterministic, public-log-safe, no ~/.runelite,
  * no secrets, no network, static-only (reads sources as text, never imports them).
@@ -61,7 +59,9 @@ const ROOTS = ['js', 'pipeline/lib', 'pipeline/commands', 'pipeline/ci', 'pipeli
 const SKIP_RE = /\.test\.mjs$/;
 
 // A file absent from the baseline is new: it must meet the doctrine, not inherit someone else's debt.
-const NEW_FILE_CAPS = { dated: 2, block: 40 };
+// The ratio is the repo's own median, so new code must be at least as lean as the typical file; the
+// floor is the room a real contract header needs before the ratio is the binding term.
+const NEW_FILE_CAPS = { dated: 2, block: 40, ratio: 0.5, floorLines: 20 };
 
 const COMMENT_LINE_RE = /^\s*(\/\/|\/\*|\*)/;
 const DATED_RE = /20[0-9]{2}-[0-9]{2}-[0-9]{2}/;
@@ -104,27 +104,33 @@ function sources() {
   return out.sort();
 }
 
-/** Per-file doctrine metrics: dated history refs in comments, and the longest contiguous comment run. */
+/** Per-file doctrine metrics: dated history refs, longest contiguous comment run, and volume. */
 function measure(rel) {
   const lines = fs.readFileSync(path.join(ROOT, rel), 'utf8').split('\n');
-  let dated = 0, block = 0, run = 0, blockAt = 0, runAt = 0, inCaveats = false;
+  let dated = 0, block = 0, run = 0, blockAt = 0, runAt = 0, inCaveats = false, comments = 0, code = 0;
   const datedLines = [];
   lines.forEach((line, i) => {
     if (COMMENT_LINE_RE.test(line)) {
       if (run === 0) { runAt = i + 1; inCaveats = false; }   // a new block clears the caveat scope
-      run++;
+      run++; comments++;
       if (CAVEAT_MARKER_RE.test(line)) inCaveats = true;
       if (!inCaveats && hasDate(line)) { dated++; datedLines.push(i + 1); }
     } else {
       if (run > block) { block = run; blockAt = runAt; }
       run = 0; inCaveats = false;
+      if (line.trim()) code++;
       const tail = trailingComment(line);
       if (tail && DATED_RE.test(tail)) { dated++; datedLines.push(i + 1); }
     }
   });
   if (run > block) { block = run; blockAt = runAt; }
-  return { dated, block, blockAt, datedLines };
+  return { dated, block, blockAt, datedLines, comments, code };
 }
+
+const ratioOf = m => (m.code ? m.comments / m.code : 0);
+const allowance = m => Math.max(Math.round(NEW_FILE_CAPS.ratio * m.code), NEW_FILE_CAPS.floorLines);
+const ratioOver = m => m.comments > allowance(m);
+const overDoctrine = m => m.dated > NEW_FILE_CAPS.dated || m.block > NEW_FILE_CAPS.block || ratioOver(m);
 
 const loadBaseline = () =>
   fs.existsSync(BASELINE) ? JSON.parse(fs.readFileSync(BASELINE, 'utf8')) : { files: {} };
@@ -136,7 +142,8 @@ function main() {
   const files = sources();
   const measured = new Map(files.map(f => [f, measure(f)]));
   const totals = [...measured.values()].reduce(
-    (a, m) => ({ dated: a.dated + m.dated, worst: Math.max(a.worst, m.block) }), { dated: 0, worst: 0 });
+    (a, m) => ({ dated: a.dated + m.dated, worst: Math.max(a.worst, m.block), comments: a.comments + m.comments, code: a.code + m.code }),
+    { dated: 0, worst: 0, comments: 0, code: 0 });
 
   if (mode === 'bless') {
     // Record EVERY scanned file, including clean ones — otherwise a file at zero dated refs inherits
@@ -146,10 +153,15 @@ function main() {
     const prev = loadBaseline();
     const out = { files: {} }, raised = [];
     for (const [f, m] of measured) {
-      const ceiling = { dated: m.dated, block: Math.max(m.block, NEW_FILE_CAPS.block) };
+      const ceiling = { dated: m.dated, block: Math.max(m.block, NEW_FILE_CAPS.block), comments: m.comments };
       const was = prev.files[f];
-      if (was && (ceiling.dated > was.dated || ceiling.block > was.block)) {
-        raised.push(`${f}: dated ${was.dated}→${ceiling.dated}, block ${was.block}→${ceiling.block}`);
+      if (was && (ceiling.dated > was.dated || ceiling.block > was.block || ceiling.comments > was.comments)) {
+        raised.push(`${f}: dated ${was.dated}→${ceiling.dated}, block ${was.block}→${ceiling.block}, comments ${was.comments}→${ceiling.comments}`);
+      } else if (!was && overDoctrine(m)) {
+        // Without this a single bless grandfathers brand-new over-doctrine code at whatever it
+        // happens to be — the hole that lets volume in. "New code meets the doctrine" only holds if
+        // adding it to the baseline is itself deliberate.
+        raised.push(`${f}: NEW file over doctrine — dated ${m.dated}, block ${m.block}, ${m.comments}c/${m.code}k ratio ${ratioOf(m).toFixed(2)}`);
       }
       out.files[f] = ceiling;
     }
@@ -162,19 +174,19 @@ function main() {
     }
     fs.writeFileSync(BASELINE, `${JSON.stringify(out, null, 2)}\n`);
     for (const r of raised) console.log(`  ⚠ raised (forced) ${r}`);
-    const over = [...measured.values()].filter(m => m.dated || m.block > NEW_FILE_CAPS.block).length;
+    const over = [...measured.values()].filter(m => m.dated || m.block > NEW_FILE_CAPS.block || ratioOver(m)).length;
     console.log(`✓ comment-budget baseline written — ${Object.keys(out.files).length} file(s) pinned, ${over} over doctrine, ${totals.dated} dated ref(s), worst block ${totals.worst}.`);
     return;
   }
 
   if (mode === 'report') {
-    const ranked = [...measured].filter(([, m]) => m.dated || m.block > NEW_FILE_CAPS.block)
+    const ranked = [...measured].filter(([, m]) => overDoctrine(m))
       .sort((a, b) => (b[1].dated - a[1].dated) || (b[1].block - a[1].block));
     console.log(`comment-doctrine report — ${ranked.length} file(s) over doctrine of ${files.length} scanned\n`);
     for (const [f, m] of ranked.slice(0, 30)) {
-      console.log(`  ${String(m.dated).padStart(3)} dated  block ${String(m.block).padStart(3)} @${m.blockAt}  ${f}`);
+      console.log(`  ${String(m.dated).padStart(3)} dated  block ${String(m.block).padStart(3)} @${m.blockAt}  ratio ${ratioOf(m).toFixed(2)} (${m.comments}c/${m.code}k)  ${f}`);
     }
-    console.log(`\ntotal dated refs in comments: ${totals.dated} · longest block: ${totals.worst}`);
+    console.log(`\ntotal dated refs in comments: ${totals.dated} · longest block: ${totals.worst} · repo volume ${totals.comments}c/${totals.code}k = ${(totals.comments / totals.code).toFixed(2)}`);
     return;
   }
 
@@ -186,6 +198,12 @@ function main() {
     const kind = b ? 'ratchet' : 'new-file';
     if (m.dated > cap.dated) violations.push({ f, rule: `${kind}-dated`, msg: `${m.dated} dated history ref(s) in comments, ceiling ${cap.dated} (line${m.datedLines.length > 1 ? 's' : ''} ${m.datedLines.slice(0, 6).join(', ')}${m.datedLines.length > 6 ? ', …' : ''}) — history belongs in CHANGELOG.md` });
     if (m.block > cap.block) violations.push({ f, rule: `${kind}-block`, msg: `longest comment block is ${m.block} lines at :${m.blockAt}, ceiling ${cap.block} — a block this long is a document, not a comment` });
+    // Baselined files ratchet on the absolute count; new files, having none, answer to the ratio.
+    if (b && b.comments != null && m.comments > b.comments) {
+      violations.push({ f, rule: 'ratchet-volume', msg: `${m.comments} comment lines, ceiling ${b.comments} — this file's prose may only come out; trim elsewhere to add here` });
+    } else if (!b && ratioOver(m)) {
+      violations.push({ f, rule: 'new-file-volume', msg: `${m.comments} comment lines against ${m.code} code (ratio ${ratioOf(m).toFixed(2)}), allowance ${allowance(m)} — behavior belongs in code; keep intent brief or absent` });
+    }
   }
 
   if (violations.length) {

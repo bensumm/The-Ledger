@@ -10,6 +10,46 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The comment ratchet could not see the thing it was built to stop (pipeline-only)
+
+The comment-doctrine guard measured two axes — dated references and longest contiguous block — and
+was structurally blind to the one that matters most: how much comment there is at all. The proof
+arrived by accident. `pipeline/lib/signal/digest.mjs`, extracted one commit earlier, shipped with 75
+comment lines over 32 code lines — a **2.34 ratio, the worst of the 137 files in the repo carrying
+more than a handful of code lines** — and `lint-comments` passed it GREEN, because a compact, undated 19-line header violates neither existing axis. A guard
+reporting clean on the exact regression it exists to prevent is worth more as evidence than as a gate.
+
+Owner ruling behind the fix: **behavior belongs in CODE.** A comment captures intent only if
+absolutely necessary, and then briefly; otherwise none at all. Agent-traceable, not human prose.
+History goes to CHANGELOG via a short pointer.
+
+**A third axis, VOLUME**, with an asymmetry that took a second pass to get right. Existing files
+ratchet on the ABSOLUTE comment count, not the ratio — a ratio ceiling goes red when you DELETE
+code, which is not a regression. New files, having no baseline to count down from, answer to an
+ALLOWANCE of `max(0.5 x code, 20 lines)`. The first draft used a bare ratio behind a `code >= 40`
+minimum, and that cutoff was measured to exempt the worst shape in the tree: `js/desk-cadence.mjs`,
+36 comment lines standing over two lines of constants, invisible to all three axes at once. The
+allowance form has no such hole.
+
+`--bless` also stopped grandfathering NEW over-doctrine files silently — the hole that let volume in,
+since "new code meets the doctrine" only holds if admitting it to the baseline is itself deliberate.
+
+**Every branch was RUN, not reasoned about.** The new-file axis was pointed at the original 75-line
+`digest.mjs` and failed it (ratio 2.34, allowance 20); the ratchet was fed one added comment line on
+a baselined file and failed it; `--bless` was asked to launder both and refused, leaving the baseline
+byte-unchanged; and a synthetic 21-comment/2-code module drove the new-file refusal branch. That
+last case is the one a `code >= 40` guard would have waved through.
+
+**The doctrine applied to the code shipping it.** `digest.mjs` went 75 comment lines → 14 (ratio 2.34
+→ 0.44) with its executable lines byte-identical — what came out was the extraction rationale already
+recorded verbatim in this file, the restated study numbers that live in README's `join-reach-basis.mjs`
+entry, and plan-code archaeology naming chunks rather than behavior. `lint-guard-lists.mjs` lost eight
+header lines, including a stale "ELEVEN script steps" claim against a job that now runs twelve — a
+number deleted rather than corrected, since the code already computes it. `lint-comments.mjs`'s own
+header came down two lines while gaining a whole axis.
+
+Pipeline-only; no `APP_VERSION` bump. All 12 gates green.
+
 ### The scorer can finally import the threshold it scores (pipeline-only)
 
 Second ship-first item from the pipeline-separation audit. The digest's ask-reach interpretation —

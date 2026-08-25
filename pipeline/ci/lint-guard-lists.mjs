@@ -1,27 +1,19 @@
 #!/usr/bin/env node
 /**
- * lint-guard-lists.mjs — the guard-list drift gate.
+ * lint-guard-lists.mjs — the guard-list drift gate: every `pipeline/ci/*.mjs` the `checks` job runs
+ * is NAMED in each doc enumerating that job, and every `pipeline/ci/…` path those docs name exists.
  *
- * WHAT IT ASSERTS: every `pipeline/ci/*.mjs` script the `checks` job runs is NAMED in each doc that
- * claims to enumerate that job, and every `pipeline/ci/…` path those docs name resolves on disk.
+ * SCOPE, before you widen or trust it: the registry is `checks.yml`, job-scoped to `checks`. It reads
+ * that job's SCRIPT steps and not its inline ones, so it checks "pipeline/ci scripts in the checks
+ * job" — never "the gating set". A guard claiming more than it reads is the class this one closes.
  *
- * SCOPE — read this before widening or trusting it. The registry is `checks.yml` itself, job-scoped
- * to `checks` (verified the only REQUIRED status check on `main`; `smoke` is a separate, non-gating
- * job). It reads the ELEVEN script steps of that job and NOT its two inline steps (the syntax sweep,
- * the fills/positions parse), so it checks "pipeline/ci scripts within the checks job" — never "the
- * gating set". A guard that claims more than it reads is the exact class this one exists to close.
+ * GOVERNED_DOCS is hand-kept and underivable: only prose says whether a doc claims to enumerate the
+ * job. `/ship` and `/analyze` are EXCLUDED — partial, purpose-built lists that would fail as written.
+ * A new complete-list home must be added here; nothing detects that omission — the guard's blind spot.
  *
- * GOVERNED DOCS is hand-kept and cannot be derived: a doc either claims to enumerate the job or it
- * does not, and only prose says which. `/ship` and `/analyze` are deliberately EXCLUDED — they carry
- * partial, purpose-built lists (a job description; a two-item pre-done checklist), so byte-matching
- * them against the job would fail on files that are correct as written. Adding a new complete-list
- * home means adding it here; nothing detects that omission, which is this guard's own blind spot.
+ * Structural only, no YAML dependency, no semantic/LLM check (`lint-docs.mjs`'s honesty note governs
+ * here too): it proves a name is PRESENT, never that the prose around it is correct.
  *
- * Structural only — substring and indentation matching, no YAML dependency, no semantic or LLM
- * check (`lint-docs.mjs`'s honesty note governs here too). It proves a name is PRESENT, never that
- * the surrounding prose describes it correctly.
- *
- * Run: `node pipeline/ci/lint-guard-lists.mjs [--root <dir>]`   (CI wires it into checks.yml.)
  * CONSTRAINTS (checks.yml, /ship §4): fast, offline, deterministic, public-log-safe, no secrets.
  */
 import { readFileSync, existsSync } from 'node:fs';
