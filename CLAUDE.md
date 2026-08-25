@@ -243,6 +243,10 @@ metadata, not a leak; the concern is content, not commit authorship.
     forcing the gate (e.g. temporarily watchlisting a held lot) usually costs a minute.
     `pipeline/ci/check-imports.mjs` now also fails on unbound SCREAMING_SNAKE constants, closing that
     one class — but the class it cannot see is why the rule is to run the path.
+    **When to STOP.** Keep going until a round returns nothing real; the empty round is the signal, not
+    a round count, and a round that only re-confirms prior findings counts as empty. Cap at five and
+    check in rather than continuing alone — the 2026-08-09 wave took eight, and six of those rounds
+    found the PREVIOUS round's fixes had introduced or left a false claim.
 11. **Name the refuting test before stating a cause; if it costs under a minute, run it.** Three
     times on 2026-08-09 a plausible mechanism was reported as an established finding and was wrong
     (a grain explanation for what was circularity; a caching bug against an uncached path; a TTL
