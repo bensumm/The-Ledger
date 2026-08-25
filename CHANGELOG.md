@@ -10,6 +10,38 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The digest stops printing a word that was measured worthless (SEP12)
+
+Owner ruling, 2026-08-25. `join-reach-basis.mjs` forward-scored the `sell unreliable` tag and found it
+loses to **not gating at all** below a false-green-to-false-gate cost ratio of ~1.29 — and that result
+landed as a code COMMENT while the verdict rule one screen up kept firing the word at **priority 1**,
+ahead of every other rule. Four candidate rows were dismissed on it without inspection. The gap it
+exposes is structural: nothing in the repo forces a measurement that scores a surface to CHANGE that
+surface, so "measured losing" became a caveat instead of a deletion.
+
+The rule is gone. The `reach` column now prints **the fraction and the window it was read on** —
+`67% r3` (recent-3), `43% 14d` (the full window recent-3 degrades to when recent counts are absent),
+`0% sg` (the stale-live-guarded recompute off the daily-HIGH distribution) — instead of a ✓/✗ that hid
+both how close the number sat to the cut and which basis produced it. Those bases disagree on exactly
+the rows where it matters, and `reachFraction` silently falls back between two of them, so the basis
+could not be inferred from the call site; `reachBasis()` now reports it from the same guards.
+
+The grade-side `REACH_GRADE_CAP` in `rating.mjs` is a separate mechanism and is deliberately untouched.
+
+Live on the next scan, three bases appeared in one block and one row read `0% sg` — a stale-guarded
+recompute that the old rendering showed as a bare ✗ and verdicted `sell unreliable`. It now reads
+`mirage top` beside a visible 0%, which is a claim the reader can check.
+
+**Caught by running it, not by a checker.** The basis reached the render as `?` on the first live pass:
+the row assembly carried four of the five digest fields and silently dropped the new one. A missing
+property reads `undefined`, not an error — no syntax check, import check or test saw it.
+
+The ratchet also earned its keep here: the new lines put two files over their comment ceiling, and
+paying for them meant deleting a stale rule-numbering sequence, a stale field list, and a header
+claiming the digest is "never a screen.json/last-report field" — which this same session had made false.
+
+Pipeline-only; no `APP_VERSION` bump. All 12 gates green.
+
 ### Two adversarial review passes, and most of what they found was mine
 
 Two reviewers ran against the previous commit — one briefed to attack it directly, one scoped

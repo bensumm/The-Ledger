@@ -1,7 +1,7 @@
 /** digest.mjs — the digest's ask-reach read: basis selection + the stale-live guard. Importable so
  *  join-reach-basis.mjs scores the value the screen applies, not a copy. Rationale: CHANGELOG. */
 import { placement, reachMargin, RECENCY_DIVERGE, RECENT_NIGHTS } from '../../../js/windowread.mjs';
-import { MIRAGE_PLACEMENT, reachFraction } from './estimators.mjs';
+import { MIRAGE_PLACEMENT, reachFraction, reachBasis } from './estimators.mjs';
 
 export const MIRAGE_REACH_FRAC = 0.70;    // PLACEHOLDER n≈0; F1 owns the value.
 // ⚠ recent-3 is deliberate — it disagrees with the full-window fold/rank by design, measured, not drift.
@@ -24,12 +24,16 @@ export function digestReachAndPlacement({ spec, row, askReachExtra, his, days } 
   // Placement-bounded, matching families.mjs symmetricExemptionHolds at the same bound and refLevel: an
   // above-distribution churn ask takes the full read so the verdict can name the mirage, not exempt it.
   const exempt = symmetric && !(askPlacement != null && askPlacement > MIRAGE_PLACEMENT);
-  let reachFrac;
+  let reachFrac, basis = null;
   if (exempt) reachFrac = null;
-  else if (guarded && his && his.length)
+  else if (guarded && his && his.length) {
     // The validator's reach was scored at the stale optSell.
     reachFrac = his.filter(h => h != null && h >= refLevel).length / his.length;
-  else reachFrac = digestReachFrac(askReachExtra);
+    basis = 'guarded';
+  } else {
+    reachFrac = digestReachFrac(askReachExtra);
+    if (reachFrac != null) basis = reachBasis(askReachExtra, { prefer: 'recent' });
+  }
   // Zero new fetch; degrades to null rather than inventing a read.
   const marginTrend = (!exempt && Array.isArray(days) && days.length && refLevel != null)
     ? (reachMargin(days, 'ask', refLevel)?.trend ?? null) : null;
@@ -43,5 +47,5 @@ export function digestReachAndPlacement({ spec, row, askReachExtra, his, days } 
       placementDiverges = (recentPlacement - askPlacement) >= RECENCY_DIVERGE;
     }
   }
-  return { reachFrac, askPlacement, staleGuarded: guarded, marginTrend, placementDiverges };
+  return { reachFrac, reachBasis: basis, askPlacement, staleGuarded: guarded, marginTrend, placementDiverges };
 }

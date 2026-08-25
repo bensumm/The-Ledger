@@ -138,8 +138,11 @@ footers, it never trims or supersedes them (the `actionable-first-dead-last` tri
 the FULL table you paste). Relay the digest AND the trimmed per-niche table — two different surfaces for two
 different reads (digest = cross-niche triage; the trimmed table = the per-niche detail). CONSOLE-ONLY (never
 in `screen.json` / the app), and every column is INFORM-ONLY, PLACEHOLDER (n≈0) — the `verdict` word is a
-deterministic triage prompt (`fill-now` / `weak deploy` / `sell unreliable` / `mirage top` / `starter /
-hold-to-next-peak` / `low-conviction`), NOT a calibrated order. Off by default for a bare/scripted run.
+deterministic triage prompt (`fill-now` / `weak deploy` / `mirage top` / `starter /
+hold-to-next-peak` / `low-conviction`), NOT a calibrated order. **There is no reach-only verdict** —
+`sell unreliable` was deleted (owner ruling 2026-08-25; it was measured to lose to not gating at all
+below cost ratio ~1.29, yet fired at priority 1 and got rows dismissed unread). The `reach` column
+prints the fraction plus its basis (`r3` / `14d` / `sg`); read the number, don't look for the word. Off by default for a bare/scripted run.
 
 **Positions check every pass (Workstream B — mandatory, cheap).** _(judgment: session-local relay; no stored
 state)_ After syncing/scanning, run `node pipeline/commands/quote-items.mjs --positions` (bare/quiet — read

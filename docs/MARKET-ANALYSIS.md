@@ -241,9 +241,13 @@ distribution — digest-scoped, never touching the screen's own reach validator,
 do I look closer at"), ADDITIVE and opt-in: it never trims or replaces the per-niche tables + context
 footers, and the per-niche table's own `rank` sort is untouched (the deployable-throughput ordering is
 digest-only). The
-`verdict` word is deterministic, first-match-wins over a rule table (`spread closed now` / `sell unreliable` /
+`verdict` word is deterministic, first-match-wins over a rule table (`spread closed now` /
 `mirage top` / `weak deploy` / `starter · hold-to-next-peak` / `fill-now` / `low-conviction`) — deterministic is not
-calibrated. **R5 (PLAN-SIGNAL-RECENCY)** escalates the base `mirage top` to a HIGH-confidence `mirage top!`
+calibrated. There is deliberately NO reach-only word: `sell unreliable` was DELETED (owner ruling
+2026-08-25) after `join-reach-basis.mjs` measured that tag losing to not-gating-at-all below a cost ratio
+of ~1.29 while it fired at priority 1. The `reach` column now prints the FRACTION and the window it was
+read on (`r3` recent-3 · `14d` the full window it degrades to · `sg` the stale-live-guarded recompute)
+instead of a ✓/✗, so the reader judges the number and knows which basis produced it. **R5 (PLAN-SIGNAL-RECENCY)** escalates the base `mirage top` to a HIGH-confidence `mirage top!`
 only when BOTH the recent-vs-full placement DIVERGENCE (`placementDiverges` — the whole-window-CDF analogue
 of RC1's recencySplit: recent-3 days abandoned the top by ≥ `RECENCY_DIVERGE`) AND a `fading` ask cushion
 trend hold; either alone stays the base word, and the base placement/reach condition still gates (the

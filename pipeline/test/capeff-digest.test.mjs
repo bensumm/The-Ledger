@@ -102,8 +102,13 @@ ok('threshold is BIG_TICKET_GP, reused not reinvented', () => {
 
 // --- 3. digestVerdict rule table (first-match-wins, ORDER matters) -------------------------------
 // each row engineered so exactly ONE condition fires (except the ORDER test, which fires two).
-ok('rule 1 — recent reach < 0.5 → "sell unreliable"', () => {
-  assert.equal(digestVerdict({ spec: BAND, row: smallMid, er: er(50, 1000, 43200), grade: 'A', reachFrac: 0.3, askPlacement: 0.9, phase: 'in-peak' }), 'sell unreliable');
+// R-tag (owner ruling): there is NO reach-only verdict. join-reach-basis.mjs measured that tag losing to
+// not-gating-at-all below cost ratio ~1.29 while it fired at priority 1, dismissing rows unread.
+ok('a thin reach ALONE no longer produces a verdict — the row is judged on its merits', () => {
+  assert.equal(digestVerdict({ spec: BAND, row: smallMid, er: er(50, 1000, 43200), grade: 'A', reachFrac: 0.3, askPlacement: 0.2, phase: 'in-peak' }), 'fill-now');
+});
+ok('a thin reach HIGH in its own distribution still fires mirage top (that rule is untouched)', () => {
+  assert.equal(digestVerdict({ spec: BAND, row: smallMid, er: er(50, 1000, 43200), grade: 'A', reachFrac: 0.3, askPlacement: 0.9, phase: 'in-peak' }), 'mirage top');
 });
 ok('rule 2 — placement > 0.85 AND 0.5 ≤ reach < 0.7 → "mirage top"', () => {
   assert.equal(digestVerdict({ spec: BAND, row: smallMid, er: er(50, 1000, 43200), grade: 'A', reachFrac: 0.6, askPlacement: 0.9, phase: 'in-peak' }), 'mirage top');
@@ -123,9 +128,9 @@ ok('rule 5 — clean, grade ≥ B- → "fill-now"', () => {
 ok('rule 6 — nothing positive cleared (grade < B-) → "low-conviction"', () => {
   assert.equal(digestVerdict({ spec: BAND, row: smallMid, er: er(50, 1000, 43200), grade: 'D', reachFrac: null, askPlacement: null, phase: 'in-peak' }), 'low-conviction');
 });
-ok('ORDER: a row matching rule 1 AND rule 3 reports rule 1 (bad sell beats thin margin)', () => {
-  // big-ticket + 0.3%/turn (rule 3 true) AND recent reach 0.3 (rule 1 true) → rule 1 wins
-  assert.equal(digestVerdict({ spec: BAND, row: bigMid, er: er(3, 1000, 43200), grade: 'A', reachFrac: 0.3, askPlacement: 0.9, phase: 'in-peak' }), 'sell unreliable');
+ok('ORDER: a thin-margin big-ticket with thin reach now reports weak deploy, not a reach word', () => {
+  // big-ticket + 0.3%/turn (weak deploy) AND recent reach 0.3; placement kept LOW so mirage cannot fire
+  assert.equal(digestVerdict({ spec: BAND, row: bigMid, er: er(3, 1000, 43200), grade: 'A', reachFrac: 0.3, askPlacement: 0.2, phase: 'in-peak' }), 'weak deploy');
 });
 
 // --- 4. deployUnits reuse (the shared value-niche three-way min) ---------------------------------
@@ -249,7 +254,8 @@ ok('STALE sell-side row: digest reach FLIPS from a false ✓ to the honest ✗ (
   const r = digestReachAndPlacement({ spec: ASYM_SPEC, row: { optSell: 52, quickStale: { sell: true, buy: false }, quickBuy: 57 }, askReachExtra: REACH_23, his: HIS });
   assert.equal(r.staleGuarded, true);
   assert.ok(approx(r.reachFrac, 0.3), `expected 0.3, got ${r.reachFrac}`);
-  assert.ok(r.reachFrac < 0.5, 'the honest read is ✗ (sell unreliable), not the stale ✓');
+  assert.ok(r.reachFrac < 0.5, 'the honest read is the recomputed 0.3, not the stale-inflated one');
+  assert.equal(r.reachBasis, 'guarded', 'and the cell must say WHICH window produced it');
   // placement is also recomputed at the fresher reference (mirage-aware): 57 sits high in the daily-HIGH dist
   assert.ok(r.askPlacement > 0.5, `placement should reflect the fresher reference, got ${r.askPlacement}`);
 });
@@ -388,7 +394,7 @@ ok('W3-1: a null-crossable (no live print) row is NOT demoted — unknown-neutra
 ok('W3-1: digestVerdict — crossable===false is TOP priority → "spread closed now"', () => {
   // an otherwise perfectly clean fill-now row → uncrossable still wins
   assert.equal(digestVerdict({ spec: BAND, row: smallMid, er: er(50, 1000, 43200), grade: 'A', reachFrac: 0.9, askPlacement: 0.2, phase: 'in-peak', crossable: false }), 'spread closed now');
-  // it even beats rule-1 'sell unreliable' (an uncrossable spread is a HARDER fact than a thin reach)
+  // and it still beats mirage top (an uncrossable spread is a HARDER fact than a thin reach)
   assert.equal(digestVerdict({ spec: BAND, row: smallMid, er: er(50, 1000, 43200), grade: 'A', reachFrac: 0.3, askPlacement: 0.9, phase: 'in-peak', crossable: false }), 'spread closed now');
 });
 ok('W3-1: null/true crossable leaves the verdict path unchanged (no false demotion)', () => {

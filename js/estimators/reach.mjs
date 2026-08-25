@@ -100,6 +100,16 @@ export function reachFraction(askReach, { prefer = 'full' } = {}) {
   return rec != null ? rec : full;   // absent recent counts ⇒ degrade to the full window (never a fabricated read)
 }
 
+// Which window reachFraction() actually read. It degrades to the full window when recent counts are
+// absent, so a surface DISPLAYING the number cannot infer the basis from `prefer`. Same guards as above.
+export function reachBasis(askReach, { prefer = 'full' } = {}) {
+  const a = askReach || null;
+  if (!a) return null;
+  const full = (num(a.nDays) > 0 && num(a.reachedDays) != null) ? 'full' : null;
+  if (prefer !== 'recent') return full;
+  return ((num(a.recentDays) > 0 && num(a.recentHit) != null) ? 'recent' : null) || full;
+}
+
 // two-leg fill weight (Proposal A, PLAN-GRADE-REACH) — the family pFill above is the BID/ENTRY fill; the
 // rank's `net` silently ASSUMES the exit at optSell prints. Discount that by the cross-day ASK reach so a
 // mirage exit (e.g. a p90 band top reaching 2/14 days) can't carry a full rank. ABSENT an ask-reach read →
@@ -111,12 +121,10 @@ export function reachFraction(askReach, { prefer = 'full' } = {}) {
 // DELIBERATELY NOT WIRED INTO estimateRank yet (F1-gated): the rank feeds the published grade/sort
 // (screen.json), so promoting relief into the rank/letter is held for F1 calibration — today the relief
 // consumers are the est-view price fold (estimatePair) + the stdout reach notes only.
-// RB-3 (PLAN-RECENCY-BASIS): the recency basis is an EXPLICIT OPT-IN, `{ prefer }`, defaulting to 'full'.
-// Why an option and not a behavior change: this function has three call sites with different roles — the
-// RANK (families.mjs:389, whose blast radius is screen.json's ordering; DEFERRED, see below), the DISPLAY
-// pFill (pair.mjs), and watch-positions' size-relief note. Keeping the default 'full' makes every call
-// byte-identical by construction and makes the opt-in sites grep-able. The presence/absence guard below is
-// the FULL window's on purpose — an ask-reach read with no full counts is still "no read" → 1.
+// The recency basis is an EXPLICIT OPT-IN (`{ prefer }`, default 'full') because the call sites have
+// different roles and blast radii — the rank orders screen.json, the others only display. The
+// presence/absence guard below is the FULL window's on purpose: an ask-reach read with no full counts is
+// still "no read" → 1. Per-site bases and the measurement behind them: docs/SIGNAL-AUDIT.md.
 // ⚠ THE RANK CALL SITE IS DELIBERATELY STILL 'full' (families.mjs:389). A measurement pass (2026-08-03/04)
 // found the rank-basis swap moves the composite rank by >33% on ~23% of item-days — a four-valued n=3
 // probability MULTIPLIER is not the same risk as a continuous, band-bounded price.
