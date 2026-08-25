@@ -10,6 +10,40 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The scorer can finally import the threshold it scores (pipeline-only)
+
+Second ship-first item from the pipeline-separation audit. The digest's ask-reach interpretation —
+the basis its reach column reads, the stale-live-print guard, and the `MIRAGE_REACH_FRAC` threshold —
+lived inside `screen-flip-niches.mjs`, a 3,000-line command, so nothing could import it. The concrete
+cost was already recorded in the tree: `join-reach-basis.mjs`, the script written to SCORE that
+threshold, kept a **hand-copied duplicate** under a comment admitting the copy would not track the
+source. That comment cited a line number which had itself gone stale.
+
+Now `pipeline/lib/signal/digest.mjs`, and the scorer imports it. Proved rather than asserted: changing
+the value at the source and re-importing the scorer showed it follow (0.70 → 0.99 → restored).
+
+**A byte-identical move.** Two back-to-back screen runs across the change produced **zero** structural
+stdout diff. Worth recording how that nearly went wrong: a later comparison against a twenty-minute-old
+capture showed 472 diff lines, which looks like a regression and is not — the same code twenty minutes
+apart reproduces the identical 472, and the row count is 138 in every run. Establish the drift baseline
+before reading a diff as a defect.
+
+**Two guards earned their keep on the way.** The first attempt used `export { X } from '…'`, a
+re-export that creates **no local binding** — and this module uses the name twice. That is a runtime
+`ReferenceError`, and `check-imports`' unbound-constant direction caught it before it could ship. It is
+the direction added after a shipped `ReferenceError`, catching the same class again. Then `run-tests`
+caught the moved export's old importer in the test suite, which now points at the new home rather than
+being re-exported from the old one — one home, not two.
+
+**Scoped deliberately.** `digestVerdict` and `capEfficiency` did NOT move: both reach into command-local
+helpers (`weakDeploy` → `isBigTicket`, `gradeAtLeast`, `holdDays`), so moving them now would drag those
+along or create an import cycle — and `isBigTicket` is slated for replacement by two explicitly-named
+predicates, so moving it first would be churn against the byte-identical guarantee. The rendering half
+(`buildDigestBlock`, `digestCells`, `collectDigestRow`) stayed too: it is rendering, and moving it into
+a signal module would violate the separation this chunk exists to establish.
+
+Pipeline-only; no `APP_VERSION` bump. All 12 gates green.
+
 ### The test runner can now see a silent suite — and its own body was running at import scope (pipeline-only)
 
 First of the ship-first items out of the pipeline-separation audit. `run-tests.mjs` graded 122 suites

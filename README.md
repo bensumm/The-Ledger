@@ -1316,6 +1316,24 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     the `now` pin remains uncovered by unit test for a reason documented there. `--json` (per-episode array,
     returns before any table), `--item <name|id>` (adds a per-episode table), `--competition N`, `--nights N`.
     Pure core `scoreDepthLot`/`sellEpisodes`/`bucketBy`/`clusterBootstrapCI`/`readClosedLots` fixture-pinned),
+    **`pipeline/lib/signal/digest.mjs`** (2026-08-25, PLAN-PIPELINE-SEPARATION) — the digest's ask-reach
+    INTERPRETATION, extracted from `screen-flip-niches.mjs`: which basis the reach column reads
+    (`digestReachFrac` → the one shared `reachFraction` on the recent-3 basis), the stale-live-print guard
+    that recomputes reach/placement/cushion-trend against the fresher instasell before any of them are
+    scored (`digestReachAndPlacement`), and the `MIRAGE_REACH_FRAC` threshold. **Why it exists as a module:**
+    the threshold was a bare module-private `const` inside a 3,000-line command, so nothing could import it —
+    and `join-reach-basis.mjs`, the script written to SCORE that very threshold, had to keep a hand-copied
+    duplicate with a comment warning the copy would not track the source. That comment's line reference had
+    itself gone stale. The scorer now imports it; verified by changing the value at the source and watching
+    the scorer follow. **A byte-identical move** — the extraction changed no logic, and the falsifier was two
+    back-to-back screen runs across the change with zero structural stdout diff (a later comparison showed
+    472 diff lines, which reproduces identically between two runs of the SAME code twenty minutes apart:
+    that is market drift, not regression — check the drift baseline before reading a diff as a defect).
+    **`digestVerdict` and `capEfficiency` deliberately did NOT move**: both reach into command-local helpers
+    (`weakDeploy` → `isBigTicket`, `gradeAtLeast`, `holdDays`), so moving them now would drag those along or
+    create an import cycle, and `isBigTicket` is itself slated for replacement by two explicitly-named
+    predicates. They follow once that lands.
+
     **`join-asym-outcomes.mjs`** (2026-08-24, PLAN-PATIENT-PAIR §7 — replaces the asym pair's
     READ-BACK QUANTILE CONSTANTS with forward-measured rates. PRODUCER: `asymShadow` on
     `suggestions.jsonl` + the monthly archives via `readSuggestionLines()`; forward-scored against the

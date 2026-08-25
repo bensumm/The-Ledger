@@ -47,12 +47,16 @@ import { loadMapping } from '../lib/market/marketfetch.mjs';
 import { reachFraction } from '../../js/estimators/reach.mjs';
 import { REACH_GRADE_CAP_FRAC } from '../../js/rating.mjs';
 
-// ⚠ A LOCAL COPY, NOT AN IMPORT. `MIRAGE_REACH_FRAC` is a bare module-private `const` at
-// screen-flip-niches.mjs:693 and cannot be imported, so a change THERE will NOT propagate here —
-// the blast-radius bound would silently drift. Re-check it when touching that line. (An earlier
-// version of this comment claimed the value was "imported-by-value so a change at the source shows
-// up"; that was simply false.) F1 owns the constant, not this script.
-export const MIRAGE_REACH_FRAC = 0.70;
+// NOW A REAL IMPORT. This was a hand-copied duplicate for as long as the constant lived as a bare
+// module-private `const` inside a 3,000-line command, unimportable — so a change at the source could
+// not propagate here and the blast-radius bound would silently drift. The warning comment even cited
+// a line number that had itself gone stale. The constant moved to `pipeline/lib/signal/digest.mjs`
+// precisely so the script that SCORES this threshold can read the one the screen actually applies.
+// Re-exported because this module's own consumers expect the name here. F1 owns the value.
+// IMPORT then re-export, not `export … from`: a bare re-export creates NO local binding, and this
+// module USES the name below (the blast-radius branch-2 count). check-imports caught exactly that.
+import { MIRAGE_REACH_FRAC } from '../lib/signal/digest.mjs';
+export { MIRAGE_REACH_FRAC };
 // The decisive spec (PLAN §3.2) — LOCKED before the run so a favourable subset cannot become the
 // headline. Everything else is a sensitivity row.
 export const DECISIVE_HORIZON_H = 24;

@@ -15,7 +15,9 @@
  * 4. buildDigestBlock is a VIEW: top-8 cap, capEff-desc sort (null last), and an honest empty fallback.
  */
 import assert from 'node:assert/strict';
-import { capEfficiency, weakDeploy, digestVerdict, buildDigestBlock, digestReachAndPlacement, liveCrossable } from '../commands/screen-flip-niches.mjs';
+import { capEfficiency, weakDeploy, digestVerdict, buildDigestBlock, liveCrossable } from '../commands/screen-flip-niches.mjs';
+// digestReachAndPlacement moved to the importable interpretation module; the screen now imports it too.
+import { digestReachAndPlacement } from '../lib/signal/digest.mjs';
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';
 import { BIG_TICKET_GP } from '../../js/quotecore.js';
 import { deployUnits } from '../../js/valuescreen.mjs';
