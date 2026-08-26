@@ -33,6 +33,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping, fetchTs, fetchLatest } from '../lib/market/marketfetch.mjs';   // fetchLatest (2026-08-10): the live leg the dip-not-below-live guard needs — without it deriveDiurnalRange's reprice cannot fire
+import { loadWatchlistNames } from '../lib/config/watchlist.mjs';
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot } from '../lib/reconstruct/offers.mjs';
 import { hourProfile, displayFitNights, WINDOW_RELIABLE_R, deriveDiurnalRange, realityClause } from '../../js/windowread.mjs';   // deriveDiurnalRange = the ONE home for the Ghrazi level guard; this file used to bypass it and shipped raw hourProfile levels. realityClause = the ONE renderer for the spike-top/stale flag (Chunk 2b) — do not re-implement the wording here
@@ -287,12 +288,6 @@ export function loopHeaderLine(rows) {
 }
 
 // ── IO helpers (degrade-gracefully, never throw a caller) ────────────────────────────────────────
-function readWatchlist(repoRoot) {
-  try {
-    const arr = JSON.parse(fs.readFileSync(path.join(repoRoot, 'watchlist.json'), 'utf8'));
-    return Array.isArray(arr) ? arr : [];
-  } catch { return []; }
-}
 function readClosed(repoRoot) {
   try {
     const p = JSON.parse(fs.readFileSync(path.join(repoRoot, 'positions.json'), 'utf8'));
@@ -329,7 +324,7 @@ export async function buildAgenda({ scope = ['c'], now = new Date(), repoRoot = 
     }
   }
   if (scope.includes('w')) {
-    const { items, warnings: w2 } = resolveWatchlist(readWatchlist(repoRoot), mapping);
+    const { items, warnings: w2 } = resolveWatchlist(loadWatchlistNames(repoRoot), mapping);
     for (const it of items) add(it.id, it.name, 'W');
     warnings.push(...w2);
   }
@@ -414,7 +409,7 @@ async function main() {
 
   if (AUDIT) {
     const mapping = await loadMapping();
-    const rows = buildAudit({ closed: readClosed(REPO), watchNames: readWatchlist(REPO), mapping });
+    const rows = buildAudit({ closed: readClosed(REPO), watchNames: loadWatchlistNames(REPO), mapping });
     console.log('# Watchlist audit — flipped but NOT in watchlist.json (proposed additions; review, never auto-added)\n');
     if (!rows.length) { console.log('(nothing to propose — every flipped item is already watchlisted)'); return; }
     console.log('| Item | Trades | Realised P/L |');

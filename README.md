@@ -545,7 +545,34 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   never a verdict/alert/price. NOT app-imported. Gitignored like `pipeline/.cache/watch-state.json`
 - `watchlist.json` — tracked repo-root watchlist (array of item names/ids); the app unions it
   with local `STATE.watchlist` and `screen-flip-niches.mjs` always scans it (S3); app writes it back via
-  the GitHub contents API (`js/github.js`)
+  the GitHub contents API (`js/github.js`). It is a PERMISSION AND PRIORITY set, not a display list:
+  see `pipeline/lib/config/watchlist.mjs` for the grants membership carries and the one reader that
+  serves them. The app rewrites the WHOLE file as bare numeric ids on every star-click
+  (`js/ui.js` `pushWatchlist`, and `dev-server.mjs`'s local-file write validates nothing), so no
+  durable metadata can live here — that is why the sidecar below exists.
+- `watchlist-meta.json` — tracked repo-root ROLE SIDECAR for `watchlist.json` (SEP16a; ships `{}`).
+  An id-keyed object `{ "<itemId>": { why, note?, addedTs?, level? } }` where `why` is one of
+  `target` / `hold` / `universe` / `probe`. PRODUCED by hand or by an agent; CONSUMED only by
+  `pipeline/lib/config/watchlist.mjs` (`loadWatchlistEntries`), which attaches the role to each
+  resolved member. **It can never change membership**: absent, empty, garbled, not-an-object, or
+  carrying an unknown/missing role all read as `universe`, and an id present here but absent from
+  `watchlist.json` is ignored (the array is authoritative). Pipeline-only, NOT app-imported and NOT
+  in `sync-fills.mjs --publish`'s add-list. The role SURFACES are a later chunk; today the file is
+  the schema and the degrade path, pinned by `pipeline/test/watchlist-permission.test.mjs`.
+- `pipeline/lib/config/watchlist.mjs` — the ONE reader for both files above (SEP16a), replacing the
+  separate parse in `screen-flip-niches.mjs`, `quote-items.mjs`, `watch-positions.mjs`,
+  `read-schedule.mjs` and `report-archive-gate.mjs`. Exports `loadWatchlistIds(map)` (the permission
+  set), `loadWatchlistEntries(map)` (ordered `{id, name, why, note, addedTs, level}`, first
+  occurrence wins) and `loadWatchlistNames()` (raw tokens, for the name-keyed `buildAudit` join).
+  **Degrade:** absent/unreadable/non-array → empty set, never a throw — five call sites rely on that.
+  **The one LOUD case:** an OBJECT entry inside the array. `buildMapping.resolve`
+  (`pipeline/lib/market/marketfetch.mjs`) does `String(token)`, so an object becomes
+  `"[object Object]"`, misses `byName`, and returns `null` **without throwing** — which empties the
+  set and switches every grant off at once with CI green. The reader throws `WatchlistFormatError`
+  and writes to `console.error` (stderr survives the screen's quiet-mode `console.log` stub, so the
+  line is visible even where a caller swallows the throw). `report-archive-gate.mjs` passes
+  `REPO_DIR` explicitly because it has always read the CLONE root, which differs from the worktree
+  root under `git worktree`; that divergence is preserved deliberately, not fixed here.
 - `alerts.json` — tracked named price alerts (`{itemId, direction, price, note?}`) read by
   `pipeline/commands/trigger-alerts.mjs` (N1); ships empty
 - `dip-watchlist.json` — tracked repo-root pool of flush candidates for the `--dip` loop (ships empty
@@ -2683,6 +2710,7 @@ constant governs each, so these can move without touching the deployed app or ph
 | File | Producer / consumer | Tracked? |
 | --- | --- | --- |
 | `alerts.json` | read by `pipeline/commands/trigger-alerts.mjs` (N1) | tracked (ships empty) |
+| `watchlist-meta.json` | role sidecar for `watchlist.json`; read only by `pipeline/lib/config/watchlist.mjs` (never by the app, never by a grant) | tracked (ships `{}`) |
 | `suggestions.jsonl` | appended by `pipeline/lib/render/suggestlog.mjs` (O1 fields + YS2 forward `posture?`/… + SF-3 `volSrc?`); SR1-bounded to the current month | tracked, append-only |
 | `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl` | completed months rolled out of the active ledger by `rotateLedger` (SR1); read with the active file via `readSuggestionLines` | **gitignored, local-only** (2026-08-07) — rolled-out months live on ONE disk, no repo backup |
 | `outcomes.json` | derived by `pipeline/commands/join-outcomes.mjs` (F1 join reads active+archives) | gitignored |

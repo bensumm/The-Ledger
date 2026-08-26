@@ -58,6 +58,7 @@ import { fmtP, fmt } from '../../js/money-format.js';
 import { briefLine } from '../../js/watchcore.js';   // --brief compact book: format owned by the script
 import { renderHeldVerdict, pathsStage, renderPathLine, rawHeldToken, heldDisplay } from '../lib/market/item-context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line; VN-1 — persistence-gated display layer
 import { loadIgnored } from '../lib/ignored.mjs';   // MERCH-book quarantine (farming/loot) for the live-offer view
+import { loadWatchlistIds } from '../lib/config/watchlist.mjs';
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs } from '../lib/market/marketfetch.mjs';   // vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readExchangeLog, activeOffers, restartBlindSuspects } from '../lib/reconstruct/offers.mjs';
@@ -90,21 +91,6 @@ const WATCH_STATE = path.join(HERE, '..', '.cache', 'watch-state.json'); // giti
 const CYCLE_WATCH = path.join(HERE, '..', '..', 'cycle-watch.json'); // gitignored repo-root sibling, Chunk 4 per-item cycle-expectation state (--cycle)
 const THESIS_PATH = path.join(HERE, '..', '.cache', 'session-thesis.json'); // gitignored, YT1 session thesis (read-only here; declare-thesis.mjs writes)
 const HOLD_THESIS_PATH = path.join(HERE, '..', '..', 'hold-thesis.json'); // TRACKED at repo root, TG1 declared-hold-thesis store (agent-written; read-only here)
-const WATCHLIST_PATH = path.join(HERE, '..', '..', 'watchlist.json'); // TRACKED at repo root, read-only — exempts a deliberately-tracked item from the incidental-lot filter regardless of value
-
-// A watchlisted item's id set — read-only, best-effort (absent/unreadable → empty, so the
-// incidental filter degrades to value-only rather than ever crashing the pass).
-function loadWatchlistIds(map) {
-  let raw;
-  try { raw = JSON.parse(fs.readFileSync(WATCHLIST_PATH, 'utf8')); } catch { return new Set(); }
-  if (!Array.isArray(raw)) return new Set();
-  const ids = new Set();
-  for (const entry of raw) {
-    const hit = map.resolve(typeof entry === 'number' ? String(entry) : entry);
-    if (hit) ids.add(hit.id);
-  }
-  return ids;
-}
 
 /* Append one line per watched item whose GE guide price CHANGED since the last logged value
    (first sighting logs too). Each line is an observed guide-update event: pinning WHEN an

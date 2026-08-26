@@ -10,6 +10,34 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The watchlist is a permission set, and now it has one reader and a tripwire (SEP16a)
+
+2026-08-25, pipeline-only. `watchlist.json` was parsed by five node commands, each with its own
+copy of the same loop, and membership in it is not decoration: it grants gate exemption, the bounded
+band-stack fetch reserve, the unbounded amplitude reserve, the amplitude proxy-floor bypass,
+`subFloorFallback`, the sub-break-even render exemption, the `NOISE_OFFER_GP` incidental-lot
+exemption in two commands, and two big-ticket force-includes. Eight grants, one input, five parsers.
+
+They now share `pipeline/lib/config/watchlist.mjs`. The move is provably mechanical rather than
+carefully reviewed: the sorted id set was dumped from every call site by executing the real
+pre-change loaders, dumped again from the shared reader, and diffed to empty — 60 ids, identical at
+all six sites, plus the raw name array `read-schedule`'s audit joins on.
+
+The failure mode this closes is not a crash. `buildMapping.resolve` stringifies its token, so an
+object entry in `watchlist.json` becomes `"[object Object]"`, misses the name index, and returns
+`null` **without throwing** — every loader `continue`s past it, and all eight grants switch off
+together with CI green. The reader now throws and writes to stderr (which survives the screen's
+quiet-mode `console.log` stub). Absent, unreadable and non-array files still degrade to an empty set
+silently, because five call sites depend on that.
+
+Role metadata gets a separate id-keyed file, `watchlist-meta.json`, precisely because the app
+rewrites `watchlist.json` wholesale as bare numeric ids on every star-click — one click on localhost
+would destroy any annotation stored inline. The sidecar can never move the id set: absent, empty,
+garbled, or carrying an unknown role, every entry reads `universe`. That property, the loud-fail
+tripwire and the degrade contract are pinned by `pipeline/test/watchlist-permission.test.mjs`, each
+case confirmed RED against a named mutant. The roles are schema and degrade path today; the surfaces
+that read them are later chunks.
+
 ### The digest stops printing a word that was measured worthless (SEP12)
 
 Owner ruling, 2026-08-25. `join-reach-basis.mjs` forward-scored the `sell unreliable` tag and found it

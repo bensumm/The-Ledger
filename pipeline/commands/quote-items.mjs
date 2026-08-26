@@ -40,6 +40,7 @@ import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, day
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
 import { warmOverride } from '../lib/market/warm-term-structure.mjs';   // COD-4 + R3 — warm .trajectory AND .recentTrend off ts1h so trajectoryValidator + floorValidator's recency gate FIRE on the explicit-ask surface
+import { loadWatchlistIds } from '../lib/config/watchlist.mjs';
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm, fetchTsCached, vol24FromInputs } from '../lib/market/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence); fetchTsCached — Proposal C's targeted 1h read; vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { staleExitRead, STALE_EXIT_RECENT_FRAC } from '../lib/timing/staleexit.mjs';   // Proposal C — stale declared-exit auto-flag (inform-only)
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
@@ -77,18 +78,6 @@ const TS_TTL_1H_EXIT = 15 * 60 * 1000;
 // Incidental-inventory filter — shared threshold + watchlist exemption with watch-positions.mjs
 // (the /positions skill's incidental-inventory rule, code-enforced here rather than left as prose).
 const NOISE_OFFER_GP = 100_000;
-const WATCHLIST_PATH_Q = path.join(HERE, '..', '..', 'watchlist.json');
-function loadWatchlistIds(map) {
-  let raw;
-  try { raw = JSON.parse(fs.readFileSync(WATCHLIST_PATH_Q, 'utf8')); } catch { return new Set(); }
-  if (!Array.isArray(raw)) return new Set();
-  const ids = new Set();
-  for (const entry of raw) {
-    const hit = map.resolve(typeof entry === 'number' ? String(entry) : entry);
-    if (hit) ids.add(hit.id);
-  }
-  return ids;
-}
 
 const args = process.argv.slice(2);
 const POSITIONS_MODE = args.includes('--positions');

@@ -61,6 +61,7 @@
  */
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
 import { tax } from '../../js/money-math.js';
+import { loadWatchlistEntries, loadWatchlistIds } from '../lib/config/watchlist.mjs';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
 import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, reachedDays, RECENCY_DIVERGE, RECENT_NIGHTS, askReachDecayNote, softBuyRead, softBuyHoursClause, displayFitNights, phaseFromLap, SOFT_BUY_CUE_TEXT, floorCeilingTrack } from '../../js/windowread.mjs';   // diurnal/timed-lap (DT2), window-clear (PLAN-WINDOW-CLEAR B2), asym pair, reachable band (RC-S2), placement (AC1, PLAN-ESTIMATOR-POSTURE), weekdayProfile (A3, PLAN-AMPLITUDE-SCAN), reachedDays (RF6) — all off the in-hand 1h series, no fetch. askReachDecayNote (DT3, PLAN-HOURLY-3DAY-TREND) is the shared compact note renderer for the top-X digest picks; there is NO per-hour drift-slope renderer (measured a non-signal), and no demandRegime read (PLAN-REMOVE-DEPTH-PRESSURE-READS).
 import { askReachDecay } from '../lib/market/hourly-lmh.mjs';   // DT3 — ask-reach decay, top-X digest picks ONLY (bounded, not the full candidate universe). No hourlyDrift slope read — see hourly-lmh.mjs's tombstone.
@@ -2405,19 +2406,6 @@ function loadVelocityIndex() {
   catch { return null; }
 }
 const VEL = loadVelocityIndex();
-function loadWatchlist(map) {
-  let raw;
-  try { raw = JSON.parse(readFileSync(join(REPO_ROOT, 'watchlist.json'), 'utf8')); }
-  catch { return []; }                                    // absent/unreadable → no watchlist section
-  if (!Array.isArray(raw)) return [];
-  const seen = new Set(), out = [];
-  for (const entry of raw) {
-    const hit = map.resolve(typeof entry === 'number' ? String(entry) : entry);
-    if (!hit || seen.has(hit.id)) continue;
-    seen.add(hit.id); out.push(hit);
-  }
-  return out;
-}
 // best-effort realistic gp/day for a watchlist grade (no mode context) — band edge if we have one,
 // else the 24h-avg spread; same expUnits basis as the niches. Informational only.
 function roughExpGpDay(d, bands, id, limit) {
@@ -2441,7 +2429,7 @@ function watchlistNote(row, d, bands, id, limit) {
   return '';                                               // would surface in a normal scan on merit
 }
 async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
-  const wl = loadWatchlist(map);
+  const wl = loadWatchlistEntries(map);
   if (!wl.length) return null;
   const { v24, bands } = ctx;
   // SP1 (PLAN-DIGEST-SIGNAL-AND-SCAN-PERF) — FETCH phase, split out of the compute loop below.
@@ -2454,7 +2442,7 @@ async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
   // ORDER SAFETY — the reason this is behaviour-preserving, not just fast: the COMPUTE loop below is
   // untouched and still walks `wl` in its original order, reading finished quotes out of an id-keyed
   // Map, so `rows`/`sugg` order is independent of fetch COMPLETION order; `logSuggestions` still fires
-  // once, after it; and `loadWatchlist` dedupes ids, so no two workers race the same disk cache file.
+  // once, after it; and the shared reader dedupes ids, so no two workers race the same disk cache file.
   // The `!qcache.get(id)` admission test is deliberately truthiness, matching the serial version it
   // replaced — do not "tidy" it to `.has()`, which would change behaviour on a falsy cached quote.
   const prefetched = new Map();
@@ -2511,7 +2499,7 @@ let BUYS_BY_ITEM = new Map();
 let HELD_IDS = new Set();
 let TRACK_INDEX = null;   // admission.mjs track-record boost index (built from positions.json closed lots)
 // F-B (PLAN-OSCILLATION-CYCLE post-landing follow-up) — the SAME repo-root watchlist.json ids the S3
-// always-scanned watchlist pass reads (loadWatchlist below), read ONCE here too so gateAmplitudeCandidates
+// always-scanned watchlist pass reads (loadWatchlistEntries below), read ONCE here too so gateAmplitudeCandidates
 // can reserve a fetch slot for a watchlisted big-ticket even when it ranks below AMP_TOP_DEFAULT by the
 // Stage-1 amplitude proxy. Empty set (absent/unreadable watchlist.json) ⇒ no reserve ⇒ byte-identical.
 let WATCHLIST_IDS = new Set();
@@ -2787,9 +2775,10 @@ async function main() {
     TRACK_INDEX = buildTrackIndex(pos && pos.closed);
   } catch { /* no positions.json → nothing held, no track record → no override, exactly today's behavior */ }
   const map = await loadMapping();
-  // F-B: read watchlist.json ids right after map load (loadWatchlist needs map.resolve). Best-effort —
-  // an absent/unreadable file degrades to an empty set (no reserve), never breaks the screen.
-  try { WATCHLIST_IDS = new Set(loadWatchlist(map).map(h => h.id)); } catch { /* keep empty */ }
+  // F-B: read watchlist.json ids right after map load (the reader needs map.resolve). The reader owns
+  // the degrade (absent/unreadable/non-array → empty set, no reserve); a WatchlistFormatError is
+  // deliberately NOT caught — the old catch turned all eight grants off silently.
+  WATCHLIST_IDS = loadWatchlistIds(map);
   const [v24legacy, latest, guide] = await Promise.all([loadAll24h(), loadAllLatest(), loadGuide()]);  // independent endpoints — fetch concurrently, not summed round-trips
   // PLAN-VOL24 step 2 (Ben-validated): DEFAULT `rolling` — the corrected whole-market trailing-24h map (24
   // bulk /1h windows, mostly warm from the SQLite archive) is the ACTIVE volume behind every gate/rank/

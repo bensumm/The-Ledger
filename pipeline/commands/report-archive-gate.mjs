@@ -34,8 +34,7 @@ import { open } from '../lib/market/archive.mjs';
 import { archiveSeries } from '../lib/market/archive-series.mjs';
 import { fetchTs, fetchLatest, loadMapping, sleep } from '../lib/market/marketfetch.mjs';
 import { reachValidator } from '../../js/validate.mjs';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { loadWatchlistEntries } from '../lib/config/watchlist.mjs';
 import { REPO_DIR } from '../lib/paths.mjs';
 
 const argv = process.argv.slice(2);
@@ -51,9 +50,7 @@ const run = (series, level, now) =>
   const map = await loadMapping();
   let targets = ids;
   if (!targets.length) {
-    // loadMapping exposes { byId, resolve } — there is no byName index; resolve() is the name→id path.
-    const names = JSON.parse(readFileSync(join(REPO_DIR, 'watchlist.json'), 'utf8'));
-    targets = names.map(n => { const r = map.resolve(n); return r && (r.id ?? r); }).filter(Boolean);
+    targets = loadWatchlistEntries(map, REPO_DIR).map(e => e.id);   // REPO_DIR (the clone root, not this worktree) is this command's pre-existing choice, preserved
   }
   targets = targets.slice(0, LIMIT);
   if (!targets.length) { console.log('no targets resolved — pass ids explicitly'); return; }
