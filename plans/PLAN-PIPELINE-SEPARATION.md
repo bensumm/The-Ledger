@@ -1,11 +1,17 @@
 # PLAN-PIPELINE-SEPARATION — separating measurement, interpretation, labeling, and rendering in the read path
 
-**Status:** r5 — **EXECUTION BEGUN on the ship-first front** (owner ruling 2026-08-25; the
+**SEP16a SHIPPED** `d500e36` + review-fix `0569000` — the shared watchlist reader (`pipeline/lib/config/watchlist.mjs`) now backs the five node-side loaders; the app keeps its own `fetch` resolve and is NOT covered by the tripwire. Review corrected two claims this plan made: SIX call sites died on a malformed file, not five (`screen-flip-niches.mjs` reads it twice), and a malformed entry cost exactly ONE member rather than emptying the set.
+
+**Status:** r6 — **EXECUTION BEGUN on the ship-first front** (owner ruling 2026-08-25; the
 coordinator is executing, starting with the runner change SEP1a). r1–r4 were drafting rounds
 (r1 initial; r2 vs adversarial round 1; r3 vs the owner's scope ruling; r4 vs round 2 of the
-cap-5 count); r5 is a FOLD-IN round, not a full review: two new owner rulings (watchlist
-separation, diurnal-hours precision), one live defect recorded (the quiet-mode section loss —
-SEP16), one open defect logged un-diagnosed (the duplicate digest row), no other scope added.
+cap-5 count); r5 was a FOLD-IN round: two new owner rulings (watchlist separation, diurnal-hours
+precision), one live defect recorded (the quiet-mode section loss — SEP16), one open defect logged
+un-diagnosed (the duplicate digest row), no other scope added. **r6 is a SCOPING + CORRECTION round
+on SEP16 only:** it RETRACTS r5's live-defect claim (`039972e` already fixed the dump half — the
+file contradicted itself at `:456`), restates SEP16's warrant on the permission/report conflation,
+expands it into five sub-chunks with two costed forks recorded as decisions, adds one open ruling
+(R-retrohorizon) and one latent defect (`analyze.mjs`'s perNiche bucket). No other chunk changed.
 Every code claim verified by reading or running the cited file; claims from a review round I could
 not independently reproduce are marked `[r1-measured]`/`[r2-measured]`. Disagreements are argued
 inline — two r1 pushbacks held, three r2 amendments are recorded below at their point of use.
@@ -14,13 +20,17 @@ with words (`Cause A`…); the letter-number space is for shippable chunks.
 
 **r5 disposition summary (fold-in).** (1) The dump gap is BIGGER than r4 reported — coordinator
 ran the quiet default and only band + churn survive anywhere machine-readable; the digest still
-prints to quiet stdout, but **amplitude, watchlist, dip pool and watch-closely reach NEITHER
-stdout NOR the dump** (independently confirmed at the code level: watchlist `screen:2540` and
-watch-closely `:3023-3025` print via bare `console.log`, which the quiet default stubs; the sole
-report-emitting site is `:1995`). The watchlist case is a LIVE DEFECT contradicting standing
-doctrine ("always report, honestly … never silently drop a watchlist row") — it gets its own
-chunk, SEP16, under a new owner ruling (R-watchlist: rework as a separate watchlist scan, not
-stapled to the regular path), which SUPERSEDES r4's "write the watchlist into the dump".
+prints to quiet stdout, but amplitude, watchlist, dip pool and watch-closely reached NEITHER
+stdout NOR the dump. **CORRECTED r6 (2026-08-25) — the second half of that claim is now STALE, and
+was left contradicting `:456`/§7 inside this same file: commit `039972e` wrapped all four surfaces
+in `captureReport` (watchlist at `screen:2998`, watch-closely `:2990`, dip pool `:2997`, amplitude
+`:2976`).** `captureReport` (`screen:349-363`) swaps `console.log` for a line buffer, pushes the
+buffer into `REPORTS` — the DUMP — then replays it through the saved sink, which under the quiet
+default is the no-op. So the honest statement is: **they reach the DUMP but not stdout.** The
+watchlist is therefore no longer silently lost, and SEP16 is no longer a live-defect chunk; it
+survives on the OTHER half of its warrant — R-watchlist's ruling that a distinct question gets a
+distinct command, plus the report/permission conflation SEP16 now carries (§7). SUPERSEDES r4's
+"write the watchlist into the dump" (already true via the wrap).
 (2) Owner ruling R-diurnal + coordinator measurement fold into SEP14: cutting the diurnal HOURS
 clause saves ~1,400 tokens, not ~10,000 — the expensive segment sharing that line is the
 liquidity/tranche/price-knee sizing read (~5,524 tokens), which is LOAD-BEARING and stays.
@@ -202,7 +212,7 @@ line pointer). SEP4 is the fix and the model.
    passes** (`quote-items.mjs:346-349` comment admits it; consumed :394) and the rebid trajectory
    degrades to `'unknown'` (:721) — the dominant path is the success return, which a catch-wired
    note would never see; watch buy-limit clause vanishes (watch :968); watchlist section omitted
-   (screen :2452); archive appends swallowed (`marketfetch.mjs:359,501,581`); guide cache
+   (screen :2445 — `if (!wl.length) return null`; re-verified r6, was :2452); archive appends swallowed (`marketfetch.mjs:359,501,581`); guide cache
    infinite-TTL (:164). 47 bare-null `windowread` returns [r1-measured] stay out of scope.
 4. **Guards' blind spots repeat as a class** — incl. eight source-text-regex suites (seven
    comment-vulnerable) [r1-measured; class verified], and `lint-guard-lists.mjs:10`'s "ELEVEN"
@@ -275,9 +285,18 @@ notes, footers) is charged against this budget in its output-delta line.
   not a diagnosis (rule: name the refuting test before stating a cause — nobody has run one).
   Notable: this is the item from the incident that started this plan. Owner/executor to triage;
   a dedupe-or-label decision belongs with SEP4's extracted module.
-- **Quiet-mode section loss (r5, live defect):** amplitude, watchlist, dip pool and watch-closely
-  reach neither stdout nor the dump on a default run (evidence in the r5 disposition note; the
-  watchlist half is fixed by SEP16, the rest by SEP14 part 1).
+- **`watchlist` can surface as a tuning-candidate "niche" (r6, latent, verified not-yet-observed):**
+  `analyze.mjs:235-241` skips only the `'(none)'` bucket when scanning `perNiche` for
+  net-negative-per-attention candidates, and watchlist's `realisedN = 32` clears `minN = 20`. So
+  `/analyze` can propose tuning a "niche" that is not one — it is the always-shown exempt section.
+  Not diagnosed further and NOT fixed by SEP16 (which deliberately leaves the log untouched, see
+  its Decision 1); the fix belongs with the perNiche rollup's bucket policy.
+- **Quiet-mode section loss (r5, live defect — RESOLVED for the dump half, r6):** amplitude,
+  watchlist, dip pool and watch-closely reached neither stdout nor the dump on a default run.
+  `039972e` wrapped all four in `captureReport`, so they now reach the DUMP but still not quiet
+  stdout (mechanism + line refs in the r5/r6 disposition note above). What remains is stdout
+  visibility — SEP14 part 2's decision surface — not a silent-drop defect. SEP16 no longer inherits
+  this as its warrant; see SEP16's restated warrant.
 
 ## 4. Rulings
 
@@ -328,6 +347,17 @@ notes, footers) is charged against this budget in its output-delta line.
 - **R-degrade (SEP3):** gate-off notes render core-tier. Per-site veto list in the chunk.
 - **R-verdictlog (SEP7):** additive `verdictKind`; the audit gating any change to the old field
   runs against the SEVEN-site census.
+- **R-retrohorizon (NEW r6; gates SEP16e's sibling question and any future removal of the
+  watchlist log):** `'watchlist'` is absent from `HORIZON_BY_MODE` (`retrojoin.mjs:49-52`) so it
+  falls to the 24h default — LONGER than band/churn's 12h — and `:147-155` awards each buy to the
+  nearest-prior suggestion in horizon, so watchlist rows (logged for all 60 items every scan)
+  usually win the claim. **Proposed default: LEAVE IT, and do not let SEP16 change it in either
+  direction.** Rationale: `retrojoin.mjs:45-47` already rules this class ("CHANGES WHICH FILLS THE
+  RETRO ATTRIBUTES … an owner call, not a doc-pass edit"), and the measured differential (band
+  taken 71→85, realised Σ 5.30m→6.73m; Bar-E 0/11→1/12) shows the numbers move but not which
+  attribution is right. Settling it needs an owner call on what a watchlist row CLAIMS, which is a
+  question about the retro's semantics, not about rendering. Veto path: rule it and SEP16e's
+  sibling chunk follows. Full evidence at SEP16 F-c.
 
 ## 5. Existing scaffolding (not greenfield)
 
@@ -451,11 +481,14 @@ note families cost ~32,000._
 **Change — three parts that compose, executed dump-first so nothing is ever lost:**
 1. **(first) Make the render dump COMPLETE.** Write the digest, amplitude, dip-pool and
    watch-closely sections into `pipeline/.cache/last-report/screen.json` alongside the two reports
-   it holds today (band + churn — verified; those sections bypass `emitReport`, the single
-   report-emitting site at `screen:1995`; under the QUIET DEFAULT, amplitude, dip pool and
-   watch-closely currently reach neither stdout nor the dump — r5). The WATCHLIST is deliberately
-   NOT folded in here: per R-watchlist it becomes its own surface (SEP16), which also cures its
-   live quiet-mode drop. Until this part lands, dropping any stdout is DATA LOSS, not relocation —
+   it holds today (band + churn via `emitReport`, the single report-emitting site at `screen:1995`
+   — verified; the other sections DO reach the dump, by the different `captureReport` path added in
+   `039972e`, which buffers bare `console.log` into `REPORTS` and replays into the quiet no-op sink,
+   so they land as untyped `lines` sections and are absent only from quiet stdout — r6 correction to
+   r5, which reported them as reaching neither). The WATCHLIST is deliberately
+   NOT folded in here: per R-watchlist it becomes its own surface (SEP16). (r6: the "also cures its
+   live quiet-mode drop" clause that stood here is RETIRED — `039972e`'s `captureReport` wrap
+   already put it in the dump, and SEP16 keeps the main scan's compute + publication anyway.) Until this part lands, dropping any stdout is DATA LOSS, not relocation —
    that distinction is the whole chunk. (The CLAUDE.md/skill claims that the digest
    and amplitude are "console-only, never in screen.json" are reconciled in the same commit: the
    published root `screen.json` app artifact is unchanged — this is the gitignored last-report
@@ -499,35 +532,231 @@ the SEP11a footer (elevated + no ledger entry) once it lands.
 **Ruling dependency:** R-surface (make it the skill default; R10 wording note). R-coverage binds
 the design (every table the scan runs stays); R-watchlist moves the watchlist table to SEP16.
 
-### SEP16 — the watchlist becomes its own scan (NEW r5; fixes a LIVE defect; R-watchlist is RULED)
-**The defect (verified at code level; coordinator-verified at runtime):** under the quiet default,
-the watchlist section — 60 rows deliberately exempt from every floor and gate so they CANNOT be
-filtered — prints via bare `console.log` (`screen:2540`), which the quiet default stubs, and never
-enters the render dump. So the rows doctrine says can "never [be] silently drop[ped]" are dropped
-by the MECHANISM on every default run. The dump was already lossy before anything was proposed
-dropped from stdout.
-**Change (per R-watchlist — a separate surface, not a section stapled to every scan):** a
-dedicated watchlist mode/command (shape for the executor: `screen-flip-niches.mjs --mode watchlist`
-or a thin sibling command — whichever keeps ONE compute path; the current watchlist code at
-`screen:2452-2556` moves rather than duplicates). It renders through the report path (`emitReport`)
-so its output exists in stdout AND the dump, and writes its own last-report entry. The scan's
-digest keeps a one-line pointer (`watchlist: N items — run the watchlist scan`) so the surface is
-never invisible from the main path. **The honesty rule travels intact:** exempt from floors/gates,
-never silently dropped, each row carrying the note saying what a gate would have hidden.
-`/scan`'s skill text + CLAUDE.md's ask-routing table gain the new surface; the WATCHLIST tier
-entry in render.mjs's registry is reconciled.
-**Verify:** the new surface's table byte-matches the old section's table on the same inputs
-(mechanical, the SEP4 shape); a quiet-default run of the MAIN scan no longer silently computes-
-and-drops the section; the dump-completeness assertion (SEP14) covers the new entry; full checks
-job; `lint-skills` green.
-**Output/prose delta:** main-scan stdout −~3,000 tokens (the watchlist section moves, replaced by
-a one-line pointer); the rows stay one command away.
-**Falsifier + observer:** a watchlist row that would have warned (falling, gate-hidden note) goes
-unseen for a session because the separate scan was never run — observer: the digest's pointer line
-(names N so an unrun watchlist scan is visible), plus Ben's own cadence ruling when he uses it —
-if the pointer proves insufficient, the fallback is folding the TABLE (not the notes) back into
-the decision surface, recorded here as the pre-agreed revert.
-**Ruling dependency:** R-watchlist (RULED — this chunk is its encoding).
+### SEP16 — the watchlist: split the PERMISSION set from the REPORT (R-watchlist is RULED)
+**Warrant, RESTATED r6.** r5 justified this chunk as a live defect (the section reaching neither
+stdout nor the dump). **That warrant is gone** — `039972e` wrapped `runWatchlist` in `captureReport`
+(`screen:2998`), so the rows are in the dump on every default run. Two warrants survive, and they
+are stronger than the one they replace:
+
+1. **R-watchlist is RULED** — a distinct question gets a distinct command, this plan's thesis.
+2. **`watchlist.json` conflates two jobs under one name** (r6, verified): a load-bearing
+   PERMISSION/PRIORITY set that eight code paths consult, and a 60-row REPORT that is measurably
+   answering the wrong question about its own contents. Anchor: **Soulreaper axe at 404.62m graded
+   `A- (thin) · net 1.01m P~0.50 ttf~34.6h`** — a two-hour band read on an item held for weeks,
+   because `screen:2485`'s own `P6b` comment says a watchlist row has no niche context and is
+   therefore ranked under the neutral band thesis. This is not a `rateItem` defect; it is the
+   correct answer to a question nobody asked. Supporting measurements on the current `screen.json`:
+   **45 of 60 rows appear in no niche table** (so the section is NOT redundant — "delete it" is the
+   wrong move), and the grade spread is `A- (thin)` 30 · `D (thin)` 20 · `C (thin)` 5 · `B- (thin)` 3 ·
+   `B (thin)` 2 — half the table on one letter, every row on the same caveat.
+
+**Five r6 findings that CONSTRAIN the design. Each was verified against source; each fails
+SILENTLY with CI green, which is why they are listed before the change and not after it.**
+
+- **F-a — `why` metadata CANNOT live in `watchlist.json`.** Two independent blockers.
+  *(i) The app owns the file and rewrites it as bare numeric ids.* `js/ui.js:129-132` — every
+  `toggleWatch` calls `pushWatchlist`; `:153-160` writes `STATE.watchlist` verbatim, which is an
+  array of numeric ids (`js/state.js:60`); `dev-server.mjs:100-115` validates nothing and writes it
+  to `ROOT/watchlist.json`. One star-click on localhost destroys every annotation AND all 60 names,
+  with no git review.
+  *(ii) An object entry silently EMPTIES the permission set.* `buildMapping.resolve`
+  (`marketfetch.mjs:138-144`) does `String(token).trim()`, so an object entry becomes
+  `"[object Object]"` → no `/^\d+$/` match → `byName` miss → **returns `null`, does not throw**. Six
+  loaders share the pattern and every one of them `continue`s on null: `screen:2408-2419`,
+  `quote-items.mjs:81-91`, `watch-positions.mjs:97-107`, `read-schedule.mjs:290-295`,
+  `report-archive-gate.mjs:55-56`, `js/ui.js:505-508`. The try/catch at `screen:2792` never fires —
+  the set just goes empty, and every grant below turns off at once. `read-schedule.mjs --audit`
+  (`:417`, `:245-262`) would then propose every already-watchlisted item as a new addition.
+  **⇒ role metadata goes in a SEPARATE id-keyed sidecar; `watchlist.json` stays the bare array the
+  app owns.** That makes the permission half byte-identical by CONSTRUCTION rather than by intent.
+- **F-b — there are at least EIGHT permission/priority grants, not the four in circulation.**
+  (1) gate exemption via the `watchedIds` arg (`gatecandidates.mjs:407`, called `screen:2858`);
+  (2) **the BAND-STACK bounded fetch reserve — `WATCH_RESERVE_DEFAULT = 24`**
+  (`gatecandidates.mjs:141`), consumed by `rankAndSlice` `:501` and `admission.mjs:198,251`, with
+  skip reason `watch-reserve-full` at `admission.mjs:376`; (3) the AMPLITUDE reserve
+  (`gatecandidates.mjs:532-540`), a DIFFERENT mechanism that is **UNBOUNDED** — its own comment says
+  so; (4) the amplitude Stage-1 proxy-floor bypass (`:405`); (5) `subFloorFallback` (`:468`);
+  (6) the sub-BE render-filter exemption (`screen:1417`); (7) the `NOISE_OFFER_GP` incidental-lot
+  exemption in BOTH `quote-items.mjs:696` and `watch-positions.mjs:630`; (8) **two big-ticket
+  FORCE-INCLUDES** — `quote-items.mjs:874` (`cost >= BIG_TICKET_GP || watchlistIds.has(itemId)`,
+  gating the window-exit read, reused `:948`) and `watch-positions.mjs:730` (WC1 window-clear rung).
+  Grants 7 and 8 mean "permission set" undersells it: membership already changes what `/positions`
+  and `watch-positions` PRINT. It is a permission **and priority** set, and freezing it means
+  freezing both. Two raw-NAME consumers (`read-schedule.mjs:290`, `report-archive-gate.mjs:55`)
+  never resolve to ids at all, so they need the name array intact, not just the id set.
+- **F-c — the report half is NOT free to move: it is half the retro ledger.** `runWatchlist` calls
+  `logSuggestions('screen', {mode:'watchlist'}, sugg)` at `screen:2497`, and that write is
+  **13,380 of 26,832 rows in `suggestions.jsonl` — 49.9%, larger than band's 10,269**
+  (r6-measured; recount by grouping the file on `context.mode`). Nothing filters on it and no test
+  covers it, so deleting it breaks nothing and moves real numbers: a measured differential has
+  `analyze-record.mjs` band taken 71→85 with realised Σ 5.30m→6.73m, churn 15→24, and **§5's Bar-E
+  headline flipping from "0/11 reached" to "1/12 reached"** [coordinator-measured].
+  *Mechanism — claim-stealing:* `'watchlist'` is absent from `HORIZON_BY_MODE`
+  (`retrojoin.mjs:49-52`), so `horizonFor` (`:53-55`) falls to `HORIZON_DEFAULT_SEC = 24h` (`:40`),
+  which is LONGER than band/churn's `HORIZON_INTRADAY_SEC = 12h` (`:38`); `retrojoin.mjs:147-155`
+  awards each buy to the **latest qualifying** (nearest-prior) suggestion in horizon, and watchlist
+  rows are logged for all 60 items on every scan, so they usually win.
+  *Bias axis to state whenever these numbers are quoted:* **12 ids are logged ONLY under watchlist
+  mode** (excluding the mode-less `(none)` bucket — including it, the count is 10; the exclusion is
+  the right basis because the claim is about NICHE coverage) — Dragonfire shield, Serpentine helm
+  (uncharged), Soulreaper axe, Eclipse atlatl, Archers ring, Granite maul, Aranea boots, Masori
+  mask (f), Malediction ward, Burning claws, Mystic smoke staff, Defence potion(4) — i.e. exactly
+  the gate-exempt big-ticket gear class, 17.1% of item-days. Cutting the log does not just shrink
+  the ledger, it removes a CLASS from it.
+  *Latent bug, recorded not fixed here:* `analyze.mjs:235-241` skips only `'(none)'`, and
+  watchlist's `realisedN = 32 ≥ minN = 20`, so **`watchlist` can already surface as a
+  tuning-candidate "niche" that is not a niche.** Fix belongs with the perNiche rollup, not with
+  this chunk; recorded in §3's open defects.
+- **F-d — the split would open a doctrine hole.** `scan/SKILL.md:934-937`: falling watchlisted items
+  are excluded from every niche table (only HELD rows carry `surviveMode`'s falling bypass) and
+  "appear only in the Watchlist section." Move that section away and **a falling watchlisted item
+  appears NOWHERE in a scan** — violating `:938` "always report, honestly." ⇒ the roll-up must
+  **NAME** falling/crash-risk watchlisted items, never merely count them. `SKILL.md:867-868` must
+  also be reconciled: its `watch-reserve-full` footer tells the reader to "read it there" in a
+  section that will no longer exist on that surface.
+- **F-e — every coupling above fails silently, and CI stays green.** `js/ui.js:440-443` guards
+  `if (wl && Array.isArray(wl.rows) && wl.rows.length)`, so a null `screen.json` `watchlist` key
+  omits the section with no crash and no schema bump. `smoke-test.mjs:130` asserts a `watchlist`
+  TAB — the unrelated app-side editor (`panel-watchlist`) — and the scan pane's content score stays
+  positive off the niche tables. There is NO tripwire for any of F-a…F-d. The acceptance criteria
+  below are written to BE the tripwire.
+
+**Decision 1 (the render-vs-ledger fork) — CHOSEN: separate WHERE IT RENDERS from WHAT IT LOGS.**
+The main scan KEEPS computing the watchlist, keeps `logSuggestions` at `screen:2497` firing
+unchanged, and keeps publishing `screen.json`'s `watchlist` + `html.watchlist`; only the rendered
+TABLE leaves the main surface. Rejected alternative: fix `HORIZON_BY_MODE` first as a prerequisite.
+Why:
+  (i) Keeping the log is the NULL action for the ledger — it makes the render move provably
+  orthogonal to the dataset, and orthogonality is checkable by counting rows. The horizon fix is not
+  checkable: the 71→85 differential shows the numbers MOVE, not which attribution is CORRECT, and
+  there is no ground truth to adjudicate it against.
+  (ii) `retrojoin.mjs:45-47` already says, about the amplitude horizon, that widening it "CHANGES
+  WHICH FILLS THE RETRO ATTRIBUTES … so it is an owner call, not a doc-pass edit." The same
+  sentence governs adding `watchlist`. Making a render chunk depend on it blocks a ruled surface
+  change behind an unruled measurement decision.
+  (iii) **Stated honestly: this choice PRESERVES the claim-stealing.** The retro is contaminated
+  today, before SEP16, and SEP16 neither causes nor cures it. F-c's differential is a measurement of
+  a PRE-EXISTING defect that the deletion experiment surfaced. It is elevated to a named open
+  ruling (R-retrohorizon, §4) rather than silently folded in.
+  *Consequence that constrains R-watchlist's reading, flagged for veto:* "not automatically stapled
+  to the regular path" can only mean the SURFACE, not the compute. A main scan that stops computing
+  the watchlist stops logging it, which is exactly the 49.9% ledger change above. If the owner
+  intends the compute to leave too, that is a ledger ruling and R-retrohorizon must be settled first.
+
+**Decision 2 (the grade-artifact fork) — CHOSEN: the move reproduces the omission exactly; wiring it
+up is a SEPARATE, separately-ruled chunk (SEP16e).**
+"100% of rows carry `(thin)`" is confirmed (60/60) but is a **code-path artifact, not a property of
+the items**: `screen:2487` calls `estimateRank(FLIP_NICHES.band, row)` with **no third argument**,
+while the niche path at `:1358` passes `{reach, askReach, askPlacement}`. With no `extra`,
+`families.mjs:354-372` sets `reach: null, askReach: null` → pure prior → `pFillN = 0` by
+construction → the confidence marker fires on every row. So:
+  - **Option 1 (chosen, SEP16b):** the new surface calls `estimateRank` with no `extra`, exactly as
+    today. Grades byte-match; the marker stays; the move is provably mechanical (this plan's own
+    rule: mechanical moves are separate chunks from behavior changes).
+  - **Option 2 (SEP16e, NOT shipped by default):** wire `extra` in. **Costed, r6:** `reachExtra`
+    needs `series1h.get(id)` (`screen:1172-1183`) and `askReachExtra` needs the ask-side validator
+    result (`:1198-1201`) — but `runWatchlist(map, ctx, guide, latest, qcache, series5m)` fetches
+    only **5m and 6h and has no `series1h` in scope**. Only the 15 ids the niche pools already
+    covered would have a 1h series; the other **45 would need a new 1h fetch per scan**. So Option 2
+    is not a wiring tidy-up — it is a fetch-budget change AND a grade-distribution change on exactly
+    the gate-exempt big-ticket class. It gets its own before/after and its own ruling.
+  ⇒ "renders unchanged" is only true under Option 1, and SEP16b's acceptance test is what keeps it
+  true.
+
+**Change — sub-chunks (each independently landable; SEP16b→d touch one new file and must be
+hand-serialized against each other).**
+
+- **SEP16a — the sidecar + the permission fixture (foundation; NO behavior change).**
+  New `watchlist-meta.json` at the repo root: an id-keyed object,
+  `{ "<itemId>": { "why": "target|hold|universe|probe", "note": …, "addedTs": …, "level": … } }`.
+  Id-keyed because names are the app's write-back casualty and ids are what every grant consults.
+  New `pipeline/lib/config/watchlist.mjs` — the ONE reader, exporting `loadWatchlistIds(map)`,
+  `loadWatchlistNames()` (for the one genuinely name-keyed consumer, `read-schedule`’s `buildAudit` join — r6 said two; `report-archive-gate` already resolved to ids) and `loadWatchlistEntries(map)` (ids ∪
+  sidecar). **Degrade path, explicit:** sidecar absent → **every entry is `universe`**, never an
+  error; sidecar unparseable → same, plus one stderr line; an id in the sidecar that is NOT in
+  `watchlist.json` → ignored (the array is authoritative for membership); a `why` that is missing,
+  unknown or non-string → `universe` + one stderr line. The sidecar is never consulted by any of
+  F-b's eight grants. Repoint the FIVE node-side loaders at the shared reader (r6 said six: `js/ui.js`’s `loadRepoWatchlist` `fetch`es the file in the browser and cannot import a node module, so the app keeps its own resolve and the F-a(ii) tripwire does NOT cover it); `watchlist.json` parsing is
+  untouched.
+  **Verify:** new `pipeline/test/watchlist-permission.test.mjs` pins — **P1** the id set is identical
+  with the sidecar present, absent, empty, garbled, and containing unknown roles (the property the
+  whole chunk rests on); **P2** `loadWatchlistNames()` never returns `"[object Object]"`; **P3** an
+  object entry accidentally landing in `watchlist.json` FAILS LOUDLY at the loader instead of
+  quietly losing that member (or, on a whole-file rewrite, emptying the set — r6 claimed one bad
+  entry emptied it; measured against the pre-change loader it cost exactly one member) — the F-a(ii) tripwire, which does not exist today; **P4**
+  absent/unreadable/non-array → empty set, no throw. Plus a live before/after dump of the sorted id
+  set from all six call sites (five node + the app’s, read separately) on the real file, diffed to empty in the commit message. `checks` job
+  green; README registry entries for BOTH new files at creation; `.gitignore` decision recorded
+  (proposed: TRACKED, so the roles survive a clone; it holds no PII).
+- **SEP16b — `pipeline/commands/read-watchlist.mjs`: the report surface (MECHANICAL move).**
+  The rendering moves out of `runWatchlist` into the new command, through `emitReport` so it exists
+  in stdout AND its own dump entry. ONE compute path — the command imports the same row builder;
+  no duplicate quote loop. Decision 2 Option 1 applies: `estimateRank` is called with no `extra`.
+  **Verify:** the new surface's table **byte-matches** the old section's table on the same inputs
+  (the SEP4 shape) — including the grade column, which is the Decision-2 tripwire; `--json`;
+  empty/absent watchlist → clean message, exit 0.
+- **SEP16c — the main scan's roll-up (the F-d doctrine fix).**
+  `runWatchlist` keeps compute + `logSuggestions` + publication (Decision 1) and loses only its
+  three `console.log`s (`screen:2499-2501`). In their place, one line that **NAMES** the
+  falling/crash-risk rows: `watchlist: 60 tracked · 15 crossed into a niche table · falling: <names>
+  · run read-watchlist.mjs`. The falling/crash-risk set comes from data already computed
+  (`row.falling` / `watchlistNote`'s reason, `screen:2434`) — no new signal.
+  **Verify, and these are the F-e tripwires:** (1) `suggestions.jsonl` gains the SAME number of
+  `mode:'watchlist'` rows per pass as before — **counted, not assumed**; (2) `screen.json`'s
+  `watchlist.rows` length, `watchlist.headers` and `html.watchlist` are unchanged (diff two
+  artifacts); (3) the deployed Scan tab still renders the section — checked in a real browser, since
+  `js/ui.js:440-443` guarantees CI cannot see this; (4) a falling watchlisted item is NAMED on the
+  main scan — assert with a fixture that has one, because this is the doctrine hole.
+  **Docs:** `scan/SKILL.md:867-868` (the `watch-reserve-full` "read it there" pointer) and `:934-938`
+  (the Watchlist-section bullets) reconciled IN PLACE, `version:` bumped; CLAUDE.md's ask-routing
+  table gains the new command; `render.mjs`'s WATCHLIST tier entry reconciled.
+- **SEP16d — the roles earn their keep: `target` / `hold` / `probe` + `--audit`.**
+  `target` (I intend to buy): multi-week range position + accumulation level, composed from
+  `js/termstructure.mjs` + `range-position.mjs` + `hourly-lmh.mjs`. Read ASYMMETRICALLY — range
+  position is a caution at extremes, never a credit; the wording must not imply "low in the range,
+  therefore buy". `hold` (I own it): the exit level and the **ask-reach AT that level**, from
+  `js/windowread.mjs` (`windowStats`/`reachedDays`/`placement`/`realityClause`) — the same numbers
+  `read-window-range.mjs --ask` prints, routed, not recomputed. `universe`: no separate render; the
+  roll-up covers it — say that plainly rather than implying a fifth surface. `probe`: ever traded /
+  ever surfaced / ever held; three nos ⇒ prune candidate. `--audit` is the PRUNE direction and
+  **imports `buildAudit` from `read-schedule.mjs:249`** (already exported) for the ADD direction —
+  two homes for "who belongs on the watchlist" is how forks are born.
+  **Anchor this chunk answers:** an Armadyl crossbow listed at 37m sat unsold for days;
+  `read-window-range.mjs "Armadyl crossbow" --ask 37000000` returns `reached 2/14 days · placement
+  p86 · ⚠ spike-top`. It was never auto-surfaced because `/positions`' window-exit note fires off a
+  big-ticket lot in `positions.json` (F-b grant 8) and that lot never reached the book. **No lot ⇒
+  no note ⇒ zero automatic reach checks on an untracked 36m position.**
+  **Verify:** replay the anchor from a sidecar fixture and show the clause side-by-side with
+  `read-window-range.mjs`'s — the ONE falsifiable claim these roles make; assert it prints with NO
+  `positions.json` lot present, since that is the entire reason the role exists; no `level` and no
+  live ask → an honest "no level to test", never a fabricated one. Nothing writes `watchlist.json`.
+- **SEP16e — the `extra`-wiring question (Decision 2 Option 2). NOT scheduled; needs a ruling.**
+  Ships only against a costed before/after: the grade-distribution delta on the 60, the 45 new 1h
+  fetches per scan, and whether the resulting `pFillN > 0` is honest for rows that are gate-exempt
+  precisely because their books are unverifiable. Until then the marker stays, and the reason it
+  fires is documented at the call site so no future reader mistakes it for an item property.
+
+**Non-goals (each is a plausible wrong turn).** Do NOT touch `rateItem`/`estimateRank`/
+`THIN_GRADE_CAP` — the undifferentiated grade is a REPORT defect (the band answer printed for 45
+items no band pass would admit), and 60/60 `(thin)` is Decision 2's artifact plus a selection effect,
+the watchlist being deliberately big-ticket and slow. Do NOT change any gate, floor, threshold or
+reserve. Do NOT migrate `watchlist.json` to ids or to objects. Do NOT add a new estimator.
+
+**Output/prose delta:** main-scan stdout −~3,000 tokens (the table moves; a naming roll-up replaces
+it). **No compute or fetch saving** — Decision 1 keeps the quote loop where it is; any claim of a
+scan speed-up from this chunk is false.
+
+**Falsifier + observer:** a watchlist row that would have warned goes unseen because the separate
+command was never run. Observer: the roll-up NAMES the falling/crash-risk rows (F-d), so the
+time-sensitive half is visible without running anything; the rest is Ben's cadence. Pre-agreed
+revert if the pointer proves insufficient: fold the TABLE (not the notes) back into the decision
+surface. Second falsifier, specific to Decision 1: if a future reader finds the retro numbers
+changed across SEP16, the row-count assertion in SEP16c was wrong — that assertion is the whole
+guarantee.
+
+**Ruling dependency:** R-watchlist (RULED — this chunk is its encoding), with the surface-vs-compute
+reading flagged for veto in Decision 1; R-retrohorizon (OPEN, §4) gates SEP16e's sibling question
+and any future removal of the watchlist log.
 
 ### SEP2 — console-mutation containment (first follow-on per risk-weighted order)
 **Change:** new `pipeline/ci/lint-console-mutation.mjs`: assignment to `console.log`/`console.error`/
@@ -708,7 +937,9 @@ SEP11a footer (prints the contradiction in the same output the disposition rides
 
 Encoded: SEP1a/1b (runner), SEP2 (lint), SEP12 (ruled deletion + cell), SEP4 (extraction), SEP5/6
 (structs + formatter + coverage tests), SEP7's guards + log field + gloss, SEP8 (anchor age), SEP9
-(predicates), SEP10 (artifacts + path check), SEP11a (ledger + footer), SEP15 (lifecycle repair), SEP16 (watchlist surface — mode + report path encoded; its cadence stays Ben's).
+(predicates), SEP10 (artifacts + path check), SEP11a (ledger + footer), SEP15 (lifecycle repair), SEP16 (watchlist surface — the sidecar schema, the five-node-loader read path and the roll-up's
+falling-NAMING rule are encoded; WHICH role an item deserves stays judgment, proposed by
+`--audit` and never auto-written; its cadence stays Ben's).
 Judgment (tagged in skills / process rules): SEP13's stopping rule (a process rule — CLAUDE.md is
 its one home); SEP14's one judgment residue — the R-surface default choice (its mode, dump
 completeness and reader are encoded, CI-pinned); SEP11b's dispositions; C-MEASURED's residual half (nothing
