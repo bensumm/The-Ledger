@@ -561,18 +561,25 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   the schema and the degrade path, pinned by `pipeline/test/watchlist-permission.test.mjs`.
 - `pipeline/lib/config/watchlist.mjs` — the ONE reader for both files above (SEP16a), replacing the
   separate parse in `screen-flip-niches.mjs`, `quote-items.mjs`, `watch-positions.mjs`,
-  `read-schedule.mjs` and `report-archive-gate.mjs`. Exports `loadWatchlistIds(map)` (the permission
-  set), `loadWatchlistEntries(map)` (ordered `{id, name, why, note, addedTs, level}`, first
-  occurrence wins) and `loadWatchlistNames()` (raw tokens, for the name-keyed `buildAudit` join).
+  `read-schedule.mjs` and `report-archive-gate.mjs`. All three loaders take ONE options bag
+  `{ map, root, tolerant }`: `loadWatchlistIds` (the permission set), `loadWatchlistEntries`
+  (ordered `{id, name, why, note, addedTs, level}`, first occurrence wins) and `loadWatchlistNames`
+  (raw tokens). The bag is not cosmetic — the original `loadWatchlistNames(root)` /
+  `loadWatchlistIds(map, root)` split meant `loadWatchlistNames(map)` returned `[]` in silence.
   **Degrade:** absent/unreadable/non-array → empty set, never a throw — five call sites rely on that.
-  **The one LOUD case:** an OBJECT entry inside the array. `buildMapping.resolve`
+  **The MALFORMED-ENTRY case:** an OBJECT entry inside the array. `buildMapping.resolve`
   (`pipeline/lib/market/marketfetch.mjs`) does `String(token)`, so an object becomes
-  `"[object Object]"`, misses `byName`, and returns `null` **without throwing** — which empties the
-  set and switches every grant off at once with CI green. The reader throws `WatchlistFormatError`
-  and writes to `console.error` (stderr survives the screen's quiet-mode `console.log` stub, so the
-  line is visible even where a caller swallows the throw). `report-archive-gate.mjs` passes
-  `REPO_DIR` explicitly because it has always read the CLONE root, which differs from the worktree
-  root under `git worktree`; that divergence is preserved deliberately, not fixed here.
+  `"[object Object]"`, misses `byName`, and returns `null` **without throwing**. Measured against the
+  verbatim pre-SEP16a loader: that costs exactly ONE member (60 clean → 59 with one member rewritten
+  as an object), and only a WHOLE-FILE schema rewrite empties the set — which `pushWatchlist` cannot
+  produce, it writes bare numeric ids. So the default throws `WatchlistFormatError` (plus
+  `console.error`), and the five desk commands pass `tolerant: true`: the bad entries are dropped, the
+  rest still grant, and ONE banner goes straight to `process.stdout` — not through `console.log`,
+  which quiet mode stubs and the screen's report capture reassigns — deduped to once per process
+  because two commands read the file twice. An inform-only read must not die on one bad entry.
+  `report-archive-gate.mjs` passes `REPO_DIR` explicitly because it has always read the CLONE root,
+  which differs from the worktree root under `git worktree`; that divergence is preserved
+  deliberately, not fixed here.
 - `alerts.json` — tracked named price alerts (`{itemId, direction, price, note?}`) read by
   `pipeline/commands/trigger-alerts.mjs` (N1); ships empty
 - `dip-watchlist.json` — tracked repo-root pool of flush candidates for the `--dip` loop (ships empty
@@ -1267,9 +1274,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     consumer bypassing that guard, which shipped a buy-high/sell-low agenda on 7.3% of items.** Three MUTUALLY-EXCLUSIVE modes:
     `-c`/`--current-position` (DEFAULT) = the actionable set, open lots in `positions.json` ∪ open offers
     in `offers.json` (`readOpenPositions`+`readOffersSnapshot`); `-w`/`--watchlist` = `watchlist.json`
-    names via `loadMapping` (`-c`+`-w` UNION, rows tagged C/W); `--audit` = flipped-but-not-watchlisted
+    names OR bare ids via `loadMapping` (`-c`+`-w` UNION, rows tagged C/W); `--audit` = flipped-but-not-watchlisted
     review off `positions.json` `closed` (trade count + realised P/L, NO market fetch, review-only — never
-    edits `watchlist.json`). Per-item `fetchTs('1h')`+`hourProfile` pooled at `FETCH_CONCURRENCY=5`,
+    edits `watchlist.json`); its "already watchlisted" join is **ID-keyed** off `loadWatchlistEntries` —
+    a name join silently proposed re-adding every watched item as soon as the app rewrote the file as ids. Per-item `fetchTs('1h')`+`hourProfile` pooled at `FETCH_CONCURRENCY=5`,
     served by the 15-min disk cache; INFORM-ONLY n≈0 (PLANS, never gates). Pure `hoursUntil`/`isInsideWindow`/
     `agendaRowsForItem`/`buildAudit` helpers are fixture-tested (`pipeline/test/schedule.test.mjs`); its
     `buildAgenda`+`loopHeaderLine` are imported in-process by `run-loop.mjs` for the `⏭ next:` banner.

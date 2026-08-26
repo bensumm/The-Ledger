@@ -8,21 +8,32 @@
  * file as bare numeric ids on every star-click (`js/ui.js` pushWatchlist). No grant reads the
  * sidecar — the id set is sidecar-independent by construction, which `watchlist-permission.test.mjs` pins.
  *
+ * ONE OPTIONS BAG for all three loaders: `{ map, root, tolerant }`. A positional second argument was
+ * the original shape and it made `loadWatchlistNames(map)` return `[]` in silence — the exact class
+ * this module exists to close.
+ *
  * Degrade: absent/unreadable/non-array watchlist → empty, never a throw; absent/garbled/unknown-role
- * sidecar → every entry `universe`, never a throw. An OBJECT entry inside the array is the one LOUD
- * case: `map.resolve` stringifies it to "[object Object]", misses `byName`, returns null, and every
- * grant turns off at once with CI green. It throws, and prints to stderr — which survives the
- * quiet-mode `console.log` stub that would swallow anything else.
+ * sidecar → every entry `universe`, never a throw.
+ *
+ * MALFORMED ENTRY. `map.resolve` stringifies an object entry to "[object Object]", misses `byName` and
+ * returns null without throwing, so a pre-SEP16a loader quietly lost THAT ONE MEMBER and kept the rest
+ * (measured against the verbatim old loader: 60 clean → 60 with a stray object → 59 with a member
+ * rewritten as one). Only a WHOLE-FILE schema rewrite emptied the set, which `pushWatchlist` cannot
+ * produce — it writes bare numeric ids.
+ *
+ * So strict-throw is the default (importers and future callers get the loud contract), and the desk
+ * commands pass `tolerant: true`: keep every well-formed member, print ONE banner. Aborting an
+ * inform-only read over one bad entry destroys more than the member it saves.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-export const WATCHLIST_ROOT = path.join(HERE, '..', '..', '..');
-export const WATCHLIST_FILE = 'watchlist.json';
-export const WATCHLIST_META_FILE = 'watchlist-meta.json';
-export const WATCHLIST_ROLES = ['target', 'hold', 'universe', 'probe'];
+const WATCHLIST_ROOT = path.join(HERE, '..', '..', '..');
+const WATCHLIST_FILE = 'watchlist.json';
+const WATCHLIST_META_FILE = 'watchlist-meta.json';
+const WATCHLIST_ROLES = ['target', 'hold', 'universe', 'probe'];
 export const WATCHLIST_ROLE_DEFAULT = 'universe';
 
 export class WatchlistFormatError extends Error {
@@ -34,9 +45,32 @@ function readJson(root, file) {
   catch (e) { return { ok: false, missing: e && e.code === 'ENOENT', message: (e && e.message) || String(e) }; }
 }
 
-// Raw tokens in file order, for the name-keyed consumers. A number is stringified (map.resolve and
-// buildAudit both stringify anyway); anything that is neither string nor finite number is the loud case.
-export function loadWatchlistNames(root = WATCHLIST_ROOT) {
+const shapeOf = e => (e === null ? 'null' : Array.isArray(e) ? 'array' : typeof e);
+const article = s => (/^[aeiou]/.test(s) ? 'an' : 'a');
+
+function malformedLine(bad, total, tolerant) {
+  const head = bad.slice(0, 3).map(b => `[${b.i}] is ${article(b.shape)} ${b.shape}`).join(', ');
+  const rest = bad.length > 3 ? ` (+${bad.length - 3} more)` : '';
+  const scope = !tolerant ? 'refusing a watchlist that is not a flat list of names/ids'
+    : bad.length >= total ? 'no member resolves — watchlist permissions OFF this run'
+    : `${bad.length} of ${total} entries dropped — the other ${total - bad.length} still grant`;
+  return `⚠ ${WATCHLIST_FILE}${head}${rest}, not an item name or id — ${scope}`;
+}
+
+// Straight to the stream: quiet mode stubs `console.log` and the screen's report capture reassigns it
+// to a buffer, so a banner routed through console reaches no human on the paths that need it most.
+// ONCE per process — screen and watch-positions each read the file twice, and run-loop re-execs the
+// command per tick, so per-process is per-pass.
+const ANNOUNCED = new Set();
+function banner(msg) {
+  if (ANNOUNCED.has(msg)) return;
+  ANNOUNCED.add(msg);
+  process.stdout.write(msg + '\n');
+}
+
+// Raw tokens in file order, for the name-keyed consumers. A number is stringified (map.resolve
+// stringifies anyway); anything that is neither string nor finite number is malformed.
+export function loadWatchlistNames({ root = WATCHLIST_ROOT, tolerant = false } = {}) {
   const r = readJson(root, WATCHLIST_FILE);
   if (!r.ok) {
     if (!r.missing) console.error(`${WATCHLIST_FILE} unreadable — watchlist permissions OFF this run: ${r.message}`);
@@ -46,17 +80,21 @@ export function loadWatchlistNames(root = WATCHLIST_ROOT) {
     console.error(`${WATCHLIST_FILE} is not an array — watchlist permissions OFF this run`);
     return [];
   }
-  return r.value.map((entry, i) => {
-    if (typeof entry === 'string') return entry;
-    if (typeof entry === 'number' && Number.isFinite(entry)) return String(entry);
-    const shape = entry === null ? 'null' : Array.isArray(entry) ? 'array' : typeof entry;
-    const msg = `${WATCHLIST_FILE}[${i}] is a ${shape}, not an item name or id — the whole permission set would resolve to nothing`;
-    console.error(msg);
-    throw new WatchlistFormatError(msg);
+  const out = [], bad = [];
+  r.value.forEach((entry, i) => {
+    if (typeof entry === 'string') out.push(entry);
+    else if (typeof entry === 'number' && Number.isFinite(entry)) out.push(String(entry));
+    else bad.push({ i, shape: shapeOf(entry) });
   });
+  if (bad.length) {
+    const msg = malformedLine(bad, r.value.length, tolerant);
+    if (!tolerant) { console.error(msg); throw new WatchlistFormatError(msg); }
+    banner(msg);
+  }
+  return out;
 }
 
-export function loadWatchlistMeta(root = WATCHLIST_ROOT) {
+export function loadWatchlistMeta({ root = WATCHLIST_ROOT } = {}) {
   const r = readJson(root, WATCHLIST_META_FILE);
   if (!r.ok) {
     if (!r.missing) console.error(`${WATCHLIST_META_FILE} unreadable — every watchlist entry read as ${WATCHLIST_ROLE_DEFAULT}: ${r.message}`);
@@ -84,10 +122,10 @@ function roleOf(meta, id) {
 
 // Resolved members in file order, first occurrence wins, unresolvable tokens skipped. An id present
 // in the sidecar but absent from the array is ignored — the array is authoritative for membership.
-export function loadWatchlistEntries(map, root = WATCHLIST_ROOT) {
-  const meta = loadWatchlistMeta(root);
+export function loadWatchlistEntries({ map, root = WATCHLIST_ROOT, tolerant = false } = {}) {
+  const meta = loadWatchlistMeta({ root });
   const seen = new Set(), out = [];
-  for (const token of loadWatchlistNames(root)) {
+  for (const token of loadWatchlistNames({ root, tolerant })) {
     const hit = map.resolve(token);
     if (!hit || seen.has(hit.id)) continue;
     seen.add(hit.id);
@@ -96,6 +134,6 @@ export function loadWatchlistEntries(map, root = WATCHLIST_ROOT) {
   return out;
 }
 
-export function loadWatchlistIds(map, root = WATCHLIST_ROOT) {
-  return new Set(loadWatchlistEntries(map, root).map(e => e.id));
+export function loadWatchlistIds({ map, root = WATCHLIST_ROOT, tolerant = false } = {}) {
+  return new Set(loadWatchlistEntries({ map, root, tolerant }).map(e => e.id));
 }

@@ -50,7 +50,7 @@ const run = (series, level, now) =>
   const map = await loadMapping();
   let targets = ids;
   if (!targets.length) {
-    targets = loadWatchlistEntries(map, REPO_DIR).map(e => e.id);   // REPO_DIR (the clone root, not this worktree) is this command's pre-existing choice, preserved
+    targets = loadWatchlistEntries({ map, root: REPO_DIR, tolerant: true }).map(e => e.id);   // REPO_DIR (the clone root, not this worktree) is this command's pre-existing choice, preserved
   }
   targets = targets.slice(0, LIMIT);
   if (!targets.length) { console.log('no targets resolved — pass ids explicitly'); return; }

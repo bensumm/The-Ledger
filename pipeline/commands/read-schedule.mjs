@@ -11,9 +11,9 @@
  * Three MUTUALLY-EXCLUSIVE modes of one entrypoint (not combinable flags):
  *   -c / --current-position   the actionable set — open lots in positions.json ∪ open offers in
  *                             offers.json (money in a GE slot). THE DEFAULT when no flag is passed.
- *   -w / --watchlist          watchlist.json (flat array of item-NAME strings), name→id via loadMapping.
+ *   -w / --watchlist          watchlist.json (item names OR bare ids), resolved via loadMapping.
  *   --audit                   flipped-but-not-watchlisted review off positions.json `closed` (trade
- *                             count + realised P/L); NO market fetch, short-circuits before the agenda.
+ *                             count + realised P/L); NO fetch, ID-keyed join, short-circuits the agenda.
  * (-c and -w may be combined to UNION the two lists; each row is tagged C / W / C/W. --audit is alone.)
  *
  * Honesty (process rule 4): windows are `hourProfile` medians, n≈0, INFORM-ONLY — same class as the
@@ -33,7 +33,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping, fetchTs, fetchLatest } from '../lib/market/marketfetch.mjs';   // fetchLatest (2026-08-10): the live leg the dip-not-below-live guard needs — without it deriveDiurnalRange's reprice cannot fire
-import { loadWatchlistNames } from '../lib/config/watchlist.mjs';
+import { loadWatchlistNames, loadWatchlistEntries } from '../lib/config/watchlist.mjs';
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot } from '../lib/reconstruct/offers.mjs';
 import { hourProfile, displayFitNights, WINDOW_RELIABLE_R, deriveDiurnalRange, realityClause } from '../../js/windowread.mjs';   // deriveDiurnalRange = the ONE home for the Ghrazi level guard; this file used to bypass it and shipped raw hourProfile levels. realityClause = the ONE renderer for the spike-top/stale flag (Chunk 2b) — do not re-implement the wording here
@@ -242,10 +242,9 @@ export function reverseFlipRows(state, { profileByItem = {}, reliableByItem = {}
   return rows;
 }
 
-// buildAudit({ closed, watchNames, mapping }) — group positions.json `closed` by itemId (count +
-// summed realised), resolve each id's NAME, and surface only ids whose name is NOT in watchlist.json.
-// The join is NAME-keyed (watchlist has no ids). Sorted by trade count desc (strongest signal first).
-export function buildAudit({ closed, watchNames, mapping }) {
+// buildAudit — flipped ids NOT in the watchlist, count + summed realised, trade-count desc. ID-keyed
+// because pushWatchlist rewrites watchlist.json as bare ids; a name join re-proposes watched items.
+export function buildAudit({ closed, watchIds, mapping }) {
   const byItem = new Map();
   for (const c of closed || []) {
     if (c == null || c.itemId == null) continue;
@@ -254,11 +253,11 @@ export function buildAudit({ closed, watchNames, mapping }) {
     g.realised += Number(c.realised) || 0;
     byItem.set(c.itemId, g);
   }
-  const watchSet = new Set((watchNames || []).map(n => String(n).toLowerCase()));
+  const watchSet = new Set(watchIds || []);
   const rows = [];
   for (const g of byItem.values()) {
     const name = (mapping && mapping.byId && mapping.byId[g.itemId] && mapping.byId[g.itemId].name) || ('#' + g.itemId);
-    if (watchSet.has(String(name).toLowerCase())) continue;   // already watchlisted → skip
+    if (watchSet.has(g.itemId)) continue;   // already watchlisted → skip
     rows.push({ itemId: g.itemId, item: name, trades: g.trades, realised: g.realised });
   }
   rows.sort((a, b) => (b.trades - a.trades) || (b.realised - a.realised));
@@ -324,7 +323,7 @@ export async function buildAgenda({ scope = ['c'], now = new Date(), repoRoot = 
     }
   }
   if (scope.includes('w')) {
-    const { items, warnings: w2 } = resolveWatchlist(loadWatchlistNames(repoRoot), mapping);
+    const { items, warnings: w2 } = resolveWatchlist(loadWatchlistNames({ root: repoRoot, tolerant: true }), mapping);
     for (const it of items) add(it.id, it.name, 'W');
     warnings.push(...w2);
   }
@@ -409,7 +408,8 @@ async function main() {
 
   if (AUDIT) {
     const mapping = await loadMapping();
-    const rows = buildAudit({ closed: readClosed(REPO), watchNames: loadWatchlistNames(REPO), mapping });
+    const watchIds = loadWatchlistEntries({ map: mapping, root: REPO, tolerant: true }).map(e => e.id);
+    const rows = buildAudit({ closed: readClosed(REPO), watchIds, mapping });
     console.log('# Watchlist audit — flipped but NOT in watchlist.json (proposed additions; review, never auto-added)\n');
     if (!rows.length) { console.log('(nothing to propose — every flipped item is already watchlisted)'); return; }
     console.log('| Item | Trades | Realised P/L |');

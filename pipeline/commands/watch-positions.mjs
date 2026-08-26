@@ -610,7 +610,7 @@ async function main() {
     if (err) { console.error('cannot read positions.json: ' + err); }
     else {
       posAge = ageMin;
-      const watchlistIds = loadWatchlistIds(map);
+      const watchlistIds = loadWatchlistIds({ map, tolerant: true });
       for (const { itemId, qty, avgCost, buyTs } of groups) {
         const name = map.byId[itemId]?.name || ('#' + itemId);
         if (qty * avgCost < NOISE_OFFER_GP && !watchlistIds.has(itemId)) { incidentalNames.push(name); continue; }
@@ -713,7 +713,7 @@ async function main() {
   const holdThesisStore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));   // TG1 read-only: agent-declared hold plans (gate the expected-underwater headline)
   const guideHist = loadGuideHistory(GUIDE_HISTORY);          // YP1 (#2) advisory: guide re-anchor history (gated → silent until it accrues)
   const newState = {};
-  const wlWindow = loadWatchlistIds(map);   // WC1: big-ticket force-include (mirrors the incidental filter's watchlist test) for the window-clear rung shadow
+  const wlWindow = loadWatchlistIds({ map, tolerant: true });   // WC1: big-ticket force-include (mirrors the incidental filter's watchlist test) for the window-clear rung shadow
   for (const it of held) {
     it.gate = { escalate: false, armed: false, reason: null };
     it._deltas = null; it._support = null; it._cutTrigger = null; it._thesis = null; it._pathCtx = null; it._display = null;

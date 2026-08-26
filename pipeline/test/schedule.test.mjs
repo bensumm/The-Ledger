@@ -15,11 +15,14 @@
  *     prominence-ranked SECONDARY marked `·2` off profile.dips[]/peaks[]); a null (too-thin)
  *     profile emits ZERO, and a length-1 dips[]/peaks[] never manufactures a secondary row.
  *   - resolveWatchlist skips an unresolvable name WITH a warning, never aborts.
- *   - buildAudit surfaces only flipped ids whose NAME is not watchlisted, count+summed realised,
- *     sorted by trade count desc.
+ *   - buildAudit surfaces only flipped ids NOT in the watchlist ID set, count+summed realised,
+ *     sorted by trade count desc. The join is ID-keyed because the app writes bare numeric ids.
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import fs, { readFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { loadWatchlistEntries } from '../lib/config/watchlist.mjs';
 import {
   hoursUntil, isInsideWindow, agendaRowsForItem, sortRows,
   resolveWatchlist, buildAudit, loopHeaderLine,
@@ -164,7 +167,13 @@ console.log('\nread-schedule -w resolution acceptance:');
 // mock mapping: same shape as marketfetch loadMapping()'s return (resolve + byId)
 const mockMapping = {
   byId: { 4151: { name: 'Abyssal whip' }, 561: { name: 'Nature rune' } },
-  resolve: (t) => ({ 'abyssal whip': { id: 4151, name: 'Abyssal whip' }, 'nature rune': { id: 561, name: 'Nature rune' } })[String(t).toLowerCase()] || null,
+  // Numeric token → itself, exactly as the real loadMapping resolves one: watchlist.json holds bare
+  // ids whenever the app has written it, and the audit join has to survive that shape.
+  resolve: (t) => {
+    const k = String(t).trim();
+    if (/^\d+$/.test(k)) return mockMapping.byId[+k] ? { id: +k, name: mockMapping.byId[+k].name } : null;
+    return ({ 'abyssal whip': { id: 4151, name: 'Abyssal whip' }, 'nature rune': { id: 561, name: 'Nature rune' } })[k.toLowerCase()] || null;
+  },
 };
 
 ok('resolveWatchlist: a known name resolves, an unknown name skips WITH a warning (no abort)', () => {
@@ -184,16 +193,28 @@ ok('buildAudit surfaces only the NOT-watchlisted flipped id, count + summed real
     { itemId: 561, realised: 30 },     // Nature rune again → count 2, realised 50
     { itemId: 999, realised: 5 },      // unknown id → '#999', not watchlisted
   ];
-  const rows = buildAudit({ closed, watchNames: ['Abyssal whip'], mapping: mockMapping });
+  const rows = buildAudit({ closed, watchIds: [4151], mapping: mockMapping });
   assert.equal(rows.length, 2, 'whip is watchlisted → excluded; nature rune + #999 remain');
   assert.equal(rows[0].item, 'Nature rune', 'most-flipped first (2 trades)');
   assert.equal(rows[0].trades, 2);
   assert.equal(rows[0].realised, 50, 'summed realised');
   assert.equal(rows[1].item, '#999', 'unknown id → #<id> fallback, still surfaced');
 });
+ok('--audit join survives an ID-format watchlist.json (the shape pushWatchlist writes)', () => {
+  // REGRESSION (SEP16a review). The CLI used to feed buildAudit raw NAME tokens and compare on
+  // lowercased names. js/ui.js pushWatchlist rewrites watchlist.json as bare numeric ids on every
+  // star-click, so that join matched nothing and --audit proposed re-adding items already watched.
+  // MUTANT: restore the name join (watchSet of lowercased tokens, test `name`) — the whip reappears.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sched-audit-'));
+  fs.writeFileSync(path.join(dir, 'watchlist.json'), JSON.stringify([4151]));
+  const watchIds = loadWatchlistEntries({ map: mockMapping, root: dir }).map(e => e.id);
+  assert.deepEqual(watchIds, [4151], 'the id-format file resolves to the whip');
+  const rows = buildAudit({ closed: [{ itemId: 4151, realised: 100 }, { itemId: 561, realised: 20 }], watchIds, mapping: mockMapping });
+  assert.deepEqual(rows.map(r => r.item), ['Nature rune'], 'the id-watchlisted whip must NOT be proposed');
+});
 ok('buildAudit: empty closed → empty rows (no crash)', () => {
-  assert.deepEqual(buildAudit({ closed: [], watchNames: [], mapping: mockMapping }), []);
-  assert.deepEqual(buildAudit({ closed: null, watchNames: null, mapping: mockMapping }), []);
+  assert.deepEqual(buildAudit({ closed: [], watchIds: [], mapping: mockMapping }), []);
+  assert.deepEqual(buildAudit({ closed: null, watchIds: null, mapping: mockMapping }), []);
 });
 
 // ── LEVEL GUARD (2026-08-10) ──────────────────────────────────────────────────────────────────────

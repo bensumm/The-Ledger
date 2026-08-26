@@ -2429,7 +2429,7 @@ function watchlistNote(row, d, bands, id, limit) {
   return '';                                               // would surface in a normal scan on merit
 }
 async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
-  const wl = loadWatchlistEntries(map);
+  const wl = loadWatchlistEntries({ map, tolerant: true });
   if (!wl.length) return null;
   const { v24, bands } = ctx;
   // SP1 (PLAN-DIGEST-SIGNAL-AND-SCAN-PERF) — FETCH phase, split out of the compute loop below.
@@ -2776,9 +2776,9 @@ async function main() {
   } catch { /* no positions.json → nothing held, no track record → no override, exactly today's behavior */ }
   const map = await loadMapping();
   // F-B: read watchlist.json ids right after map load (the reader needs map.resolve). The reader owns
-  // the degrade (absent/unreadable/non-array → empty set, no reserve); a WatchlistFormatError is
-  // deliberately NOT caught — the old catch turned all eight grants off silently.
-  WATCHLIST_IDS = loadWatchlistIds(map);
+  // both degrades — absent/unreadable/non-array → empty set, malformed entry → dropped plus a stdout
+  // banner. A scan must not die on one bad entry.
+  WATCHLIST_IDS = loadWatchlistIds({ map, tolerant: true });
   const [v24legacy, latest, guide] = await Promise.all([loadAll24h(), loadAllLatest(), loadGuide()]);  // independent endpoints — fetch concurrently, not summed round-trips
   // PLAN-VOL24 step 2 (Ben-validated): DEFAULT `rolling` — the corrected whole-market trailing-24h map (24
   // bulk /1h windows, mostly warm from the SQLite archive) is the ACTIVE volume behind every gate/rank/

@@ -679,7 +679,7 @@ async function runPositions() {
   // Incidental-inventory filter (code-enforced here rather than left as /positions skill prose; matches
   // watch-positions.mjs): a lot worth < NOISE_OFFER_GP and NOT on the watchlist never
   // reaches the table/verdict loop at all. Collapsed into one summary line instead.
-  const watchlistIds = loadWatchlistIds(map);
+  const watchlistIds = loadWatchlistIds({ map, tolerant: true });
   const incidentalNames = [];
   const groups = allGroups.filter(g => {
     if (g.cost < NOISE_OFFER_GP && !watchlistIds.has(g.itemId)) {

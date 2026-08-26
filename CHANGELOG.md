@@ -25,10 +25,29 @@ all six sites, plus the raw name array `read-schedule`'s audit joins on.
 
 The failure mode this closes is not a crash. `buildMapping.resolve` stringifies its token, so an
 object entry in `watchlist.json` becomes `"[object Object]"`, misses the name index, and returns
-`null` **without throwing** — every loader `continue`s past it, and all eight grants switch off
-together with CI green. The reader now throws and writes to stderr (which survives the screen's
-quiet-mode `console.log` stub). Absent, unreadable and non-array files still degrade to an empty set
-silently, because five call sites depend on that.
+`null` **without throwing** — every loader `continue`d past it, so the set quietly lost that ONE
+member. (The first cut of this entry, the module header and the commit message all said the set
+EMPTIED and all eight grants switched off together. That was wrong, and the review that caught it ran
+the verbatim pre-change loader to prove it: clean file → 60 members, one stray object entry → 60, one
+member rewritten as an object → 59, whole file rewritten as objects → 0. Only the whole-file case
+empties, and `js/ui.js` `pushWatchlist` cannot produce it — it writes bare numeric ids.)
+
+The reader throws `WatchlistFormatError` by default, which is the right contract for an importer and
+the wrong one for a desk read: the first cut had a single malformed entry exit 1 with no usable stdout
+at all from `/scan`, `/positions`, the watch pass and `--audit`. So the five commands pass
+`tolerant: true` — the bad entries are dropped, every well-formed member still grants, and ONE banner
+is written straight to `process.stdout` (deduped per process; `console.log` is stubbed under quiet
+mode and reassigned by the screen's report capture, so it is not a channel a warning can trust).
+Absent, unreadable and non-array files still degrade to an empty set silently, because five call sites
+depend on that.
+
+Two more defects the same review found. `read-schedule --audit` joined its "already watchlisted"
+check on lowercased NAMES while the app writes the file as bare numeric ids — it worked only because
+the file happens to hold names today, and would have proposed re-adding every already-watched item the
+next time the app rewrote it; the join is now id-keyed off `loadWatchlistEntries`. And the loaders'
+arities disagreed (`loadWatchlistNames(root)` vs `loadWatchlistIds(map, root)`), so
+`loadWatchlistNames(map)` returned `[]` in silence — the exact silent-empty class this chunk exists to
+close. All three now take one `{ map, root, tolerant }` bag.
 
 Role metadata gets a separate id-keyed file, `watchlist-meta.json`, precisely because the app
 rewrites `watchlist.json` wholesale as bare numeric ids on every star-click — one click on localhost
