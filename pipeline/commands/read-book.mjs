@@ -157,6 +157,7 @@ async function main() {
       limitRemaining: w.remaining,
       dailyVol,
       mark: row ? (row.quickSell ?? null) : null,
+      markAgeTag: ageLabel(marks.get(sizerId)),
       breakEven: unitCost != null ? breakEven(unitCost) : null,
     };
   }
@@ -220,15 +221,14 @@ function render(book, { cash, capitalSource, reverseFlip = [], suspectEsc = null
   if (book.sizer) {
     const s = book.sizer;
     out.push(`=== SIZER: ${s.name} ===`);
-    if (s.refuse) {
-      out.push(`- cannot size: ${s.refuseReason === 'unknown-limit' ? 'buy limit UNKNOWN (null) — treat as cannot-advise, NOT unlimited' : s.refuseReason}`);
-    } else {
+    {
       const capTxt = capitalSource === 'override' ? `${fmtP(s.capital)} (--capital)` : `${fmtP(s.capital)} (deployablePool)`;
       out.push(`- capital ${capTxt} · unit ${fmtP(s.unitCost)} (BE ${fmtP(s.breakEven)})`);
       const b = (label, v, unit) => `${label} ${v == null ? '—' : v.toLocaleString()}${unit || ''}`;
       out.push(`- bounds: ${b('buy-limit', s.buyLimitBound)} · ${b('clearability', s.clearabilityBound)} (${(CLEARABILITY_FRAC * 100).toFixed(1)}% of day vol) · ${b('capital', s.capitalBound)}`);
       out.push(`- RECOMMEND ${s.recommendedQty == null ? '—' : s.recommendedQty.toLocaleString()} units · BINDING: ${s.binding || '—'}`);
-      if (s.netIfCycled != null) out.push(`  net if cycled once ~${s.netIfCycled >= 0 ? '+' : ''}${fmtP(s.netIfCycled)} (sell ${fmtP(s.mark)} vs BE ${fmtP(s.breakEven)})`);
+      if (s.buyLimitBound == null) out.push('  ⚠ buy limit not in mapping — this size is NOT limit-checked (unknown is not unlimited)');
+      if (s.netIfCycled != null) out.push(`  net if cycled once AT THE TOUCH ~${s.netIfCycled >= 0 ? '+' : ''}${fmtP(s.netIfCycled)} (sell ${fmtP(s.mark)}${s.markAgeTag || ''} vs BE ${fmtP(s.breakEven)})`);
     }
   }
 

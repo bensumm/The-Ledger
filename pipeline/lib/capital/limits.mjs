@@ -2,8 +2,8 @@
  * limits.mjs — pure GE BUY-LIMIT WINDOW MATH (LM1). Node-importable, DOM-free, no fetch, no fs
  * (except the one explicit file helper at the bottom). The market judgment "never suggest a buy qty
  * over the 4h GE limit; a bigger size is a multi-window accumulation; a null limit is UNKNOWN, never
- * unlimited" (memory `buy-limit-caps-every-size`) is encoded HERE so every suggesting surface shares
- * one window model.
+ * unlimited" (memory `buy-limit-caps-every-size`) is encoded HERE for its IMPORTERS only — NOT
+ * tool-wide: trancheComfort, expUnits and pathAGpDay each carry their own null-limit policy.
  *
  * THE MODEL. A GE buy limit is a ROLLING 4-hour window: each purchased UNIT counts against the item's
  * limit for 4h after it is bought, then ages out. So capacity is not a clock that resets on the hour —
@@ -20,8 +20,8 @@
  *     inside one offer aren't logged either — we attribute all of an offer's units to its CLOSE time
  *     (the last fill update). That skews conservative: it keeps units in-window slightly longer
  *     (a touch higher boughtInWindow) and pushes nextFreeAt slightly later — the safe direction.
- *   - `remaining === null` means the item's limit is UNKNOWN (mapping had no `limit`). Callers MUST
- *     treat unknown as "cannot advise a size", NOT as "no limit / unlimited".
+ *   - `remaining === null` means the limit is UNKNOWN (mapping had no `limit`). Not "unlimited", but
+ *     not a refusal either: size on the other bounds and say the limit is unknown.
  *
  * All DISPLAYED times are the CALLER's concern (repo rule: rendered times are LOCAL) — this module
  * returns unix-SECONDS instants (nextFreeAt / fullResetAt); pipeline/commands/read-buy-limits.mjs formats them local.

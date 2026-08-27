@@ -31,7 +31,7 @@ function hhmm(tsSec) {
 }
 
 function itemLine(name, limit, w) {
-  const limS = limit == null ? 'limit UNKNOWN (null — treat as cannot-advise, NOT unlimited)'
+  const limS = limit == null ? 'limit not in mapping (unknown — not unlimited; size is not limit-checked)'
                              : `limit ${limit.toLocaleString()}/4h`;
   const boughtS = `bought ${w.boughtInWindow.toLocaleString()} this window`;
   const remS = w.remaining == null ? 'remaining unknown'

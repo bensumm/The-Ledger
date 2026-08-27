@@ -1,6 +1,6 @@
 ---
 name: book
-version: 1.3
+version: 1.9
 description: Show the state of the book right now — GE slots, working/parked/idle capital, per-lot P&L, and (with --size) how much of an item a given capital can buy. Triggers — "what's my book look like", "what's deployed/idle", "how many slots free", "capital dashboard", "how much X can I buy right now", "book".
 ---
 
@@ -46,10 +46,11 @@ manual sync needed. It does ONE live fetch per item in the held ∪ resting-bid 
   and `book-model.mjs`'s reverse-flip `liveTxt` still render their marks UNLABELLED. The code headers were
   narrowed on 2026-08-09 precisely because the tool-wide wording was false at those two sites; this skill
   kept the old wording until 2026-08-09. Don't cite it as tool-wide coverage.
-- **The sizer REFUSES on an unknown buy limit — it never treats null as unlimited.** _(judgment: sizing honesty)_
-  `book-model.mjs` returns `refuse: true` / `refuseReason: 'unknown-limit'` with every bound null when
-  `limit == null`. Relay that as "cannot advise a size", not as an unbounded one (repo rule
-  `buy-limit-caps-every-size`).
+- **An unknown buy limit does not block a size — but the size is NOT limit-checked.** _(judgment: sizing honesty)_
+  When `limit == null`, `book-model.mjs` sizes on the bounds it has (clearability + capital) and leaves
+  `buyLimitBound` null; the render prints a ⚠ saying the limit was never checked. Relay that ⚠ — unknown
+  is not unlimited (repo rule `buy-limit-caps-every-size`), and roughly a tenth of the mapping has no
+  limit, most of it cheap and illiquid rather than the big-ticket case this behaviour was ruled for.
 - **The free-slot count is a log-derived UPPER bound** (equivalently: OCCUPANCY is the lower bound).
   _(judgment: display honesty)_ A just-completed-but-not-yet-collected GE slot reads as FREE (the
   Exchange Logger only emits on a state change), which inflates `free`. So "N free" means "at MOST N

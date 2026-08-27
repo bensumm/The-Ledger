@@ -42,8 +42,8 @@ export const CLEARABILITY_FRAC = 0.005;
 /* sizeTranche(inp) -> the tranche-sizer result (view 5). PURE: takes the already-fetched/derived
  * ingredients and folds them into three independent bounds, the min, and the net-if-cycled. The
  * three bounds:
- *   buy-limit    = limitRemaining (from limits.mjs limitWindow().remaining). A NULL limit is UNKNOWN,
- *                  never unlimited (repo rule) → the sizer REFUSES to recommend a qty.
+ *   buy-limit    = limitRemaining (limits.mjs limitWindow().remaining). NULL = UNKNOWN, never
+ *                  unlimited: the bound drops out, the size is NOT limit-checked, the render says so.
  *   clearability = floor(dailyVol × clearFrac) — the smaller-side corrected trailing-24h volume × the
  *                  0.5% knee. null when no volume is known (bound simply drops out).
  *   capital      = floor(capital / unitCost) — how many units the deployable gp buys at the acquire price.
@@ -75,16 +75,11 @@ export const CLEARABILITY_FRAC = 0.005;
  * number it sits beside. That distinction is the whole lesson and it is pinned by 6 cases in
  * book-model.test.mjs, each verified RED against its named mutant. */
 export function sizeTranche({
-  itemId, name, capital, unitCost, limit, limitRemaining, dailyVol, mark, breakEven: be,
+  itemId, name, capital, unitCost, limit, limitRemaining, dailyVol, mark, markAgeTag = '', breakEven: be,
   clearFrac = CLEARABILITY_FRAC,
 } = {}) {
-  const base = { itemId, name, capital, unitCost, mark, breakEven: be };
-  // Repo rule (buy-limit-caps-every-size): a null limit is UNKNOWN — refuse to size, never treat as unlimited.
-  if (limit == null) {
-    return { ...base, buyLimitBound: null, clearabilityBound: null, capitalBound: null,
-      recommendedQty: null, binding: null, netPerUnit: null, netIfCycled: null,
-      spreadPct: null, taxPct: null, spreadVsTax: null, refuse: true, refuseReason: 'unknown-limit' };
-  }
+  const base = { itemId, name, capital, unitCost, mark, markAgeTag, breakEven: be };
+  // Unknown limit: not unlimited, but no reason to withhold a size — the other bounds still apply.
   const buyLimitBound = (limitRemaining == null) ? null : Math.max(0, limitRemaining);
   const clearabilityBound = (dailyVol != null && dailyVol > 0) ? Math.floor(dailyVol * clearFrac) : null;
   const capitalBound = (unitCost > 0 && capital > 0) ? Math.floor(capital / unitCost) : null;

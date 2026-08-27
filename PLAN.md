@@ -572,6 +572,21 @@ the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the co
 
 ## Discovered
 
+- **The "certain-pair" screen is unsatisfiable on BIG-TICKET specifically — not "by construction" (2026-08-27).**
+  Pairing the certain bid (max daily low) with the certain ask (min daily high) nets negative on **0 of 31**
+  measured items ≥10m, which is why it rejected an entire 8-row digest shortlist. But it is NOT arithmetic:
+  it passes on ~38% of sub-100k items (two samples, 591 and 790 items). The mechanism is that day-to-day
+  drift plus the 2% tax exceeds the stable common band once the price is large. An agent screening
+  big-ticket candidates this way will reject every one of them and read the result as a per-item finding.
+  **A `pairRead` estimator + digest column built on the wrong "by construction" story was written and then
+  DELETED the same day** — `pipeline/lib/market/fill-surface.mjs`'s header already names the defect
+  ("windowread's 'reached on ~50% of days' is the median of the daily highs, so its 50% is TRUE BY
+  CONSTRUCTION and cannot carry information about its own quantile"), and the Discovered entry on
+  `AMP_ASK_Q`/`AMP_BID_Q` = 0.5 already condemned the same estimator. **The real remedy is AB7**
+  (`plans/PLAN-ASK-BACKTEST.md`): `askAtFillRate` answers 9/9 digest items today off the cached surface
+  with a MEASURED p, and refuses honestly where it cannot. Measured walk-forward (5,277 folds): on ≥10m
+  items both legs of a 50/50 pair are available on the same day **8.5%** of the time.
+
 - **Doc/prose drift left UNFIXED because each needs a version bump or a judgment call (found
   2026-08-26, away-scoped review; everything cheap and unambiguous in the same sweep was fixed).**
   (a) `pipeline/daemons/registry.mjs` says sync-fills "rides **EVERY** read" in three places; five

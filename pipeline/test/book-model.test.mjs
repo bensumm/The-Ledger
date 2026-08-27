@@ -214,14 +214,13 @@ ok('sizer: an ABSENT mark yields NULL reason fields — never a fabricated 0%', 
   assert.equal(s.netIfCycled, null);
 });
 
-ok('sizer: a REFUSED size still carries the reason keys as null (stable shape)', () => {
+ok('sizer: an unknown limit still returns the full key shape', () => {
   const s = sizeTranche({ itemId: 1, name: 'X', capital: 1_000_000, unitCost: 100,
     limit: null, limitRemaining: null, dailyVol: 100_000, mark: 120, breakEven: breakEven(100) });
-  assert.equal(s.refuse, true);
-  for (const k of ['netPerUnit', 'spreadPct', 'taxPct', 'spreadVsTax']) {
-    assert.ok(k in s, k + ' must be present on the refuse path');
-    assert.equal(s[k], null);
+  for (const k of ['netPerUnit', 'spreadPct', 'taxPct', 'spreadVsTax', 'buyLimitBound']) {
+    assert.ok(k in s, k + ' must be present when the limit is unknown');
   }
+  assert.equal(s.buyLimitBound, null);   // the ONE bound we cannot compute
 });
 
 ok('sizer: BUY-LIMIT binds when remaining is the smallest bound', () => {
@@ -239,13 +238,16 @@ ok('sizer: CLEARABILITY binds when the daily-volume slice is the smallest bound'
   assert.equal(s.binding, 'clearability');
 });
 
-ok('sizer: a NULL limit REFUSES to recommend a qty (UNKNOWN ≠ unlimited)', () => {
+ok('sizer: a NULL limit sizes on the OTHER bounds rather than refusing', () => {
+  // Ben 2026-08-27: refusing to size on an unknown limit helped nobody — clearability and capital
+  // still bound the lot, and on big-ticket the limit is small enough that it rarely binds. Unknown
+  // is still NOT unlimited: buyLimitBound stays null and never contributes a bound.
   const s = sizeTranche({ itemId: 1, name: 'X', capital: 1_000_000, unitCost: 100,
     limit: null, limitRemaining: null, dailyVol: 100_000, mark: 120, breakEven: breakEven(100) });
-  assert.equal(s.refuse, true);
-  assert.equal(s.refuseReason, 'unknown-limit');
-  assert.equal(s.recommendedQty, null);
-  assert.equal(s.binding, null);
+  assert.ok(!s.refuse, 'must not refuse');
+  assert.equal(s.buyLimitBound, null);
+  assert.equal(s.recommendedQty, Math.floor(100_000 * CLEARABILITY_FRAC));
+  assert.equal(s.binding, 'clearability');   // the other bounds still do the work
 });
 
 ok('buildBook threads a sizer input through to sizeTranche', () => {

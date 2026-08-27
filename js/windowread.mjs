@@ -511,10 +511,9 @@ export function floorCeilingTrack(days, { todayKey = null, recentN = FC_RECENT_N
  * read-window-range.mjs and quote-items.mjs (via render.mjs) print it byte-identically (the same
  * one-owner rule the trajectory read follows). PURE: `fmt` (money-format) is INJECTED so windowread
  * stays dependency-free. Returns the note TEXT (no sigil — the caller's NOTE_KIND owns that).
- * R6 (PLAN-SIGNAL-RECENCY): this note now ALSO carries what trajectoryRead's retired `shape` line used to —
- * the `oscillating` qualifier on a ranging item (fc.oscillating) + the absolute 2-week band and where the
- * live price sits in it (`live` opt = { ref, pos, floor, ceiling } from trajectoryRead), so ONE combined
- * note per pass replaces the two that could visibly disagree. `live` absent ⇒ the band clause is omitted.
+ * Carries the `oscillating` qualifier on a ranging item (fc.oscillating) plus the 2-week band and where
+ * live sits in it (`live` opt = { ref, pos, floor, ceiling } from trajectoryRead) — ONE note per pass, so
+ * two notes cannot visibly disagree. `live` absent ⇒ the band clause is omitted.
  * PLAN-OSCILLATION-CYCLE Chunk 5: an OPTIONAL `drift` opt = a driftAdjustedExit() result (js/forecast.mjs,
  * computed BY THE CALLER off its in-hand hourProfile + days — windowread never imports forecast, the
  * one-way arrow) folds the drift-adjusted exit LEVEL beside every price suggestion. It is a projected
@@ -726,6 +725,7 @@ export function askExitRead(stats, { ask = null, stats5m = null, recentN = RECEN
     : null;
   return { nDays: his.length, askSide, ask: scored, grain5m };
 }
+
 
 // --- reach-margin FADE check (the godsword/mask pair) ------------------------------------------
 // The reach COUNT + placement percentile say "does this level print", but not whether the CUSHION over
@@ -1083,13 +1083,11 @@ export function reachableBand(stats, { slope = PRESSURE_PHI_SLOPE, headroomMax =
 // LOCAL hour-of-day (0–23) across the last N days, so a caller can SEE where the daily dip and peak
 // print and derive a bid/ask from the shape rather than guessing a window up front. This is Ben's
 // default pricing method (peak-timing): bid at the recent dip-hour level, ask at the recent peak-hour
-// level. Two robustness guards are baked in, both learned the hard way (the Ghrazi anchor):
-//   • CLUSTER, don't point-pick — a single hour over ~7 nights is ≤7 samples (noisy). The dip/peak are
-//     the CONTIGUOUS run of hours near the extreme (Ben: "analyse the hourly output to define the range").
-//   • TREND-DOMINATES flag — when the multi-day floor drifts faster than the intraday swing is deep, a
-//     "dip" bid never fills (the floor rises past it). deriveDiurnalRange then prices the bid to LIVE.
-// SHAPE (which hours are low/high) reads off the FULL-window median (more samples, stabler); the LEVEL
-// quoted reads off the RECENT-N median (trend-accurate). PURE over an already-fetched 1h series.
+// Two robustness guards (the Ghrazi anchor): CLUSTER rather than point-pick, since one hour over ~7
+//   nights is <=7 noisy samples — the dip/peak are the CONTIGUOUS run near the extreme; and a
+//   TREND-DOMINATES flag, since a floor drifting faster than the swing is deep means a "dip" bid never
+//   fills, so deriveDiurnalRange prices the bid to LIVE instead.
+// SHAPE (which hours are low/high) reads off the FULL-window median (stabler); the LEVEL quoted reads off the RECENT-N median (trend-accurate). PURE over an already-fetched 1h series.
 export const HOURPROFILE_MIN_DAYS = 4;   // fewer scored days than this ⇒ too thin to profile → null
 export const DIP_CLUSTER_FRAC = 0.34;    // an hour within this fraction of the intraday amplitude of the
                                          //   extreme joins the dip/peak cluster (the contiguous window)
