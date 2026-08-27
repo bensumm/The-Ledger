@@ -20,7 +20,7 @@
  * shared `liveAgeTag`, so a stale number is never rendered as live (decision 3). SCOPED deliberately —
  * this file's own SIZER line (`net if cycled once (sell …)`, below) renders its mark UNLABELLED, as does
  * `book-model.mjs`'s reverse-flip `liveTxt`. Both are inform-only and off the board; don't read this
- * sentence as tool-wide coverage (it used to be worded that way, and was false at two sites). The free-slot count is a log-derived LOWER bound — a just-completed,
+ * sentence as tool-wide coverage (it used to be worded that way, and was false at two sites). The free-slot count is a log-derived UPPER bound — a just-completed,
  * not-yet-collected slot reads as free (decision 4, stated once). Times rendered LOCAL (repo rule).
  * Auto-runs the LOCAL zero-git sync first (SY1) so it reads a fresh book. Pipeline-only: no APP_VERSION.
  */

@@ -4,7 +4,7 @@
    (chunk 10.2 dedup). No market/quote math lives here — that is js/quotecore.js.
    Consumers: screen-flip-niches.mjs, add-manual-fill.mjs (parseArgs/parseGp); quote-items.mjs,
    screen-flip-niches.mjs (mdTable/stdCells). */
-import { quoteCells, cellText } from '../../../js/quotecore.js';
+import { quoteCells, cellText, QUOTE_HEADERS } from '../../../js/quotecore.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,15 +16,12 @@ import { fileURLToPath } from 'node:url';
    serialises the object(s) already in hand to `pipeline/.cache/last-report/<kind>.json` (compact, NOT
    pretty), overwritten every run — "last run from this command" semantics, mirroring join-outcomes.mjs's
    `.cache/last-weekly-report` marker. Gitignored (the whole `.cache/` tree is). `kind` = the report's own
-   `kind` field ('screen'|'quote'|'watch'); screen accumulates its N per-niche reports into the ONE file
+   `kind` field ('screen'|'quote'|'watch'|'watchlist'); screen accumulates its N per-niche reports into the ONE file
    per pass. Wrapped as `{kind, generatedAt, reports:[…]}` so a consumer reads a single predictable shape
    (`.reports[]` of render.mjs section objects) regardless of how many the pass produced. Best-effort:
    never throws (a dump-write failure must not break the read). Returns the repo-relative display path.
    PURE of side effects on import (only writes when CALLED), so it's safe in a test-imported entrypoint. --- */
-// TWO up: this file lives in pipeline/lib/render/, so the target is pipeline/.cache/last-report/.
-// It MUST stay in sync with the repo-relative path this function RETURNS (below) — they disagreed
-// once (PLAN-LIB-SUBDIRS, 2026-07-27: the render/ move left this at one `..`, so the dump silently
-// landed in pipeline/lib/.cache/ while callers were told to read pipeline/.cache/ and got a stale file).
+// TWO up. MUST match the repo-relative path this function RETURNS below; they silently disagreed once.
 const LAST_REPORT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '.cache', 'last-report');
 export function writeLastReport(kind, reports) {
   const payload = { kind, generatedAt: new Date().toISOString(), reports: Array.isArray(reports) ? reports : [reports] };
@@ -88,3 +85,6 @@ export const mdTable = (headers, rows) =>
    `{t, c}` cells (T1), ready for mdTable (renders text) or the app publish path (keeps class),
    or to have extra columns appended. Wraps quotecore.quoteCells directly. --- */
 export const stdCells = (name, row) => quoteCells(name, row);
+
+// ONE definition, read by the scan niche tables AND the watchlist builder — they must not drift.
+export const RANK_TABLE_HEADERS = ['Item', 'Grade', ...QUOTE_HEADERS.slice(1), 'Rank net·P/ttf'];

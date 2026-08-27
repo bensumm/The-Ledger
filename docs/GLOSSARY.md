@@ -38,7 +38,7 @@ These are different things at different levels — kept as two words on purpose.
     LONGER in `--mode all` (THE SWAP handed its slot to amplitude). (cycle period ~7d+.)
 - **held-item strategy** — a *position-level* approach for a lot you already hold, produced by the
   path engine (`held-item-strategy.mjs`, "compare strategies"). The options: **hold-recovery** (wait for the
-  thesis to play out), **cut** (take the loss, redeploy), **break-even-escape** (get out at cost),
+  thesis to play out), **cut** (take the loss, redeploy), **be-escape** (get out at cost),
   **list-to-clear** (step the ask down to the printing price), **value-hold** (ride the multi-week
   cycle).
 

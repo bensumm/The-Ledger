@@ -36,8 +36,7 @@ import { dirname } from 'node:path';
 
 // --- named tunables (NOT magic numbers) ----------------------------------------------------
 // A position is considered a NEW episode (counters reset) when the gap since its last observed
-// pass exceeds this. ~2× the tightest expected /loop cadence (CADENCE_TIGHT = 1min in watch-positions.mjs,
-// but real human loops run minutes apart) → 15 min: two consecutive passes must be recent to count
+// pass exceeds this. Real human loops run minutes apart → 15 min: two consecutive passes must be recent to count
 // as consecutive. Keeps `passesUnderwater` honest across an overnight pause / a closed laptop.
 export const STALE_GAP_MS = 15 * 60 * 1000;
 // How many recent band-top observations to retain for the drift classification. A short window so

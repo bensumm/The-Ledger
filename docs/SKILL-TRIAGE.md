@@ -59,7 +59,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | 250k gp/day attention floor | ENCODE | `pipeline/commands/screen-flip-niches.mjs` `--min-gpd` (default 250_000; was 500_000 until 2026-08-08, paired with the expUnits 6→2 refill haircut). |
 | SUB-FLOOR FALLBACK not qualified picks (P6c) | KEEP-AS-JUDGMENT | Mechanic in `pipeline/lib/signal/gatecandidates.mjs`; the relay-honestly rule is judgment. |
 | 24h-drift is a pre-filter only | KEEP-AS-JUDGMENT | Regime column is coded; "never recommend off 24h alone" is interpretation. |
-| Two-sided liquidity discipline | ENCODE | Two-sided gate in `pipeline/lib/signal/gatecandidates.mjs`; the ~100/day floor stays judgment. |
+| Two-sided liquidity discipline | ENCODE | Two-sided gate in `pipeline/lib/signal/gatecandidates.mjs`; the per-day volume floor stays judgment. (The number is **3500** — `LIQUID_FLOOR_PER_DAY` in `watch-positions.mjs`, `FLOOR` in `screen-flip-niches.mjs`. This row said `~100/day` until 2026-08-26, a 35x understatement; the surviving `volDay < 100` in `suggestlog.mjs` is a DISPLAY class, not this gate.) |
 | Tax dominates thin flips | KEEP-AS-JUDGMENT | The >~0.5% after-tax bar is a taste threshold. |
 | Band-is-the-edge pricing | KEEP-AS-JUDGMENT | Pricing call. |
 | Anchor pricing — fillable side of a round number | KEEP-AS-JUDGMENT | n=2; the `anchor.mjs` probe is output-only, never a gate. |

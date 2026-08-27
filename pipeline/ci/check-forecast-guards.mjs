@@ -17,16 +17,10 @@
  * mid-decay, exactly the shape 'post-shock-shape' exists to refuse) printed a drift-adjusted peak that
  * marched 1,090 → 1,024 across one day, and it was quoted as decision evidence on a 13.66m position.
  *
- * ---- 2026-08-10: THIS GUARD WAS ITSELF FAIL-OPEN, and this header used to say the opposite ----
- * The paragraph above ended with: "The other four call sites (screen-flip-niches ×2, quote-items ×2)
- * had always passed the fields." That was FALSE, and it is the single most dangerous kind of comment —
- * a verification claim a future reader trusts instead of re-checking. Those sites passed the TEXT
- * `phase: row.phase`, and `computeQuote()` returns no `phase` field (js/quotecore.js `row={…}`, 32
- * keys, none of them `phase`). So the value was `undefined`, `ctx.phase === 'spike'` was false by
- * absence, and the refusal was dead at SEVEN sites — including `screen-flip-niches.mjs`'s amplitude
- * lane, where the projection fed `amplitudeGate({driftMargin})`, i.e. a REAL GATE and not an
- * inform-only note. The v1 guard passed all seven green, because it asked whether the WORD `phase`
- * appeared in the argument region, and `phase: row.phase` contains it twice.
+ * This guard was itself fail-open once: v1 matched the WORD `phase` in the argument text, so seven
+ * sites passing `phase: row.phase` — a field `computeQuote` does not return — read `undefined` and
+ * passed green, one of them feeding a REAL gate. Hence rule 2 below, and hence the producer key set is
+ * obtained by CALLING `computeQuote` rather than hardcoded. (CHANGELOG 0.71.8 for the full account.)
  *
  * WHAT this forbids, in two rules:
  *   (1) MISSING  — a `diurnalForecast(`/`driftExitFrom(` call whose ctx never mentions `phase`.
@@ -41,6 +35,12 @@
  * rather than becoming the next stale assertion. If that call ever throws, this guard EXITS NONZERO
  * instead of skipping the rule: a probe that cannot see is not a probe that passes. That is the whole
  * lesson of the bug it was built for.
+ *
+ * KNOWN BLIND SPOTS (both escaped it, both found by review and fixed): it checks neither the
+ * VALUE'S SHAPE — `phase(series)` returns an OBJECT, and an object matches no refusal while also
+ * defeating `guardsUnchecked` — nor a caller that populates a BUNDLE whose `driftExitFrom` runs in
+ * another module (read-window-range's `extra.forward` → estimators/pair.mjs). Neither rule below sees
+ * either class. Do not read a green run as "every refusal is live".
  *
  * Same philosophy as lint-docs.mjs / lint-skills.mjs / check-daemon-safety.mjs: a cheap, STRUCTURAL
  * checker over source text — NEVER a semantic/LLM one. A spread of a prepared ctx object

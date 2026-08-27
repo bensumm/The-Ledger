@@ -505,7 +505,8 @@ function renderForecast(profSeries, qrow, it, showAnalysis, s6h){
   if(series.length>1) forecastChart=createChart(chartEl, {series, overlay, fillBetween:true, refs, markers, kind:'line', spans:false, xFmt:h=>'+'+fmtEta(h)});
   else if(chartEl) chartEl.innerHTML='';
   const lvl=x=>(x&&x.level!=null)?fmtP(Math.round(x.level)):'—';
-  const eta=x=>(x&&x.etaH!=null)?('in ~'+fmtEta(x.etaH)+(x.window?' ('+x.window+')':'')):'(trend-only — no eta)';
+  const etaTok=h=>{ const f=fmtEta(h); return f==='now'?'now':'in '+f; };
+  const eta=x=>(x&&x.etaH!=null)?(etaTok(x.etaH)+(x.window?' ('+x.window+')':'')):'(trend-only — no eta)';
   const fcleg='<span class="dpleg"><span><i class="sw-buy"></i>projected buy (low)</span><span><i class="sw-sell"></i>projected sell (high)</span></span>';
   let s=fcleg+'<br><b>Next trough</b> '+lvl(tr)+' '+eta(tr);
   if(tr && tr.band && tr.band.lo!=null) s+=' <span class="mini">[band '+fmtP(Math.round(tr.band.lo))+'–'+fmtP(Math.round(tr.band.hi))+']</span>';

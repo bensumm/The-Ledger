@@ -1,6 +1,6 @@
 ---
 name: cleanup
-version: 1.5
+version: 1.6
 description: A repeatable post-wave hygiene + architectural-integrity pass — run the CI guards, then a SESSION/WAVE-scoped judgment sweep for drift, duplication, dead code, doc-honesty, and worktree/branch staleness, and produce a proposed-fix list. Triggers — "clean up after this session/wave", "check the architecture", "did we leave a mess", "run a cleanup", "post-wave cleanup", "cleanup".
 ---
 
@@ -11,7 +11,7 @@ Skills-versioning note: this file's `version` bumps on material behavior change;
 
 This is the DEEP, SEPARATE hygiene pass — the CODE/DOC/ARCHITECTURE half of "did we leave a mess",
 run after a large feature session or a shipped wave. It orchestrates the mechanical guards the repo
-already has, adds two non-gating report scripts, then spends judgment ONLY on the parts that are
+already has, adds the non-gating report scripts, then spends judgment ONLY on the parts that are
 irreducibly judgment — reading a diff for intent, deciding whether a worktree's deferred work is
 still wanted, deciding whether a comment narrates history. The load-bearing cheapness rule: **every
 judgment pass is scoped to the SESSION/WAVE diff, never a cold repo-wide re-audit.**
@@ -57,7 +57,7 @@ node pipeline/ci/lint-guard-lists.mjs
 ## 2. Run the three non-gating report scripts
 
 - **Gather plan-lifecycle + skill-coverage facts** — `pipeline/ci/lint-plan-lifecycle.mjs` flags any
-  root `PLAN-*.md` whose Status reads complete with no deferred/partial marker (a doc past its
+  `plans/PLAN-*.md` whose Status reads complete with no deferred/partial marker (a doc past its
   fold-in point) and reports which `.claude/skills/*` are missing from `lint-skills.mjs`'s
   `SKILL_FILES`. Non-gating; read its `--- JSON ---` block.
 - **Gather branch/worktree facts** — `pipeline/ci/report-branches.mjs` emits tip sha/date, ancestor-
@@ -65,7 +65,8 @@ node pipeline/ci/lint-guard-lists.mjs
   verdict is the judgment pass in §6.
 - **Gather chunk-id collisions** — `pipeline/ci/lint-plan-refs.mjs --collisions` lists every chunk id
   claimed by more than one plan. _(judgment: only ACT on a collision when the wave you are cleaning
-  up added one — the existing 37 are a standing backlog, not this wave's mess.)_ Renaming a shipped
+  up added one. Diff against the count `--collisions` prints on a clean checkout — the pre-existing
+  set is a standing backlog, not this wave's mess, and is too large to keep as a literal here.)_ Renaming a shipped
   chunk's id is NOT a fix: the old id is already in commit messages and PLAN.md rows, so a rename
   moves the ambiguity rather than removing it. The fix is prospective — `docs/PLANNING.md`'s
   plan-unique-prefix rule — plus disambiguating the id at any in-tree citation that is now unclear.

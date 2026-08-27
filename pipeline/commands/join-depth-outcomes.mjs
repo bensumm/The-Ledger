@@ -32,7 +32,7 @@
  * PLACEHOLDER never scored against a fill. HONEST STATUS: on the current book this report CANNOT
  * calibrate it — sweeping competition 0.5→16 (a 32× range) moves the median residual 0.20pp, and
  * 4→8 leaves ~71% of predictions bit-identical. It is also not yet distinguishable from the trivial
- * null model (`--null-model`: just use the window's MEDIAN hourly high). Both are printed so the
+ * null model (just use the window's MEDIAN hourly high — always computed, there is NO --null-model flag). Both are printed so the
  * comparison is visible rather than assumed. Treat this as instrumentation that will become
  * informative as big-lot sells accrue, NOT as a live calibration.
  *

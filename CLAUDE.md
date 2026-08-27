@@ -110,6 +110,7 @@ deliberate):**
 | "watch for **dips/flushes**", "run the **dip loop**", "catch a **liquid flush**" | `node pipeline/commands/watch-positions.mjs --dip ["<target>" …]` (DL2 — folds `dip-watchlist.json`; fires a reactive FLUSH bid-into-the-fall alert on a LIQUID dumping item; 5m cadence floor) |
 | "can I **buy more** X?", "how much **buy limit** left [on X]?", "have I hit my **limit**?", "when does X's limit **reset**?" | `node pipeline/commands/read-buy-limits.mjs "<item or id>" [...]` (no args → every item bought in the last 4h) |
 | "what's my **book** look like?", "what's **deployed vs idle**?", "how many **slots free**?", "**capital dashboard**", "how much **X can I buy** right now?" | **`/book` skill** — runs `node pipeline/commands/read-book.mjs` (GE slots + working/parked/idle capital split + grouped per-lot P&L board); add `--size "<item>" [--capital <gp>]` for the tranche sizer (min of buy-limit × clearability × capital + the binding bound + net-if-cycled). Inform-only; live marks age-labelled, free-slot count a log-derived UPPER bound (a completed-but-uncollected slot reads as free — "at most N free") |
+| "how's my **watchlist**?", "the things I **track**", "**watchlist** read", "what's happening with the items I **follow**?" | `node pipeline/commands/read-watchlist.mjs --verbose [--json]` (SEP16b — the watchlist's OWN surface: the same TABLE LINES the scan's WATCHLIST section prints — byte-identical UNDER SCAN DEFAULTS (it has no `--archive-regime` seam and is always `rolling` vol, which feed the Regime and Vol/d cells, so a non-default scan diverges there) — off the shared `pipeline/lib/signal/watchlist-report.mjs` builder. **Quiet by default** — pass `--verbose` for the table, or read `pipeline/.cache/last-report/watchlist.json`. Every row is gate-EXEMPT and carries a Note saying what a gate would have hidden; **every grade carries `(thin)` by construction, so the letter is not a quality signal** — read the net inside the `Rank net·P/ttf` cell (there is no `Net/u` column on this surface). Writes nothing to `suggestions.jsonl`) |
 | "what's my **agenda**", "what should I **buy/sell and when**", "when's the **next window**", "what's **coming up**", "**schedule**" | **`/schedule` skill** — runs `node pipeline/commands/read-schedule.mjs [-c\|-w] [--audit]` (default `-c` = current positions ∪ open offers; `-w` = watchlist; `--audit` = flipped-but-not-watchlisted review) → ONE time-sorted `In (h)` agenda of each item's buy(dip)/sell(peak) windows off the same `hourProfile` `read-window-range.mjs --profile` prints, then a spoken agenda. INFORM-ONLY n≈0 (plans, never gates). `run-loop.mjs` prints a `⏭ next:` one-liner off this each watch tick |
 | "**analyze** our track record", "**what should we tune?**", "did we **log everything**?", "run a **retro**", "how are our **suggestions** doing?" | **`/analyze` skill** — runs `node pipeline/commands/analyze-record.mjs` (read-only dataset audit + per-flip-niche retro rollup + n-gated tuning candidates; `--json` for the brief) then interprets it into a retro + F1-routed improvement proposals + a project-guidelines checklist over the session's edits |
 | "is the **depth model** any good?", "does size actually **move my fill price**?", "how big a lot can I **really clear**?", "score **clearableAsk**" | `node pipeline/commands/join-depth-outcomes.mjs [--item "<item>"] [--json] [--competition N] [--nights N]` (2026-08-11 — scores the DE3 depth model against REALIZED sells; recomputes per sell EPISODE with NO look-ahead rather than reading the sparse logged `depthExit`. **The measured answer so far is NO — the model does not clear its own null baseline**, and the residual is dominated by price TREND rather than depth, so read the trend rows and never the pooled number. Full result + why the size axis is not yet readable: README's `join-depth-outcomes.mjs` entry and PLAN.md Discovered — don't restate them here) |
@@ -255,6 +256,26 @@ metadata, not a leak; the concern is content, not commit authorship.
     the outcome flags it, and the wrong reason is what gets written down. When challenged on a
     number, answer from a DIFFERENT data source than the one that produced it (the daily-grain
     regime read said `ranging` while the hourly grid showed a two-hour-old breakdown).
+12. **A review's output is a CANDIDATE LIST, not a work queue — triage by decision impact, and brief
+    the reviewer to triage too.** Measured 2026-08-26: worked top-to-bottom, roughly ONE IN FIVE
+    findings was load-bearing; a third were nitpicks costing more to fix than the error could cost,
+    and several were the reviewer being wrong. Re-briefing the SAME running agents to report decision
+    impact ("what goes wrong, for whom, when" — "nothing, cosmetic" being a fine answer), a remedy
+    with **DELETE / LEAVE IT / ENCODE** as first-class options beside FIX, a cost note when the remedy
+    exceeds the defect, and a SELF-TRIAGE of their own nitpicks raised the acted-on rate sharply in
+    the very next round. Amend a running agent rather than re-triaging its output later — it still
+    has the context to self-assess.
+    **Demand reachability, not shape.** A fail-open shown with a synthetic fixture proves the SHAPE
+    and says nothing about whether the input occurs. One was ranked "fix this first, a live
+    behavioural defect" and measured ZERO across 4,041 real items; another's stated impact ("every
+    value row reads thin") A/B'd to no rendered change at all. Require "measured on <path>, N of M"
+    or "shape only — unmeasured", and rank latent below live.
+    **Prose fixes regress; code fixes converge.** A prose correction is made of the same material as
+    the thing corrected, so each one is a fresh batch of falsifiable claims — and a defensive banner
+    is itself a new assertion that drifts. **Derived numbers (counts, timings, call-site tallies) do
+    not belong in prose at all**: every one of them regressed, including a cell that stated a count
+    directly above its own warning that the count had been wrong four rounds running. Delete the
+    number or encode the check; do not re-derive it.
 
 ## GitHub CLI (`gh`), Actions CI, and shipping — mechanics live in `/ship`
 - **`main` is protected by a ruleset** (G1, 2026-07-04): PR + `checks` required, no

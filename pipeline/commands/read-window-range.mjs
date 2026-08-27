@@ -28,19 +28,17 @@
  *   --depth <qty>  (PLAN-DEPTH-EXIT DE2/DE6) percentile-DEPTH read for <qty> units: the per-day instabuy
  *                  flow at/above the scored --ask, and clearableAsk ("BOOK AT ≤ X"). A thin book prints
  *                  its COLLAPSE REASON, never a bare null. From bucket AVERAGES, not an order book (n≈0).
- *   --hourly       (PLAN-DIURNAL-HOURLY) the RAW per-LOCAL-hour LOW/MID/HIGH grid — a 7d-avg (median)
- *                  block + the last N dates broken out (N via --days, default 3, most-recent first): the
- *                  detail the dip/peak summary distills away (it caught a churn item whose break-even sat
- *                  above its typical hourly high, and a secret +7% breakout). Same 1h series, no second
- *                  fetch. Inform-only, n≈0 — a diagnostic, never gates.
- *   --niche <n>    (PLAN-ESTIMATOR-POSTURE AC8) the strategy spec the reach-FOLD data point is scored
- *                  against — band (default) | churn | scalp. With a scored --bid/--ask/--exit + a live pair,
- *                  prints `fold: best-case X → reach-folded Y` + `result.fold` in --json/--out. churn
- *                  inherits the AC5/AC6 fold exemption (fold ≈ best-case). No fetch; inform-only.
+ *   --hourly       the RAW per-LOCAL-hour LOW/MID/HIGH grid — 7d median block + the last N dates
+ *                  (--days, default 3). Same 1h series, no second fetch. Inform-only, n≈0, never gates.
+ *   --niche <n>    strategy spec the reach-FOLD is scored against — band (default) | churn | scalp.
+ *                  Prints `fold: best-case X → reach-folded Y`. No fetch; inform-only.
  *   --pressure     (PLAN-DEPTH-EXIT Extension A, PB2) the demand-balance reachable band: pressure =
  *                  medVolHi/medVolLo (buy-heavy > 1 / sell-heavy < 1), the regime label, and
  *                  reachableBid/reachableAsk = base ± band·φ(±s)·reliability, band + reliability inline.
  *                  The manual φ-tuning surface. Inform-only, n≈0 — φ/PRESSURE_* are placeholders.
+ *   --profile      the per-LOCAL-hour DIURNAL PROFILE (dip/peak windows; the one home other docs cite)
+ *   --trajectory   per-day low/high + floor/ceiling slope    --days <n>  dates --hourly breaks out (3)
+ *   --json         results array as JSON on stdout
  *   --out <path>   ALWAYS write the results array as JSON to this path, whether or not --json was passed —
  *                  keeps the markdown stdout while also saving a machine-readable dump. Creates parents.
  */
@@ -717,7 +715,7 @@ for (const want of positionals) {
     // oscillation-forecast default (NOT the amplitude hold — that is 4d per DT1). Mirrors the screen's
     // F-C wiring so the forward "list at X (~Nd hold)" scales to the niche the fold is scored against.
     extra.forward = (profMargin && scored && scored.length)
-      ? { profile: profMargin, days: scored, holdHorizonDays: FLIP_NICHES[NICHE]?.driftInform?.holdDays }
+      ? { profile: profMargin, days: scored, ...guardCtx, holdHorizonDays: FLIP_NICHES[NICHE]?.driftInform?.holdDays }
       : null;
     const est = estimatePair(FLIP_NICHES[NICHE], synthRow, extra, { sellModel: 'reach-fold' });
     if (est) {

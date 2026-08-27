@@ -178,7 +178,7 @@ export function valueRanges(ts, live) {
   const knifeDelta = (med3 != null && med14 != null && med14 > 0) ? (med14 - med3) / med14 : 0;
 
   return {
-    hasData: true, live: num(live), durableLow, durableHigh, buyLow,
+    hasData: true, live: num(live), durableLow, durableHigh, buyLow, coverageDays: ts.coverageDays,
     rawDurableLow, rawDurableHigh, ceilingStale, floorStale,
     lowByRange, highByRange, afterTaxAmpPct, proximity, stability, knifeDelta,
     liveVsLowPct: (num(live) != null) ? (live - durableLow) / durableLow : null,

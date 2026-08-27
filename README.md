@@ -561,19 +561,27 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   the schema and the degrade path, pinned by `pipeline/test/watchlist-permission.test.mjs`.
 - `pipeline/lib/config/watchlist.mjs` — the ONE reader for both files above (SEP16a), replacing the
   separate parse in `screen-flip-niches.mjs`, `quote-items.mjs`, `watch-positions.mjs`,
-  `read-schedule.mjs` and `report-archive-gate.mjs`. All three loaders take ONE options bag
+  `read-schedule.mjs` and `report-archive-gate.mjs`, and since SEP16b also backing `read-watchlist.mjs`
+  (SIX node consumers; the app keeps its own `fetch` resolve and is NOT covered by the tripwire). All three loaders take ONE options bag
   `{ map, root, tolerant }`: `loadWatchlistIds` (the permission set), `loadWatchlistEntries`
   (ordered `{id, name, why, note, addedTs, level}`, first occurrence wins) and `loadWatchlistNames`
   (raw tokens). The bag is not cosmetic — the original `loadWatchlistNames(root)` /
   `loadWatchlistIds(map, root)` split meant `loadWatchlistNames(map)` returned `[]` in silence.
-  **Degrade:** absent/unreadable/non-array → empty set, never a throw — five call sites rely on that.
+  **Degrade:** absent/unreadable/non-array → empty set, never a throw. Three different counts are
+  true of this loader at once, so all three are stated here rather than one being picked and left to
+  contradict the others: **6 consumer commands · 10 literal call sites · 2 commands that actually read
+  twice per process.** The 10 sites sit in 6 commands and four of those hold two — but in
+  `read-schedule.mjs` (`:326` vs `:411`, the latter inside `if (AUDIT) {…return}`) and
+  `read-watchlist.mjs` (`:32` vs `:35`) the pair is MUTUALLY EXCLUSIVE, so only
+  `screen-flip-niches.mjs` and `watch-positions.mjs` execute two reads in one process — which is the
+  property the once-per-process banner dedup below depends on.
   **The MALFORMED-ENTRY case:** an OBJECT entry inside the array. `buildMapping.resolve`
   (`pipeline/lib/market/marketfetch.mjs`) does `String(token)`, so an object becomes
   `"[object Object]"`, misses `byName`, and returns `null` **without throwing**. Measured against the
   verbatim pre-SEP16a loader: that costs exactly ONE member (60 clean → 59 with one member rewritten
   as an object), and only a WHOLE-FILE schema rewrite empties the set — which `pushWatchlist` cannot
   produce, it writes bare numeric ids. So the default throws `WatchlistFormatError` (plus
-  `console.error`), and the five desk commands pass `tolerant: true`: the bad entries are dropped, the
+  `console.error`), and the six desk commands pass `tolerant: true`: the bad entries are dropped, the
   rest still grant, and ONE banner goes straight to `process.stdout` — not through `console.log`,
   which quiet mode stubs and the screen's report capture reassigns — deduped to once per process
   because two commands read the file twice. An inform-only read must not die on one bad entry.
@@ -1023,8 +1031,25 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   staleexit, statetransition); **`pipeline/lib/market/`** = market data acquisition (marketfetch,
   archive, warm-term-structure, compose, guideanchor, item-context, probes, hourly-lmh);
   **`pipeline/lib/signal/`** = scoring/admission (estimators, rating, gatecandidates, admission,
-  structural-admission, patha, recovery, range-position, levels). Files not yet
-  clustered stay at
+  structural-admission, patha, recovery, range-position, levels, watchlist-report).
+  `watchlist-report.mjs` (SEP16b) is the ONE watchlist row builder: `buildWatchlistReport` does the
+  bounded prefetch + the per-entry quote→`estimateRank`→`rateItem`→cells/`suggestionEntry` loop and
+  returns `{headers, rows, sugg}`; it COMPUTES only — rendering and `logSuggestions` stay with its
+  two callers (`read-watchlist.mjs` and `screen-flip-niches.mjs`'s `runWatchlist`), so neither owns a
+  second quote loop. It also holds `watchlistNote` (the reason a gate WOULD have hidden a row),
+  `roughExpGpDay`, `estFields` and `round2`, all moved out of `screen-flip-niches.mjs` — the gate
+  thresholds (`floor`/`gpFloor`/`minGpd`) are PARAMETERS, since they are per-run CLI values.
+  Pinned by `pipeline/test/watchlist-report.test.mjs` (11 cases: the column contract, the gate-reason
+  vocabulary and its ORDERING, and the row loop's load-bearing lines — the fail-closed thin cap, the
+  qcache truthiness admission test, the `(thin)` marker. Every "Kills:" claim in that file was
+  confirmed by applying the mutation; the header NAMES the two invariants still unpinned rather than
+  implying full coverage). It also carries a KNOWN MOVED DEFECT, pinned rather than fixed: an item
+  ABSENT from `v24` renders `one-sided book — uncrossable (ghost-spread)`, because `d?.highPriceVolume
+  || 0` cannot tell missing data from a real one-sided book — the opposite reading of the same `d`
+  that the `thin` cap takes four lines below, where missing data fails CLOSED. Identical in the
+  pre-SEP16b `runWatchlist`, so changing it is a behaviour change (and breaks the byte-match) that
+  belongs to its own chunk.
+  Files not yet clustered stay at
   `pipeline/lib/` root, and cross-cutting infra — paths, version, ignored — stays there by design;
   **`pipeline/probes/`** = the probe framework; **`pipeline/test/`** = all
   `*.test.mjs` suites + `fixtures/`; plus the two pipeline docs and generated data files.
@@ -1290,6 +1315,42 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     has nothing to score here.) Zero new fetch; an empty store adds ZERO rows — the
     agenda is byte-identical (`pipeline/test/reverseflip-surfacing.test.mjs`). Reads
     `positions.json`/`offers.json`/`watchlist.json`/`reverse-flip-state.json`; produces NO new tracked file),
+    `read-watchlist.mjs` (SEP16b, PLAN-PIPELINE-SEPARATION — the watchlist's OWN surface, answering
+    "how are the things I track doing?" rather than the scan's "what should I buy?". Renders the same
+    `Item | Grade | Guide | Quick | Optimistic | Vol/d | Momentum | Regime | Rank net·P/ttf | Note`
+    table the scan's WATCHLIST section prints, from the ONE shared row builder
+    `lib/signal/watchlist-report.mjs`. **The TABLE LINES were byte-identical** to the in-scan
+    section on the same inputs when measured, grade column included (the Decision-2 tripwire) — but
+    that was one manual byte-diff, and NO standing test reproduces it. What IS enforced is narrower:
+    `watchlist-report.test.mjs` pins this surface's column sequence and pins that the scan binds its
+    headers to the same shared constant. Neither compares rendered output. Do not treat the two
+    surfaces as provably identical; the surrounding
+    SECTION is not, and deliberately so — `renderReport`'s `table` carries a leading blank line where
+    the scan's raw `console.log` pair did not. Quiet by default per AO1 (`--verbose` for the table,
+    `--json` for the structured read); `writeLastReport('watchlist', …)` fires on EVERY path —
+    `--json` and the empty-watchlist case included, the latter writing a headline-only report so an
+    emptied watchlist cannot leave the previous run's rows sitting in the dump. Note the two shapes: the dump is
+    the fleet-standard `{kind, generatedAt, reports:[…]}`, while `--json` is the flatter
+    `{kind, tracked, headers, rows}`. Builds its own context (`loadMapping`/`loadAllLatest`/
+    `loadGuide`/`loadAll24hRolling`/`loadBands`) and pools per-item 5m+6h fetches at
+    `FETCH_CONCURRENCY=5` — runtime is dominated by that per-item
+    pool, so it is bimodal on `TS_TTL_5M`, NOT on how long ago you last ran it: **inside** the TTL the
+    context loads are all that remain and it returns in a fraction of a second; **outside** it, all
+    tracked items refetch 5m+6h and it takes several seconds. The slow case is the NORMAL one for a
+    real ask — the TTL is minutes, so any gap between two questions clears it. Measure if it matters;
+    do not quote a figure from here. Flags: `--verbose`, `--json`, `--band-hours`, `--floor`,
+    `--gp-floor`, `--min-gpd`. (A `--posture` flag was documented here and REMOVED — it was inert:
+    posture reaches `suggestionEntry` only, and this command discards those entries, so all three
+    values produced byte-identical output. It is now the literal `'active'` at the one call.) **Two KNOWN context divergences from the scan, named in the file header:** no
+    `--archive-regime` seam (6h is always live, so Regime would differ under that flag) and no
+    `--vol-source`/`pipeline-config.json` resolution (always `rolling`) — latent while no config file
+    exists, and moot once SEP16c removes the scan's own pass. Every row carries `(thin)` because
+    `estimateRank` is called with no `extra` — reproduced deliberately from the in-scan path
+    (Decision 2 Option 1), since wiring it is a fetch-budget change (SEP16e) needing its own ruling.
+    **Writes NOTHING to `suggestions.jsonl`** — an explicit read must not move the retro's population;
+    it discards the `sugg` entries the shared builder returns. Absent/empty/garbled `watchlist.json`
+    degrades to a one-line message and exit 0, never an error, and under `--json` the shared reader's
+    malformed-entry banner is diverted to stderr so stdout stays parseable),
     `trigger-alerts.mjs` (N1 push-notification trigger
     engine — behind the standard `import.meta.url === pathToFileURL(argv[1])` invocation guard
     (TD2) so importing it for tests never runs/fetches; exports `positionSignal`/`quietSuppresses`),
@@ -1749,7 +1810,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     before a read, prints the single `positions:`/`nothing to`/`Pushed` summary line (unified superset regex —
     a local sync never prints `Pushed`, so the union is a no-op on observed output), and NEVER blocks the read
     on failure. Was copy-pasted byte-for-byte across `screen-flip-niches.mjs`/`quote-items.mjs`/`watch-positions.mjs`
-    — those three are now its only consumers, one call each. Node-only, not app-imported), `compose.mjs` (PC1, PLAN-PIPELINE-COMPOSITION — the thin COMPOSITION resolver: `resolve(category,
+    — those FOUR (`screen-flip-niches`, `quote-items`, `watch-positions`, `read-book`) are its only consumers, one call each. `read-book.mjs` is the odd one: no quiet default, so the sync summary line prints there and nowhere else. Node-only, not app-imported), `compose.mjs` (PC1, PLAN-PIPELINE-COMPOSITION — the thin COMPOSITION resolver: `resolve(category,
     {flag, config, fallback, shadowPool?})` → `{active, shadow:[names]}` with precedence **CLI flag > `pipeline/pipeline-config.json`
     > hardcoded fallback**, ACTIVE-PLUS-SHADOW not exclusive-or — `shadow` is the optional `shadowPool` minus
     `active` (a variant never shadows itself; absent pool ⇒ `[]`, byte-identical to PC1). PC3 adds
@@ -2648,10 +2709,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     root-level `heartbeat.json` (LW3 — watch-log's browser-facing 30s pulse): this one is desk-only,
     whole-fleet, never fetched by the app. Missing/corrupt → `{}`, never throws. Disposable), and the AO1
     `last-report/<kind>.json`
-    dumps (`screen.json`/`quote.json`/`watch.json`) — the compact-JSON render.mjs report object(s)
-    the last run of each market-read CLI built, written EVERY run (overwritten, "last run" semantics),
+    dumps (`screen.json`/`quote.json`/`watch.json`/`watchlist.json`) — the compact-JSON render.mjs report object(s)
+    the last run of each market-read CLI built, overwritten with "last run" semantics. **NOT written on
+    every run** — three of the four producers return before their dump on a degenerate path
+    (`quote-items.mjs` exits at `:618`/`:655`; `watch-positions.mjs` returns on "Nothing to watch";
+    `screen-flip-niches.mjs --mode reverse` returns before its write), so a stale dump can outlive the
+    run that should have replaced it. `read-watchlist.mjs` is the one that writes on every path,
+    including the empty case. A reader that must know the dump is fresh should check `generatedAt`,
     for an agent to read instead of re-parsing stdout. Producer: `screen-flip-niches.mjs` /
-    `quote-items.mjs` / `watch-positions.mjs` (via `writeLastReport`, `pipeline/lib/render/cli.mjs`); consumer:
+    `quote-items.mjs` / `watch-positions.mjs` / `read-watchlist.mjs` (via `writeLastReport`, `pipeline/lib/render/cli.mjs`); consumer:
     agent analysis passes — quiet-and-dump-only is now the DEFAULT (an agent must read this file for
     the data, not a stdout summary line); `--verbose` opts into the markdown table for a human paste.
     Shape `{kind, generatedAt, reports:[…]}`; screen
@@ -2731,10 +2797,10 @@ run `pipeline/test/quotecore.test.mjs` + `pipeline/test/reconstruct.test.mjs`.
 
 | Module | Also imported by (pipeline) |
 | --- | --- |
-| `js/quotecore.js` | 13 files: `quote-items.mjs`, `screen-flip-niches.mjs`, `watch-positions.mjs`, `monitor-offers.mjs`, `trigger-alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `lib/retrojoin.mjs` (P6a — `tax` for suggested-net; SF-1 — `quantileOf` for the p25/p75 latency spread), `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab), `dipposture.test.mjs` (DP1 — `recentDirection`); plus the js/ side-imports `js/termstructure.mjs` (SF-1 — re-exports `quantileSorted` as `quantile`) + `js/validate.mjs` (DP1 — `recentDirection` for `dipPostureValidator`) |
+| `js/quotecore.js` | a widely-shared leaf — treat any edit as broad-blast-radius. Includes: `quote-items.mjs`, `screen-flip-niches.mjs`, `watch-positions.mjs`, `monitor-offers.mjs`, `trigger-alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `lib/retrojoin.mjs` (P6a — `tax` for suggested-net; SF-1 — `quantileOf` for the p25/p75 latency spread), `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab), `dipposture.test.mjs` (DP1 — `recentDirection`); plus the js/ side-imports `js/termstructure.mjs` (SF-1 — re-exports `quantileSorted` as `quantile`) + `js/validate.mjs` (DP1 — `recentDirection` for `dipPostureValidator`) |
 | `js/money-math.js` | the tax/margin/bond MATH (split from `format.js`, R2): `quote-items.mjs`/`screen-flip-niches.mjs` (`tax`) + js-side node imports `js/flip-niches.mjs` (`tax`), `js/estimators.mjs` (`netMargin`/`clamp`), `js/validate.mjs`/`js/trendcore.js` (`tax`/`netMargin`), `js/valuescreen.mjs`/`js/market.js`. Edit ⇒ re-run `quotecore.test`+`reconstruct.test` (byte-identical tax). |
 | `js/money-format.js` | gp/number DISPLAY (split from `format.js`, R2): `quote-items.mjs`, `screen-flip-niches.mjs`, `watch-positions.mjs`, `trigger-alerts.mjs`, `join-outcomes.mjs`, `retrojoin.mjs`, `derive-cash.mjs` + `lib/analyze.mjs`/`item-context.mjs`/`emit.mjs` (`fmt`/`fmtP`/`fmtTurn` for the reports) |
-| `js/windowread.mjs` | **Re-enumerated 2026-08-09 — this row listed 9 dependents when there were 20 non-test ones; it is a widely-shared leaf, so treat any edit as broad-blast-radius.** Commands: `read-window-range.mjs`, `quote-items.mjs`, `watch-positions.mjs`, `read-book.mjs` (`liveAgeTag` on P&L marks), `read-schedule.mjs`, `join-window-clears.mjs`, `join-depth-outcomes.mjs`, `screen-flip-niches.mjs` (diurnal profile). js/: `js/quotecore.js` (`windowStats`/`floorCeilingTrack` — the edge that makes windowread a PURE LEAF: it can never import quotecore back, so a shared constant is passed as a PARAMETER, not imported), `js/validate.mjs`, `js/forecast.mjs` (PF1 — `hourProfile`), `js/amplitudescreen.mjs`, `js/termstructure.mjs`, `js/estimators/cells.mjs`, `js/estimators/pair.mjs`. pipeline/lib: `render/emit.mjs`, `timing/staleexit.mjs`, `reconstruct/fill-placement.mjs`, `market/warm-term-structure.mjs`, `market/item-context.mjs` (`realityClause` on the thesis-frame exit — PLAN-DIURNAL-RECENCY-GUARD Chunk 2c, 2026-08-12; a NEW `pipeline/lib/market` → `js/windowread.mjs` edge). Experiments: `pipeline/experiments/dt4-window-gate-study.mjs`. **22 non-test importers in total.** _(was 20 until `join-depth-outcomes.mjs` landed 2026-08-11, 21 until `item-context.mjs` landed 2026-08-12. This cell has now been caught stale twice — 2026-08-09 and again 2026-08-11 — so bump the count in the SAME commit that adds an importer; a re-enumeration note is not a substitute for maintaining it.)_ Tests: exactly 12 — `windowread.test.mjs` (P2 — moved from `pipeline/lib/`), `askexitread.test.mjs`, `projecttrajectory.test.mjs`, `forecast.test.mjs`, `diurnal-recency-replay.test.mjs`, `dt4-timedlap-coverage.test.mjs` (DT4 — the §7 data-guarantee structural pin, direct `diurnalTimedLap` import), `reality-render-coverage.test.mjs` (PLAN-DIURNAL-RECENCY-GUARD **Chunks 2b + 2c**, 2026-08-12 — the render-COVERAGE guard: a source-level scan over **five** NAMED files (`js/windowread.mjs`, `read-window-range.mjs`, `read-schedule.mjs`, `emit.mjs`, `suggestlog.mjs`) asserting the known diurnal-level call sites still render `realityClause`, plus behavioural pins built from the real Green-dragon-leather daily highs (they reproduce the shipped `3/14 · p86 · typical ~1,828` exactly). **It is a fixed regex set, not an enumeration** — it cannot discover a new surface. Chunk 2c added `js/windowread.mjs`, `emit.mjs` (the `also ASK`/`also BID` clause, no longer bare) and `suggestlog.mjs` to its scan. **Two Chunk-2c sites are NOT source-scanned here** and rest on behavioural tests alone: `item-context.mjs`'s thesis-frame exit (`verdictpersist.test.mjs` fixtures 3f–3i) and `quote-items.mjs`'s `windowExit` peak-level bit — a deletion at either would not trip this guard. _(A draft of this cell said "six NAMED files"; it is five. A hand-maintained count in this exact cell has now been wrong in four consecutive review rounds — the durable fix is to stop stating one, not to re-derive it again.)_ `js/trends.js` remains uncovered and still bare, logged in the plan's §10 — which now records it as FOUR app sites, not one, two of them (the ★ badge gate and the `diurnalForecast` projections) being design questions rather than clause-appends. Exists because Chunk 2 enumerated three surfaces and missed two — `read-window-range.mjs`'s own `→ BID/ASK` recommendation line and `/schedule`'s Level column — and a missed CALL SITE is invisible to every behavioural test of the function itself. Also pins the two load-bearing gates that must not be "simplified": the `bidBasis !== 'live'` guard (a repriced bid must not inherit the dip level's reality) and the side-branch on the `⚠⚠` cushion composite. Non-vacuity is scoped, not blanket: every §A assertion that targets a NEW call site fails against `git show HEAD:` copies of the four files §A scans; exactly three §A assertions are before/after invariants guarding a FUTURE deletion, named rather than counted (the `→ BID/ASK` line existing at all, the ASK-leg ⚠⚠ wording surviving the BID-leg fix, and Chunk 2's own `formatTimedLap` clauses); §B pins `computeReality`, which the diff does not touch. **No assertion count is stated** — a hand-maintained count here was wrong in three consecutive review rounds), and **five** of the six `oscillation-*.test.mjs` (`oscillation-reachphase.test.mjs` does NOT import it). _(An earlier version of this cell double-listed two of these and said "six oscillation" — re-derived 2026-08-09.)_ **APP-IMPORTED by `js/trends.js`** (TV — the Trends Diurnal timing section, same `hourProfile`/`deriveDiurnalRange` the console prints; since 0.73.0 it also imports `windowReliability` + `fitWindowMismatchNote` + `WINDOW_RELIABLE_NIGHTS` — the ★ badge is gated on the SAME split-half reliability verdict the console gates hour-display on, and the lookback toggle defaults to the gate's own window. _It imported `hourConcentration` for the ★ from DT5 (0.68.0) until 0.73.0, when that predicate was dropped here as a measured non-discriminator._) |
+| `js/windowread.mjs` | **A widely-shared leaf — treat any edit as broad-blast-radius.** Commands: `read-window-range.mjs`, `quote-items.mjs`, `watch-positions.mjs`, `read-book.mjs` (`liveAgeTag` on P&L marks), `read-schedule.mjs`, `join-window-clears.mjs`, `join-depth-outcomes.mjs`, `screen-flip-niches.mjs` (diurnal profile). js/: `js/quotecore.js` (`windowStats`/`floorCeilingTrack` — the edge that makes windowread a PURE LEAF: it can never import quotecore back, so a shared constant is passed as a PARAMETER, not imported), `js/validate.mjs`, `js/forecast.mjs` (PF1 — `hourProfile`), `js/amplitudescreen.mjs`, `js/termstructure.mjs`, `js/estimators/cells.mjs`, `js/estimators/pair.mjs`. pipeline/lib: `render/emit.mjs`, `timing/staleexit.mjs`, `reconstruct/fill-placement.mjs`, `market/warm-term-structure.mjs`, `market/item-context.mjs` (`realityClause` on the thesis-frame exit — PLAN-DIURNAL-RECENCY-GUARD Chunk 2c, 2026-08-12; a NEW `pipeline/lib/market` → `js/windowread.mjs` edge). Experiments: `pipeline/experiments/dt4-window-gate-study.mjs`. _(No importer COUNT is stated here on purpose: a hand-maintained tally in this cell was wrong in four consecutive review rounds, and was wrong again the round after it was re-derived. Enumerate with a grep when you need the set; do not write the number down.)_ Tests: `windowread.test.mjs` (P2 — moved from `pipeline/lib/`), `askexitread.test.mjs`, `projecttrajectory.test.mjs`, `forecast.test.mjs`, `diurnal-recency-replay.test.mjs`, `dt4-timedlap-coverage.test.mjs` (DT4 — the §7 data-guarantee structural pin, direct `diurnalTimedLap` import), `reality-render-coverage.test.mjs` (PLAN-DIURNAL-RECENCY-GUARD **Chunks 2b + 2c**, 2026-08-12 — the render-COVERAGE guard: a source-level scan over **five** NAMED files (`js/windowread.mjs`, `read-window-range.mjs`, `read-schedule.mjs`, `emit.mjs`, `suggestlog.mjs`) asserting the known diurnal-level call sites still render `realityClause`, plus behavioural pins built from the real Green-dragon-leather daily highs (they reproduce the shipped `3/14 · p86 · typical ~1,828` exactly). **It is a fixed regex set, not an enumeration** — it cannot discover a new surface. Chunk 2c added `js/windowread.mjs`, `emit.mjs` (the `also ASK`/`also BID` clause, no longer bare) and `suggestlog.mjs` to its scan. **Two Chunk-2c sites are NOT source-scanned here** and rest on behavioural tests alone: `item-context.mjs`'s thesis-frame exit (`verdictpersist.test.mjs` fixtures 3f–3i) and `quote-items.mjs`'s `windowExit` peak-level bit — a deletion at either would not trip this guard. _(A draft of this cell said "six NAMED files"; it is five. A hand-maintained count in this exact cell has now been wrong in four consecutive review rounds — the durable fix is to stop stating one, not to re-derive it again.)_ `js/trends.js` remains uncovered and still bare, logged in the plan's §10 — which now records it as FOUR app sites, not one, two of them (the ★ badge gate and the `diurnalForecast` projections) being design questions rather than clause-appends. Exists because Chunk 2 enumerated three surfaces and missed two — `read-window-range.mjs`'s own `→ BID/ASK` recommendation line and `/schedule`'s Level column — and a missed CALL SITE is invisible to every behavioural test of the function itself. Also pins the two load-bearing gates that must not be "simplified": the `bidBasis !== 'live'` guard (a repriced bid must not inherit the dip level's reality) and the side-branch on the `⚠⚠` cushion composite. Non-vacuity is scoped, not blanket: every §A assertion that targets a NEW call site fails against `git show HEAD:` copies of the four files §A scans; exactly three §A assertions are before/after invariants guarding a FUTURE deletion, named rather than counted (the `→ BID/ASK` line existing at all, the ASK-leg ⚠⚠ wording surviving the BID-leg fix, and Chunk 2's own `formatTimedLap` clauses); §B pins `computeReality`, which the diff does not touch. **No assertion count is stated** — a hand-maintained count here was wrong in three consecutive review rounds), and the `oscillation-*.test.mjs` set except `oscillation-reachphase.test.mjs` (`oscillation-reachphase.test.mjs` does NOT import it). **APP-IMPORTED by `js/trends.js`** (TV — the Trends Diurnal timing section, same `hourProfile`/`deriveDiurnalRange` the console prints; since 0.73.0 it also imports `windowReliability` + `fitWindowMismatchNote` + `WINDOW_RELIABLE_NIGHTS` — the ★ badge is gated on the SAME split-half reliability verdict the console gates hour-display on, and the lookback toggle defaults to the gate's own window. _It imported `hourConcentration` for the ★ from DT5 (0.68.0) until 0.73.0, when that predicate was dropped here as a measured non-discriminator._) |
 | `js/forecast.mjs` | `pipeline/test/forecast.test.mjs`, `pipeline/commands/read-window-range.mjs` + `pipeline/commands/quote-items.mjs` (`driftExitFrom` Chunk 5), `js/amplitudescreen.mjs`, and **`js/estimators/pair.mjs`** (PLAN-ESTIMATOR-HONEST-SELL E1 — `driftExitFrom` for the `estSellForward` "list at X" forward projection); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Trends "Forward forecast" section: `diurnalForecast`/`fmtEta`, provisional PF n≈0). Console-side consumers still pending — PF7 validate. An app-behavior change to it bumps APP_VERSION. |
 | `js/validate.mjs` | `pipeline/commands/screen-flip-niches.mjs`, `pipeline/commands/quote-items.mjs`, `pipeline/test/validate.test.mjs`, `pipeline/test/termstructure.test.mjs`, `pipeline/test/dipposture.test.mjs` (DP1 — `dipPostureValidator`) (P2/P3 — the validator registry: reach + floor + dip-posture); imports `js/quotecore.js` (DP1 — `recentDirection`); **APP-IMPORTED by `js/trends.js`** (TV — `reachValidator` beside the Diurnal timing chart; `floorValidator`+`trajectoryValidator` beside the 0.60.0 term-structure overlay — all inform-only) |
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/commands/screen-flip-niches.mjs`, `pipeline/commands/quote-items.mjs`, `pipeline/test/termstructure.test.mjs` (P3 — term structure / durable floor); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Price-history floor/ceiling overlay). Imports `js/quotecore.js` for the shared `quantileSorted` (SF-1) and re-exports it as `quantile`. |

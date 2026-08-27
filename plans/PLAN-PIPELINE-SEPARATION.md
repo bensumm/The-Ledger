@@ -1,6 +1,6 @@
 # PLAN-PIPELINE-SEPARATION — separating measurement, interpretation, labeling, and rendering in the read path
 
-**SEP16a SHIPPED** `d500e36` + review-fix `0569000` — the shared watchlist reader (`pipeline/lib/config/watchlist.mjs`) now backs the five node-side loaders; the app keeps its own `fetch` resolve and is NOT covered by the tripwire. Review corrected two claims this plan made: SIX call sites died on a malformed file, not five (`screen-flip-niches.mjs` reads it twice), and a malformed entry cost exactly ONE member rather than emptying the set.
+**SEP16a SHIPPED** `d500e36` + review-fix `0569000` — the shared watchlist reader (`pipeline/lib/config/watchlist.mjs`) now backs the six node-side loaders (five at SEP16a, plus `read-watchlist.mjs` at SEP16b); the app keeps its own `fetch` resolve and is NOT covered by the tripwire. Review corrected two claims this plan made: SIX call sites died on a malformed file, not five (`screen-flip-niches.mjs` reads it twice), and a malformed entry cost exactly ONE member rather than emptying the set.
 
 **Status:** r6 — **EXECUTION BEGUN on the ship-first front** (owner ruling 2026-08-25; the
 coordinator is executing, starting with the runner change SEP1a). r1–r4 were drafting rounds
@@ -13,7 +13,15 @@ file contradicted itself at `:456`), restates SEP16's warrant on the permission/
 expands it into five sub-chunks with two costed forks recorded as decisions, adds one open ruling
 (R-retrohorizon) and one latent defect (`analyze.mjs`'s perNiche bucket). No other chunk changed.
 Every code claim verified by reading or running the cited file; claims from a review round I could
-not independently reproduce are marked `[r1-measured]`/`[r2-measured]`. Disagreements are argued
+not independently reproduce are marked `[r1-measured]`/`[r2-measured]`.
+⚠ **THE LINE NUMBERS ARE NOT PART OF THAT GUARANTEE — treat every `file:NNNN` in this document as
+UNRELIABLE and re-grep the symbol instead.** Checked 2026-08-26: of the `screen-flip-niches.mjs`
+citations, effectively all are wrong. No reason for that is given here on purpose: a first attempt
+stated both an offset range and a "never right rather than drifted" inference, and re-measurement
+refuted both (the range depends entirely on which revision you diff against, and most citations ARE
+exact at the commit they were written against). A wrong diagnosis teaches the wrong repair. They are deliberately left uncorrected: this file is long-lived against a file that
+moves every wave, so a re-numbering pass buys a few weeks and re-establishes exactly the false
+confidence being warned about here. Cite SYMBOLS; grep for them. Disagreements are argued
 inline — two r1 pushbacks held, three r2 amendments are recorded below at their point of use.
 **Chunk prefix:** `SEP*` — unique across `plans/` + `PLAN.md` (grep-checked). Findings are labelled
 with words (`Cause A`…); the letter-number space is for shippable chunks.
@@ -290,7 +298,9 @@ notes, footers) is charged against this budget in its output-delta line.
   net-negative-per-attention candidates, and watchlist's `realisedN = 32` clears `minN = 20`. So
   `/analyze` can propose tuning a "niche" that is not one — it is the always-shown exempt section.
   Not diagnosed further and NOT fixed by SEP16 (which deliberately leaves the log untouched, see
-  its Decision 1); the fix belongs with the perNiche rollup's bucket policy.
+  its Decision 1) — but only HALF of that decision survives R-watchlist-compute: the historical
+  rows do stay, while the "keep writing new ones" half is VETOED (SEP16c stops the writes, so the
+  bucket stops growing without shrinking). The fix belongs with the perNiche rollup's bucket policy.
 - **Quiet-mode section loss (r5, live defect — RESOLVED for the dump half, r6):** amplitude,
   watchlist, dip pool and watch-closely reached neither stdout nor the dump on a default run.
   `039972e` wrapped all four in `captureReport`, so they now reach the DUMP but still not quiet
@@ -325,6 +335,52 @@ notes, footers) is charged against this budget in its output-delta line.
   own surface/mode (SEP16) — a distinct question gets a distinct command, which is this plan's
   thesis. The honesty rule travels with it wherever it lands: exempt from floors, never silently
   dropped, each row carrying the note saying what a gate would have hidden.
+- **R-watchlist-compute — RULED 2026-08-26 (owner, verbatim):** "I meant essentially treat the
+  watchlist as empty unless explicitly scanned. Stop computing entirely."
+  **This VETOES Decision 1 as written** (which chose surface-moves/compute-stays and flagged exactly
+  this reading for veto). Under the ruling a default `screen-flip-niches.mjs` run behaves as if
+  `watchlist.json` were an empty array: no prefetch, no quote loop, no rows, no `logSuggestions`, no
+  `screen.json` watchlist section, and none of F-b grants (1)-(6). The watchlist is reachable only
+  through the explicit surface SEP16b builds. **Sequencing consequence: SEP16b MUST land before
+  SEP16c**, or the capability is deleted before its replacement exists.
+  **SCOPE — the ruling is SCAN-scoped, and grants (7)/(8) are deliberately NOT touched.** Those live
+  in `quote-items.mjs` and `watch-positions.mjs` (the `NOISE_OFFER_GP` incidental-lot exemption and
+  the big-ticket window-exit force-include). They belong to TWO different surfaces the owner did not
+  rule on — `/positions` (`quote-items.mjs --positions`) and the `/loop` watch pass
+  (`watch-positions.mjs`) — so removing them would silently change what BOTH print. If that is also
+  wanted it is a separate ruling, not an inference from this one.
+  **Four consequences, stated because each is a real loss and none is reversible by a doc pass:**
+  (a) `suggestions.jsonl` stops gaining watchlist rows. **State the share against the right
+  denominator:** they are 13,800 of 27,805 rows (49.6%) in the CURRENT file, but `analyze-record.mjs`
+  reads the monthly archives too, and across that whole ledger it is **29,327 of 110,798 = 26.5%**
+  (recounted 2026-08-26). Every retro figure below is computed over the 110k ledger, so quoting the
+  49.6% file share against them overstates the consequence by ~1.9x. It is also a STOCK accumulated
+  to date, not a per-era rate. (F-c cites 13,380/26,832 and tells the reader to recount by grouping on
+  `context.mode` — that field is undefined on every row; the mode is TOP-LEVEL `o.mode`.)
+  (b) **R-retrohorizon is DEFANGED going forward, not settled — three corrections to an earlier
+  draft of this line.** (i) The claim-stealing stops only for NEW rows; the 71→85 / 5.30m→6.73m /
+  15→24 / 0/11→1/12 differential was measured by deleting watchlist rows from HISTORY, which
+  consequence (c) declines to do — so the forward numbers drift asymptotically, they do not jump to
+  the deleted-state, and quoting that endpoint as a prediction is wrong. (ii) The left side has
+  already drifted: band now reads latencyN 72 / realised 4.93m against F-c’s 71 / 5.30m.
+  (iii) `--include-watchlist` RE-ARMS the defect — it restores `logSuggestions` verbatim, and
+  `HORIZON_BY_MODE` still has no `'watchlist'` entry, so any run of that flag writes claim-stealing rows
+  back into the shared ledger. SEP16c verify (1) must therefore NOT be run against the real ledger.
+  `HORIZON_BY_MODE` is not edited: the "LEAVE IT" default holds on the threshold.
+  (c) **NEW OPEN QUESTION (owner):** the 13,800 watchlist rows ALREADY in `suggestions.jsonl` (29,327
+  counting the archives — NOT the 13,380 F-c reports, which is stale simply because the FILE GREW.
+  An earlier note here blamed "a broken grouping"; that cause is refuted by this plan's own evidence,
+  since a grouping on `context.mode` returns ZERO rows, and zero cannot produce 13,380) keep
+  winning claims on past fills within their 24h horizon, so the retro becomes a MIX of two regimes
+  either side of the cutover. Proposed default: leave history untouched and have `analyze-record.mjs`
+  NAME the regime break rather than silently averaging across it. Nothing is done here.
+  (d) **The F-d doctrine fix dies with the compute.** SEP16c's roll-up was specified to NAME the
+  falling/crash-risk watchlist rows, and that was the plan's own falsifier-observer for "a watchlist
+  row that would have warned goes unseen". A scan that does not compute cannot warn. The residual
+  risk is now real and unmitigated: it rests entirely on the owner running the explicit command.
+  Pre-agreed revert if that proves wrong: restore a compute-only (never-render) pass for the
+  falling check alone.
+
 - **R-diurnal — RULED 2026-08-25 (owner):** the diurnal-hours read was measured near-nonexistent —
   drop the hours clause where the reliability gate fails (78 of 79 survivors on the measured pass:
   `levels only — no reliable hours`; ~1.3% pass, consistent with the ~0.8% on record
@@ -347,12 +403,17 @@ notes, footers) is charged against this budget in its output-delta line.
 - **R-degrade (SEP3):** gate-off notes render core-tier. Per-site veto list in the chunk.
 - **R-verdictlog (SEP7):** additive `verdictKind`; the audit gating any change to the old field
   runs against the SEVEN-site census.
-- **R-retrohorizon (NEW r6; gates SEP16e's sibling question and any future removal of the
+- **R-retrohorizon (NEW r6; SUPERSEDED IN PART 2026-08-26 — R-watchlist-compute IS the removal this
+  ruling was said to gate, so it can no longer gate it; what survives is the THRESHOLD question for
+  SEP16e's sibling. The circular reading — removal gated on the ruling, ruling settled by the removal —
+  is resolved in that direction. Original text follows; gates SEP16e's sibling question and any future removal of the
   watchlist log):** `'watchlist'` is absent from `HORIZON_BY_MODE` (`retrojoin.mjs:49-52`) so it
   falls to the 24h default — LONGER than band/churn's 12h — and `:147-155` awards each buy to the
   nearest-prior suggestion in horizon, so watchlist rows (logged for all 60 items every scan)
-  usually win the claim. **Proposed default: LEAVE IT, and do not let SEP16 change it in either
-  direction.** Rationale: `retrojoin.mjs:45-47` already rules this class ("CHANGES WHICH FILLS THE
+  usually win the claim. **Proposed default: LEAVE IT — meaning do not edit `HORIZON_BY_MODE`. That default STILL HOLDS and
+  is untouched by R-watchlist-compute, which changes the POPULATION (no new watchlist rows) and not
+  the threshold. The r6 clause "do not let SEP16 change it in either direction" is overtaken: SEP16c
+  necessarily changes the population.** Rationale: `retrojoin.mjs:45-47` already rules this class ("CHANGES WHICH FILLS THE
   RETRO ATTRIBUTES … an owner call, not a doc-pass edit"), and the measured differential (band
   taken 71→85, realised Σ 5.30m→6.73m; Bar-E 0/11→1/12) shows the numbers move but not which
   attribution is right. Settling it needs an owner call on what a watchlist row CLAIMS, which is a
@@ -488,7 +549,9 @@ note families cost ~32,000._
    r5, which reported them as reaching neither). The WATCHLIST is deliberately
    NOT folded in here: per R-watchlist it becomes its own surface (SEP16). (r6: the "also cures its
    live quiet-mode drop" clause that stood here is RETIRED — `039972e`'s `captureReport` wrap
-   already put it in the dump, and SEP16 keeps the main scan's compute + publication anyway.) Until this part lands, dropping any stdout is DATA LOSS, not relocation —
+   already put it in the dump. The clause's second half — "and SEP16 keeps the main scan's compute
+   + publication anyway" — is ⛔ VETOED by R-watchlist-compute: the compute LEAVES the default scan
+   at SEP16c, and `screen.json`'s watchlist key goes permanently null with it.) Until this part lands, dropping any stdout is DATA LOSS, not relocation —
    that distinction is the whole chunk. (The CLAUDE.md/skill claims that the digest
    and amplitude are "console-only, never in screen.json" are reconciled in the same commit: the
    published root `screen.json` app artifact is unchanged — this is the gitignored last-report
@@ -587,6 +650,14 @@ SILENTLY with CI green, which is why they are listed before the change and not a
 - **F-c — the report half is NOT free to move: it is half the retro ledger.** `runWatchlist` calls
   `logSuggestions('screen', {mode:'watchlist'}, sugg)` at `screen:2497`, and that write is
   **13,380 of 26,832 rows in `suggestions.jsonl` — 49.9%, larger than band's 10,269**
+  ⚠ **EVERY FIGURE ON THE LINE ABOVE IS SUPERSEDED — do not quote it.** All FOUR, not the two an
+  earlier banner named: recounted 2026-08-26 over live + archive (110,808 rows, `parseErr = 0`),
+  watchlist is **29,327 of 110,808 (26.5%)** and band is **50,008**. Three consequences:
+  (a) the 49.9% overstated the retro exposure by ~1.9x; (b) **the qualitative claim REVERSES** — band
+  is 1.7x LARGER than watchlist on the archive-inclusive ledger, so "larger than band's" is true only
+  of the current file; and (c) the recount recipe below is broken — `mode` is a TOP-LEVEL field, so
+  grouping on `context.mode` returns zero rows on all 110,808. Note 110,808 is the LINE count;
+  `analyze-record.mjs` drops admission-exclusion rows and reports a smaller `audit.total`.
   (r6-measured; recount by grouping the file on `context.mode`). Nothing filters on it and no test
   covers it, so deleting it breaks nothing and moves real numbers: a measured differential has
   `analyze-record.mjs` band taken 71→85 with realised Σ 5.30m→6.73m, churn 15→24, and **§5's Bar-E
@@ -611,7 +682,11 @@ SILENTLY with CI green, which is why they are listed before the change and not a
   are excluded from every niche table (only HELD rows carry `surviveMode`'s falling bypass) and
   "appear only in the Watchlist section." Move that section away and **a falling watchlisted item
   appears NOWHERE in a scan** — violating `:938` "always report, honestly." ⇒ the roll-up must
-  **NAME** falling/crash-risk watchlisted items, never merely count them. `SKILL.md:867-868` must
+  **NAME** falling/crash-risk watchlisted items, never merely count them.
+  ⛔ **INVERTED by R-watchlist-compute.** There is no roll-up, and "appears nowhere in a scan" is now
+  the RULED-CORRECT behaviour, not a violation: a watchlisted item is deliberately invisible until
+  `read-watchlist.mjs` is run. "Always report, honestly" binds that surface, not the scan. This finding
+  is kept because its ANALYSIS of the coupling is still correct — only its conclusion is dead. `SKILL.md:867-868` must
   also be reconciled: its `watch-reserve-full` footer tells the reader to "read it there" in a
   section that will no longer exist on that surface.
 - **F-e — every coupling above fails silently, and CI stays green.** `js/ui.js:440-443` guards
@@ -621,7 +696,9 @@ SILENTLY with CI green, which is why they are listed before the change and not a
   positive off the niche tables. There is NO tripwire for any of F-a…F-d. The acceptance criteria
   below are written to BE the tripwire.
 
-**Decision 1 (the render-vs-ledger fork) — CHOSEN: separate WHERE IT RENDERS from WHAT IT LOGS.**
+**Decision 1 (the render-vs-ledger fork) — ⛔ VETOED 2026-08-26 by R-watchlist-compute (§4). The
+text below is the SUPERSEDED r6 reasoning, kept because the ruling is a veto OF it; do not act on
+it. The scan stops computing entirely — see §4 and the rewritten SEP16c.**
 The main scan KEEPS computing the watchlist, keeps `logSuggestions` at `screen:2497` firing
 unchanged, and keeps publishing `screen.json`'s `watchlist` + `html.watchlist`; only the rendered
 TABLE leaves the main surface. Rejected alternative: fix `HORIZON_BY_MODE` first as a prerequisite.
@@ -695,29 +772,48 @@ hand-serialized against each other).**
   **Verify:** the new surface's table **byte-matches** the old section's table on the same inputs
   (the SEP4 shape) — including the grade column, which is the Decision-2 tripwire; `--json`;
   empty/absent watchlist → clean message, exit 0.
-- **SEP16c — the main scan's roll-up (the F-d doctrine fix).**
-  `runWatchlist` keeps compute + `logSuggestions` + publication (Decision 1) and loses only its
-  three `console.log`s (`screen:2499-2501`). In their place, one line that **NAMES** the
-  falling/crash-risk rows: `watchlist: 60 tracked · 15 crossed into a niche table · falling: <names>
-  · run read-watchlist.mjs`. The falling/crash-risk set comes from data already computed
-  (`row.falling` / `watchlistNote`'s reason, `screen:2434`) — no new signal.
-  **Verify, and these are the F-e tripwires:** (1) `suggestions.jsonl` gains the SAME number of
-  `mode:'watchlist'` rows per pass as before — **counted, not assumed**; (2) `screen.json`'s
-  `watchlist.rows` length, `watchlist.headers` and `html.watchlist` are unchanged (diff two
-  artifacts); (3) the deployed Scan tab still renders the section — checked in a real browser, since
-  `js/ui.js:440-443` guarantees CI cannot see this; (4) a falling watchlisted item is NAMED on the
-  main scan — assert with a fixture that has one, because this is the doctrine hole.
-  **Docs:** `scan/SKILL.md:867-868` (the `watch-reserve-full` "read it there" pointer) and `:934-938`
-  (the Watchlist-section bullets) reconciled IN PLACE, `version:` bumped; CLAUDE.md's ask-routing
-  table gains the new command; `render.mjs`'s WATCHLIST tier entry reconciled.
+- **SEP16c — the main scan stops computing the watchlist (REWRITTEN 2026-08-26 under
+  R-watchlist-compute, which REPLACED the r6 roll-up version in place — there is no roll-up spec left
+  in this file to compare against).**
+  `runWatchlist` is no longer called on a default run. The scan behaves as if `watchlist.json` were
+  an empty array: no prefetch, no quote loop, no `logSuggestions`, no `screen.json` watchlist
+  section, and F-b grants (1)-(6) all read an empty id set — `watchedIds` (`gatecandidates.mjs`),
+  `WATCH_RESERVE_DEFAULT` band-stack reserve, the UNBOUNDED amplitude reserve, the amplitude Stage-1
+  proxy bypass, `subFloorFallback`, and the sub-BE render-filter exemption. Grants (7)/(8) are OUT
+  OF SCOPE by the ruling (they belong to `/positions` AND the `/loop` watch pass — two surfaces).
+  An `--include-watchlist` flag restores the old in-scan behavior verbatim for a one-off comparison.
+  In place of the three `console.log`s, ONE line that does not require the compute:
+  `watchlist: 60 tracked · not scanned (run read-watchlist.mjs)`.
+  **The roll-up can no longer NAME the falling rows** — that was the F-d doctrine fix and it dies
+  with the compute (recorded as consequence (d) on the ruling). Do not re-add a "cheap falling
+  check": there is no falling read without a quote, so it is the compute under another name.
+  **Verify — the tripwires INVERT from r6's, which asserted no-change:** (1) `suggestions.jsonl`
+  gains ZERO `mode:'watchlist'` rows on a default pass and the SAME count as before under
+  `--include-watchlist` — both counted, not assumed; (2) `screen.json` has `watchlist: null` and no
+  `html.watchlist`, and the app degrades cleanly rather than rendering an empty section
+  (`js/ui.js:440-443` — CI cannot see this, so check a real browser); (3) **the freed fetch budget is
+  MEASURED, not assumed** — a paired default run before/after, reporting what the 24 released band
+  slots and the unbounded amplitude reserve actually admit, against the standing `crowded out: 31`
+  footer; (4) a default run and an `--include-watchlist` run on the same inputs are diffed BOTH ways —
+  not just what the freed slots ADMITTED but what emptying the grants DROPPED. Grant (6)
+  (`screen-flip-niches.mjs`, the `!WATCHLIST_IDS.has(s.id)` sub-BE render exemption) and grant (1)
+  (the `watchedIds` gate exemption) both REMOVE watchlisted rows from the NICHE tables when the id set
+  goes empty — the file’s own comment calls that reserve load-bearing. An acceptance test blind to the
+  drop direction passes while rows the scan prints today silently vanish.
+  **Docs:** `scan/SKILL.md` (the `watch-reserve-full` pointer and the Watchlist-section bullets)
+  reconciled IN PLACE, `version:` bumped; CLAUDE.md's ask-routing table gains the new command AND
+  loses any claim that the scan always shows the watchlist; `render.mjs`'s WATCHLIST tier entry
+  reconciled; README's `screen.json` entry updated for the now-nullable section.
 - **SEP16d — the roles earn their keep: `target` / `hold` / `probe` + `--audit`.**
   `target` (I intend to buy): multi-week range position + accumulation level, composed from
   `js/termstructure.mjs` + `range-position.mjs` + `hourly-lmh.mjs`. Read ASYMMETRICALLY — range
   position is a caution at extremes, never a credit; the wording must not imply "low in the range,
   therefore buy". `hold` (I own it): the exit level and the **ask-reach AT that level**, from
   `js/windowread.mjs` (`windowStats`/`reachedDays`/`placement`/`realityClause`) — the same numbers
-  `read-window-range.mjs --ask` prints, routed, not recomputed. `universe`: no separate render; the
-  roll-up covers it — say that plainly rather than implying a fifth surface. `probe`: ever traded /
+  `read-window-range.mjs --ask` prints, routed, not recomputed. `universe`: no separate render.
+  ⚠ An earlier draft said "the roll-up covers it" — **the naming roll-up is GONE** (vetoed; see the
+  banners in Decision 1 and SEP16b). Nothing replaces it, so this role currently has no render at all;
+  SEP16d must choose one rather than inherit a mechanism that no longer exists. `probe`: ever traded /
   ever surfaced / ever held; three nos ⇒ prune candidate. `--audit` is the PRUNE direction and
   **imports `buildAudit` from `read-schedule.mjs:249`** (already exported) for the ADD direction —
   two homes for "who belongs on the watchlist" is how forks are born.
@@ -740,23 +836,29 @@ hand-serialized against each other).**
 `THIN_GRADE_CAP` — the undifferentiated grade is a REPORT defect (the band answer printed for 45
 items no band pass would admit), and 60/60 `(thin)` is Decision 2's artifact plus a selection effect,
 the watchlist being deliberately big-ticket and slow. Do NOT change any gate, floor, threshold or
-reserve. Do NOT migrate `watchlist.json` to ids or to objects. Do NOT add a new estimator.
+reserve VALUE. (The `WATCH_RESERVE_DEFAULT = 24` slots do become idle at SEP16c — the constant is
+untouched, the section that consumed it stops running. SEP16c verify (3) measures what that idle
+budget then admits; a measured re-ranking of the niche tables is an EXPECTED consequence, not a
+violation of this non-goal.) Do NOT migrate `watchlist.json` to ids or to objects. Do NOT add a new estimator.
 
-**Output/prose delta:** main-scan stdout −~3,000 tokens (the table moves; a naming roll-up replaces
-it). **No compute or fetch saving** — Decision 1 keeps the quote loop where it is; any claim of a
-scan speed-up from this chunk is false.
+**Output/prose delta:** main-scan stdout −~3,000 tokens (the table moves to `read-watchlist.mjs`;
+**nothing replaces it on the scan** — an earlier draft said a naming roll-up would, which
+R-watchlist-compute vetoed). **Compute and fetch DO leave** under R-watchlist-compute (this line said the opposite under the
+vetoed Decision 1). The size of the saving is not assumed — SEP16c verify item (3) measures it.
 
 **Falsifier + observer:** a watchlist row that would have warned goes unseen because the separate
-command was never run. Observer: the roll-up NAMES the falling/crash-risk rows (F-d), so the
-time-sensitive half is visible without running anything; the rest is Ben's cadence. Pre-agreed
+command was never run. Observer: ⛔ GONE. The roll-up was to NAME the falling/crash-risk rows (F-d), but
+R-watchlist-compute consequence (d) kills that with the compute — the residual risk is unmitigated and
+rests on Ben running the command; the rest is Ben's cadence. Pre-agreed
 revert if the pointer proves insufficient: fold the TABLE (not the notes) back into the decision
-surface. Second falsifier, specific to Decision 1: if a future reader finds the retro numbers
-changed across SEP16, the row-count assertion in SEP16c was wrong — that assertion is the whole
-guarantee.
+surface. Second falsifier — ⛔ INVERTED by the veto: retro numbers now change BY DESIGN, so the old
+"numbers changed ⇒ bug" test would fire on correct behaviour. The replacement is SEP16c verify (1):
+zero `mode:'watchlist'` rows on a default pass.
 
 **Ruling dependency:** R-watchlist (RULED — this chunk is its encoding), with the surface-vs-compute
 reading flagged for veto in Decision 1; R-retrohorizon (OPEN, §4) gates SEP16e's sibling question
-and any future removal of the watchlist log.
+and any future removal of the watchlist log. (2026-08-26: that removal is now RULED —
+R-watchlist-compute — so this dependency reads THRESHOLD-only; see §4.)
 
 ### SEP2 — console-mutation containment (first follow-on per risk-weighted order)
 **Change:** new `pipeline/ci/lint-console-mutation.mjs`: assignment to `console.log`/`console.error`/
@@ -937,8 +1039,9 @@ SEP11a footer (prints the contradiction in the same output the disposition rides
 
 Encoded: SEP1a/1b (runner), SEP2 (lint), SEP12 (ruled deletion + cell), SEP4 (extraction), SEP5/6
 (structs + formatter + coverage tests), SEP7's guards + log field + gloss, SEP8 (anchor age), SEP9
-(predicates), SEP10 (artifacts + path check), SEP11a (ledger + footer), SEP15 (lifecycle repair), SEP16 (watchlist surface — the sidecar schema, the five-node-loader read path and the roll-up's
-falling-NAMING rule are encoded; WHICH role an item deserves stays judgment, proposed by
+(predicates), SEP10 (artifacts + path check), SEP11a (ledger + footer), SEP15 (lifecycle repair), SEP16 (watchlist surface — the sidecar schema and the six-consumer loader read path are encoded.
+The roll-up's falling-NAMING rule is ⛔ GONE with the roll-up itself under R-watchlist-compute: a
+falling watchlisted item is named by `read-watchlist.mjs`, the surface the reader must now ask for; WHICH role an item deserves stays judgment, proposed by
 `--audit` and never auto-written; its cadence stays Ben's).
 Judgment (tagged in skills / process rules): SEP13's stopping rule (a process rule — CLAUDE.md is
 its one home); SEP14's one judgment residue — the R-surface default choice (its mode, dump
@@ -973,11 +1076,14 @@ verdict-comment block (SEP12).
   lifecycle guard's 42/42-ok run incl. a SHIPPED-leading status, the ✓/✗ render line (:945) and
   the discarded `staleGuarded` (:829 vs :1308), windowread's app imports (quotecore.js:40,
   trends.js:7), money-format's zero imports, and lint-comments' ROOTS/caps/tracked status.
-  Verified r4 (round 2): the last-report dump holds exactly TWO reports (band + churn — read the
-  file, 2 entries, ~196 KB); the watchlist section prints via bare `console.log` (`screen:2540` —
-  so under the quiet default it reaches NEITHER stdout nor the dump), the digest via `realLog`
-  (`:3019`), and `emitReport` (:1995) is the only report-emitting call site — the dump-completeness
-  gap SEP14 part 1 closes. The section/line-kind token tables in Cause H are [r2-measured] — not
+  ⚠ **Superseded in three places (re-verified 2026-08-26); re-measure before relying on any of it.**
+  (a) The watchlist section still prints via bare `console.log` in the SCAN — but since SEP16b it has
+  its own command and its own dump, so "reaches NEITHER stdout nor the dump" is no longer true of the
+  watchlist as a whole. (b) **The digest DOES ride the dump** — it is pushed to `REPORTS` immediately
+  before `realLog`, and the code comment beside it says so; SEP14's "write the digest into
+  screen.json" is therefore already a no-op. (c) `emitReport` is **NOT** the only report-emitting
+  site — there are THREE `REPORTS.push` calls (`emitReport`, one inside `captureReport`, and the
+  digest's own). The two-report dump count was accurate when measured and moves with the run's modes. The section/line-kind token tables in Cause H are [r2-measured] — not
   independently reproduced; the executor re-measures on a current pass before pinning SEP14's
   ~8,000-token target. Process record: r3's opt-in chunk was built on a coordinator instruction
   the owner later overruled — the override and the verbatim ruling are recorded at §4 R-coverage
@@ -1018,7 +1124,9 @@ verdict-comment block (SEP12).
   promotion of the lifecycle report to `checks.yml` is flagged for Ben as guard #13 with the same
   3-mention cost, not assumed).
 - Every chunk's verify list runs the FULL twelve-guard `checks` job.
-- Wire: `suggestions.jsonl`/`screen.json` changes additive only.
+- Wire: `suggestions.jsonl` changes additive only. `screen.json` is additive EXCEPT at SEP16c, where the
+  `watchlist` key goes permanently null under R-watchlist-compute — a subtractive wire change, absorbed
+  by `js/ui.js`'s existing `wl.rows.length` guard (F-e) rather than by a schema bump.
 - APP_VERSION: SEP5 and SEP8 touch app-imported modules → bump per rule 5 (E9 manifest guard is
   unbuilt — the bump rides review); SEP12's digest cell is CONSOLE-only (digest never reaches
   `screen.json` — CLAUDE.md's digest section), no bump; SEP1a/1b/2/4/10/11a/13/15 pipeline-only.

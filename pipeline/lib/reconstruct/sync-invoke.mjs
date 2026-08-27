@@ -2,12 +2,10 @@
  * sync-invoke.mjs — the ONE home for the "always sync first" (SY1) invocation.
  *
  * Before every market read (screen / positions-quote / watch), the read surfaces run a LOCAL,
- * zero-git `sync-fills.mjs` so positions.json is rebuilt off the current exchange logs (Ben,
- * 2026-07-16 — prose "sync before every read" was skipped repeatedly, so a real closed position
- * went unnoticed; SY1 moved it in-code). That invocation used to be copy-pasted byte-for-byte
- * across `screen-flip-niches.mjs`, `quote-items.mjs`, and `watch-positions.mjs` — three homes for
- * one operational concern, already drifting (watch's summary regex matched `^Pushed`, the other
- * two did not). AR1 (PLAN-ARCHITECTURE-COHERENCE) collapses them here.
+ * zero-git `sync-fills.mjs` so positions.json is rebuilt off the current exchange logs (prose
+ * "sync before every read" was skipped repeatedly and a real closed position went unnoticed; SY1
+ * moved it in-code). The invocation was copy-pasted across the read surfaces and already drifting
+ * (watch's summary regex matched `^Pushed`, the others did not); AR1 collapses them here.
  *
  * CONTRACT (behavior-preserving):
  *   - Runs the BARE (no-flag) `sync-fills.mjs` as a child of the current node — LOCAL / ZERO-GIT
@@ -20,8 +18,9 @@
  *     unless `--verbose`, so this respects their quiet default — the helper reads the live global
  *     `console.log` at call time, it does not capture a reference).
  *   - ⚠ THE FAILURE NOTE GOES TO STDERR AND THE SUMMARY TO STDOUT — do NOT "tidy" them onto one
- *     stream. All three callers run `if (!VERBOSE) console.log = () => {}` a few lines BEFORE
- *     calling this, so a `console.log` failure note reaches nobody on the quiet default — the very
+ *     stream. Three of the FOUR callers run `if (!VERBOSE) console.log = () => {}` a few lines BEFORE
+ *     calling this (NOT `read-book.mjs`: no quiet default, so its note lands). On the other three a
+ *     `console.log` failure note reaches nobody — the very
  *     invocation CLAUDE.md's command table tells an agent to run (measured: 0 bytes to stdout for a
  *     whole runLocalSync, on the SUCCESS arm too, so silence never evidenced health). That is the
  *     hazard SY1 exists to remove, reinstated: a crashing sync leaves the read quoting a FROZEN
@@ -33,7 +32,7 @@
  *   - The summary regex is the UNION `/^positions:|^Pushed|nothing to/` (AR1 regex reconciliation):
  *     watch already matched `^Pushed`; screen/quote did not. A bare (local) `sync-fills.mjs` never
  *     prints a `Pushed` line, so unifying to the superset is a strict no-op on observed output for
- *     all three surfaces while removing the divergence — one regex, one home.
+ *     all four surfaces while removing the divergence — one regex, one home.
  *
  * Node-only (child_process); NOT app-imported — no APP_VERSION bump when this changes.
  */

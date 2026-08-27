@@ -202,7 +202,7 @@ this table is the flow view, not a second inventory.
 | `.cache/watch-state.json` | `watch-positions.mjs` (ONLY writer) | quote-items (read-only) | C |
 | `.guide-history.jsonl` | `watch-positions.mjs` | quote-items (advisory) | C |
 | `ignored-items.json` | app / manual | monitor/positions quarantine | C/D |
-| `watchlist.json` | app + phone (contents API) | app (`js/ui.js`) + FIVE node commands through the ONE reader `pipeline/lib/config/watchlist.mjs` — `screen-flip-niches.mjs` (watchlist section + the gate/reserve/render grants), `quote-items.mjs`, `watch-positions.mjs`, `read-schedule.mjs`, `report-archive-gate.mjs` | B |
+| `watchlist.json` | app + phone (contents API) | app (`js/ui.js`) + SIX node commands through the ONE reader `pipeline/lib/config/watchlist.mjs` — `screen-flip-niches.mjs` (watchlist section + the gate/reserve/render grants), `read-watchlist.mjs` (the dedicated surface, SEP16b), `quote-items.mjs`, `watch-positions.mjs`, `read-schedule.mjs`, `report-archive-gate.mjs` | B |
 | `watchlist-meta.json` | hand-edited / agent-written (no automated writer) | `pipeline/lib/config/watchlist.mjs` role sidecar — read only for DISPLAY roles, never for membership | B |
 | `suggestions.jsonl` | `lib/suggestlog.mjs` (every surface) | `join-outcomes` / `analyze-record` | E |
 | `outcomes.json` | `join-outcomes.mjs` | `analyze-record.mjs` | E |

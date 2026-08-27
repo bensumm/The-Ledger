@@ -682,8 +682,19 @@ async function main() {
   }
 
   if (!heldSpecs.length && !targetSpecs.length && !bidSpecs.length && !asks.length) {
-    console.log('Nothing to watch — no open positions, no active GE offers, and no target items passed.');
-    if (noise.length) console.log(`(noise ignored: ${noise.length} offer(s) under ${fmtP(NOISE_OFFER_GP)} total)`);
+    // TERMINAL-STATE EMISSION, same contract as quote-items.mjs's finishEarly (its header has the full
+    // reasoning): bare console.log is stubbed under the quiet default, so returning here printed ZERO
+    // BYTES and left last-report/watch.json holding an OLDER pass an agent reads as current.
+    let msg = 'Nothing to watch — no open positions, no active GE offers, and no target items passed.';
+    if (noise.length) msg += `
+(noise ignored: ${noise.length} offer(s) under ${fmtP(NOISE_OFFER_GP)} total)`;
+    const report = buildWatchReport({
+      generatedAt: new Date().toISOString(), headline: msg,
+      alerts: [], tableHeaders: [], tableRows: [], notes: [], summaryLines: [],
+    });
+    console.log(renderReport(report));
+    const rel = writeLastReport('watch', report);
+    if (!VERBOSE) realLog(`${msg} → ${rel}`);
     return;
   }
 
@@ -851,7 +862,7 @@ async function main() {
         const days = (windowStats(it.ts1h, { nights: 14, wStart: 0, wEnd: 0 }) || {}).days || null;
         const dae = driftExitFrom(prof, days, {
           liveLo: it.row.quickBuy ?? null, liveHi: it.row.quickSell ?? null,
-          phase: it.ts6h ? phase(it.ts6h) : undefined, mom: it.row.mom, reliable: it.row.reliable, now: new Date(),
+          phase: it.ts6h ? phase(it.ts6h)?.phase : undefined, mom: it.row.mom, reliable: it.row.reliable, now: new Date(),
         });
         const tick = cycleTick(cyclePrior[String(it.id)], {
           identity: `cyc:${it.id}`, troughActual: it.row.quickBuy ?? null, peakActual: it.row.quickSell ?? null,

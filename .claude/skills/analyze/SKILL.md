@@ -1,6 +1,6 @@
 ---
 name: analyze
-version: 1.3
+version: 1.4
 description: Retro our own track record, audit that we're logging/storing the right data, and surface data-backed tuning proposals — then check the session's edits against the project guidelines. Triggers — "analyze our track record", "what should we tune", "did we log everything", "run a retro", "how are our suggestions doing", "analyze".
 ---
 
@@ -23,7 +23,7 @@ node pipeline/commands/analyze-record.mjs --json     # the structured brief (par
 ```
 
 - **That command IS the analysis** — it reads `suggestions.jsonl` (+ archives), `fills.json`, and
-  `positions.json` and prints the three honest sections; the pure core is `pipeline/lib/render/analyze.mjs`.
+  `positions.json` and prints the honest sections; the pure core is `pipeline/lib/render/analyze.mjs`.
   NEVER hand-write a join or a `node -e` over the ledger — every number here must be byte-identical to
   what the engine (and thus `retrojoin.mjs`) computes.
 - **The n-gates already ran inside the engine** — `judgment:` your job is to READ the flags, not to

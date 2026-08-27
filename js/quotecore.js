@@ -1165,8 +1165,8 @@ export function flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) {
    F1 (the retro-join in pipeline/commands/analyze-record.mjs) owns calibration.
 
    SUITABILITY GATES (all must hold, else null): TWO-SIDED (ghost-spread guard) + WIDE-ENOUGH amplitude
-   (band % or 24h-range % fallback) + a VALUE FLOOR (gp-flow = mid × limitVol ≥ DL4_MIN_GP_FLOW, the tool-
-   wide gp/day attention scale — 250k since 2026-08-08) so a huge-% swing on a penny item (Sweetcorn seed) can't nominate.
+   (band % or 24h-range % fallback) + a VALUE FLOOR (gp-flow = mid × limitVol ≥ DL4_MIN_GP_FLOW = 9m —
+   its OWN scale, not MIN_GPD; see its PROVENANCE note at the definition) so a huge-% swing on a penny item (Sweetcorn seed) can't nominate.
    The value floor is a gp-SCALE gate, NOT a unit-price one — cheap high-throughput churn keeps a huge
    gp-flow and passes; both tracks gate on it.
 
@@ -1177,7 +1177,7 @@ export function flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) {
      are polymorphic over legacy plain-string/number existing entries. See their definitions below. */
 export const DL4_WIDE_BAND_PCT = 0.03;          // PLACEHOLDER (n=2): min 2h-band amplitude (bandHi-bandLo)/bandLo to be flush-suitable
 export const DL4_WIDE_DAY_PCT  = 0.05;          // PLACEHOLDER (n=2): min 24h-range amplitude fallback when no band present (coarser → wider bar)
-// VALUE FLOOR (2026-07-11): reuses the tool-wide gp/day ATTENTION floor (screen-flip-niches.mjs MIN_GPD — 250k since 2026-08-08) as a
+// VALUE FLOOR: a gp/day SCALE floor of its own (9m — NOT MIN_GPD, see PROVENANCE below), applied as a
 // gp-SCALE gate, applied as gp-flow = mid × limitVol (the SAME construction as the main gate's gp-flow
 // path). It fixes the penny-item leak: a huge-% band on a sub-gp item (e.g. Sweetcorn seed — guide 3gp,
 // ~7→14gp band, ~3.9k/d → ~39k/d gp-flow) is three orders below anything worth watching for a flush, yet
@@ -1241,7 +1241,7 @@ export function nominateDip(v24Entry, bandEntry, { now } = {}) {   // `now` unus
   const mid = haveBand ? (bandEntry.bandLo + bandEntry.bandHi) / 2
                        : (v24Entry.avgLowPrice + v24Entry.avgHighPrice) / 2;
   const gpFlow = mid * limitVol;
-  if (!(gpFlow >= DL4_MIN_GP_FLOW)) return null;   // below the gp/day attention scale (250k since 2026-08-08) → not worth watching
+  if (!(gpFlow >= DL4_MIN_GP_FLOW)) return null;   // below DL4_MIN_GP_FLOW (9m) → not worth watching
   // PER-UNIT SWING FLOOR — orthogonal to the gp-SCALE floor above: reject items whose per-unit dip is too
   // small to be worth a bid-into-the-fall (kills the Feather/rune/seed churn the flow floor let through).
   const swingGp = haveBand ? (bandEntry.bandHi - bandEntry.bandLo)

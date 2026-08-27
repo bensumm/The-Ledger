@@ -572,6 +572,158 @@ the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the co
 
 ## Discovered
 
+- **Doc/prose drift left UNFIXED because each needs a version bump or a judgment call (found
+  2026-08-26, away-scoped review; everything cheap and unambiguous in the same sweep was fixed).**
+  (a) `pipeline/daemons/registry.mjs` says sync-fills "rides **EVERY** read" in three places; five
+  read commands (`read-window-range`, `read-schedule`, `read-trajectory`, `read-buy-limits`,
+  `monitor-offers`) never call `runLocalSync`. The four that do are now correctly enumerated in
+  `sync-invoke.mjs`, `docs/ARCHITECTURE.md` and README; this registry copy still overclaims.
+  (b) `.claude/skills/schedule/SKILL.md` calls them "three mutually-exclusive modes" and then says two
+  may be combined; `.claude/skills/overnight/SKILL.md` cites a line number for the `--mode` default
+  that points at an unrelated comment (the CLAIM is right, only the citation drifted). Both are
+  skills-only edits and so carry a `version:` bump — batch them with the next skill change.
+  (c) `docs/GLOSSARY.md` has no entry for the `reverse` flip-niche at all, though `MODE_KEYS`
+  includes it and CLAUDE.md gives it its own row.
+  (d) `pipeline/ci/check-imports.mjs` reports a SYNTAX error in a module as ~76 failures all naming
+  the healthy files that import it, never the broken one. Largely defused rather than fixed: the
+  syntax step now covers `js/**/*.mjs` too and runs FIRST, so it fails and names the file before
+  `check-imports` runs — but run it standalone and the misdirection is still there.
+
+- **UNFIXED BUG — the amplitude lane's phase label asserts "floor holding" from an ABSENT
+  measurement (found 2026-08-26 by an away-scoped review; flagged, deliberately not fixed).**
+  `reachPhaseNote` (`pipeline/commands/screen-flip-niches.mjs`) reads
+  `const floorSlope = (dae && dae.floorSlope != null) ? dae.floorSlope : 0;` and then
+  `if (floorSlope >= 0) return 'trough phase — floor holding, oscillation intact'`.
+  `driftExitFrom` returns **null** whenever `diurnalForecast` degrades, so a missing forecast becomes
+  slope 0, which passes `>= 0`, which prints a floor-direction claim. **FAIL-OPEN on the direction
+  word**, on the big-ticket multi-day lane.
+  **Verified by a discriminating run, not inferred:** `reachPhaseNote(osc, dae, null)` on real archive
+  data varying ONLY the `reliable` field of the ctx — `reliable=true` → `oscillating into a falling
+  floor`; `reliable=false` → `dae` null → `trough phase — floor holding`; `reliable=undefined` →
+  `falling floor`. Same item, same window, opposite words.
+  **Live instance:** the 2026-08-26 scan printed Abyssal bludgeon as `trough phase — floor holding,
+  oscillation intact` at A- while `floorCeilingTrack` on the SAME 14-day `days` array gave
+  `floor.slope −147,649/d`. They are not different windows — `driftExitFrom` calls
+  `floorCeilingTrack(days)` on the array `windowStats(ts1h, {nights: AMP_NIGHTS})` produced. A first
+  diagnosis blamed differing windows; that was wrong, and the fail-open default is the real cause.
+  **`check-forecast-guards.mjs` cannot see this** — it pins how `phase` is PASSED IN, not what happens
+  when the whole forecast returns null.
+  **But this is NOT an uncovered gap — it is COVERED IN THE WRONG DIRECTION, which is worse.**
+  `pipeline/test/oscillation-reachphase.test.mjs:77-82` asserts exactly this output and calls it
+  intentional: `'degrade: oscillating + null dae → trough phase (unknown slope treated as ≥0)'`. A
+  test SAW the behaviour and codified it. So the fix is not a one-line edit — it requires INVERTING a
+  currently-green assertion, which is why it needs a ruling rather than a patch.
+  ⚠ **The earlier "sweep of the other consumers (done, so nobody re-audits it)" was WRONG, and the
+  closing instruction made it worse.** It checked exactly two functions — `amplitudeDriftMargin`
+  (`js/amplitudescreen.mjs`) and `driftInformNote` (`js/flip-niches.mjs`), both siblings in the same
+  lane, both of which do degrade correctly — and then told future readers not to look again. A
+  repo-wide sweep finds at least two more instances of the shape in under two minutes. Never close a
+  sweep against re-audit; that sentence is the finding as much as the misses are.
+  **(a) `js/valuescreen.mjs` — the same shape ON A GATE, but LATENT.** `knifeDelta` coalesces an
+  unmeasurable 3d/14d median pair to `0`, and the gate then asks `(vr.knifeDelta || 0) > VALUE_KNIFE_PCT`,
+  so a MISSING measurement reads as "not a knife" and passes. Demonstrated on two fixtures identical
+  but for the 3d lookback: `0.2833 → {pass:false,reason:'knife'}` vs `0 → {pass:true}`.
+  **Reachability was then measured rather than assumed, and it is the part that changes the ranking:
+  across 4,041 archive items with `valueRanges` data the null path fires ZERO times** — `termStructure`
+  anchors `now` to the series' last point, so the 3d/14d windows always contain data, and
+  `warmOverride` patches only `.trajectory`/`.recentTrend`, never `.lookbacks`. So this is a LATENT
+  fail-open worth closing for defence-in-depth, NOT a live defect — an adversarial pass reported it as
+  live on the strength of the synthetic fixture alone, which proves the shape and says nothing about
+  reachability.
+  **(b) `js/market.js` `refineTrend` — reachable.** `mom = m7 ?? m30 ?? 0` means an unmeasurable
+  momentum (series shorter than 7 days, which still clears the `px.length >= 8` guard) becomes `0`,
+  and `(mom<0)?'down-confirmed':'reversion'` then labels a genuinely falling item `reversion`. That
+  silences two of the three terms in `js/trends.js`'s `falling` flag at once (`R.state` and the
+  `m30<=-15` term), leaving only `rl.falling`. Reachable only on a short series, so scoped to
+  newly-tracked items — but unlike (a) it is not structurally blocked.
+  Fix direction (needs a ruling, since it changes a printed label): a null `dae` should yield a
+  direction-AGNOSTIC phrase, the way the `!osc.oscillating` branch already does (itself pinned at
+  `:71-73`), never "floor holding".
+  **Limit on the live instance:** the reach cell is CONSOLE-ONLY and absent from `screen.json`, so the
+  printed line is not reproducible from a stored artifact. The MECHANISM and the −147,649/d slope are
+  both independently reproducible; the print itself rests on a session observation.
+
+- **OPEN INVESTIGATION — the asym deep bid skews STALE on rising items. Effect confirmed, magnitude
+  much smaller than first written (Ben, 2026-08-26; corrected the same day by an adversarial pass).**
+  **Verified at source:** `asymPair` (`js/windowread.mjs`) sets `deepBid = quantLow(stats.lows,
+  ASYM_P_LO)` with `ASYM_P_LO = 0.25` — an unweighted 25th percentile over the 14-day `lows` array.
+  There is NO recency handling anywhere in the chain: `windowStats` sorts `lows` ascending and
+  discards day order, `asymEstimate` only applies `Math.min(row.quickBuy, deepBid)`, and
+  `formatAsymFill` prints a bare `touched N/Md` with no dates. `recentQuant` exists but serves
+  `reachableBand`/`realityClause`, never `asymPair`. The `min()` guard is structurally NON-BINDING on
+  a riser (a stale `deepBid` sits below live `quickBuy`), so it cannot rescue the level.
+  **The point:** the function's header sells `deepBid` as "a bid that fills only on a genuine flush".
+  On a dumping item rare means the market seldom flushes there; on a rising item it can instead mean
+  the market has moved past the level. Same statistic, two different objects, and the render shows a
+  bare count that cannot separate them.
+  **MEASURED (n=400 items, ONE snapshot, proxy statistic — directional evidence, not a measurement).**
+  Mean normalised position of the deep bid's touch-days across the 14-day window (0 = oldest,
+  1 = newest), bucketed on `floorCeilingTrack(...).floor.slope` at ±0.2%/day:
+  `rising n=205 → 0.419 · flat n=60 → 0.455 · falling n=135 → 0.501`.
+  **The 3-bucket collapse HIDES a non-monotonicity in the very variable it buckets on. The honest
+  reading is "a small aggregate lean, non-monotone in slope, driven by the falling tail" — NOT
+  "direction confirmed".** Refuting test named first, then run: *if the deep bid is drawn from the old
+  end BECAUSE the item is rising, mean touch position must fall as the rising slope steepens.* It does
+  not. Finer bins on floor slope %/day (n=346, top 400 by guide price with a touch and 14 full days):
+  `<-2.0% n=22 -> 0.575 · [-2.0,-0.5) n=71 -> 0.486 · [-0.5,-0.2) n=32 -> 0.451 · [-0.2,+0.2) n=56 -> 0.447 · [+0.2,+0.5) n=30 -> 0.412 · [+0.5,+2.0) n=96 -> 0.408 · >=+2.0% n=39 -> 0.514`.
+  The non-monotone U is the durable finding: **three independent implementations reproduce every bin
+  mean to within ~0.03**, and all three put the strongest-riser bin back ABOVE its milder neighbours.
+  **The n does NOT reproduce — 323 / 346 / 362 across the three runs.** The universe spec ("top 400 by
+  price") is under-determined (guide price vs latest-high; whether 14 FULL days are required), and each
+  choice moves n by ~10%. Anyone re-running this must fix the universe first; quote the SHAPE, never the n.
+  **Do not quote a correlation coefficient here to three decimals.** The three runs give Pearson
+  **+0.009 / −0.014 / −0.058** — the sign is not even determined, because the slope axis has outliers
+  spanning −35 to +31 %/day and Pearson chases them. The rank statistic is the one that answers the
+  question. **The pooled rank correlation is negative — and it is a SIMPSON'S-PARADOX ARTIFACT. Split
+  the pool and the sign flips on the half the hypothesis is actually about.** Among FALLERS the
+  association is negative and near-tautological: `quantLow` picks the lowest daily lows, and on a
+  falling item those ARE the newest days, so the statistic largely restates the trend classification.
+  Among RISERS — the exact population "the deep bid skews STALE on rising items" is a claim about —
+  the association is significantly POSITIVE with a CI excluding zero, and the strongest risers sit near
+  the MIDDLE of the position range where the mechanism predicts the extreme low end. That is not
+  "non-monotone in the tails"; it is roughly half the pool, monotone the WRONG way.
+  **So the honest claim is that the mechanism FAILS on risers, not that it weakly holds.** A recency
+  fix to `asymPair` tuned on the pooled number would move risers in the wrong direction. Fix the
+  universe spec and the `floor.nUsed === 5` confound (a 5-day slope cannot classify days 0–8, which is
+  the leading candidate for why strong risers land mid-range) BEFORE treating any of this as a result.
+  **Nothing here is auditable and that is the load-bearing problem:** the position statistic is
+  computed by NO committed script (grep the repo — zero hits), so all four runs are unreproducible by
+  construction. Any next pass writes the script FIRST. No coefficient is quoted here on purpose;
+  re-derive from primitives, and expect the digits to move.
+  **The mechanical benchmark nobody stated, which is what makes the effect small:** at `ASYM_P_LO = 0.25`
+  over 14 days a PERFECTLY monotone riser touches only its oldest ~4 days -> mean position **0.115**; a
+  monotone faller -> **0.885** (both verified by running the construction, not reasoning it). The
+  observed 0.41–0.58 spread is ~20% of that 0.77 span. The statistic is
+  therefore largely a definitional consequence of the trend classification, and real risers land nowhere
+  near the value the mechanism implies. An earlier draft said "drawn structurally from the old end"; the
+  retraction of that phrase was right, and "direction confirmed" was still too strong a replacement.
+  **A limitation of the bucketing itself, found while re-running it:** `floorCeilingTrack` fits
+  `floor.slope` over the RECENT 5 days while touch position spans all 14 — the stratifier and
+  the outcome do not cover the same window. This is TOTAL, not occasional: `nUsed === 5` on **346 of
+  346** items. Any real study must fix that before reading anything into it.
+  **The four-item anecdote that started this is a TAIL, not an illustration of the typical case, and
+  its internal ordering is inverted** (recorded so nobody re-quotes it as the pattern): mean touch
+  position — Masori body 0.115 (rising) · Primordial boots 0.231 (rising) · **Abyssal bludgeon 0.346
+  (FALLING)** · **Armadyl crossbow 0.577 (RISING)**. The crossbow's touches sit mostly in the NEWER
+  half — its floor is a V (35.54m → 33.48m on 08-19 → 35.19m), so the level was reached mid-window on
+  a dip and recovered, which is mean reversion, not abandonment. And the one falling item is OLDER
+  than one of the risers. The mechanism's own prediction is violated inside the four items first cited
+  as evidence for it.
+  **Still worth finishing, because it bears on an already-measured number:** `join-asym-outcomes.mjs`
+  found the deep bid touched 17.8% within 24h against a logged `pBid` of 31.1%. A proper study would
+  score P(touched within 24h) — not touch POSITION — stratified by floor slope, forward, off the
+  archive.
+  **If you build it, read `pipeline/lib/market/archive-series.mjs` FIRST.** `archive.seriesFor`
+  returns rows keyed `ts`; `windowStats` keys on `timestamp`. The mismatch filters every point and
+  returns `null` SILENTLY — the adapter module exists to close exactly that trap, and a first attempt
+  at the measurement above fell into it.
+  **Not blocked by PLAN-PATIENT-PAIR's DO-NOT-RE-PROPOSE list** — that bars a `max(shownNet, asymNet)`
+  gate, a ranking objective on `pAsk`/`pBid`, an asym-amplitude gate, and a random-offset null. A
+  recency-aware LEVEL is none of them. Closest sibling is F1 (`ASYM_P_LO` is a labelled PLACEHOLDER
+  F1 tunes), but the question is the estimator's BASIS, not its threshold.
+  Promote to a `plans/PLAN-*.md` when scheduled.
+
+
 - **FIXED — `pipeline/test/render.test.mjs` printed NOTHING and still passed.**
   `node pipeline/test/render.test.mjs` emits 0 bytes and exits 0; `run-tests.mjs` prints `✓` over that
   silence. Cause verified by a discriminating run rather than inferred: `quote-items.mjs` sets

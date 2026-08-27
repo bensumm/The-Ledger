@@ -659,8 +659,7 @@ reconciliation. The registry:
 
 Rollout: `reach`/`value-amplitude`/`trajectory` are inform **everywhere**; `floor`+`limit` gate.
 (`trajectory` gated in `value` 2026-07-09 → 2026-08-08; demoted back after measurement — the row
-above has the numbers. Note what that leaves: **`floor` R3 is now the only path by which any
-validator drops a row**, and it is itself unmeasurable for the same reason.) Reach/trajectory fire NOW off the warm
+above has the numbers.) Reach/trajectory fire NOW off the warm
 1h-derived shape (`trajectoryFrom1h`, `lib/warm-term-structure.mjs`) while the daily archive warms.
 Thresholds are named PLACEHOLDERS. `validate.mjs` is app-imported (Trends), so a behavior change
 bumps `APP_VERSION`.

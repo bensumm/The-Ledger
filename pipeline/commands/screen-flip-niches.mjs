@@ -10,7 +10,7 @@
  * OUTPUT (AO1). DEFAULT is quiet: ONE summary line + the last-report path; the per-niche report objects are ALWAYS
  * written to pipeline/.cache/last-report/screen.json (gitignored, per run) — read THAT, never the summary line.
  * --verbose prints the markdown table. --publish ALSO writes repo-root screen.json { app, generatedAt, mode,
- * params, headers, niches:{band,churn} } for the app's Scan tab, rows { id (Item→Trends deep link), cells }
+ * params, headers, niches:{modes with spec gate==='band' — band+churn, +scalp when run; a PREDICATE, not a fixed pair} } for the app's Scan tab, rows { id (Item→Trends deep link), cells }
  * byte-identical to the printed table (sync-fills.mjs commits it beside fills/positions). ONE table PER niche,
  * sorted by a letter GRADE = per-thesis RANK × a risk-quality multiplier (regime, momentum, liquidity, capital,
  * band confidence) — PLACEHOLDER cutoffs/weights, see rating.mjs, plus a per-table grade-distribution footer.
@@ -59,7 +59,7 @@
  *
  * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only fetches, gates, rates and renders.
  */
-import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
+import { computeQuote, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
 import { tax } from '../../js/money-math.js';
 import { loadWatchlistEntries, loadWatchlistIds } from '../lib/config/watchlist.mjs';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
@@ -71,7 +71,7 @@ import { askReachDecay } from '../lib/market/hourly-lmh.mjs';   // DT3 — ask-r
 import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS, MIRAGE_PLACEMENT, DEADBID_PFILL_FLOOR, reachFraction } from '../lib/signal/estimators.mjs';   // reachFraction (RB-5, PLAN-RECENCY-BASIS) = the ONE recency-basis rule; MIRAGE_PLACEMENT (EF1, PLAN-ESTIMATOR-FIDELITY) also bounds the churn ask-reach exemption; DEADBID_PFILL_FLOOR = the dead-bid reprice trigger the ↻ note names; dayHighFrom5m (PLAN-LIQUIDITY-REACH) = the observed 24h high off the in-hand 5m series; SELL_TOP_MODELS (PC3) = the named sell-top registry (--est-sell).
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
 import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, loadDailyRangeBulk, fetchTsCached, pruneCache } from '../lib/market/marketfetch.mjs';   // loadDailyRangeBulk (PLAN-LANE-ADMISSION Chunk A) — zero-fetch per-item daily intraday range powering Path-A's console sort. No `sleep` import (SP1): the two worker-pool bounds ARE the throttle.
-import { parseArgs, parseGp, mdTable, stdCells, writeLastReport } from '../lib/render/cli.mjs';   // writeLastReport — AO1 agent-readable dump
+import { parseArgs, parseGp, mdTable, stdCells, writeLastReport, RANK_TABLE_HEADERS } from '../lib/render/cli.mjs';   // writeLastReport — AO1 agent-readable dump
 import { resolve, loadPipelineConfig, refusePublishIfNonNeutral, shadowModelsOf } from '../lib/market/compose.mjs';   // PC1 — the flag>config>default precedence resolver + the ONE publish-refusal guard; PC3 — shadowModelsOf pools the default-shadow sell models
 import { open as openArchive } from '../lib/market/archive.mjs';   // AF5b — READONLY handle for --archive-regime's 6h read (open() runs schema DDL unless readonly; never take that path on the live DB)
 import { sixHourReader, archiveSeries, LIVE_TS6H_BUCKETS, REGIME_MIN_6H_BUCKETS } from '../lib/market/archive-series.mjs';   // archiveSeries (DT1b) = the ts→timestamp adapter the amplitude walk-forward reads long 1h history through; AF5b — the ONE 6h seam, its 365-bucket pin (phase() depth stability) and the depth floor below which it serves live.
@@ -101,6 +101,7 @@ import { FLIP_NICHES, MODE_KEYS, ALL_MODE_KEYS, driftInformNote, belowAdmitNet }
 import { enumeratePaths, weighPaths } from '../../js/held-item-strategy.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
 import { rateItem, GRADE_CUTOFFS, CONF_THIN_N_FLOOR } from '../lib/signal/rating.mjs';   // G1: the four grade caps live INSIDE rateItem (applyGradeCaps) — the render site passes cap values/flags and never calls capGrade itself. CONF_THIN_N_FLOOR (G6) = the (thin) confidence-marker tooltip.
 import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow, timedLapShadow, excludedShadow } from '../lib/render/suggestlog.mjs';   // RC-S2: pressure co-log on survivors (five-way head-to-head off the in-hand 1h series); shared asym reshaper; PLAN-DIURNAL-TIMING DT4: timedLap shadow reshaper
+import { buildWatchlistReport, estFields, round2 } from '../lib/signal/watchlist-report.mjs';   // SEP16b: the ONE watchlist row builder, shared with read-watchlist.mjs
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
 import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (derive-cash.mjs anchor + log flow)
 import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification); L2 suspect-bid flag
@@ -560,7 +561,7 @@ const PLAYBOOK = {
 // P6b: the last column is the per-thesis RANK (net × P(fill) ÷ TTF), NOT the demoted `Score gp/d`.
 // The app renders screen.json headers generically (only 'Grade' is special-cased in js/ui.js), and
 // the headers TRAVEL with the payload, so renaming is app-safe (no APP_VERSION bump).
-const HEADERS = ['Item', 'Grade', ...QUOTE_HEADERS.slice(1), 'Rank net·P/ttf'];
+const HEADERS = RANK_TABLE_HEADERS;
 // PLAN-OUTPUT-TABLE: the DEFAULT stdout column set — Est. buy/sell REPLACE Quick+Optimistic on the
 // printed niche tables only (Grade moves after Regime per the plan's row layout; the Rank column is
 // kept — it's the sort key's honesty readout). HEADERS above stays the --raw AND --publish set.
@@ -631,18 +632,7 @@ function rotationNote(excluded) {
   return parts.length ? `  exploration rotation (a given excluded row's wait for a lottery slot): ${parts.join(' · ')}` : null;
 }
 
-const round2 = x => Math.round(x * 100) / 100;   // P6b: pFill logged to 2dp (lean ledger)
-// P6b: the compact honest lean fields for a rank estimate `er` (estimateRank result) — the quoted pair
-// the thesis posts + the rank components + n/basis so the retro-join can later calibrate estimate-vs-
-// realized. Lean-included by suggestionEntry (absent-field rows stay byte-identical — the YS2 pattern).
-function estFields(er) {
-  return {
-    bid: er.pair.bid, ask: er.pair.ask,
-    pFill: round2(er.pFill.value), ttfSec: er.ttf.value, rank: Math.round(er.rank),
-    estBasis: `${er.pFill.basis}/${er.ttf.basis}`, estN: Math.min(er.pFill.n, er.ttf.n),
-  };
-}
-
+// round2 / estFields moved to ../lib/signal/watchlist-report.mjs — their doc comment went with them.
 // =====================================================================================================
 // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST — capital-efficiency ranking, the weak-deploy flag, and the
 // decision-digest verdict rule table. EVERYTHING here is INFORM-ONLY, PLACEHOLDER (n≈0), and NEVER
@@ -2406,84 +2396,20 @@ function loadVelocityIndex() {
   catch { return null; }
 }
 const VEL = loadVelocityIndex();
-// best-effort realistic gp/day for a watchlist grade (no mode context) — band edge if we have one,
-// else the 24h-avg spread; same expUnits basis as the niches. Informational only.
-function roughExpGpDay(d, bands, id, limit) {
-  if (!d) return 0;
-  const b = bands && bands[id];
-  let net;
-  if (b && b.bandHi != null && b.bandLo != null) net = (b.bandHi - tax(b.bandHi)) - b.bandLo;
-  else if (d.avgHighPrice && d.avgLowPrice) net = (d.avgHighPrice - tax(d.avgHighPrice)) - d.avgLowPrice;
-  else return 0;
-  if (net <= 0) return 0;
-  return Math.round(expUnits(limit, Math.min(d.highPriceVolume || 0, d.lowPriceVolume || 0)) * net);
-}
-// the reason a gate WOULD have hidden this row (empty = it'd pass a normal scan) — surfaced as a Note.
-function watchlistNote(row, d, bands, id, limit) {
-  const hpv = d?.highPriceVolume || 0, lpv = d?.lowPriceVolume || 0;
-  if (hpv <= 0 || lpv <= 0) return 'one-sided book — uncrossable (ghost-spread)';
-  if (row.falling) return 'falling — price to clear, do not accumulate';
-  const limitVol = Math.min(hpv, lpv), mid = row.mid || ((d.avgHighPrice + d.avgLowPrice) / 2);
-  if (limitVol < FLOOR) return limitVol * mid >= GP_FLOOR ? `thin (~${limitVol}/day — size in units)` : 'thin/illiquid — few trades/day';
-  if (roughExpGpDay(d, bands, id, limit) < MIN_GPD) return `below ${(MIN_GPD/1e3).toLocaleString()}k/day attention floor`;
-  return '';                                               // would surface in a normal scan on merit
-}
-async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
+// roughExpGpDay / watchlistNote now live in ../lib/signal/watchlist-report.mjs — the shared builder
+// owns them so read-watchlist.mjs and this file cannot drift apart.
+async function runWatchlist(map, ctx, guide, latest, qcache) {
   const wl = loadWatchlistEntries({ map, tolerant: true });
   if (!wl.length) return null;
   const { v24, bands } = ctx;
-  // SP1 (PLAN-DIGEST-SIGNAL-AND-SCAN-PERF) — FETCH phase, split out of the compute loop below.
-  // Every watchlist id the niche fetch pools did NOT already quote gets pre-quoted here through the
-  // same bounded worker pool the survivor pool uses, with its two independent endpoints in flight
-  // together. This replaced a strictly-serial `fetchTsCached(5m) → sleep(30) → fetchTsCached(6h) →
-  // sleep(30)` per item — ~60 watchlist items paid ~2.2s of pure sleep plus fully serialized latency
-  // on EVERY scan (TS_TTL_5M is 3 minutes, so the 5m leg is always re-fetched at /loop cadence).
-  //
-  // ORDER SAFETY — the reason this is behaviour-preserving, not just fast: the COMPUTE loop below is
-  // untouched and still walks `wl` in its original order, reading finished quotes out of an id-keyed
-  // Map, so `rows`/`sugg` order is independent of fetch COMPLETION order; `logSuggestions` still fires
-  // once, after it; and the shared reader dedupes ids, so no two workers race the same disk cache file.
-  // The `!qcache.get(id)` admission test is deliberately truthiness, matching the serial version it
-  // replaced — do not "tidy" it to `.has()`, which would change behaviour on a falsy cached quote.
-  const prefetched = new Map();
-  {
-    const queue = wl.filter(({ id }) => !qcache.get(id)).map(({ id }) => id);
-    const worker = async () => {
-      for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
-        const [ts5m, ts6h] = await Promise.all([
-          fetchTsCached(id, '5m', TS_TTL_5M),
-          read6h(id),                       // AF5b seam — live fetchTsCached unless --archive-regime
-        ]);
-        prefetched.set(id, computeQuote({ id, latest: latest[id] || latest[String(id)] || null, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true, held: true }));
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(FETCH_CONCURRENCY, queue.length) || 1 }, worker));
-  }
-  const rows = [], sugg = [];
-  for (const { id, name } of wl) {
-    const row = qcache.get(id) || prefetched.get(id);      // niche pool first, else this pass's prefetch
-    const d = v24[id], limit = map.byId[id]?.limit ?? null;
-    const limitVol = d ? Math.min(d.highPriceVolume || 0, d.lowPriceVolume || 0) : 0;
-    // "thin OR UNVERIFIED" — the same fail-closed rule as the app's desirabilityOf (js/market.js).
-    // Both `> 0` and the old `: false` were CAP ESCAPES: a one-sided book, a zero-volume item, and an
-    // item absent from v24 all read NOT-thin and skipped THIN_GRADE_CAP entirely. Watchlist rows are
-    // gate-exempt by design, so this cap is the ONLY thing standing between an unverifiable book and
-    // an S+ letter. Unknown liquidity must not headline.
-    const thin = d ? (limitVol < FLOOR) : true;
-    // P6b: a watchlist row has no niche context, so rank it under the neutral band thesis (intraday
-    // estimator, patient 2h-band pair) — a standard flip read. Same rank basis as the niche tables.
-    const er = estimateRank(FLIP_NICHES.band, row);
-    const r = rateItem({ row, rank: er.rank, thin, pFillN: er.pFill.n, ttfN: er.ttf.n });   // G6: (thin) confidence marker off the reach sample
-    const std = stdCells(name, row);
-    const gradeCell = thin ? { t: r.grade, title: `thin: ~${limitVol}/day two-sided — size in units, expect slow fills` } : { t: r.grade };
-    if (r.thinConfidence) { gradeCell.t = gradeCell.t + ' (thin)'; gradeCell.title = (gradeCell.title ? gradeCell.title + '; ' : '') + `thin confidence: the fill call rests on only ${er.pFill.n} day(s) of reach evidence (< ${CONF_THIN_N_FLOOR})`; }
-    const rankCell = { t: `${fmtP(r.score)} · net ${fmt(er.net || 0)} P~${er.pFill.value.toFixed(2)} ttf~${fmtTtf(er.ttf.value)}`, c: 'mini' };
-    const cells = [std[0], gradeCell, ...std.slice(1), rankCell, { t: watchlistNote(row, d, bands, id, limit), c: 'mini' }];
-    rows.push({ id, cells });
-    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), volDay: row.volDay, volSrc: VOL_SRC_LABEL, verdict: r.grade, grade: r.grade, cappedBy: r.cappedBy, posture: POSTURE, ...estFields(er) }));   // SF-3: watchlist row's volDay follows VOL_SOURCE (v24all — rolling by default). AZ-forward: grade letter logged explicitly · R7: THIN cap only → r.cappedBy
-  }
+  const { headers, rows, sugg } = await buildWatchlistReport({
+    entries: wl, map, v24, bands, guide, latest, qcache,
+    fetchSeries: id => Promise.all([fetchTsCached(id, '5m', TS_TTL_5M), read6h(id)]),   // AF5b seam — live unless --archive-regime
+    concurrency: FETCH_CONCURRENCY,
+    floor: FLOOR, gpFloor: GP_FLOOR, minGpd: MIN_GPD,
+    volSrcLabel: VOL_SRC_LABEL, posture: POSTURE,
+  });
   logSuggestions('screen', { mode: 'watchlist', params: SCREEN_PARAMS }, sugg);
-  const headers = [...HEADERS, 'Note'];
   console.log(`## WATCHLIST — ${rows.length} item(s) (always shown; exempt from floors/gates; falling items shown with a warning)`);
   console.log(mdTable(headers, rows.map(r => r.cells)));
   console.log('');
@@ -2984,7 +2910,7 @@ async function main() {
   // DL4: nominate flush-suitable dip candidates into dip-watchlist.json — only in the routine `--mode all`
   // scan Ben runs (not a single-niche run), best-effort so a failure never breaks the scan output.
   if (MODE === 'all') { try { captureReport(() => runDipNominations(v24, bands, map, qcache, series5m)); } catch (err) { console.error('(dip-nominate: pass failed — ' + ((err && err.message) || err) + ')'); } }
-  const watchlist = await captureReport(() => runWatchlist(map, ctx, guide, latest, qcache, series5m));   // S3: always-scanned watchlist
+  const watchlist = await captureReport(() => runWatchlist(map, ctx, guide, latest, qcache));   // S3: always-scanned watchlist
 
   // --publish: self-describing per-niche snapshot for the app's Scan tab. `headers` travels WITH the
   // rows so a stale published file can never mismatch app-side header code. Cells are the raw `r.cells`
