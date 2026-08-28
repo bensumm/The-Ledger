@@ -10,6 +10,66 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.74.12 — the reach surface: chunks 0-1 of PLAN-REACH-SURFACE, and what re-deriving the curves cost the plan
+
+`join-reach-outcomes.mjs` could not rank the five exit estimators because its columns come from one
+per-row comparison that is monotone in the ask price. The successor plan's answer is to stop ranking
+estimators and build the surface they are five points on: `p(ask, H)`, the probability an ask is
+reached within H, replayed from the item's own 1h archive. Chunk 0 moved
+`pipeline/lib/market/forward-reach.mjs` to `js/forward-reach.mjs` (old path a re-export shim, the
+`pipeline/lib/signal/estimators.mjs` pattern) so a `js/` surface builder can reach it — `js/` never
+imports `pipeline/`. Verified byte-identical: `join-reach-outcomes.mjs --horizon 24` produced an
+identical 165-line report across the move.
+
+Chunk 1 is `js/reach-surface.mjs`. Levels are z-normalized (`(ask - refHigh)/disp`) rather than
+%-above-median, because a raw % grid inverts the trend split; `refHigh` and `disp` are RE-DERIVED at
+every origin from complete days strictly before it, so no level is ever scored against data the
+market had not yet revealed. Unresolved windows are dropped rather than counted as misses, and so are
+origins whose window held no printing bucket — the archive cannot tell a quiet hour from an unfetched
+one — with the second drop COUNTED, since it biases p up. Refusal is a width bound, not a count: a
+cell is thin by its Wilson half-width (Wald reads 0 at p=0 and would price an empty cell as certain)
+over origins thinned to non-overlapping windows.
+
+**Re-deriving §1.5's curves on the fixed instrument cost the plan its founding taxonomy claim.** §1.5
+read Ranarr as a cliff and Ancestral as a fat shallow tail, with Soul between, and called that
+difference the volatility taxonomy. In z units the order is the reverse — Soul 1.00, Ranarr 0.80,
+Ancestral 0.59 — and all three sit inside one narrow band. The contrast was mostly `disp`, which z
+already carries as one number. A variance decomposition over 364 items then put a size on what is
+left: true between-item shape is 8.1pp of sd at z=0 and only 2.1-3.3pp at every z >= 0.5, against a
+sampling sd of 2.3-5.7pp. Per-item curves earn their keep near the reference and barely separate from
+pooled-plus-noise exactly where a patient ask lives, which makes the pooled fallback a much stronger
+default than the plan assumed. The obvious test for this — comparing an item against its own other
+half — was run first and DISCARDED: halving the origins doubles the noise, so the 2.1x ratio it
+returned is precisely what a pure-noise null predicts, and it cannot separate the hypotheses.
+
+Two pieces of the plan turned out to be dead code and one turned out to be load-bearing. The
+specified isotonic cleanup on the z axis can never fire: every z cell in a row is scored over the
+same origins against `top >= refHigh_o + z*disp_o`, so raising z can only turn a hit into a miss.
+Measured 0 violations in 22,500 adjacent pairs over 250 items; deleted rather than shipped inert. The
+H axis genuinely inverts, because its origin set shrinks with H — 155 violations over 250 items, up
+to 12.1pp — so the running max stays and a real violator became a fixture. The miss payoff moved from
+gp to z after Ancestral's pooled gp bail landed 19% above its own current `refHigh`, the item having
+fallen across the window. And the horizon-level refusal was rewritten to read the decision cell
+(nearest p=0.5) after "every cell thin" proved unable to fire at all: a p=0 cell is narrow at any n,
+so a dead tail always keeps one non-thin cell.
+
+Also measured, and deliberately NOT applied: `disp` as the IQR of daily highs conflates trend with
+volatility, and the pooled curve cliffs from 54% to 33% between z=0 and z=0.1 as a result. A
+detrended basis decays smoothly instead and carries more between-item signal in the patient region,
+at the cost of refusing 22% more items. The seam is built and both bases run on the shipped path, but
+`level` remains the default: which basis produces better PRICES is chunk 4's question, and swapping
+it moves every price.
+
+Ten mutants killed, each named in the suite header. The first draft of that suite let two of them
+live — the isotonic and drop-window groups both asserted properties of the data rather than of the
+code — and one survivor exposed real duplication, `ciHalf` being stamped twice with the second write
+masking the first. Every export carries `@provisional-api` citing chunk 3, which is the honest state:
+`check-dead-exports` refuses a library with no production consumer, so the plan's claim that every
+chunk lands independently CI-green is false for chunk 1 as written.
+
+Full findings: `plans/PLAN-REACH-SURFACE.md` §1b. Module contract: README's `reach-surface.mjs` entry.
+
+
 ### The correction that was itself wrong — round two of the RC review (pipeline/docs only)
 
 Two adversarial passes over the 0.74.11 doc-correction wave, one briefed to attack that wave's own

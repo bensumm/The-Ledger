@@ -176,7 +176,7 @@ export function dipLoopAudit(sugRows = [], retroRows = []) {
  * NOT answerable from the realized sell. rawTop exceeds the quoted ask by construction and a GE sell
  * executes AT the ask you typed, so `sellEach >= rawTop` asks whether Ben typed above our own number.
  * A rawTopReached field computed that way was deleted; score it against the 1h archive instead
- * (lib/market/forward-reach.mjs maxHighWithin — lib/render/reachability.mjs states the target rule).
+ * (js/forward-reach.mjs maxHighWithin — lib/render/reachability.mjs states the target rule).
  *
  * HONESTY (rule 4). n≈0 — ASK_HEADROOM_MIN_PCT / RAWTOP_TRUST_BUCKET_VOL / ASK_HEADROOM_VOL_FLOOR are NAMED
  * PLACEHOLDERS; the caller emits this as an n-gated CANDIDATE pointing at F1, never a calibrated conclusion. */

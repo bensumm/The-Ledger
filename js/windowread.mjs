@@ -1108,7 +1108,7 @@ const median = arr => { const s = arr.filter(v => v != null).sort((a, b) => a - 
 // built from. IQR not stdev on purpose: 7–14 samples/hour is a small sample and a lone flier print must
 // not blow up the band (the Bar E robustness lesson). null when fewer than 2 non-null samples. Uses the
 // same ceil-quantile index convention as quantLow so it stays legible next to the reach math.
-const iqr = arr => {
+export const iqr = arr => {
   const s = arr.filter(v => v != null).sort((a, b) => a - b);
   if (s.length < 2) return null;
   const q = p => s[Math.min(s.length - 1, Math.max(0, Math.ceil(p * s.length) - 1))];

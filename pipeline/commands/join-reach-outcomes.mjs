@@ -18,7 +18,7 @@
  *
  * INFORM-ONLY, gates nothing. Reached != filled — queue position is invisible — so every rate here
  * bounds a real offer from ABOVE. Sibling of join-asym-outcomes.mjs / join-reach-basis.mjs; shares
- * their forward primitives via lib/market/forward-reach.mjs.
+ * their forward primitives via js/forward-reach.mjs.
  * Run: node pipeline/commands/join-reach-outcomes.mjs [--horizon H] [--min-n N] [--item "<name>"] [--json]
  */
 import { fileURLToPath } from 'node:url';

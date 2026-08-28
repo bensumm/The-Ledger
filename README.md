@@ -90,7 +90,54 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   no longer on the write path — all consumed ONLY by `pipeline/commands/screen-flip-niches.mjs`, no app import);
   also the ONE type-7 quantile/median home (SF-1):
   `quantileSorted` (pre-sorted input) + `quantileOf`/`median` (sort a copy) — `termstructure.mjs`
-  re-exports it as `quantile`, `retrojoin.mjs` aliases `quantileOf`), `windowread.mjs` (P2 — pure window-range/reach math:
+  re-exports it as `quantile`, `retrojoin.mjs` aliases `quantileOf`),
+  `forward-reach.mjs` (the shared FORWARD-SCORING primitives over the 1h archive — `touchedAt` (bid
+  side, `avgLowPrice`), `reachedWithin` / `maxHighWithin` (ask side, `avgHighPrice`), `covers`,
+  `firstIndexAfter`. **Lives in `js/` as of PLAN-REACH-SURFACE chunk 0** (it was
+  `pipeline/lib/market/forward-reach.mjs`; that path is now a one-line re-export shim so every
+  pipeline importer resolves byte-identically, the `pipeline/lib/signal/estimators.mjs` pattern). The
+  move is what lets `js/reach-surface.mjs` build the surface from the same walk the joiners score
+  with — `js/` never imports `pipeline/`, so a primitive both sides need has to live here. `covers`
+  is the load-bearing one: an unresolved window is DROPPED, never counted as a miss, because counting
+  it biases every rate DOWN by exactly the truncation at the end of the archive. Side convention is
+  pinned by `js/quotecore.js` — a BUY fills against `avgLow`, a SELL against `avgHigh`. Pure: no fs,
+  no fetch, no clock; the caller supplies the `ts`-ascending series. ⚠ It is shared by
+  `join-asym-outcomes.mjs` + `join-reach-outcomes.mjs` + `js/reach-surface.mjs` ONLY:
+  `join-reach-basis.mjs` still carries its own independent `scoreForward` walk, and
+  `pipeline/lib/market/printed-at.mjs` a third — so a fix here does NOT reach every reach joiner.
+  Consolidating them is unfinished work, not a claim to repeat; `printedAt` additionally has the
+  better tristate (`null` when no bucket exists, which `reachedWithin` collapses to `false`)),
+  `reach-surface.mjs` (PLAN-REACH-SURFACE chunk 1 — the empirical reach surface **p(ask, H)** for ONE
+  item, replayed from its own 1h archive. `buildReachSurface(series, opts)` walks origins every
+  `strideH` hours and scores a z-grid of ask levels against `maxHighWithin`, returning the p(z,H)
+  grid plus `refHigh`/`disp`, `bailZOnMiss` (the miss payoff, in z), the per-horizon refusal, and a
+  reported-never-applied 1h-vs-5m `grainBias`. `surfaceProb(surface, ask, H)` reads a live ask off it;
+  `surfaceShape` reduces the curve to z50/z20/spread; `referenceAsOf` exposes the point-in-time
+  reference. It re-derives nothing: `refHigh` is `windowread.mjs`'s `recentQuant(days,'ask',0.5,3)` and
+  `disp` its `iqr` (exported from that module for this — it was module-local), both fed by
+  `windowStats`, whose `pt.timestamp` shape is bridged from the archive's `.ts` here rather than in
+  `windowStats`, where every other caller already passes `timestamp`. **Everything is `@provisional-api` until chunk 3's `read-exit-surface.mjs` consumes it** —
+  chunk 4 scores the surface before anything prices off it. Four properties are load-bearing and each
+  has a killed mutant in `pipeline/test/reach-surface.test.mjs`: (1) **no look-ahead** — `refHigh`/`disp`
+  are re-derived at every origin from complete days strictly before it, so a level scored 90 days ago
+  never sees day 91; (2) **unresolved windows are DROPPED**, never scored as misses, and an origin whose
+  window held no printing bucket is dropped too and COUNTED (`noPrintDropped`) because the archive
+  cannot tell a quiet hour from an unfetched one — that drop biases p UP; (3) **refusal is a WIDTH
+  bound** — a cell is thin by its **Wilson** half-width (Wald reads 0 at p=0 and would price an empty
+  cell as certain), computed on `nIndep` (origins thinned to non-overlapping windows) rather than the
+  raw count; a HORIZON refuses on its decision cell, the one nearest p=0.5, because "every cell thin"
+  can never fire; (4) **the grain bias is reported, never applied** — passing `fiveMin` must not move a
+  grid cell, and `fiveMinCoverage` rides beside every delta since a ~0 delta on a thin item means NOT
+  MEASURABLE rather than unbiased. The z axis is `(ask - refHigh)/disp`, not a % grid: a raw
+  %-above-median grid inverts the trend split. **z-monotonicity needs no cleanup — it holds by
+  construction** (one origin set, one threshold per origin; measured 0 violations in 22,500 adjacent
+  pairs, so the specified isotonic pass was deleted rather than shipped inert); the H axis DOES invert
+  because its origin set shrinks with H (155 violations over 250 items, max 12.1pp) and keeps a running
+  max. **REACH IS NOT FILL** — queue position is invisible in bucketed aggregates, so p bounds P(fill)
+  from ABOVE, and every consumer must say so. What chunk 1 MEASURED — including that
+  PLAN-REACH-SURFACE §1.5's taxonomy premise did not survive and its ordering inverted — is §1b of
+  that plan, the ONE home; don't restate it here),
+  `windowread.mjs` (P2 — pure window-range/reach math:
   **`windowReliability`** (DT4, 2026-08-10 — the split-half hours gate: parity-split the last
   `WINDOW_RELIABLE_NIGHTS` (14) days, `hourProfile` each half, Pearson-correlate the de-trended devLow/devHi
   24h vectors, gate on `min(rLow,rHi) ≥ WINDOW_RELIABLE_R` (0.6, PLACEHOLDER). Returns a TRI-state
@@ -496,6 +543,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   fixture-tested in `pipeline/test/watchcore.test.mjs`),
   `backup.js` (export/import),
   `main.js` (entry point — event wiring + init, loaded as `<script type="module">`)
+- `pipeline/test/fixtures/reach-surface.json` — frozen 1h/5m archive slices behind
+  `pipeline/test/reach-surface.test.mjs`, as `[ts, avgHighPrice, avgLowPrice]` triples. Three `curve`
+  items (Soul rune / Ranarr weed / Ancestral robe top) pin the re-derived p(z,H=24) curves; two
+  `grain` items with their 5m series (one liquid, one thin) exercise the coverage split that
+  distinguishes "measured, small" from "not measurable"; one `hviol` item carries a REAL 12.1pp
+  H-monotonicity violation, because the three curve items are all already ordered and a synthetic
+  violator is hard to build (z re-normalizes per origin and cancels a manufactured tail spike).
+  Regenerate from the archive if the era it freezes stops being representative; the pinned curve
+  values in the test move with it.
 - `manifest.json`, `icon-*.png` — PWA manifest and icons
 - `fills.json` — raw real-trade event stream synced from RuneLite; the pipeline source
   `positions.json` is FIFO-reconstructed from (the app fetches the derived `positions.json`,
@@ -1460,7 +1516,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     prints — and nothing had ever read that
     log. PRODUCER: the `reachable`/`estSell`/`asym`/`depthExit` co-logs on `suggestions.jsonl` + the
     monthly archives via `readSuggestionLines()`; forward-scored against the 1h
-    `pipeline/.market-archive.sqlite` through `pipeline/lib/market/forward-reach.mjs`. Per estimator, per
+    `pipeline/.market-archive.sqlite` through `js/forward-reach.mjs`. Per estimator, per
     (side × class × regime) cell: was that ask REACHED within the horizon, and how far above it did the
     market go. **The target is the ARCHIVE, and that is the load-bearing design decision** — the plan
     specified scoring against the realized sell, which is CIRCULAR here: a GE sell executes AT the ask you
@@ -1786,19 +1842,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     served LIVE and reported as `shallow`, because a short series yields `{ok:false}` → label `unknown` →
     the falling exclusion silently un-gates. Consumer: `screen-flip-niches.mjs --archive-regime` (AF5b).
     Pinned by `pipeline/test/archive-series.test.mjs` + `pipeline/test/archive-6h-pin.test.mjs`),
-    **`forward-reach.mjs`** (RC, PLAN-REACHABILITY-CONSOLIDATION — the shared FORWARD-SCORING primitives
-    over the 1h archive: `touchedAt` (bid side, `avgLowPrice`), `reachedWithin` / `maxHighWithin` (ask
-    side, `avgHighPrice`), `covers`, `firstIndexAfter`. Lifted VERBATIM out of `join-asym-outcomes.mjs`
-    when `join-reach-outcomes.mjs` needed the same walk — the extraction `campaigns.mjs` made for the
-    campaign build. ⚠ It is shared by `join-asym-outcomes.mjs` + `join-reach-outcomes.mjs` ONLY:
-    `join-reach-basis.mjs` still carries its own independent `scoreForward` walk, and
-    `lib/market/printed-at.mjs` a third — so a fix here does NOT reach every reach joiner. Consolidating
-    them is unfinished work, not a claim to repeat; `printedAt` additionally has the better tristate
-    (`null` when no bucket exists, which `reachedWithin` collapses to `false`).
-    `covers` is the load-bearing one: an unresolved window is DROPPED, never counted as a miss, because
-    counting it biases every rate DOWN by exactly the truncation at the end of the archive. Side
-    convention is pinned by `js/quotecore.js` — a BUY fills against `avgLow`, a SELL against `avgHigh`.
-    Pure: no fs, no fetch; the caller supplies the ts-ascending series),
+    **`forward-reach.mjs`** (RE-EXPORT SHIM only — the primitives MOVED to `js/forward-reach.mjs` at
+    PLAN-REACH-SURFACE chunk 0 and are documented in the `js/` inventory above; this path survives so
+    existing pipeline importers resolve unchanged. Do not add logic here),
     **`printed-at.mjs`** (AB1, PLAN-ASK-BACKTEST — the PURE atom the ask fill surface is built from:
     `printedAt(series,{mid,premium,horizon,from})` → did any bucket in the horizon print `avgHighPrice ≥
     mid × (1+premium)`, plus the observed max. No fetch, no archive handle, no clock. `mid` is an INPUT

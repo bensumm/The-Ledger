@@ -1,6 +1,6 @@
 # PLAN-REACH-SURFACE — one exit function: the reach surface `p(ask, H)`
 
-**Status: PROPOSED. No code shipped.** Drafted 2026-08-28, successor to
+**Status: CHUNKS 0-1 SHIPPED; 2-9 PROPOSED.** Drafted 2026-08-28, successor to
 `PLAN-REACHABILITY-CONSOLIDATION` (whose scorer shipped and whose premise did not survive).
 All measurements here were run against the live repo on that date. Spike measurements
 (marked SPIKE) used ad-hoc scripts and MUST be reproduced by the chunk-1 fixtures before
@@ -172,6 +172,63 @@ price-vs-probability comparable — exists in `join-reach-basis.mjs` (`mcnemarCo
    circular; the archive is the only target the tool does not influence. Reach ≠ fill: queue
    position is invisible, so archive-derived P(reach) bounds P(fill) from ABOVE.
 
+## 1b. WHAT CHUNK 1 MEASURED — read this before quoting §1.5 or designing chunk 2
+
+Chunk 1 shipped and re-derived the curves on the uniform 1h instrument with z-normalized levels and
+per-origin references. Five findings, all measured against the live archive.
+
+1. **§1.5's taxonomy premise does NOT survive, and its ordering INVERTS.** §1.5 read Ranarr as a
+   cliff, Ancestral as a fat shallow tail, Soul between. In z units the shape spread (z20 - z50) is
+   **Soul 1.00 · Ranarr 0.80 · Ancestral 0.59** — the reverse order, all inside one narrow band, and
+   at the 91st / 72nd / 53rd percentile of a 148-item sample. The contrast §1.5 saw was mostly
+   `disp`, which z already carries as a single number. Pinned by test so a re-inversion is visible.
+
+2. **Per-item curve shape is REAL but SMALL, and smallest exactly where the patient ask lives.**
+   Variance decomposition over 364 items (H=24, median 78 independent windows), across-item variance
+   minus mean within-item binomial variance: true between-item sd is **8.1pp at z=0** and **2.1-3.3pp
+   at every z >= 0.5**, against a sampling sd of 2.3-5.7pp. So near the reference items genuinely
+   differ; in the patient region a per-item curve is barely separable from pooled-plus-noise.
+   **Consequence: chunk 7's pooled fallback is a far stronger default than this plan assumed**, and
+   the per-item value is concentrated in `refHigh`/`disp` — the normalization — not the curve.
+   *Limit: nIndep may overstate independence, which would understate sampling sd and OVERSTATE the
+   true-shape figures, so these are upper bounds. Sample is the well-covered end (>=1500 1h rows).*
+
+3. **The obvious test for finding 2 has no power, and the design must not use it.** A split-half
+   comparison (item vs its own other half, 144 items) gives RMSE 10.2pp against 4.8pp vs pooled — a
+   2.1x ratio. Halving the origins doubles the noise, so a pure-noise null predicts **exactly 2x**.
+   The test cannot distinguish "no shape" from "some shape" and was replaced by the decomposition
+   above. Do not reinstate it.
+
+4. **The `level` dispersion basis conflates trend with volatility, and the alternative measures
+   better — but this is a DECISION, not a finding to apply.** IQR of the trailing-14d daily highs is
+   mostly the trend on a trending item, which inflates z and cliffs the curve: pooled p falls
+   **54% -> 33% between z=0 and z=0.1** and then spans only 33%->3% across the whole rest of the
+   grid. On `dispMode:'detrended'` (IQR of day-over-day changes) the same pooled curve decays
+   smoothly, 51% -> 37% -> 8% out to z=4, AND carries more true between-item sd in the patient
+   region (4.4-5.2pp at z>=1 vs 2.3-3.2pp). It also REFUSES 22% more items (a zero detrended IQR is
+   a flat day-over-day item). The seam is built and both bases run on the shipped code path;
+   `'level'` remains the default because **which basis produces better PRICES is a chunk-4 question,
+   not something a curve-shape read settles.** Do not swap it silently — it moves every price.
+
+5. **The plan's isotonic cleanup was half dead code, and one half is load-bearing.** z-monotonicity
+   holds BY CONSTRUCTION: every z cell in a row is scored over the same resolved origins against
+   `top >= refHigh_o + z*disp_o` with disp_o > 0, so raising z can only turn a hit into a miss.
+   Measured **0 violations in 22,500 adjacent pairs over 250 items** — the z-PAVA was deleted rather
+   than shipped inert. The H axis genuinely inverts, because its origin set shrinks with H:
+   **155 raw violations over 250 items, median 0.4pp, max 12.1pp**. The running max stays, and a
+   real violator is now a fixture.
+
+Two smaller corrections chunk 2 inherits:
+   - **`bailZOnMiss`, not `bailNetOnMiss`.** Chunk 1 emits the miss payoff in z, not gp and not net.
+     In gp it is not poolable — over this archive's span a big ticket moves 20%, and Ancestral's
+     pooled gp bail landed 19% ABOVE its own current `refHigh`. Chunk 2 reconstructs the price as
+     `refHigh + bailZ*disp` and applies `net()` at its single call site.
+   - **Horizon-level refusal reads the DECISION cell, not "every cell".** "Every cell thin" cannot
+     fire: a p=0 cell has a narrow Wilson width at any n, so a curve with a dead tail always keeps
+     one non-thin cell, and H=96 at 19 independent windows read thin=false with its whole mid-range
+     individually thin. The horizon's verdict is the cell nearest p=0.5 — the widest interval on the
+     curve, and where an EV maximum sits.
+
 ## 2. The objective function (what makes ranking possible at all)
 
 ```
@@ -276,7 +333,7 @@ number.
 Each lands independently, CI-green, with its acceptance check and falsifier named. Something
 usable ships at chunk 3.
 
-### Chunk 0 — Home the forward primitives where both sides can reach them
+### Chunk 0 — Home the forward primitives where both sides can reach them  ✅ SHIPPED
 Move `pipeline/lib/market/forward-reach.mjs` → `js/forward-reach.mjs` (pure, imports nothing);
 old path becomes a re-export shim, the established `pipeline/lib/estimators.mjs` pattern. README
 inventory entries for both.
@@ -284,7 +341,7 @@ inventory entries for both.
 byte-identical across the move against a frozen archive fixture.
 **Proves it wrong**: any behavior diff — byte-neutral or it doesn't land.
 
-### Chunk 1 — `js/reach-surface.mjs`: the surface builder
+### Chunk 1 — `js/reach-surface.mjs`: the surface builder  ✅ SHIPPED (see §1b for what it measured)
 `buildReachSurface(series, { nights=14, refN=3, horizonsH=[2,6,12,24,48,96], zGrid, strideH=6,
 minIndependent=8, now })` → `{ refHigh, disp, grid, nOrigins, independentWindows, coveredDays,
 thin }`. `refHigh` reuses `recentQuant(days,'ask',0.5,3)` (do not re-derive); `disp` = IQR of
@@ -312,6 +369,15 @@ windows dropped not counted — **mutation-verify this one**, the vacuous-test f
 happened twice in this repo's joiners).
 **Proves it wrong**: held-out calibration failing beyond binomial noise on a ≥100-item sample —
 demotes per-item curves to fallback-only and reopens Option C's conditioner question.
+**As built**, differing from the spec above wherever measurement required it: the z-PAVA is DELETED
+(§1b.5), `bailZOnMiss` replaces `bailNetOnMiss` (§1b), refusal reads the DECISION cell (§1b), the z
+grid was densified to 16 points because the pooled curve cliffs between z=0 and z=0.25 (§1b.4), a
+`dispMode` seam was added for §1b.4's comparison, and `referenceAsOf` is exported so the
+no-look-ahead invariant is an EQUALITY rather than an inference. Every export carries
+`@provisional-api` citing chunk 3 — **the plan's "each chunk lands independently, CI-green" claim is
+FALSE for chunk 1 as written**: `check-dead-exports` refuses a library with no production consumer,
+and the first consumer is chunk 3. 10 of 10 mutants killed; the two that the FIRST test draft let
+live, and why, are named in the suite header.
 
 ### Chunk 2 — Inversions + EV
 `askStar(surface, H, { bailNet, delayCost=0 })` maximizes §2's EV over the z-grid using
