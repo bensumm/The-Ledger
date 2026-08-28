@@ -86,7 +86,7 @@
  *              watch-positions held rows only.
  *   reachable?  pressure-driven band { ask, bid, pressure, reliability, bandLow, bandHigh } off windowread.mjs
  *              reachableBand; absent when the pressure read degrades. Rides EVERY row with an in-hand 1h
- *              series, so reachable/depthExit/estBuy/estSell/asym all score against the SAME realized sell.
+ *              series, so reachable/depthExit/estBuy/estSell/asym are co-logged on the SAME row. Scoring target: reachability.mjs.
  *   windowExit?  big-ticket window-clear ask rung off askExitRead — { list, live, peakWindow:[startH,endH],
  *              hiReach:{reached,n,recentHit,recentDays,placement}, fiveReach:{reached,n,placement}|null,
  *              reachMargin:{trend,cushionNow,cushionFrom,cushionTo,reachedRecent,nRecent,
@@ -314,7 +314,7 @@ export function classAndSource(row, id, warmBulk) {
 
 // --- reachability head-to-head ledger-shadow reshapers (RC-S1/RC-S2, PLAN-REACHABILITY-CONSOLIDATION) --
 // ONE home for the `reachable`/`depthExit` shadow-field SHAPE so the watch/screen/quote co-logs can't
-// drift (the five-way exit-estimator head-to-head scores these against the realized sell). Each takes a
+// drift (the five-way exit-estimator head-to-head reads these). Each takes a
 // RAW js/windowread result and returns the lean ledger object, or null when there is nothing to log.
 export function reachableShadow(rb) {
   if (!rb || rb.ask == null) return null;
@@ -597,7 +597,7 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   if (asym != null)          e.asym = asym;
   // PLAN-OUTPUT-TABLE — the reconciliation-estimator pair (js/estimators.mjs estimatePair) + its lean
   // evidence object (estConfLean), logged BESIDE the model-free quickBuy/optBuy/… fields so the F1
-  // retro-join can score "did estSell predict the realized sell".
+  // retro-join can score estSell. Target: reachability.mjs, NOT the realized sell.
   if (estBuy != null)        e.estBuy = estBuy;
   if (estSell != null)       e.estSell = estSell;
   if (estConfidence != null) e.estConfidence = estConfidence;
@@ -624,8 +624,8 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // DISTINCT from winClear, which keys the within-window lap-clear on optSell.
   if (windowExit != null)    e.windowExit = windowExit;
   // PLAN-DEPTH-EXIT DE3 / RC-S1 / RC-S2 (PLAN-REACHABILITY-CONSOLIDATION) — depthExit + reachable ride
-  // BESIDE estBuy/estSell/estConfidence and asym so all five exit-pricing estimators are scored against the
-  // SAME realized sell, including whether the ×4 competition bar nulls a liquidity class we would want to
+  // BESIDE estBuy/estSell/estConfidence and asym so all five exit-pricing estimators are co-logged on the
+  // SAME row, including whether the ×4 competition bar nulls a liquidity class we would want to
   // price (collapse + liqClass). The head-to-head spans HELD (watch, quote --positions) AND DISCOVERY
   // (screen survivors, quote per-item): `reachable` (pressure) rides every row with an in-hand 1h series,
   // while `depthExit` (depth) rides only HELD rows with a real qty — a bare discovery row omits it, the DE7

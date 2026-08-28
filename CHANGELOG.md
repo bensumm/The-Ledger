@@ -10,6 +10,49 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The reachability head-to-head, and the metric that could not rank (RC, 0.74.11)
+
+2026-08-27/28. PLAN-REACHABILITY-CONSOLIDATION set out to retire three of five overlapping exit
+estimators (reach-fold · reachRelief · asym · depth · pressure) by scoring them head-to-head. The
+scorer shipped (`join-reach-outcomes.mjs` + `lib/render/reachability.mjs` + the shared
+`lib/market/forward-reach.mjs` primitives). **Nothing retired, and the reason is the finding.**
+
+Two design decisions survived and are load-bearing. The plan specified scoring against the realized
+sell; that is CIRCULAR here, because a GE sell executes AT the ask you typed and the operator types
+the tool's suggestion — so the target is the 1h archive, the one thing the tool does not influence.
+The same circularity was found already shipped in `analyze-record.mjs`'s `rawTopReached`, which asked
+whether the operator had typed above our own number and printed the answer as calibration evidence;
+that field is deleted.
+
+The scorer then failed to rank, and the failure is more useful than a ranking would have been.
+`reached` and `headroomPct` are the SAME comparison (`reached ⟺ gap ≥ 0`), so the two reported
+columns are one statistic printed twice rather than two corroborating facts — and both are monotone
+in the ask price, so any ordering they produce is a price-level ordering. `quickSell*`, the declared
+null, therefore beats every contender on both columns at every horizon tested: read literally the
+metric says "always instasell". A miss costs a re-list, not the trade, and nothing in the surface
+prices that. The sibling `join-reach-basis.mjs` already carries the missing half (`mcnemarCost`, a
+cost ratio, a four-regime map); until it is ported, this command describes and does not rank.
+
+The headline is also HORIZON-CONDITIONAL, and the default horizon was the adversarial one for the
+estimator being judged: pressure's gap runs −2.9% (reach 27%) at H=6, −1.6% (38%) at H=24, and +0.2%
+(54%) at H=96 — closest to zero of all five at 96h. H=24 is the premise DT1 measured and retired for
+big-ticket, which is pressure's own class. Docs now state the horizon with every claim.
+
+The lesson, which redirects the program: "which estimator is best" is the wrong question. There is no
+best ask independent of how long you will wait and what a miss costs — the five are points on a
+(price × fill-probability × time) frontier, not competing hypotheses about one truth. The successor
+work is one parameterized function over a measured reach curve, not a winner among five.
+
+Also in this wave, from adversarial review: the two-lens depth/pressure clause was rendering
+UNGATED on the default `watch-positions.mjs` pass while both `quote-items.mjs` sites were flag-gated
+— on 12 of 13 logged rows the pressure ask sat above that row's own quoted sell, once by 3.7m on a
+109.5m lot. Gating only the pressure half would have left the depth floor rendering alone, which
+`emit.mjs` forbids as a size-honest floor that under-reads on a liquid book; both lenses are now
+gated together and a mutation-tested static pin in `emit.test.mjs` holds all three call sites
+uniform. `--est-sell` now rejects the space form that was silently swallowed as an item target.
+Gate B in `join-outcomes.mjs` — which told `/morning` daily to "build the scorer" for a scorer that
+exists, gating on closed round-trips the scorer never needed — is deleted rather than reworded.
+
 ### The watchlist is a permission set, and now it has one reader and a tripwire (SEP16a)
 
 2026-08-25, pipeline-only. `watchlist.json` was parsed by five node commands, each with its own

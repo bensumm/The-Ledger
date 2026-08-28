@@ -115,14 +115,13 @@ other morning, this check reads `no` — skip straight past this section.
    liquidity class with **n per cell**, the concentration line (top item's share of closed lots /
    realised P/L), and **THREE readiness gates** _(judgment: this is the dashboard, not a build trigger by itself)_:
    - **Gate A — F1-gate progress** (`X/5 cells at n≥30`): the general fill-rate CALIBRATION gate.
-   - **Gate B — Reachability head-to-head** (RC, `PLAN-REACHABILITY-CONSOLIDATION`): the five-way
-     exit-estimator co-log (reach·reachRelief·asym·depth·pressure) accrual — closed-sell round-trips
-     carrying the co-log, bucketed into the scorer's (side × class × regime) cells. Its clock started
-     at RC-S1 (2026-07-15), so it LAGS Gate A. **When it shows a cell at n≥floor (`SCORABLE`), that is
-     the cue to build+run `aggregateReachability`** (the retrojoin sibling — designed, not yet built)
-     and, if a challenger (depth/pressure) beats the incumbent (reachRelief/asym) on median |error| vs
-     `sellEach` without worsening the exit-safe rate, sustained over a window, flip the RC1 retire flag.
-     Nothing retires off a single week (rule 4); the flags are attended + reversible.
+   - **Gate B — Reachability head-to-head** (RC, `PLAN-REACHABILITY-CONSOLIDATION`): **RETIRED as a gate
+     — the scorer it waited on SHIPPED.** `join-reach-outcomes.mjs` (2026-08-27) scores the co-logged
+     estimators forward against the 1h archive and needs no closed round-trip, so the accrual count that
+     stood here gated nothing; run the command directly whenever the question comes up. Read it as a
+     DESCRIPTION of reach and gap, never a ranking: the two columns are one statistic and the `quickSell*`
+     null beats every contender on both, so "which estimator wins" is not in evidence without the cost
+     model `join-reach-basis.mjs` already carries. **No RC retire flag flips off this surface.**
    - **Gate C — Ring-3 rank-denoise** (forward-vs-recency exit, `PLAN-ESTIMATOR-HONEST-SELL`): the
      accrual that gates the display redesign's DEFERRED denoising lever — promoting the drift-adjusted
      FORWARD exit ("list at X") into `estimateRank`'s net/pFill so it reaches the graded board +

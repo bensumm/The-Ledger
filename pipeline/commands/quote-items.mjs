@@ -96,6 +96,7 @@ const RAW = args.includes('--raw');
 // boolean). PRESSURE_EXIT stays the boolean this script branches on, DERIVED from the active model.
 // --est-sell takes the `=value` form (a bare positional would be swallowed as an item target by `tokens`
 // below); `--pressure-exit` stays the space-free legacy sugar.
+if (args.includes('--est-sell')) { console.error(`! --est-sell takes the =value form (--est-sell=pressure); a space-separated value is swallowed as an item target.`); process.exit(1); }
 const estSellArg = args.find(a => a.startsWith('--est-sell='));
 const SELL_MODEL = resolve('sellModel', {
   flag: estSellArg ? estSellArg.slice('--est-sell='.length).toLowerCase() : (args.includes('--pressure-exit') ? 'pressure' : undefined),

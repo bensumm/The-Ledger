@@ -15,12 +15,9 @@ import { rolling24FromTs1h } from '../market/marketfetch.mjs';
 
 export const FP_MIN_DAYS = 5;   // fewer scored trailing days than this ⇒ 'thin-history' (mirrors ASYM_MIN_DAYS)
 
-// empirical CDF: fraction of the ascending-sorted sample AT OR BELOW x. sellEach vs daily-HIGHS: a high
-// value ⇒ sold above most days' peaks (the small-clip premium). buyEach vs daily-LOWS: a LOW value ⇒
-// bought below most days' troughs (a deep entry). One convention; the caller documents per use. null on
-// an empty sample. THE ONE definition lives in js/windowread.mjs as `placement` (AC4a made it the shared
-// price→percentile home the reach CLIs use); `cdf` is kept as this study's original name so AC1's call
-// sites + fixtures read unchanged — same computation, one implementation.
+// empirical CDF: fraction of the sample AT OR BELOW x. sellEach vs daily-HIGHS: high ⇒ sold above most
+// days' peaks; buyEach vs daily-LOWS: low ⇒ bought below most days' troughs. null on an empty sample.
+// Alias of js/windowread.mjs `placement` — THE ONE price→percentile definition.
 export const cdf = placement;
 
 export const median = arr => { const s = arr.filter(v => v != null).sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; };
@@ -51,7 +48,10 @@ export function spearman(pairs) {
  * coverage: 'no-series' (empty series), 'thin-history' (<minDays trailing daily-highs as-of the sell —
  * the un-placeable early period before the live 1h reach), else 'ok'. The sell-day distribution is the
  * trailing `nights` COMPLETE days as-of the sell (the sell day itself excluded, exactly like the live
- * reach check); the series is pre-filtered to ts ≤ sellTs so no future data leaks in. */
+ * reach check); the series is pre-filtered to ts ≤ sellTs so no future data leaks in.
+ * WARNING: sellPlacement's target is TOOL-INFLUENCED — a GE sell executes at the ask you typed, which
+ * is the tool's own suggestion, so anything calibrated on it (AC3 safeQuantile) scores the tool against
+ * itself. lib/render/reachability.mjs states the non-circular target. */
 export function lotPlacement(lot, series1h, { nights = 14, minDays = FP_MIN_DAYS } = {}) {
   const out = { sellPlacement: null, buyPlacement: null, sizeShare: null, shareHpv: null, volDaySell: null, nDaysSell: 0, coverage: 'ok' };
   if (!Array.isArray(series1h) || !series1h.length) { out.coverage = 'no-series'; return out; }

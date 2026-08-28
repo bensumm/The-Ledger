@@ -1,7 +1,17 @@
 # PLAN-REACHABILITY-CONSOLIDATION — pressure as the load-bearing reachability primitive
 
-Status: **DRAFT — migration ARCHITECTURE + evidence-scaffolding only. Nothing retired; every existing
-heuristic stays fully live.** Per-topic working doc (PLANNING.md lifecycle). Cross-linked from
+Status: **MEASURED 2026-08-27 — and the premise did not survive. Nothing retired; every existing
+heuristic stays fully live.** The scorer this doc designed is built (`join-reach-outcomes.mjs`) and its
+first read says pressure REACHES LEAST OFTEN at the default horizon — note it also leaves the LEAST on the
+table there (its gap is negative, and `reachability.mjs:42` defines positive gap as money left on the
+table; an earlier draft of this line had that inverted). **RC1 and RC2 as specified below both point the wrong
+way** and must not be executed on this evidence — read §7 before acting on §3.
+**Two limits bound every claim below.** (1) The scorer CANNOT RANK: `reached` and `headroomPct` are the
+same comparison, both monotone in price, and the `quickSell*` null beats every contender on both — so the
+ordering is a price-level ordering and "best estimator" is not in evidence. Ranking needs the cost model
+`join-reach-basis.mjs` already carries. (2) The headline is HORIZON-CONDITIONAL: pressure's gap is −2.9%
+at H=6, −1.6% at H=24 and **+0.2% at H=96**, closest to zero of the five — and H=24 is the horizon DT1
+retired for big-ticket, pressure's own class. Per-topic working doc (PLANNING.md lifecycle). Cross-linked from
 `PLAN-DEPTH-EXIT.md` (which shipped the primitives this consolidates around: DE1/DE2/DE6 depth,
 PB1 pressure, DE3 the two-lens held-lot line). This doc SPANS beyond depth-exit — it governs how the
 whole *reachability layer* (how far a resting bid/ask realistically fills) converges on ONE
@@ -81,9 +91,10 @@ OFF — a swap there is experiment-vs-experiment, not a live-path change.
 - **asym**: `asymEstimate.ask` (= `highReachAsk`, clamped to live/band).
 - **depth**: `clearableAsk` → `depthExit.ask` (null-with-reason on a thin book).
 - **pressure**: `reachableBand.ask` → `reachable.ask`.
-All five map to a single realized target the retro already produces: **`sellEach`** (the qty-weighted
-realized GROSS sell price per closed lot — `retrojoin.mjs` added it 2026-07-12 for exactly this class of
-sell-side join). The bid side mirrors it against `fillEach`/the deep-bid touch.
+The realized target is the 1h ARCHIVE — was the ask reached, and how far above it did the market go
+(§7). It is NOT `sellEach`/`fillEach`: our own executed price is the ask we typed, and we type the tool's
+suggestion, so scoring against it measures the tool agreeing with itself. The bid side is UNSCORED — the
+shipped surface covers the ask leg only.
 
 ---
 
@@ -97,7 +108,12 @@ competing exit estimate on the SAME `(itemId, ts)` row so the join scores them a
 richest accrual surface — the loop fires many times per real held lot, and held lots produce the real
 sells to score). Screen/quote co-log of pressure is a cheap follow-on (RC-S2, noted below).
 
-**The scorer (DESIGN — F1 analysis, built when the window warms, NOT now).** A pure
+⚠ **SUPERSEDED BY §7 — the target named in this paragraph is CIRCULAR.** Scoring against the realized
+sell cannot work here: a GE sell executes AT the ask you typed, and you type the tool's suggestion, so
+the executed price simply reproduces the last reprice. The shipped scorer joins the
+1h ARCHIVE instead. Kept for the cell/floor design, which survived.
+
+**The scorer (DESIGN — superseded target, see above).** A pure
 `aggregateReachability(retroRows)` sibling of `aggregateOutcomes` (`retrojoin.mjs`): for every row with a
 closed round-trip (`sellEach` present) it reads the five predicted asks off the joined suggestion,
 computes each estimator's signed + absolute error vs `sellEach`, and buckets by the **(side × liquidity
@@ -191,8 +207,10 @@ rate** (did prices above the observed high actually clear?) before it can bind l
   DE7 fetch-budget rule keeps depth OFF the screen and off bare per-item reads). The three co-logs now share
   ONE reshaper home — `reachableShadow`/`depthExitShadow`/`asymShadow` in `pipeline/lib/suggestlog.mjs` — so
   the watch/screen/quote shadow shapes can't drift (watch's RC-S1 inline reshapers were refactored onto
-  them). Inform-only; rendered output byte-identical. **The five-way head-to-head now spans held +
-  discovery: complete.**
+  them). Inform-only; rendered output byte-identical. **"Five-way" overstates it — measured coverage is
+  pressure 100% · asym 88% · reachFold 51% · reachRelief 49% · depth 1%.** depth needs a held qty, so it
+  can only ever log where one exists; reachFold and reachRelief are disjoint by construction. Only the
+  MATCHED pool compares like with like.
 - **RC-S3 — the readiness dashboard in the weekly retro (LANDED — see the commit).** `join-outcomes.mjs
   --report` now prints a **Reachability head-to-head** gate beneath the F1-gate line: it counts the
   closed-sell round-trips whose nearest read carried the five-way co-log (`joinSuggestion` gained a `coLog`
@@ -200,9 +218,87 @@ rate** (did prices above the observed high actually clear?) before it can bind l
   into the scorer's `(side × liqClass × regime)` cells, reporting cells at `n≥MIN_N` (scorable) / `n≥MIN_N_F1`
   (robust) — the SAME floors, no new thresholds. This makes "is the head-to-head scorable yet?" a MECHANICAL
   weekly read (surfaced in `/morning §5`), not polling. It is an accrual COUNT (off join-outcomes campaigns);
-  `aggregateReachability` still owns the exact per-cell |error|-vs-`sellEach` scoring — the dashboard is the
-  cue to BUILD it. The co-log clock started at RC-S1, so this gate LAGS F1 by design and reads 0 until closed
+  ⚠ STALE: this gate was written before the scorer existed and its premise is dead. `join-reach-outcomes.mjs`
+  SHIPPED, needs no closed round-trip at all, and scores against the archive — not `aggregateReachability`
+  (never built) and not `sellEach` (circular). Re-point or delete this gate; see §7. The co-log clock started at RC-S1, so this gate LAGS F1 by design and reads 0 until closed
   sells accrue against co-logged reads. Inform-only; no `APP_VERSION` (console stdout).
+
+## 7. THE MEASUREMENT (2026-08-27) — built, run, and it refutes the premise
+
+`join-reach-outcomes.mjs` scores every co-logged read FORWARD against the 1h archive: per estimator, was
+that ask REACHED within 24h and how far above it did the market go. Two reference lines ride along —
+`quickSell*` (the live market print, the true null) and `optSell*` (the tool's own band edge, a sibling
+not an outside check).
+
+**Read the MATCHED pool, never the pooled marginals.** Coverage is ragged by construction (depth needs a
+held qty; reachFold and reachRelief are disjoint), so the per-estimator marginals are computed over
+DIFFERENT row sets — the same unmatched-marginal trap that made the asym pooled read misleading. On the
+15,529 reads / 617 items that every contender priced at once:
+
+| estimator | reached ≤24h | gap to top (ALL rows) | headroom when reached |
+| --- | --- | --- | --- |
+| pressure | 37% | **−1.6%** | +3.1% |
+| asym | 70% | +0.9% | +2.5% |
+| reachFold | 74% | +1.1% | +2.1% |
+| quickSell* | 81% | +1.9% | +2.9% |
+| optSell* | 58% | +0.0% | +1.5% |
+
+**Read the GAP column, not the headroom one.** Headroom conditions on reaching, and reaching selects the
+high-topping rows, so a rarely-reaching estimator's conditional headroom is flattered. The gap is over
+ALL rows and is the only column comparable across estimators.
+
+**Pressure is the only contender that systematically prices PAST the market.** Its median ask sits 1.6%
+ABOVE the best price the market reached in 24h — the only negative gap in the table — and it reaches half
+as often as the incumbents (37% vs 70–74%). Its asks sit a median +4.0% over the live sell, which is the
+no-peak-cap doctrine working exactly as designed and overshooting. That is the opposite of what §1
+assumed when it nominated pressure as the primitive the others should converge on.
+
+**The rest is a frontier, not a ranking.** optSell prices the median achievable top almost exactly (+0.0%
+gap) but only fills 58% of the time; reachFold gives up 1.1% to fill 74%; asym sits between them. No
+single estimator dominates, so "which is best" is a posture choice, not a measurement — and none of them
+is a retirement candidate on this evidence.
+
+**So the migration map inverts.** RC1 ("retire reachRelief in favour of depth/pressure") and RC2 ("merge
+asym into the pressure band") are both arguments for routing live prices through the ONE contender that
+overshoots. Do not execute §3 without re-deriving it.
+
+**PB4's cap-relaxation gate is answered too, and the answer is no.** The §3 ruling made the
+`dayHighFrom5m` cap reliability-gated so a fully-reliable pressure read could price above the observed
+high. Pressure already overshoots without that relaxation; loosening the cap moves it further in the
+direction the measurement says is wrong. PB4 stays flag-off, and this is now a measured reason rather
+than a precautionary one.
+
+**What is NOT in evidence.** The ASK leg only — pressure and asym both produce a BID and nothing here
+scores it, so a bid-side claim is unsupported either way. Reached ≠ filled (no queue position), so every
+rate bounds a real offer from ABOVE. `n` counts READS, not trades, and the screen re-prices the same item
+many times a day, so rows are heavily item-day clustered and effective n is far below nominal — treat the
+five-figure n as a shape, never as a confidence interval. And depth is still unscorable at n≈100, which
+is a structural limit rather than an accrual one: it can only ever log where a held qty exists.
+
+**The co-log gap worth closing.** reachFold and reachRelief never co-occur, so this surface cannot answer
+"does the relief softening help?" — the cheapest fix is co-logging the relief=0 counterfactual beside the
+softened `estSell`, which would make RC1's actual question answerable for the first time.
+
+### 7b. What the result changed on the LIVE surfaces (adversarial review, same date)
+
+The measurement says pressure prices past the achievable top and reaches roughly half as often as the
+incumbents. A review pass then asked the obvious follow-up — where does a pressure price actually reach
+Ben today? — and found two unflagged consumers plus a second instance of the circular-target defect:
+
+- **The watch held-lot line rendered a pressure ask on the DEFAULT pass**, not behind `--est-sell=pressure`,
+  beside the lot's own list-at. Both `quote-items` sites were flag-gated; this one was not. FIXED — the
+  `reachable` argument is now gated to match. The ledger shadow is untouched, so the scorer keeps its data.
+- **`/analyze` §5's `rawTopReached` was circular** in exactly the way §7's scorer warns about: `rawTop`
+  exceeds the quoted ask by construction and a GE sell executes AT the ask Ben typed, so the join asked
+  whether he typed above our own number. DELETED rather than re-pointed; `forward-reach.mjs`'s
+  `maxHighWithin` is the non-circular replacement whenever that question is worth re-asking.
+- **`suggestlog.mjs`'s schema doc pointed the next joiner at the realized sell** in four places — the
+  mechanism by which the defect above got written. Corrected to name the scoring target's real home.
+- **STILL OPEN, Ben's call:** `reverseListBand` (`js/reverseflip.mjs`) folds `reachable.ask` into the
+  reverse-flip `Sold-ref/Peak` cell. Because `ask >= baseHigh` by construction and `baseHigh` is already a
+  candidate, the pressure leg can only ever raise the band's top, never lower it — so the one estimator
+  measured to overshoot is wired in exclusively in the direction where that shows. Not changed here:
+  dropping it collapses the band to base-vs-sellRef, which is a rendering-design call, not a bug fix.
 
 ## 6. HONESTY / ENTANGLEMENTS (rule 4 — surfaced, not forced)
 - **n≈0 on everything.** This doc designs the calibration; it claims none. Every promotion is gated on a

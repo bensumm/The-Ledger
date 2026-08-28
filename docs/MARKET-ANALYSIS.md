@@ -171,7 +171,8 @@ floor-bound value so a LIST price never sits below break-even), and a **reliabil
   All constants are n≈0 placeholders (`DEPTH_*`, `PRESSURE_*` — `js/windowread.mjs`). These two
   primitives are the successors the older `reachRelief` + `asymPair` heuristics converge on: the watch
   held row co-logs ALL FIVE exit estimators (reach · reachRelief · asym · depth · pressure) so the F1
-  retro-join can score them head-to-head against the realized sell — the evidence-based, deprecate-then-
+  retro-join can score them head-to-head against the 1h ARCHIVE (the realized sell is circular — a GE sell
+  executes at the ask you typed); `join-reach-outcomes.mjs` does this and DESCRIBES rather than ranks — the deprecate-then-
   remove migration is architected in `PLAN-REACHABILITY-CONSOLIDATION.md` (nothing retires on theory).
 - **Confidence rides IN the price cell** as the recent-3 reach (`0/3`, `recencySplit`) — the
   freshness-honest signal and the fold basis; the full window shows beside it only on divergence

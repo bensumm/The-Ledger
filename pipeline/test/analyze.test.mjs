@@ -190,19 +190,8 @@ ok('askHeadroomAudit: segments trusted vs untrusted and joins the retro outcome'
   assert.equal(a.nTakenTrusted, 1);
   assert.equal(a.realisedPerUnitTaken, 8, 'realized/u averaged over the taken trusted subset');
   assert.ok(Math.abs(a.gapPctTrusted - 0.01) < 1e-9);
-  // strict raw-top-reach join (2026-07-12): sellEach 398 ≥ rawTop 397 → reached; the untrusted row's
-  // retro lacks sellEach → unanswerable (null), never a crash.
-  assert.equal(a.rows.find(r => r.itemId === 566).rawTopReached, true);
-  assert.equal(a.rows.find(r => r.itemId === 999).rawTopReached, null, 'no sellEach → unknown, degrade');
-  assert.equal(a.rawTopKnownTrusted, 1);
-  assert.equal(a.rawTopReachedTrusted, 1);
-});
-ok('askHeadroomAudit: a realized sell BELOW the raw top reads rawTopReached=false', () => {
-  const sug = [{ itemId: 7, ts: 100, askHeadroom: { gap: 10, gapPct: 0.02, rawTop: 500, topBucketVol: 900, netLever: 3, trusted: true } }];
-  const a = askHeadroomAudit(sug, [{ outcome: 'filled', realisedPerUnit: 4, sellEach: 490 }]);
-  assert.equal(a.rows[0].rawTopReached, false);
-  assert.equal(a.rawTopKnownTrusted, 1);
-  assert.equal(a.rawTopReachedTrusted, 0);
+  // A rawTopReached assertion lived here; the metric was deleted as circular (see analyze.mjs header).
+  assert.equal(a.rows.find(r => r.itemId === 566).sellEach, 398, 'sellEach rides along as description');
 });
 
 // --- amplitudeRetro (F-G shadow-vs-realized) -------------------------------------------------

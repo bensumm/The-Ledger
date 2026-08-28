@@ -144,6 +144,24 @@ ok('DE3: reachable alone renders (depth read absent); sub-1 reliability is state
   assert.equal(depthReachClause({ rb: { ask: null } }), null);
 });
 
+// Every depthReachClause call site must be flag-gated. watch-positions rendered the pressure ask on the
+// DEFAULT pass while both quote-items sites were gated; that asymmetry put an unlabelled ask beside the
+// list-at, and the scorer later measured that ask reaching ~37% against the incumbents' ~70%. Static
+// because the render needs a real held lot: CI has no book, so nothing else here can see this drift.
+ok('DE3: the two-lens clause is flag-gated at EVERY call site, watch included', () => {
+  const watch = fs.readFileSync('pipeline/commands/watch-positions.mjs', 'utf8');
+  assert.ok(watch.includes('depth: PRESSURE_EXIT ? it._depthExit : null, reachable: PRESSURE_EXIT ? it._reachable : null'),
+    'watch must gate BOTH lenses — gating only the pressure half leaves the depth floor rendering alone, which its own contract forbids');
+  const quote = fs.readFileSync('pipeline/commands/quote-items.mjs', 'utf8');
+  let at = quote.indexOf('depthReachClause({');
+  assert.ok(at > 0, 'the quote-items call sites still exist to be checked');
+  while (at > 0) {
+    assert.ok(quote.lastIndexOf('if (PRESSURE_EXIT', at) > quote.lastIndexOf('\n  rows.push', at),
+      'every quote-items depthReachClause call sits under an if (PRESSURE_EXIT ...) branch');
+    at = quote.indexOf('depthReachClause({', at + 1);
+  }
+});
+
 /* formatAsymFill — the ◆ asym fill clause pair. The BUSINESS REQUIREMENT: a reach count must never be
    printed as though it described a price it was not measured at. asymEstimate's ordering guards can
    move bid/ask off the quantile levels pAsk/pBid were counted at, and when they do the quoted price is

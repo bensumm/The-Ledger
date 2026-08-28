@@ -147,7 +147,7 @@ clamps, BE floor, declared-exit anchor) so a model only PROPOSES a price, never 
 Active-plus-shadow: the active model displays/publishes, every `defaultShadow` model still runs + logs to
 `suggestions.jsonl` each pass (the unbiased F1 co-log). A **boolean mode-flag threading through a shared
 function** (the pre-PC3 `{pressureExit:true}` that overrode both legs mid-function) is the anti-pattern this
-replaced — a new variant (safe-quantile, PLAN-REACH-CALIBRATION AC3) lands as a registry line, not a third
+replaced — a new sell-top variant lands as a registry line, not a third
 boolean. Same shape as declarative specs below: composition lives in a registry + a resolver, not in `if`s.
 
 **Provisional/app-parity drift is tracked, not silent.** Where the console is deliberately ahead of the

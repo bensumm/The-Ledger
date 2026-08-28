@@ -562,6 +562,7 @@ async function main() {
   // (--est-sell=reach-fold|pressure, the `=value` form since targets are bare positionals); `--pressure-exit`
   // stays the legacy sugar for `--est-sell=pressure` (explicit --est-sell wins). Absent flag+config ⇒
   // 'reach-fold'. PRESSURE_EXIT stays the boolean this script branches on, DERIVED from the active model.
+  if (args.includes('--est-sell')) { console.error(`! --est-sell takes the =value form (--est-sell=pressure); a space-separated value is swallowed as an item target.`); process.exit(1); }
   const estSellArg = args.find(a => a.startsWith('--est-sell='));
   const SELL_MODEL = resolve('sellModel', {
     flag: estSellArg ? estSellArg.slice('--est-sell='.length).toLowerCase() : (args.includes('--pressure-exit') ? 'pressure' : undefined),
@@ -1052,7 +1053,7 @@ async function main() {
     // try so a context-field failure never drops the load-bearing sell line; the optional context
     // fields (V1 delta / V2 tripwire / V4 conviction) are computed inside, defaulting to null.
     const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true, heldQty: it.qty, volDay: it.row.volDay,
-      depth: it._depthExit, reachable: it._reachable });   // DE3: depth floor + pressure read ride the window clause
+      depth: PRESSURE_EXIT ? it._depthExit : null, reachable: PRESSURE_EXIT ? it._reachable : null });   // DE3: the whole two-lens clause is flag-gated, matching both quote-items sites — the depth floor must never render alone (emit.mjs)
     const mvHeld = momVerdict(row, be, lotValue, ts5m, undefined, lotCtxOf(it));
     const verdictText = firstSentence(heldAction(row, be, lotValue, ts5m, mvHeld, it._display));
     let conviction = null, delta = null, tripwire = null, recovery = null;

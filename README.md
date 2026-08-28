@@ -1369,7 +1369,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     prints THREE readiness gates: the F1-gate progress line (general calibration), the **Reachability
     head-to-head** accrual (RC, `PLAN-REACHABILITY-CONSOLIDATION`) — closed-sell round-trips carrying the
     five-way exit co-log (`joinSuggestion`'s `coLog` marker), bucketed into the scorer's (side × class ×
-    regime) cells, so the weekly retro shows WHEN `aggregateReachability` becomes scorable without polling —
+    regime) cells, so the weekly retro shows WHEN `join-reach-outcomes.mjs` has a scorable cell without polling —
     and the **Ring-3 rank-denoise** accrual (`PLAN-ESTIMATOR-HONEST-SELL`) — the same round-trips filtered by
     the FORWARD-exit co-log (`joinSuggestion`'s `fwdLog` marker = `estConfidence.forwardPeak`), the gate that
     tracks when the forward-vs-reach-fold head-to-head (`aggregateForwardExit`) becomes scorable, the
@@ -1455,6 +1455,46 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     update cycle, band-dominated; CIs resample ITEMS. **GATES NOTHING** — threshold work belongs to F1.
     `--entry`/`--horizon`/`--item`/`--json`.)
 
+    **`join-reach-outcomes.mjs`** (2026-08-27, PLAN-REACHABILITY-CONSOLIDATION — the RC head-to-head,
+    forward-scored. The tool carries FIVE overlapping ways to price an exit (reach-fold · reachRelief ·
+    asym · depth · pressure); RC-S1/RC-S2 co-log all of them on every read and nothing had ever read that
+    log. PRODUCER: the `reachable`/`estSell`/`asym`/`depthExit` co-logs on `suggestions.jsonl` + the
+    monthly archives via `readSuggestionLines()`; forward-scored against the 1h
+    `pipeline/.market-archive.sqlite` through `pipeline/lib/market/forward-reach.mjs`. Per estimator, per
+    (side × class × regime) cell: was that ask REACHED within the horizon, and how far above it did the
+    market go. **The target is the ARCHIVE, and that is the load-bearing design decision** — the plan
+    specified scoring against the realized sell, which is CIRCULAR here: a GE sell executes AT the ask you
+    typed, and you type the tool's suggestion, so scoring against it measures the tool agreeing with
+    itself. The header of
+    `pipeline/lib/render/reachability.mjs` is the ONE home for that reasoning; don't re-derive it.
+    **⚠ THE METRIC CANNOT RANK EXIT ESTIMATORS, and no conclusion here may be read as if it did.**
+    `reached` and `headroomPct` are the SAME comparison (`reached ⟺ gap ≥ 0`, derived at
+    `reachability.mjs:52`), so the two reported columns are ONE statistic printed twice, not two
+    corroborating facts. Both are monotone in the ask price, so the ordering they produce is a
+    PRICE-LEVEL ordering — and `quickSell*`, the declared null, beats every contender on both columns at
+    every horizon tested. Read literally this surface says "always instasell", which nobody believes: an
+    ask that misses costs a RE-LIST, not the trade, and nothing here expresses that cost. The sibling
+    `join-reach-basis.mjs` already solved this exact problem (`mcnemarCost`, a cost ratio `r`, a
+    four-regime map, `rStar`); until that is ported, this command DESCRIBES reach and gap and ranks nothing.
+    **It does refute the consolidation's premise, but not by ranking.** Pressure prices consistently
+    higher than the incumbents, so on a SHORT horizon its ask sits above the window top while the
+    incumbents sit near zero — the opposite of what RC1 ("retire reachRelief in favour of pressure") and
+    RC2 ("merge asym into the pressure band") assumed. **That finding is HORIZON-CONDITIONAL, and the
+    default horizon is the adversarial one for pressure's own class:** on one matched pool pressure's gap
+    runs −2.9% (reach 27%) at H=6, −1.6% (38%) at H=24, and **+0.2% (54%) at H=96** — where it is the
+    CLOSEST of all five to zero. H=24 is the premise DT1 measured and retired for big-ticket, and
+    pressure is the big-ticket estimator. Quote the horizon with any claim off this surface, and never
+    the phrase "prices past the market" unqualified.
+    **Compare on the gap column, never the conditional headroom** — headroom conditions on reaching, which selects
+    high-topping rows and flatters a rarely-reaching estimator. Read the MATCHED tables, never the pooled ones: coverage is ragged (depth needs
+    a held qty; reachFold/reachRelief are disjoint by construction) so the pooled per-estimator marginals
+    are computed over DIFFERENT row sets. HONESTY: reached ≠ filled — no queue position — so every rate
+    bounds a real offer from ABOVE; n counts READS, not trades, and the screen re-prices the same item
+    many times a day, so rows are heavily item-day clustered and effective n is far below nominal; the
+    ASK leg only, so a bid-side claim is not in evidence; `quickSell*` is the live market print (the true
+    null) but `optSell*` is the tool's OWN band edge, so beating it beats a sibling. **GATES NOTHING.**
+    `--horizon`/`--min-n`/`--item`/`--json`.)
+
     **`join-reach-basis.mjs`** (2026-08-13, PLAN-REACH-BASIS-DECISION — settles the digest's
     recent-3-vs-full-window ask-reach split that `screen-flip-niches.mjs`'s header had flagged as KNOWN,
     UNDECIDED and forbidden to "fix" either way without a measurement. PRODUCER: `estConfidence`
@@ -1520,6 +1560,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     supporting n + an explicit confidence label — surfacing evidence for Ben, NOT graduating a constant.
     `--json` dumps the proposal bundle. Pure analysis fns pinned by `test/f1-calibrate.test.mjs`, incl. a
     drift-guard tying `MIN_N_F1`/`MIN_CELLS_F1` to `join-outcomes.mjs`),
+    `reachability.mjs` (RC, PLAN-REACHABILITY-CONSOLIDATION — the PURE reachability head-to-head scorer
+    behind `join-reach-outcomes.mjs`. `REACH_ESTIMATORS` is the ONE registry mapping a logged suggestion
+    field to a contender: `reachable.ask`→pressure, `asym.ask`→asym, `depthExit.ask`→depth, and `estSell`
+    splitting into reachFold / reachRelief on whether `estConfidence.reachRelief` FIRED — the same
+    estimator with and without the softening, so the two are scored over DISJOINT rows and this surface
+    can never answer "does relief help?" (that needs the relief=0 counterfactual co-logged). `scoreRow`
+    scores one read forward against a series; `matchedPool` restricts to the rows every named contender
+    priced, which is the only place a cross-estimator comparison is legitimate — coverage is ragged, so
+    the pooled marginals are computed over different row sets. Its header owns the why-not-the-realized-
+    sell reasoning (the target is circular: a GE sell executes at the ask you typed). Fixture-pinned +
+    mutation-verified by `pipeline/test/reachability.test.mjs`),
     `retrojoin.mjs` (P6a — the SUGGESTION→FILL retro-join REPORT: read-only, prints per-flip-niche +
     per-path outcome accounting — filled / filled-worse / not-taken counts, realized TTF median/
     spread, and realized profit per unit of attention — over EVERY suggestion row × `fills.json`
@@ -1545,9 +1596,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     separation over the alerted subset; candidate-surfacing → points at F1, never retunes; n≈0 placeholder),
     a **Bar E ask-headroom retro §5** (`askHeadroomAudit` — pulls the lean `askHeadroom` shave-gap flags,
     segments trusted (surfaced) from untrusted (audit-only), joins the trusted subset to the retro
-    round-trip incl. the STRICT raw-top-reach answer (`rawTopReached` off retrojoin's realized `sellEach`,
-    2026-07-12 — unanswerable rows degrade to unknown); candidate-surfacing → F1 owns `ASK_HEADROOM_*` +
-    the deferred clamp-widen; n≈0 placeholder),
+    round-trip. A `rawTopReached` field lived here and was DELETED as circular — `rawTop` exceeds the
+    quoted ask by construction and a GE sell executes at the ask you typed, so it scored the tool against
+    itself; `forward-reach.mjs` `maxHighWithin` is the non-circular replacement. Candidate-surfacing →
+    F1 owns `ASK_HEADROOM_*` + the deferred clamp-widen; n≈0 placeholder),
     and derives
     n-gated TUNING CANDIDATES that are FLAGS for F1, never applied here; a ~0% taken rate is treated as the
     documented BASELINE, not a finding. `--since <hrs>`/`--json`/`--min-n`. Pure core is `lib/analyze.mjs`,
@@ -1732,6 +1784,19 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     served LIVE and reported as `shallow`, because a short series yields `{ok:false}` → label `unknown` →
     the falling exclusion silently un-gates. Consumer: `screen-flip-niches.mjs --archive-regime` (AF5b).
     Pinned by `pipeline/test/archive-series.test.mjs` + `pipeline/test/archive-6h-pin.test.mjs`),
+    **`forward-reach.mjs`** (RC, PLAN-REACHABILITY-CONSOLIDATION — the shared FORWARD-SCORING primitives
+    over the 1h archive: `touchedAt` (bid side, `avgLowPrice`), `reachedWithin` / `maxHighWithin` (ask
+    side, `avgHighPrice`), `covers`, `firstIndexAfter`. Lifted VERBATIM out of `join-asym-outcomes.mjs`
+    when `join-reach-outcomes.mjs` needed the same walk — the extraction `campaigns.mjs` made for the
+    campaign build. ⚠ It is shared by `join-asym-outcomes.mjs` + `join-reach-outcomes.mjs` ONLY:
+    `join-reach-basis.mjs` still carries its own independent `scoreForward` walk, and
+    `lib/market/printed-at.mjs` a third — so a fix here does NOT reach every reach joiner. Consolidating
+    them is unfinished work, not a claim to repeat; `printedAt` additionally has the better tristate
+    (`null` when no bucket exists, which `reachedWithin` collapses to `false`).
+    `covers` is the load-bearing one: an unresolved window is DROPPED, never counted as a miss, because
+    counting it biases every rate DOWN by exactly the truncation at the end of the archive. Side
+    convention is pinned by `js/quotecore.js` — a BUY fills against `avgLow`, a SELL against `avgHigh`.
+    Pure: no fs, no fetch; the caller supplies the ts-ascending series),
     **`printed-at.mjs`** (AB1, PLAN-ASK-BACKTEST — the PURE atom the ask fill surface is built from:
     `printedAt(series,{mid,premium,horizon,from})` → did any bucket in the horizon print `avgHighPrice ≥
     mid × (1+premium)`, plus the observed max. No fetch, no archive handle, no clock. `mid` is an INPUT

@@ -170,13 +170,13 @@ export function dipLoopAudit(sugRows = [], retroRows = []) {
  * WHAT IT DOES. Pulls every ledger row carrying the lean `askHeadroom` object (computeQuote flagged the
  * robust p90 shaved a TRADED in-band top off the quoted ask). Segments TRUSTED (surfaced as a ladder note)
  * from UNTRUSTED (logged for audit only — the thin-flier path Bar E protects). Joins each to retroRows[i]
- * (1:1 with sugRows) for the realized round-trip. THE QUESTION F1 needs answered: on a TRUSTED-headroom
- * suggestion, did the realized sell actually reach the raw top (i.e. was the quoted ask genuinely leaving
- * money on the table)? As of 2026-07-12 the retro row carries `sellEach` (retrojoin.mjs — the
- * qty-weighted realized GROSS sell price of the claimed lot's closing sells), so the STRICT join IS
- * computed here: rawTopReached = sellEach ≥ askHeadroom.rawTop, null when either side is unknown (an
- * unclosed round-trip, or a pre-field row). Old buy-keyed-only rows degrade to null, never a crash.
- * F1 still owns what to DO with the answer; this reports it n-honest.
+ * (1:1 with sugRows) for the realized round-trip. `sellEach` rides along as description only.
+ *
+ * WARNING: the question F1 needs answered — did the market print above the top the clamp shaved? — is
+ * NOT answerable from the realized sell. rawTop exceeds the quoted ask by construction and a GE sell
+ * executes AT the ask you typed, so `sellEach >= rawTop` asks whether Ben typed above our own number.
+ * A rawTopReached field computed that way was deleted; score it against the 1h archive instead
+ * (lib/market/forward-reach.mjs maxHighWithin — lib/render/reachability.mjs states the target rule).
  *
  * HONESTY (rule 4). n≈0 — ASK_HEADROOM_MIN_PCT / RAWTOP_TRUST_BUCKET_VOL / ASK_HEADROOM_VOL_FLOOR are NAMED
  * PLACEHOLDERS; the caller emits this as an n-gated CANDIDATE pointing at F1, never a calibrated conclusion. */
@@ -187,15 +187,12 @@ export function askHeadroomAudit(sugRows = [], retroRows = []) {
     if (!s || s.askHeadroom == null) continue;   // askHeadroom presence IS the marker (trusted or audit-only)
     const rj = retroRows[i] || {};
     const sellEach = rj.sellEach ?? null;
-    const rawTop = s.askHeadroom.rawTop ?? null;
     rows.push({
       itemId: s.itemId, ts: s.ts, ...s.askHeadroom,
       trusted: !!s.askHeadroom.trusted,
       outcome: rj.outcome ?? null, realisedPerUnit: rj.realisedPerUnit ?? null,
       taken: rj.outcome != null && rj.outcome !== 'not-taken',
-      // the strict Bar E join (2026-07-12): did the realized sell PRINT at/above the raw band top the
-      // robust clamp shaved? null = unanswerable (no closed round-trip / pre-sellEach retro row).
-      sellEach, rawTopReached: (sellEach != null && rawTop != null) ? sellEach >= rawTop : null,
+      sellEach,
     });
   }
   const trusted = rows.filter(r => r.trusted);
@@ -209,10 +206,6 @@ export function askHeadroomAudit(sugRows = [], retroRows = []) {
     // realized round-trip where a taken lot closed (the material F1 joins to the raw-top-reach question).
     gapPctTrusted: avg(trusted, 'gapPct'), netLeverTrusted: avg(trusted, 'netLever'),
     realisedPerUnitTaken: avg(takenTrusted, 'realisedPerUnit'),
-    // strict raw-top-reach accounting over the trusted subset — n-honest: `known` counts only rows
-    // where the join was answerable (a closed round-trip with both sellEach and rawTop).
-    rawTopKnownTrusted: trusted.filter(r => r.rawTopReached != null).length,
-    rawTopReachedTrusted: trusted.filter(r => r.rawTopReached === true).length,
   };
 }
 

@@ -35,6 +35,8 @@
  */
 import { fileURLToPath } from 'node:url';
 import * as archive from '../lib/market/archive.mjs';
+import { HOUR, touchedAt, reachedWithin, covers } from '../lib/market/forward-reach.mjs';   // the shared forward-scoring primitives (one home)
+export { touchedAt, reachedWithin, covers };
 import { readSuggestionLines } from '../lib/render/suggestlog.mjs';
 import { parseArgs } from '../lib/render/cli.mjs';
 import { loadMapping } from '../lib/market/marketfetch.mjs';
@@ -59,47 +61,7 @@ export const MIN_ITEMS_FOR_CI = 5;
  * gap, so the null was largely scoring windows that began at or above the ask, where "reached" is
  * free. Do not reinstate a null that is matched on neither the starting price nor the clock; the
  * shipped contrast below is TIME-MATCHED, both arms over the identical calendar window. */
-const HOUR = 3600;
 
-/* firstIndexAfter(series, ts) → the first index whose bucket is strictly later than ts. */
-function firstIndexAfter(series, ts) {
-  let lo = 0, hi = series.length;
-  while (lo < hi) { const m = (lo + hi) >> 1; if (series[m].ts <= ts) lo = m + 1; else hi = m; }
-  return lo;
-}
-
-/* touchedAt(series, from, level, windowH) → the ts of the first bucket in (from, from+windowH]
- * printing avgLowPrice ≤ level, or null. The ENTRY leg: a resting deep bid is touched when the
- * market trades down to it. Uses avgLow (the instasell side) because that is the side a BUY fills
- * against — the orientation `js/quotecore.js` pins for quickBuy. */
-export function touchedAt(series, from, level, windowH) {
-  if (!series || !series.length || level == null) return null;
-  const end = from + windowH * HOUR;
-  for (let i = firstIndexAfter(series, from); i < series.length && series[i].ts <= end; i++) {
-    const lo = series[i].avgLowPrice;
-    if (lo != null && lo <= level) return series[i].ts;
-  }
-  return null;
-}
-
-/* reachedWithin(series, from, level, windowH) → did any bucket in (from, from+windowH] print
- * avgHighPrice ≥ level. The EXIT leg, mirroring the entry leg's side convention. */
-export function reachedWithin(series, from, level, windowH) {
-  if (!series || !series.length || level == null) return false;
-  const end = from + windowH * HOUR;
-  for (let i = firstIndexAfter(series, from); i < series.length && series[i].ts <= end; i++) {
-    const h = series[i].avgHighPrice;
-    if (h != null && h >= level) return true;
-  }
-  return false;
-}
-
-/* covers(series, until) → does the archive extend far enough to RESOLVE an outcome ending at
- * `until`. An unresolved row is DROPPED, never counted as a miss — counting it as a miss would bias
- * every rate downward by exactly the truncation at the end of the archive. */
-export function covers(series, until) {
-  return !!(series && series.length && series[series.length - 1].ts >= until);
-}
 
 /* scoreRow(series, row, {entryH, horizonH}) → one row's forward outcome, or null if the archive
  * cannot resolve it.

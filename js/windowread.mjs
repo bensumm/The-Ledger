@@ -1044,9 +1044,9 @@ const pressurePhi = (x, slope, cap) => Math.max(0, Math.min(cap, 0.5 + slope * x
  * The headroom each side adds/subtracts is band·φ(±s)·reliability — a thin-volume book collapses to
  * the smoothed center (the guard above), a balanced liquid book sits half a band out, a one-sided
  * liquid book reaches up to one full band (the clamp). Monotone in s on both sides by construction. */
-// @provisional-api: PLAN-DEPTH-EXIT Extension A (PB1) — consumed by DE3's watch-positions held-lot
-// line + suggestions.jsonl shadow fields and PB2's read-window-range --pressure inspector; PB4
-// (F1-gated) later promotes it into estimatePair's liquid-tier sell/buy reference.
+// @provisional-api: PLAN-DEPTH-EXIT Extension A (PB1) — consumed by suggestions.jsonl shadow
+// fields (ungated), PB2's read-window-range --pressure inspector, the flag-gated --est-sell=pressure
+// held-lot line, estimatePair's liquid-tier reference, and reverseListBand's Sold-ref/Peak band.
 export function reachableBand(stats, { slope = PRESSURE_PHI_SLOPE, headroomMax = PRESSURE_HEADROOM_MAX, minVol = PRESSURE_MIN_VOL, minDays = PRESSURE_MIN_DAYS, recentN = RECENT_NIGHTS, bandRecentN = PRESSURE_BAND_RECENT_N } = {}) {
   const dp = demandPressure(stats, { minVol });
   if (!dp || !stats.days || !Array.isArray(stats.lows) || !Array.isArray(stats.his)) return null;
