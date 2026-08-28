@@ -1,0 +1,429 @@
+# PLAN-REACH-SURFACE — one exit function: the reach surface `p(ask, H)`
+
+**Status: PROPOSED. No code shipped.** Drafted 2026-08-28, successor to
+`PLAN-REACHABILITY-CONSOLIDATION` (whose scorer shipped and whose premise did not survive).
+All measurements here were run against the live repo on that date. Spike measurements
+(marked SPIKE) used ad-hoc scripts and MUST be reproduced by the chunk-1 fixtures before
+being quoted anywhere else.
+
+## 0. The reframe this plan is built on
+
+`join-reach-outcomes.mjs` was built to rank the five co-logged exit estimators and could not,
+for a reason its own footer now states: its two columns are one statistic
+(`reached ⟺ gap ≥ 0`, derived at `pipeline/lib/render/reachability.mjs:52`), and both are
+monotone in the ask price, so every ordering it prints is a price-level ordering. Verified
+live (measured 2026-08-28, `--horizon 24`): on the matched pool the reach ordering is exactly
+the inverse of the price ordering — pressure 37% (prices highest), reachFold 74%,
+quickSell* 81% (prices lowest, "wins"). Read literally the metric says "always instasell."
+
+The correct conclusion is not "build a better scorer." It is: **"which estimator is best" has
+no answer, because there is no best ask independent of (a) how long you will wait and (b) what
+a miss costs.** The five estimators are five points on a single surface — `p(ask, H)` = the
+probability an ask is reached within horizon H — each with its price axis chosen by a
+different unexamined convention. The thing to build is the surface itself, plus the two
+inversions the owner asked for:
+
+- **price for horizon**: given H, the EV-maximizing ask off the surface;
+- **horizon for price**: given an ask, the smallest H at which its reach probability clears a
+  stated target.
+
+Everything needed already exists and needs **zero accrual**: the 1h archive is 92 days deep
+over 4,495 items (measured 2026-08-28: 2,187 1h buckets 2026-05-29→2026-08-28, 91.1d span, 89
+of 92 days at full 24-bucket coverage; per-item 1h rows p25=717 / p50=1,903 / p75=2,174; 3,369
+items have ≥720 rows ≈ 30 full days; 5m grain 50.2d). The forward-scoring primitives exist
+(`pipeline/lib/market/forward-reach.mjs`). The missing half — a cost model that makes
+price-vs-probability comparable — exists in `join-reach-basis.mjs` (`mcnemarCost`, cost ratio
+`r`, `rStar`, the four-regime map) and needs generalizing from a binary gate to a price choice.
+
+## 1. Verified ground (read before disputing any design choice)
+
+1. **The five-estimator registry** is `REACH_ESTIMATORS`, `reachability.mjs:23-31`: pressure
+   (`reachableBand`, `js/windowread.mjs:1050`), reachFold / reachRelief (`estSell`, disjoint by
+   whether relief fired, `reachability.mjs:17,25-26`), asym (`asymPair`, `windowread.mjs:823`),
+   depth (`clearableAsk`, `windowread.mjs:983`), plus baselines quickSell*/optSell*. Co-log
+   contract: `suggestlog.mjs:626-636` — `reachable` rides every row with an in-hand 1h series;
+   `depthExit` only held rows (102 of 32,374 scored rows, 0.3%, measured 2026-08-28).
+2. **Depth is already measured as not beating a one-line null** (README `join-depth-outcomes`:
+   median residual +0.81% vs the window-median null's +0.83%, trend-dominated). **Asym's
+   displayed probabilities are quantiles read back out** (displayed pAsk 86.8% measures 24.2%).
+   Both are retirement candidates *before* this plan; the backtest gives the instrument.
+3. **The cost model to port**: `join-reach-basis.mjs` `mcnemarCost`. What ports is the *idea* —
+   a miss and a hit have different, operator-owned costs, and the answer is a function of `r`,
+   not a winner — not the numbers, which score a binary tag rather than a price.
+4. **Window choice interacts with trend** (measured 2026-08-28): Ancestral robe top's last 7
+   complete daily highs are a falling staircase 100.00 → 92.73m; recent-3 median 94.50m sits
+   ~5.5% below the 7-day top. Any fixed-lookback quantile of raw prices misprices a trender.
+5. **The archive-only reach curve works and is cheap** (SPIKE, 2026-08-28: origins every 6h,
+   level = recent-3 median daily high × (1+x), forward max via `maxHighWithin`):
+
+   | item | P(reach ≤24h) at +0% / +1% / +3% over recent-3 median high |
+   |---|---|
+   | Soul rune (566) | 58% / 35% / 3% |
+   | Ranarr weed (257) | 54% / 28% / 0% |
+   | Ancestral robe top (21021) | 39% / 30% / 14% |
+
+   The **shape difference IS the volatility taxonomy**, as numbers instead of labels: Ranarr's
+   curve is a cliff (tight band — patience buys nothing past +1%), Ancestral's a fat shallow
+   tail (trendy big ticket — nothing likely, nothing impossible), Soul between.
+   ⚠ **These curves are DIFFERENTIALLY instrument-contaminated — see §1.5b: Ranarr's heavily,
+   Ancestral's barely — so the contrast between them is partly an artifact of the measuring
+   device. Chunk 1 must re-derive all three on the fixed instrument before the taxonomy claim is
+   quoted, and the contrast shrinking is a live possibility, not a hypothetical.**
+5b. **The 1h `avgHighPrice` outcome instrument understates reach, and the error GROWS with how
+   far above the reference you price** (ADVERSARIAL REVIEW + independent re-measure, 2026-08-28;
+   identical origins, 1h-average outcome vs 5m-average outcome, H=24, n=1184 each):
+
+   | item | +0% | +1% | +3% |
+   |---|---|---|---|
+   | Soul rune (liquid) | +5.0pp | **+21.6pp** | +14.6pp |
+   | Ranarr weed (mid) | +2.6pp | +13.3pp | **+18.5pp** |
+   | Nature rune (liquid) | +3.0pp | +4.7pp | +6.2pp |
+
+   `maxHighWithin` reads `avgHighPrice` — an AVERAGE of the hour's prints, structurally below the
+   intra-hour max a resting limit ask actually fills against. The repo documents this bias twice
+   already (`js/windowread.mjs`'s avg-bound header; the PB1 header on `clearableAsk`).
+
+   **The bias is LIQUIDITY-GATED, and it disappears exactly where the patient ask matters most.**
+   Extended across the liquidity range (2026-08-28, same method, `highPriceVolume` as the proxy):
+
+   | item | prints/h | 5m buckets w/ a print | Δpp +0% | Δpp +1% | Δpp +3% |
+   |---|---|---|---|---|---|
+   | Soul rune | 714,649 | 100% | +5.0 | **+21.9** | +14.6 |
+   | Nature rune | 622,733 | 99% | +3.0 | +4.7 | +6.1 |
+   | Ranarr weed | 6,226 | 81% | +2.6 | +13.2 | **+18.8** |
+   | Dragon boots | 148 | 95% | +7.0 | +6.7 | +2.9 |
+   | Abyssal whip | 102 | 94% | +7.5 | +9.3 | +13.9 |
+   | Bandos chestplate | 35 | 87% | +9.3 | +16.0 | +8.3 |
+   | Twisted bow | 6 | 57% | −1.9 | +1.6 | +0.0 |
+   | Scythe of vitur | 6 | 58% | −2.5 | +0.4 | +1.3 |
+   | Ancestral robe top | 5 | 47% | +5.1 | −2.2 | +1.6 |
+   | Elysian spirit shield | 3 | 55% | −0.4 | +1.8 | −0.6 |
+
+   Above ~35 prints/h the bias is large and widens with ask distance; below it the bias is ~0 and
+   sometimes NEGATIVE. The mechanism is the 5m-coverage column: on a thin item only about half the
+   5m buckets carry a print, so a max over the sparse 5m series can MISS a print the 1h bucket
+   caught. There is little to average away when an hour holds one or two prints, which is why the
+   1h average is nearly unbiased there.
+   **Consequences, all binding:**
+   (a) The remedy is `max(1h, 5m)` and **must stay a MAX — never "prefer 5m"**, which would
+       silently degrade every thin big-ticket item. Chunk 1 pins this with a thin-item fixture.
+   (b) **The fix buys commodity accuracy and buys big-ticket patient asks almost nothing.** The
+       instrument is not *good* on thin items, it is merely not *averaging* — a resting ask still
+       fills against ticks we cannot see. This limit is real and unfixable with stored data.
+   (c) §1.5's taxonomy exemplars are **differentially** contaminated: Ranarr's "cliff" is heavily
+       instrument-shaped, Ancestral's "fat tail" barely at all, so the cliff-vs-fat-tail contrast
+       SHRINKS on the fixed instrument. The two curves were partly pushed apart by the measuring
+       device. Chunk 1 must re-derive all three before the taxonomy claim is quoted, and if the
+       contrast does not survive, §1.5's "shape difference IS the taxonomy" premise is weakened —
+       which is a chunk-1 finding, not something to settle here.
+   (d) chunk 4 would otherwise re-penalise `pressure` for the same reason the dead scorer did —
+       pressure exists to price into peaks a 1h average cannot see — **but note this correction
+       mostly does NOT reach pressure's own big-ticket class**, so it is not a rehabilitation.
+   (e) §6.1's "upper bound" claim is retracted (see there), on the liquid half.
+6. **Normalization does the work trend-conditioning was assumed to do — for the up-vs-down split
+   specifically.** (Adversarially re-measured 2026-08-28 on an independent re-implementation: the
+   inversion and its collapse under z both reproduce, and the "falling refs sit mechanically
+   lower" confound is REFUTED by direction — falling items' refs sit FURTHER above the market, yet
+   reach more; dispersion carries it. But a **flat-vs-trending residual of 4–7pp survives at fixed
+   z**, the same magnitude that disqualified the raw grid. It is a dispersion-class effect, which
+   is why chunk 7's dispersion-tercile cell key is load-bearing rather than a nicety.) (SPIKE, 2026-08-28, 120
+   random items ≥60d coverage, H=24, origins every 12h): on a raw %-above-median grid the trend
+   split is **inverted and confounded** (falling items reach +1% *more* often than rising — 35%
+   vs 28% — because |slope| correlates with dispersion). Re-expressing the level in dispersion
+   units (`z = (ask − recent-3 median high) / IQR(trailing-14d daily highs)`) collapses the
+   split to a few pp (z=0.5: up 21% / flat 24% / dn 24%; z=1: 15/18/15). **Consequence: the
+   level axis is z-normalized; trend becomes a guard flag, not a curve conditioner.** Must be
+   re-verified by the chunk-4 fixture before chunk 7 keys on it.
+7. **The plug-in seam already exists**: sell-top models are a file + one registry line
+   (`js/estimators/sell-models/index.mjs:19-22`), the shell owns non-skippable floors (BE via
+   `breakEven`, `js/quotecore.js:58`; ordering clamps), and `quote-items.mjs:101,584-585`
+   already resolves the active model from `pipeline-config.json` with reach-fold as the
+   always-on shadow.
+8. **Circularity/selection constraints hold**: scoring an ask against the realized sell is
+   circular; the archive is the only target the tool does not influence. Reach ≠ fill: queue
+   position is invisible, so archive-derived P(reach) bounds P(fill) from ABOVE.
+
+## 2. The objective function (what makes ranking possible at all)
+
+```
+EV(ask, H) = p(ask,H) · net(ask)  +  (1 − p(ask,H)) · (net(bail) − delayCost(H))
+```
+
+- `net(x)` = `x − tax(x)` via `js/quotecore.js` — the ONE tax definition. The holder's basis
+  cancels in every *comparison* of asks, so the surface price is basis-free; basis enters only
+  at the shell's BE floor.
+- `bail` = the miss policy: liquidate at the end-of-window instasell. In the backtest this is
+  **measurable** (the 1h `avgLowPrice` at H — an approximation, labelled as such).
+- `delayCost(H)` = capital/attention cost of waiting — **operator preference, PLACEHOLDER,
+  default 0**, surfaced exactly as `--cost-ratio r` is in `join-reach-basis.mjs`.
+
+EV is **not monotone in the ask** — a higher ask raises the win payoff and lowers p — so it has
+an interior maximum and CAN rank, which is precisely what the failed metric lacked.
+`askStar(H) = argmax EV` is "price for horizon"; "horizon for price" is the smallest grid H
+with `p(ask,H) ≥ pTarget` (pTarget operator-owned, PLACEHOLDER default 0.7, always printed
+with the full p-by-H row so the threshold hides nothing).
+
+## 3. Options considered
+
+### Option A — Nonparametric empirical reach surface (per item, from the archive) — RECOMMENDED
+Brute replay: origins every `strideH` hours across the item's series; level grid in z-units;
+outcome via `maxHighWithin`; unresolved windows dropped via `covers`. Isotonic cleanup for
+monotonicity (violations are sampling noise by construction).
+- **Buys**: zero model assumptions; zero accrual; per-item shape captured automatically;
+  computable today for 3,369 items; the five incumbents become inspectable points on it.
+- **Costs**: long-H cells thin per item (91d ⇒ ~23 *independent* 96h windows; 6h-stride origins
+  overlap heavily — effective n must be reported as independent-window count, never origin
+  count); a 92-day curve is a long-run average that can misprice a just-crashed item.
+- **Falsified by**: held-out calibration — split origins by time; if first-half p̂ mispredicts
+  second-half realized reach beyond binomial noise across the z×H grid on a ≥100-item sample,
+  per-item curves are too unstable to price from and pooled becomes primary.
+- **Failure mode**: regime shift. Mitigated by z-normalization + chunk-6 guards, not by
+  pretending the curve adapts.
+
+### Option B — Parametric distributional model
+Fit a location-scale extreme-value family to the forward H-max; read p off the CDF.
+- **Buys**: smooth interpolation, graceful small samples, three numbers per item.
+- **Costs**: misspecification exactly in the tails, where a patient ask lives. The update-cycle
+  dynamic makes the forward-max distribution multi-modal and era-dependent; a fit averages over
+  that and is confidently wrong at z ≥ 1. Also violates "prefer measured over modelled" for no
+  data-poverty reason — we are not data-poor.
+- **Verdict**: rejected as the engine; retained as an explicitly-labelled *compression* of A if
+  chunk 7 finds pooled grids too coarse.
+
+### Option C — Volatility-taxonomy-first
+Classify (via `floorCeilingTrack`, `windowread.mjs:466-506`) then price from per-class templates.
+- **Buys**: the owner's "flavor of volatile" vocabulary; warning signs as first-class outputs.
+- **Costs**: §1.6 says the pricing benefit is mostly absorbed by z-normalization. Hard class
+  boundaries add cliff behavior (an item hopping `ranging`↔`cooling` flips its price) while
+  duplicating what the per-item curve encodes continuously. `floorCeilingTrack` is a *direction*
+  taxonomy; curve shape (cliff vs fat-tail) is a *dispersion-shape* taxonomy it cannot express.
+- **Falsified by**: if per-cell curves split by fcTrack class diverge strongly *after*
+  z-normalization on the chunk-4 fixtures, taxonomy graduates from guard to conditioner.
+- **Verdict**: not the engine — but **its content ships anyway** as (a) the guard/refusal layer
+  (chunk 6 — the "warning signs" ask), (b) the pooled-fallback cell key (chunk 7), and (c) a
+  three-number flavor line derived *from the curve* (p(0,24) · dp/dz · dp/dH) — a measured
+  taxonomy rather than a labelled one.
+
+### Option D — Discrete-time hazard by clock hour
+Per item and local clock hour, `h_c(z)` = P(reached during hour c | not yet), so
+`p(ask,H,now) = 1 − Π(1 − h_c(z))`. Merges `hourProfile`'s diurnal read into the surface;
+horizon-for-price becomes clock-aware ("an ask posted at 21:00 has the 00-03 window inside
+H=6; the same ask at 09:00 does not").
+- **Costs**: 24× thinner cells; more machinery day one; improvement unmeasured.
+- **Falsified by** a cheap check: pooled p(z=0,H=6) at peak-window vs off-window starts on
+  liquid items; under ~5pp spread and the refinement buys nothing.
+- **Verdict**: not day one, but the natural v2 of A — and A's data layout (per-origin outcomes
+  keyed by ts) is chosen so D is a re-aggregation, not a rebuild. Chunk 9, behind its falsifier.
+
+### Option E — Relist-ladder policy
+The operator's real behavior is a ladder — list high, step down on miss. The true object is a
+policy `π: state → (ask, wait)` optimized by DP over the surface; a single (ask,H) understates
+achievable EV. **Deliberately out of scope**: needs the surface as input anyway, the state space
+multiplies the thin-cell problem, and shipping a price first is the constraint. Recorded so
+nobody mistakes single-shot EV for the ceiling; chunk 4 scores a one-step ladder as a
+sensitivity row to size what is being left on the table.
+
+## 4. Recommendation
+
+**Option A as the engine; the §2 EV objective as the port of the join-reach-basis cost model;
+C's content as guards + pooling + the measured flavor line; D staged behind its falsifier; B
+and E parked with re-entry conditions.**
+
+A wins because it alone (i) ships a price with zero accrual, (ii) makes the five incumbents
+commensurable (each becomes a point (ask → p) on a measured curve), (iii) captures per-item
+volatility flavor as shape rather than label, and (iv) leaves an audit trail a skeptic can
+re-run — no fitted constants inside the probability itself. Its weaknesses are handled by
+honest labelling and guards, not a cleverer model, which is this repo's doctrine.
+
+**One adjustment to the owner's framing.** There is no "ONE parameterized function that yields
+the single informed price" — there is one measured **surface** plus **two operator-owned
+parameters** (`delayCost`/`r`, `pTarget`) that turn it into a price. Collapsing those into the
+function would be exactly the silent-threshold move `join-reach-basis` refused. The deliverable
+is `surface + askStar(H; params) + horizonFor(ask; params)`, parameters printed beside every
+number.
+
+## 5. Chunks
+
+Each lands independently, CI-green, with its acceptance check and falsifier named. Something
+usable ships at chunk 3.
+
+### Chunk 0 — Home the forward primitives where both sides can reach them
+Move `pipeline/lib/market/forward-reach.mjs` → `js/forward-reach.mjs` (pure, imports nothing);
+old path becomes a re-export shim, the established `pipeline/lib/estimators.mjs` pattern. README
+inventory entries for both.
+**Acceptance**: joiner tests green; `check-imports` green; `join-reach-outcomes.mjs --horizon 24`
+byte-identical across the move against a frozen archive fixture.
+**Proves it wrong**: any behavior diff — byte-neutral or it doesn't land.
+
+### Chunk 1 — `js/reach-surface.mjs`: the surface builder
+`buildReachSurface(series, { nights=14, refN=3, horizonsH=[2,6,12,24,48,96], zGrid, strideH=6,
+minIndependent=8, now })` → `{ refHigh, disp, grid, nOrigins, independentWindows, coveredDays,
+thin }`. `refHigh` reuses `recentQuant(days,'ask',0.5,3)` (do not re-derive); `disp` = IQR of
+trailing-14d daily highs (export windowread's `iqr` rather than duplicating); outcomes via
+`maxHighWithin`/`covers` taken as **max(1h, 5m)** per §1.5b, with the per-item 1h↔5m delta emitted
+as `instrumentBiasPp` (a diagnostic the inspector prints, never a correction applied silently, and
+the field §6.1 requires a reader to consult before assuming an error direction);
+isotonic cleanup both axes; per-H refusal (`thin:true` + reason) when the **binomial CI half-width
+at the surface's own p exceeds `maxCiHalfWidth` (default 15pp)** — a width bound, not a count,
+because `minIndependent=8` admits a ±32pp interval as a price input (review F6). Short horizons
+price while H=96 refuses. Chunk 1 ALSO emits **`bailNetOnMiss[z][H]`** — E[bail | the ask missed]
+— from the same replay: conditional on missing, the market at H is systematically lower (measured
+−0.53% at z=0.5 across 120 items), and §2's unconditional bail flatters high asks by an error that
+grows with the ask (review F3). Also `surfaceProb(surface, ask, H)` and `surfaceShape(surface)`. Every constant PLACEHOLDER n≈0
+except those measured here.
+**Acceptance**: fixture-pinned against a frozen archive slice of Soul rune / Ranarr / Ancestral —
+reproducing the **re-derived** §1.5 curves on the fixed instrument, NOT the contaminated ones
+printed there today (§1.5b); an assertion that the 5m leg actually moved the outcome on a liquid
+fixture, so the hybrid cannot silently degrade to 1h-only; **and a THIN-item fixture asserting the
+hybrid never scores BELOW 1h-alone** — on a thin item ~half the 5m buckets are empty, so a
+"prefer 5m" implementation loses prints the 1h bucket caught (§1.5b); property tests (monotone in z and H; refusal fires; unresolved
+windows dropped not counted — **mutation-verify this one**, the vacuous-test failure has
+happened twice in this repo's joiners).
+**Proves it wrong**: held-out calibration failing beyond binomial noise on a ≥100-item sample —
+demotes per-item curves to fallback-only and reopens Option C's conditioner question.
+
+### Chunk 2 — Inversions + EV
+`askStar(surface, H, { bailNet, delayCost=0 })` maximizes §2's EV over the z-grid using
+`breakEven`/`tax`, taking the miss-branch payoff from chunk 1's **`bailNetOnMiss[z][H]`** rather
+than an unconditional bail (review F3 — the unconditional form flatters high asks); `horizonForAsk(surface, ask, { pTarget })` returns the smallest grid H with
+p ≥ pTarget *plus the full p-by-H row* (the threshold never travels alone).
+**Acceptance**: fixture with an interior EV maximum (asserting non-monotonicity — the exact
+property the old metric lacked); limiting cases pinned (`delayCost → ∞` ⇒ lowest z; p ≡ 1 ⇒
+highest z); round-trip `horizonForAsk(askForHorizon(H,pTarget),pTarget) ≤ H`. **A grid-edge
+assertion**: `askStar` landing on the top z is a REFUSAL (widen or say so), never a price —
+measured 7 of 120 items hit the grid top, which is a too-short grid, not an optimum (review F2).
+**Proves it wrong**: nothing empirical — this chunk is arithmetic; its correctness is the tests.
+
+### Chunk 3 — The inspector ships a price: `pipeline/commands/read-exit-surface.mjs`
+`node pipeline/commands/read-exit-surface.mjs "<item>" [--horizon H] [--price P] [--qty N]
+[--delay-cost gp] [--p-target f] [--json]`. Prints the p(z,H) table with levels in gp; `askStar`
+at strategy-relevant horizons; `horizonForAsk` when `--price` given; **each incumbent's current
+ask placed on the surface as a labelled point** (pressure/fold/asym/quick/opt, computed fresh
+from the same series — the zoo becomes five rows of `(ask, p@H)` under one ruler); the flavor
+line; the guards. Inform-only, gates nothing, honesty footer.
+**Docs (house rule 8, same commit)**: README inventory; CLAUDE.md ask-row ("what should I ask
+for X if I'll wait H?", "how long to clear X at price P?"); `docs/MARKET-ANALYSIS.md` pass.
+**Acceptance**: matches chunk 1 on the fixture items; a <14-day-coverage item refuses with a
+reason, not a number; `--json` returns before any table.
+**Proves it wrong**: an operator-visible contradiction — e.g. `askStar(24h)` below quickSell on
+a liquid item (a sign inversion). Add as an assertion, not a hope.
+
+### Chunk 4 — The decisive backtest: `pipeline/commands/join-exit-ev.mjs`
+The head-to-head the failed scorer could not be. **Recompute-per-origin** (the
+`join-depth-outcomes` precedent): at each origin, truncate the series to `ts` (no look-ahead),
+recompute each contender's ask from the truncated series, then score **realized net gp/unit** of
+the policy "list at ask for H; if reached credit net(ask); else bail at H's 1h avgLow". **Before
+any head-to-head number is quoted, an acceptance check must print the divergence between each
+RECOMPUTED contender ask and the co-logged ask that estimator actually emitted, over the
+overlapping (itemId, ts) rows** (~32k available). Chunk 4 scores reconstructions, not the deployed
+estimators; "fully matched by construction" is bought with that swap, and nothing else in this
+plan bounds it (review F4). `clearableAsk(series, opts)` also needs its qty/competition convention
+stated per origin, or depth is not really in the matched pool. Every
+quantity from the archive. This fixes both defects of the co-log scorer at once: the pool is
+**fully matched by construction** (every contender priced at every origin) and the metric is
+**not monotone in price**. Pre-registered in the file header before the first full run: decisive
+H=24, sensitivity {6,48,96}; cells = liqClass × fcTrack-direction; item-cluster bootstrap;
+independent-window thinning as a sensitivity row; a one-step-ladder variant (relist once at
+−0.5z on miss) sizing Option E's headroom.
+**Pre-registered retirement criterion**: an estimator retires *from the exit-pricing surfaces*
+(not deleted — bid-side consumers survive: `watch-positions.mjs:748` uses the pressure **bid**,
+`reverseListBand` the band) when its realized-EV deficit vs the best contender has an
+item-clustered CI clear of zero at the decisive spec AND the same sign in ≥2 of 3 sensitivity
+horizons, per cell.
+**Pre-registered null branch**: if `askStar` does not beat the best incumbent under that
+criterion, the surface still ships as the *description* layer (chunks 1-3 stand), the chunk-5
+default swap is CANCELLED, and this plan's §0 claim is downgraded in the docs. Written here so
+it cannot be reframed later.
+**Acceptance**: mutation-verified no-look-ahead test (delete the truncation, watch it fail);
+fixture-pinned pure core; the report prints the funnel, the effective-n honesty block, and the
+`delayCost` crossover at which the ranking flips (the `rStar` idiom).
+**Proves it wrong**: the null branch, or instability — a ranking flipping sign between era
+halves invalidates the pooled headline and blocks retirement.
+
+### Chunk 5 — Surface integration: the `curve` sell model + co-log
+`js/estimators/sell-models/curve.mjs` + one registry line in `SELL_TOP_MODELS` (the seam PC3
+built for exactly this). `propose(ctx)` reads `extra.reachSurface`; absent surface ⇒ degrade to
+reach-fold. The shell's non-skippable floors apply unchanged — the curve can never propose past
+break-even. Lean `exitSurface` shadow field via a reshaper in `suggestlog.mjs`.
+**Visible comparison, not silent swap** (`gate-on-error-cost-not-n`): the console prints the
+curve ask beside the incumbent until chunk 4's verdict; the default `sellModel` flip happens
+only on that verdict, and reach-fold stays the always-on shadow either way.
+**Acceptance**: model-contract tests; one real `quote-items.mjs` run on a held item showing both
+numbers; co-log row round-trips through `readSuggestionLines`.
+**Proves it wrong**: the run-the-path rule — if the changed line has not executed on a real
+held-lot read, the chunk is not done.
+
+### Chunk 6 — Guards and the flavor line (the taxonomy layer, scoped to warnings)
+`surfaceGuards(surface, fc, recency)`: **(a)** `floorBreak`/`crash-risk` ⇒ refuse `askStar`
+beyond the grid's short end and print why (the falling-knife ask is the known failure of every
+trailing-window method); **(b)** curve-era divergence — rebuild on recent-30d origins only and
+flag `curve stale` where p at the operative z diverges beyond the noise band (the `recencySplit`
+idiom lifted to the curve); **(c)** thin/pooled provenance always printed. Each guard's
+**reachability measured, not assumed**: report "fires on N of M real items" from a whole-archive
+sweep in the commit message.
+**Proves it wrong**: a guard measuring ~0 reachability on 4,495 real items gets DELETED, not
+shipped (the measured-zero fail-open lesson).
+
+### Chunk 7 — Pooled fallback surfaces for thin items
+Bulk job building per-cell pooled surfaces (cell key: liqClass × dispersion-shape tercile —
+*not* fcTrack direction, per §1.6's collapse; re-verify on chunk-4 fixtures first), cached under
+`pipeline/.cache/`. Thin items price from pooled with `provenance:'pooled(cell)'` printed in
+every consuming line. Report the coverage split across all 4,495 items.
+**Proves it wrong**: pooled-vs-per-item held-out calibration — if pooled mispredicts worse than
+refusing would cost, refusal beats fallback and the pooled path narrows.
+
+### Chunk 8 — Retirement + reconciliation (gated on chunk 4's verdict)
+Apply the pre-registered criterion (depth and asym enter as favorites given §1.2, but the
+criterion decides, not the prior); `REACH_ESTIMATORS` keeps retired keys as historical readers
+so past log rows still parse. Then the full doc-reconciliation pass: grep for superseded claims
+across CLAUDE.md / README / `docs/MARKET-ANALYSIS.md` / module headers, fix in place; add retired
+terms to `lint-docs.mjs`'s denylist so they cannot re-enter prose; `lint-plan-refs.mjs --refs`
+before this plan is folded and deleted.
+**Proves it wrong**: review finding a live consumer of a retired field.
+
+### Optional chunk 9 — Clock-hour conditioning (Option D), behind its falsifier
+Run D's cheap check first; ship the hazard re-aggregation only if the spread clears ~5pp
+(PLACEHOLDER, stated in the check's output); otherwise record the negative result in the README
+entry and stop.
+
+## 6. Honest limits — what this will NOT know
+
+1. **Reach ≠ fill, and the error runs BOTH WAYS — `p` is not a bound in either direction.**
+   Queue position, partials and competition are invisible to the archive, which pushes `p` ABOVE
+   the true fill rate. But the bucket-average instrument (§1.5b) pushes it BELOW — by up to ~20pp
+   on a patient ask **on a liquid item**, and by ~0 on a thin one. **An earlier draft of this plan
+   claimed `p` is permanently an upper bound on P(fill); that is RETRACTED — it is not a theorem.
+   On liquid items the two errors are of comparable size with no established dominance; on thin
+   items the instrument error is small and the upper-bound reading roughly holds.** So the
+   direction of the net error is ITEM-DEPENDENT and must be read off `instrumentBiasPp`, never
+   assumed. Both halves are *labelled, not modelled*. Estimating
+   the queue haircut from our own placed offers inherits both traps: estimating it from our own placed offers inherits both traps
+   (fills execute at the tool's own suggestion; offers exist only where the operator acted). A
+   future accrual join over `offers.json` could bound it — F1-class, not a dependency here.
+2. **One era.** 92 days, roughly one-and-a-bit update cycles. The update-cycle dynamic makes the
+   forward-max distribution era-dependent for gear; the era-half stratification (chunk 4) and
+   the staleness guard (chunk 6) DETECT this, they do not fix it.
+3. **Effective n at long horizons is small per item** (~23 independent 96h windows) and origin
+   overlap makes nominal counts a lie; every surface reports independent-window n and refuses
+   below the floor. Treat any per-item H=96 number as a shape.
+4. **The bail policy is a model.** "Instasell at H" via the 1h avgLow is an approximation (an
+   average, not a tick; no size). It is the *same* approximation for every contender, so
+   comparisons hold better than levels.
+5. **PLACEHOLDER numbers**: `delayCost` (default 0), `pTarget` (default 0.7), the z-grid and
+   stride, `minIndependent=8`, the chunk-9 5pp threshold, the retirement CI convention. Each is
+   labelled at its definition site; none is quoted as calibrated anywhere.
+6. **Out of scope**: bid-side pricing (ASK leg only), the relist ladder (Option E), and any
+   change to the app's deployed Finder (console surfaces only).
+
+## 7. Provenance — where every quantity comes from
+
+| Quantity | Source | Notes |
+|---|---|---|
+| p(z,H) surfaces, dispersion, refs, flavor stats, guards | **archive** (1h) | never from logged trades; the only target the tool doesn't influence |
+| Backtest EV, bail values, era/cell strata | **archive** | recompute-per-origin, no look-ahead, mutation-verified |
+| Tax / break-even | `js/quotecore.js` | the ONE definition |
+| Held-lot basis (BE floor only) | `positions.json` | logged trades as an *input cost*, never a scoring *target* — not circular |
+| `delayCost` (r), `pTarget`, horizon per posture | **operator preference** | printed beside every number; crossovers reported |
+| P(fill given reached) haircut | **unknown** | labelled, UNSIGNED (§6.1) — the queue haircut and the instrument bias push opposite ways; possible future `offers.json` join, not a dependency |
+| Outcome instrument (`maxHighWithin`) | **archive, 1h ⋃ 5m** | bucket AVERAGES, so a floor on truth; per-item 1h↔5m delta printed as `instrumentBiasPp` (§1.5b) |
+| Anything scored against realized sells | **forbidden as a target** | circularity — `reachability.mjs:6-9` |
