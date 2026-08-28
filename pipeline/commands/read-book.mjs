@@ -36,6 +36,7 @@ import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib
 import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';
 import { buysByItem, limitWindow } from '../lib/capital/limits.mjs';
 import { buildBook, buildReverseFlipPending, CLEARABILITY_FRAC } from '../lib/capital/book-model.mjs';
+import { parseGp } from '../lib/render/cli.mjs';
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 "Reverse-flip pending" section
 import { fmt, fmtP } from '../../js/money-format.js';
 
@@ -56,7 +57,12 @@ function hhmm(tsSec) {
 const argv = process.argv.slice(2);
 function flagVal(name) { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null; }
 const sizeToken = flagVal('--size');
-const capitalOverride = flagVal('--capital') != null ? Math.max(0, Math.round(+flagVal('--capital'))) : null;
+const capitalRaw = flagVal('--capital');
+const capitalOverride = capitalRaw != null ? Math.max(0, parseGp(capitalRaw)) : null;
+if (capitalOverride != null && !Number.isFinite(capitalOverride)) {
+  console.error(`could not parse --capital "${capitalRaw}" as a gp amount (try 20m, 500k, 2.5b, or a plain number).`);
+  process.exit(1);
+}
 
 // age label for a mark — ALWAYS names the age via the shared liveAgeTag (2026-08-09): `(Nm ago)` when
 // fresh, `⚠ Nm old` past QUICK_FRESH_MIN. Silent-when-fresh made an unchanged-but-current mark

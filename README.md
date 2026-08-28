@@ -354,7 +354,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `valueRanges` (recency-anchored shape features) / `valueScore` (composite rank with a deployable-capital
   multiplier; `capGp` threaded from `screen-flip-niches.mjs --capital÷--slots`) / `deployUnits` (the extracted
   three-way-min deployable position size `valueScore` blends in — ALSO reused by the `--digest` decision
-  block's deployable-throughput ranking, PLAN-CAPITAL-EFFICIENCY-AND-DIGEST) / `valueGate` (amplitude floor +
+  block's `deploy` SIZING column — not its sort basis, PLAN-CAPITAL-EFFICIENCY-AND-DIGEST) / `valueGate` (amplitude floor +
   artifact-low guard + knife guard + coverage guard) / `valueTier` (buy-now vs watch). Consumed by
   `screen-flip-niches.mjs`/`gatecandidates.mjs`; imports only `tax`. Full spec + all NAMED-PLACEHOLDER thresholds (n≈0)
   live in the module header; resolved rank-metric history in `docs/LORE.md`. NOT app-imported → no
@@ -856,9 +856,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   single-turn (non-churn) thin-per-turn flag (mid ≥ `BIG_TICKET_GP`, roiPct < ~0.5% PLACEHOLDER). Computed
   inline in `screen-flip-niches.mjs` (`capEfficiency`/`weakDeploy`). The LEAN-LOGGED `capEff` is the INTRINSIC
   per-turn-efficiency (size-independent, calibration-friendly); the console-only `--digest` decision block
-  DISPLAYS a REALIZABLE, buy-limit-bounded `capEff` (laps/day capped at the deployed size) and RANKS by
-  deployable throughput = `capEff × deployable capital` (via the reused `valuescreen.mjs deployUnits`, so
-  scale-free % can't bury big-ticket deploys; a guaranteed `— big-ticket lane —` slice keeps them visible).
+  DISPLAYS a REALIZABLE, buy-limit-bounded `capEff` (laps/day capped at the deployed size) but RANKS on
+  `rank` = net × P(fill) ÷ TTF (AF1 — scale-aware and wallet-free; `capEff × deployable` via the reused
+  `valuescreen.mjs deployUnits` survives only as a tie-break, because on a fully-deployed book it collapses
+  to 0 for every row and the order fell through to scale-free `capEff`. A guaranteed `— big-ticket lane —`
+  slice keeps big deploys visible; the sort basis is stated once, in the block's own printed header).
   Two DIGEST-ONLY denoisers (W3, PLAN-OSCILLATION-CYCLE, 2026-07-22) reshape only the digest sort/verdict:
   `liveCrossable(row)` FLOORS an uncrossable-live-spread row (`row.quickRoi <= 0`) to the bottom of the
   digest sort (comparator only — displayed `capEff` unchanged, row still renders) + fires the top-priority
@@ -952,9 +954,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   plan-file rule).
 - `plans/PLAN-DIGEST-SIGNAL-AND-SCAN-PERF.md` — in-flight per-topic plan (2026-08-07, **PARTLY SHIPPED —
   SP1 landed**; corrected 2026-08-09, this entry said PLANNING ONLY / no code changed): two workstreams that share one file (`pipeline/commands/screen-flip-niches.mjs`)
-  and therefore one parallel-safety contract. **A — digest SIGNAL:** `buildDigestBlock`'s comparator
-  ranks on `capEff × deployable` and never reads the `reach` column it prints, so its top slots go to
-  rows its own `digestVerdict` calls `sell unreliable` (live anchor 2026-08-07: 9 of 11 rendered rows,
+  and therefore one parallel-safety contract. **A — digest SIGNAL:** as of that plan's writing
+  `buildDigestBlock`'s comparator ranked on `capEff × deployable` and never read the `reach` column it
+  prints, so its top slots went to rows its own `digestVerdict` calls `sell unreliable` (live anchor 2026-08-07: 9 of 11 rendered rows,
   top four graded C/C/D/B-, the only `A- fill-now` row at #5). Chunks DS0 (log the digest's computed
   fields — `verdict`/`reachHit`/`reachDays`/`marginTrend`/`crossable`/`deployable`/`rankKey`/
   `capEffRealizable`/`digestRank`, none of which survive a pass today) → DS1 (a read-only
@@ -1338,7 +1340,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `deployablePool`. IMPURE SHELL: one per-invocation `fetchItemInputs` per id in the held∪bid∪{sizer}
     union feeds the age-labelled marks + `loadDerivedCash` marketRef; ALL aggregation is the PURE
     `lib/book-model.mjs`. Inform-only, no gates; live marks age-labelled (decision 3), free-slot count a
-    log-derived lower bound (decision 4). RF4 (2026-07-25) adds a "Reverse-flip pending" section — loads
+    log-derived UPPER bound — occupancy is the lower one, so read it as "at most N free" (decision 4). RF4 (2026-07-25) adds a "Reverse-flip pending" section — loads
     `reverse-flip-state.json` and renders `book-model.mjs`'s PURE `buildReverseFlipPending` (awaiting-rebuy/
     rebuy-armed cycles with sold price / BE-rebuy / live / days-pending + notes), reusing the SAME in-hand
     quote rows (no new fetch); an empty store renders NOTHING extra — byte-identical to the pre-RF4 read),

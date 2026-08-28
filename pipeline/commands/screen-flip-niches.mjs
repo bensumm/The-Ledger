@@ -90,7 +90,7 @@ import { isThinBigTicket, reverseListBandCell, askSpreadFlag, askSpreadNote, reb
 import { pickFetchPool, buildTrackIndex, clampUnionFetch, TOTAL_FETCH_MAX, GEAR_RESERVE_DEFAULT, EXPLORE_RESERVE_DEFAULT, rotationPeriodMs, MID_TIER_RESERVE_DEFAULT, MID_TIER_OFFSET_DEFAULT } from '../lib/signal/admission.mjs';
 import { pathAGpDay, comparePathARows, assignRankInLane } from '../lib/signal/patha.mjs';   // PLAN-LANE-ADMISSION Chunk C/D — the Path-A gp/day scorer (captureFrac PLACEHOLDER n≈0) + the pure two-tier console ranker and in-lane ranker.
 import { classifyVolLane } from '../lib/signal/structural-admission.mjs';   // PLAN-LANE-ADMISSION Chunk B — the gear/churn volume lane selecting Path-A's captureFrac
-import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits = the shared three-way-min deployable position size (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST), reused for the digest's deployable-throughput ranking.
+import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits = the shared three-way-min deployable position size (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST), reused for the digest's `deploy` SIZING column, never its sort basis.
 import { amplitudeRanges, amplitudeGate, amplitudeDriftMargin, ampWalkForward, AMP_HOLD_DAYS_DEFAULT, AMP_ASK_Q, AMP_BID_Q, AMP_WF_WARMUP_DAYS, AMP_WF_FIT_DAYS, AMP_WF_MIN_JUDGED } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the multi-day niche's Stage-2 gate + its 4d hold-horizon default (DT1); ampWalkForward (DT1b) = the measured round-trip P(fill) + its AMP_WF_* constants; amplitudeDriftMargin (PLAN-OSCILLATION-CYCLE Chunk 2) = the shadow-logged drift-adjusted margin; AMP_ASK_Q/AMP_BID_Q (F-E) = the default reach-vs-margin quantiles behind --amp-ask-q/--amp-bid-q.
 import { driftExitFrom, oscillationVsKnife, OSC_DETECTOR_NIGHTS } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE — driftExitFrom = the ONE slope-sourcing + drift-adjusted-exit composition, off in-hand hourProfile + windowStats().days, NO fetch; oscillationVsKnife tempers the knife guard (a drift-riding oscillator is not a false knife); OSC_DETECTOR_NIGHTS (F-H) = the detector's OWN longer window, decoupled from the gate's AMP_NIGHTS.
 import { amplitudeShadow } from '../lib/render/suggestlog.mjs';   // A5 — the amplitude lane shadow block on suggestions.jsonl
@@ -755,7 +755,7 @@ export function digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, m
 // The cross-niche digest candidate pool, filled while niches render and printed ONCE after the RUN_MODES
 // loop via realLog. --digest-gated. Rides the last-report dump; stays out of screen.json (the app).
 const DIGEST_ROWS = [];
-// collectDigestRow(...): compute the realizable capEff + the deployable-throughput RANK KEY + the verdict for
+// collectDigestRow(...): compute the realizable capEff + the `rankKey` TIE-BREAK + the verdict for
 // one surfaced candidate and push it into DIGEST_ROWS. Skips sub-floor rows (NOT qualified picks, §3.4) and
 // held rows (Workstream B's positions read owns those). rankKey = capEff × deployable capital ≈ after-tax
 // deployable gp/day (raw capEff is SCALE-FREE, so dust-tier cheap high-% items swept the top-N and buried the
@@ -849,7 +849,8 @@ function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, reachBasi
   });
 }
 // buildDigestBlock(): the rendered digest string. The MAIN block = top ~8 across ALL niches this pass, ranked
-// by the DEPLOYABLE-THROUGHPUT rank key (capEff × deployable capital ≈ after-tax deployable gp/day) desc,
+// by `rank` (AF1) desc, with rankKey then capEff only as TIE-BREAKS — buildDigestBlock's own printed
+// header is the ONE statement of the basis; do not restate it here, it drifted once already,
 // ties broken by capEff then rank. capEff stays a DISPLAYED column (realizable %/day per POLISH 2); a
 // `deploy` column shows the deployable capital so the ordering is legible (why a big-ticket you can park 40m
 // into out-ranks a dust flip you can only put 100k into, even at a higher raw %).

@@ -69,6 +69,14 @@ export const POINTER_DOCS = [
 // here in the source, which is in no `files` list.
 export const DENYLIST = [
   {
+    id: 'digest-sort-deployable-throughput',
+    pattern: /deployable[- ]throughput/i,
+    files: ['CLAUDE.md', 'README.md', 'docs/MARKET-ANALYSIS.md', 'docs/GLOSSARY.md',
+            'js/valuescreen.mjs', 'pipeline/commands/screen-flip-niches.mjs',
+            'pipeline/test/capeff-digest.test.mjs'],
+    reason: 'the --digest block sorts on `rank` (AF1), not on capEff x deployable capital — that key survives only as a tie-break, and the printed digest header is the ONE place the basis is stated. The CODE is covered: the rank-tie-break assertion in capeff-digest goes RED against the old comparator, so this bounds PROSE recurrence only. NOT in files, deliberately: .claude/skills/scan/SKILL.md names the old basis in order to say it was replaced, and CHANGELOG/PLAN.md/plans/* are the dated record',
+  },
+  {
     id: 'hourly-drift-slope-live',
     // The per-hour drift SLOPE described as a live read. Deleted 2026-08-09 (PLAN-DIURNAL-TRIAGE DT3)
     // after measuring 49.7% direction and beating predict-no-change on 6 of 380 items. Per the

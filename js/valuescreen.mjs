@@ -200,7 +200,7 @@ export function valueRanges(ts, live) {
    whose input is missing is skipped; NONE known → null (a bare call degrades). A null limit ≠ zero units —
    it just drops that bound (mirrors expUnits). Null when buyLow is missing/≤0. EXTRACTED from valueScore
    (byte-identical) so the screen's decision digest can reuse the SAME deployable-capital shape for its
-   capEff × deployable-throughput ranking (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST follow-up) — ONE home, no fork. */
+   `deploy` sizing column, never its sort basis (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST) — ONE home, no fork. */
 export function deployUnits({ buyLow, limitVol = null, limit = null, capGp = null } = {}) {
   const b = num(buyLow);
   if (!(b && b > 0)) return null;

@@ -10,6 +10,40 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### A sort basis that drifted in prose, and a flag that swallowed 20m (pipeline/docs only)
+
+Three findings from a review pass scoped deliberately away from the reach-surface work.
+
+**The digest sort basis.** AF1 moved `--digest` from ranking on `capEff × deployable capital` to
+ranking on `rank` (net × P(fill) ÷ TTF), because on a fully-deployed book the old key collapses to 0
+for every row and the order falls through to scale-free `capEff` — reproducing the dust-sweep it
+existed to prevent. The old basis then survived in seven live sites describing it as the CURRENT
+ordering: an import comment, two `screen-flip-niches.mjs` module headers, a test section header,
+`js/valuescreen.mjs`, README twice and `docs/MARKET-ANALYSIS.md` twice. All now say `rank`, or point
+at the block's printed header rather than restating it.
+
+The review reported this as a test gap too, "mutation-proven: restoring the old comparator passes all
+suites". **That is false and was checked rather than inherited** — restoring the pre-AF1 comparator
+turns `capeff-digest.test.mjs` RED on "higher rank should sort first on a rank-key tie". The code was
+always covered; only the prose drifted. A denylist rule in `lint-docs.mjs` now bounds the recurrence,
+verified reachable by reintroducing the phrase and watching it fail. `.claude/skills/scan/SKILL.md` is
+deliberately outside its file list: it names the old basis in order to say it was replaced, which is
+the honest form, and the dated record (CHANGELOG/PLAN.md/plans) is excluded for the same reason.
+
+**`read-book --capital 20m` silently dropped the bound.** The flag parsed with bare `+`, so `+"20m"`
+was `NaN`, accepted, and the capital bound vanished from the tranche sizer with no error — while
+`derive-cash.mjs`, `add-manual-fill.mjs` and `declare-reverse-flip.mjs` all take `20m`/`500k`/`2.5b`
+through the shared `parseGp`. `read-book` now uses it and refuses an unparseable value loudly. Both
+paths were run, not just type-checked: `--capital 20m` now bounds at 3,340 units of Ranarr, and
+`--capital twenty` exits 1 with the same message `derive-cash` gives.
+
+**One inverted word.** README called the free-slot count a log-derived LOWER bound; the code, its own
+runtime caveat string, CLAUDE.md and the `/book` skill all say UPPER. A completed-but-uncollected slot
+reads as free, so the only safe reading is "at most N free" — the inverted word invited sizing new
+offers against slots that are not there.
+
+No APP_VERSION bump: the only `js/` change is a comment.
+
 ### 0.74.12 — the reach surface: chunks 0-1 of PLAN-REACH-SURFACE, and what re-deriving the curves cost the plan
 
 `join-reach-outcomes.mjs` could not rank the five exit estimators because its columns come from one

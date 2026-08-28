@@ -142,10 +142,11 @@ ok('deployUnits → null when buyLow is missing (degrade, no throw)', () => {
   assert.equal(deployUnits({ buyLow: null, capGp: 140_000_000 }), null);
 });
 
-// --- 5. buildDigestBlock (the VIEW: ranked by deployable throughput = capEff × deployable) -------
-// rankKey = capEff × deployable capital ≈ after-tax deployable gp/day (the follow-up fix — raw capEff is
-// scale-free, so dust-tier cheap high-% items swept the top). mkRow keeps deployable EQUAL by default so the
-// legacy capEff-order + rank tie-break assertions still hold (rankKey ∝ capEff when deployable is constant).
+// --- 5. buildDigestBlock (the VIEW: sorted on `rank`, AF1) ---------------------------------------
+// rankKey = capEff × deployable capital survives only as the first TIE-BREAK. mkRow keeps deployable EQUAL
+// by default so the legacy capEff-order + rank tie-break assertions still hold (rankKey ∝ capEff when
+// deployable is constant). The rank-tie-break assertion below is what goes RED against the pre-AF1
+// comparator — mutation-verified, so the sort basis is covered by test, not only by prose.
 const mkRow = (name, capEff, rank = 0, deployable = 1, bigTicket = false) =>
   ({ name, capEff, deployable, rankKey: (capEff != null && deployable != null) ? capEff * deployable : null, rank, reachFrac: 0.9, phase: 'in-peak', grade: 'A', bigTicket, verdict: 'fill-now' });
 ok('empty pool → the honest one-liner, not an empty table', () => {

@@ -203,9 +203,10 @@ PLACEHOLDER model (n≈3–14); `estBuy`/`estSell`/`estConfidence` ride `suggest
 ### The decision digest — a THIRD console view (`--digest`)
 `screen-flip-niches.mjs --digest` prints ONE compact cross-niche block ABOVE the per-niche tables (and
 above `--raw`): `Item | capEff | deploy | reach | trend | phase | soft-buy | grade | verdict` — top ~8 across all flip-niches
-this pass, ranked by **deployable throughput** (`capEff × deployable capital` ≈ after-tax deployable gp/day,
-NOT raw %). Raw `capEff` is SCALE-FREE, so ranking on it alone let dust-tier cheap high-% flips (Lead ore
-1072%/d on ~60k of deployable capital) sweep the top and bury the big-ticket deploys the digest exists to
+this pass, ranked by **`rank` = net × P(fill) ÷ TTF** (AF1) — SCALE-AWARE and WALLET-FREE, so the order does
+not move with your cash. `capEff` and `deploy` are SHOWN as sizing columns and are NOT the sort basis;
+`capEff × deployable` survives only as a tie-break. Raw `capEff` alone is SCALE-FREE, which let dust-tier
+cheap high-% flips (Lead ore 1072%/d on ~60k) sweep the top and bury the big-ticket deploys the digest exists to
 surface — the SAME failure `valueScore`'s deployable-capital blend already solved, so the digest REUSES its
 `deployUnits` three-way min (`js/valuescreen.mjs` — bankroll ÷ buy price, 10% market-share over 2 days,
 buy-limit accumulation) against the FULL deployable pool (`--capital`, NOT ÷slots). `capEff` is a REALIZABLE
@@ -240,7 +241,7 @@ instabuy can fake a reach ✓, so reach + placement recompute against the freshe
 distribution — digest-scoped, never touching the screen's own reach validator, `screen.json`, or
 `quote-items` output. It is an anti-overwhelm TRIAGE VIEW ("which N
 do I look closer at"), ADDITIVE and opt-in: it never trims or replaces the per-niche tables + context
-footers, and the per-niche table's own `rank` sort is untouched (the deployable-throughput ordering is
+footers, and the per-niche table's own sort is untouched (the digest's dedup + big-ticket lane are
 digest-only). The
 `verdict` word is deterministic, first-match-wins over a rule table (`spread closed now` /
 `mirage top` / `weak deploy` / `starter · hold-to-next-peak` / `fill-now` / `low-conviction`) — deterministic is not
