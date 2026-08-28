@@ -177,21 +177,73 @@ price-vs-probability comparable — exists in `join-reach-basis.mjs` (`mcnemarCo
 Chunk 1 shipped and re-derived the curves on the uniform 1h instrument with z-normalized levels and
 per-origin references. Five findings, all measured against the live archive.
 
+**Nothing in this surface reads a trade.** Its only inputs are the 1h price archive and pure series
+math (`windowStats`/`recentQuant`/`iqr` + the forward primitives) — no `fills.json`, no
+`positions.json`, no `suggestions.jsonl`, no fitted constants. Which suggestions the operator acts on
+therefore cannot bias it, and this is worth stating because it is NOT true of every surface here:
+`join-depth-outcomes.mjs` scores against realized sells in `positions.json` and `analyze-record.mjs`
+reads the logged record, so both inherit the operator's selection. This one does not.
+
 1. **§1.5's taxonomy premise does NOT survive, and its ordering INVERTS.** §1.5 read Ranarr as a
    cliff, Ancestral as a fat shallow tail, Soul between. In z units the shape spread (z20 - z50) is
    **Soul 1.00 · Ranarr 0.80 · Ancestral 0.59** — the reverse order, all inside one narrow band, and
    at the 91st / 72nd / 53rd percentile of a 148-item sample. The contrast §1.5 saw was mostly
    `disp`, which z already carries as a single number. Pinned by test so a re-inversion is visible.
 
-2. **Per-item curve shape is REAL but SMALL, and smallest exactly where the patient ask lives.**
-   Variance decomposition over 364 items (H=24, median 78 independent windows), across-item variance
-   minus mean within-item binomial variance: true between-item sd is **8.1pp at z=0** and **2.1-3.3pp
-   at every z >= 0.5**, against a sampling sd of 2.3-5.7pp. So near the reference items genuinely
-   differ; in the patient region a per-item curve is barely separable from pooled-plus-noise.
-   **Consequence: chunk 7's pooled fallback is a far stronger default than this plan assumed**, and
-   the per-item value is concentrated in `refHigh`/`disp` — the normalization — not the curve.
-   *Limit: nIndep may overstate independence, which would understate sampling sd and OVERSTATE the
-   true-shape figures, so these are upper bounds. Sample is the well-covered end (>=1500 1h rows).*
+2. **PER-ITEM CURVES DO NOT PREDICT THEIR OWN FUTURE. The pooled curve does it better.** This
+   supersedes an earlier, weaker and mis-framed version of this finding; the correction is recorded
+   because the first framing would have led chunk 5 to ship the wrong estimator.
+
+   *First, the variance read, which is TRUE but not decision-relevant.* Variance decomposition over
+   364 items (H=24, median 78 independent windows): true between-item sd is 8.1pp at z=0 and 2.1-3.3pp
+   at z >= 0.5, against a sampling sd of 2.3-5.7pp. An earlier draft read that as "shape is smallest
+   exactly where the patient ask lives" — **that was an artifact of reading absolute percentage points
+   on a mean that is itself shrinking.** As a FRACTION of the mean the variation is largest at high z:
+   15% at z=0, 20% at z=0.25, 44% at z=2, 77% at z=4. Neither framing settles anything.
+
+   *The decision-relevant test is out-of-sample skill, and it is blunt.* Train on the first 2/3 of each
+   item's archive, score on the held-out last 1/3, pooled curve computed leave-one-out so an item never
+   helps build its own baseline (156 items surviving train >= 120 / test >= 60 origins):
+
+   | contender | held-out MAE on p, H=24 | cells won |
+   |---|---|---|
+   | **pooled curve** | **9.90pp** | **57.1%** |
+   | item's own curve | 11.21pp | 42.9% |
+   | shrunk (empirical Bayes) | 10.17pp | 46.4% |
+
+   Pooled wins at 15 of the 16 z levels. This is not "items are alike" — it is overfitting: a 16-point
+   curve estimated from ~78 independent windows fits its training era's noise.
+
+   *Three rescue attempts, all failed, all on the same held-out split:*
+   - **Partial pooling** with the exact empirical-Bayes weight `w = tau^2/(tau^2 + sigma_i^2)`, both
+     terms measured on the TRAIN half only: 10.17pp, loses to pooled. The weights are substantial
+     (w = 0.30-0.74), and that is the informative part — **the between-item variance measured above is
+     largely NOT PERSISTENT across eras.** Item identity does not forecast item shape at 92 days.
+   - **Detrended dispersion** (§1b.4's alternative basis): own-curve wins 45.0%. Still loses.
+   - **A stabler reference.** refN 3 -> 7 -> 14 roughly DOUBLES measured between-item sd (z=0.5:
+     3.2 -> 4.0 -> 6.4pp), which looked like reference noise blurring real shape. It is not: held-out
+     own-curve win rate goes 42.9% -> 43.5% -> 41.5% and absolute pooled MAE at z=0 goes
+     11.3 -> 15.1 -> 22.1pp. A longer reference spreads items apart WITHOUT making them predictable —
+     it goes stale. **recent-3 is confirmed as the right anchor**, independently of RB-3's own evidence.
+
+   **CONSEQUENCE — the estimator is POOLED p(z,H) + PER-ITEM refHigh/disp.** The surface's value is in
+   the NORMALIZATION, not the curve. That is Option C, reached by measurement rather than preference.
+   Chunk 7 is promoted from last-resort fallback to the PRIMARY path (and simplifies: no cell keys
+   until a cell key is measured to help). Chunks 2 and 3 are structurally unaffected — askStar, the EV
+   inversion and the inspector all work identically off a pooled curve. Chunk 5's per-item surface
+   field becomes pooled + normalization. Chunk 4 is unchanged and matters more.
+
+   **NEW CHUNK-2 ACCEPTANCE GATE, and it is a stop-or-go.** Pooled leaves ~10pp of MAE on p. Whether
+   that is tolerable for a PRICE depends entirely on how flat EV is near its optimum, which is a cheap
+   chunk-2 computation: perturb the curve by +/-10pp and measure how far `askStar` moves. If the
+   optimum is flat, 10pp is fine and the price is trustworthy. **If it is sharp, the surface cannot
+   price at this archive depth and chunk 3 must not be built** — say so instead.
+
+   *Limits: one 92-day era, one update cycle, H=24 only; 156 items after the train/test filter, drawn
+   from the well-covered end (>=1900 1h rows). The held-out target is itself noisy, which inflates
+   every absolute MAE above — but both contenders face the same target, so the RANKING is fair.
+   `nIndep` may overstate independence, which would inflate the tau^2 estimate and therefore FLATTER
+   the shrinkage contender, which still lost.*
 
 3. **The obvious test for finding 2 has no power, and the design must not use it.** A split-half
    comparison (item vs its own other half, 144 items) gives RMSE 10.2pp against 4.8pp vs pooled — a
