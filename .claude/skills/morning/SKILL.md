@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.18
+version: 1.19
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -119,9 +119,10 @@ other morning, this check reads `no` — skip straight past this section.
      — the scorer it waited on SHIPPED.** `join-reach-outcomes.mjs` (2026-08-27) scores the co-logged
      estimators forward against the 1h archive and needs no closed round-trip, so the accrual count that
      stood here gated nothing; run the command directly whenever the question comes up. Read it as a
-     DESCRIPTION of reach and gap, never a ranking: the two columns are one statistic and the `quickSell*`
-     null beats every contender on both, so "which estimator wins" is not in evidence without the cost
-     model `join-reach-basis.mjs` already carries. **No RC retire flag flips off this surface.**
+     DESCRIPTION of reach and gap, never a ranking: both columns derive from one per-row comparison that is
+     monotone in the ask price, so the reach ordering is a price-level ordering — and the two REPORTED
+     columns are different functionals of it and can rank differently. "Which estimator wins" is not in
+     evidence without the cost model `join-reach-basis.mjs` already carries. **No RC retire flag flips off this surface.**
    - **Gate C — Ring-3 rank-denoise** (forward-vs-recency exit, `PLAN-ESTIMATOR-HONEST-SELL`): the
      accrual that gates the display redesign's DEFERRED denoising lever — promoting the drift-adjusted
      FORWARD exit ("list at X") into `estimateRank`'s net/pFill so it reaches the graded board +

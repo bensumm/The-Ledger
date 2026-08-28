@@ -48,7 +48,7 @@ export function scoreRow(series, row, { horizonH }) {
   for (const e of REACH_ESTIMATORS) {
     const a = row.preds[e.key];
     if (a == null || a <= 0) continue;
-    // reached ⟺ top >= ask by definition of the window max — derived, so the two columns cannot disagree.
+    // reached ⟺ top >= ask per row; the reported rate and median are different functionals and can rank differently.
     out[e.key] = { reached: top >= a, headroomPct: (top - a) / a * 100 };
   }
   return Object.keys(out).length ? out : null;

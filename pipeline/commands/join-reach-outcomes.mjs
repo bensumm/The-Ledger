@@ -32,8 +32,9 @@ const DEFAULT_HORIZON_H = 24;
 const DEFAULT_MIN_N = 8;          // the join-outcomes --report floor, reused — no new threshold
 const ROBUST_N = 30;              // MIN_N_F1, reused — a retirement wants a cell at this depth
 
-/* Every co-logged read in the ledger → a scorable row. `reachable` is the universal co-log marker
- * (logged on held AND discovery reads); a row without it predates RC-S1. */
+/* Every co-logged read in the ledger → a scorable row, admitted on `reachable` — which is the PRESSURE
+ * band, so admission is an INCLUSION CRITERION, not a coverage measurement: the pool is conditioned on
+ * the pressure read succeeding. A missing `reachable` is a pre-RC-S1 row OR a degraded band. */
 export function readRows() {
   const rows = []; const drop = { noColog: 0, badClass: 0, badTs: 0 };
   for (const line of readSuggestionLines()) {
@@ -109,8 +110,9 @@ async function main() {
   console.log(`\n## Coverage — what the co-log can actually score (ragged BY DESIGN, not a bug)`);
   console.log('| estimator | rows | of ' + scored.length + ' |');
   console.log('| --- | --- | --- |');
-  for (const c of res.coverage) console.log(`| ${c.key} | ${c.n} | ${scored.length ? Math.round(c.n / scored.length * 100) : 0}% |`);
-  console.log(`  depth needs a HELD qty, so it only ever logs on watch/held-quote reads. reachFold and`);
+  for (const c of res.coverage) console.log(`| ${c.key} | ${c.n} | ${scored.length ? Math.round(c.n / scored.length * 100) : 0}%${c.key === 'pressure' ? ' (inclusion criterion, not a measurement)' : ''} |`);
+  console.log(`  A row is admitted only if the pressure band read, so pressure cannot print below 100% and every`);
+  console.log(`  comparison is conditioned on it. depth needs a HELD qty, so it only ever logs on watch/held-quote reads. reachFold and`);
   console.log(`  reachRelief are the same estimator with and without the softening and NEVER co-occur, so`);
   console.log(`  this cannot answer "does relief help?" — that needs the relief=0 counterfactual logged too.`);
 
@@ -142,14 +144,16 @@ async function main() {
   console.log(`  screen re-prices the same item many times a day, so rows are heavily item-day clustered and the`);
   console.log(`  effective n is far below nominal. Treat a 5-figure n as a shape, never as a confidence interval.`);
   console.log(`\n⚠ Reached != filled — queue position is invisible, so every rate bounds a real offer from ABOVE.`);
-  console.log(`\n⚠ THIS SURFACE DOES NOT RANK ESTIMATORS. "reached" and "gap to top" are the SAME comparison`);
-  console.log(`  (reached <=> gap >= 0), so they are one statistic printed twice, not two agreeing ones — and both`);
-  console.log(`  are monotone in the ask price, so any ordering they produce is a PRICE-LEVEL ordering. That is why`);
-  console.log(`  quickSell*, the null, beats every contender on both columns: read literally, the metric says`);
+  console.log(`\n⚠ THIS SURFACE DOES NOT RANK ESTIMATORS. "reached" and "gap to top" are the SAME PER-ROW`);
+  console.log(`  comparison (reached <=> gap >= 0) and both are monotone in the ask price, so the REACH ordering is`);
+  console.log(`  a price-level ordering: quickSell*, the null, maximises reach in every MATCHED pool. But the two`);
+  console.log(`  REPORTED columns are different functionals of it — a rate and a median — so they can rank`);
+  console.log(`  differently, and neither ordering is a quality ordering. Read literally, the metric says`);
   console.log(`  "always instasell". A miss costs a RE-LIST, not the trade, and nothing here prices that; until the`);
   console.log(`  cost model join-reach-basis.mjs already carries (mcnemarCost / cost-ratio r / rStar) is ported,`);
   console.log(`  read these tables as a DESCRIPTION of where each estimator prices, never as a winner.`);
-  console.log(`  Also horizon-conditional: pressure's gap runs -2.9% at H=6, -1.6% at H=24, +0.2% at H=96. Quote H.`);
+  console.log(`  Also horizon-conditional: pressure's gap SIGN FLIPS across the horizon. Run --horizon 6/24/96 and`);
+  console.log(`  compare; always state which horizon produced a claim.`);
   console.log(`  Of the two columns right of "gap to top", both CONDITION on reaching, and reaching selects the`);
   console.log(`  high-topping rows, so a rarely-reaching estimator's conditional headroom is flattered. * = reference lines:`);
   console.log(`  quickSell is the live market print (the true null); optSell is the tool's OWN band edge, so an`);

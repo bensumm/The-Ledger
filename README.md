@@ -1366,11 +1366,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     suggestion, null on pre-YS2 rows); reconstruction routes through `dedupeSnapshots`. COD-3: `--report`
     stamps `.cache/last-weekly-report` and the cheap standalone `--weekly-due` prints `weekly-due: yes|no`
     off the local Mon–Sun week so `/morning`'s weekly-read cadence is mechanical, not "ask Ben". `--report`
-    prints THREE readiness gates: the F1-gate progress line (general calibration), the **Reachability
-    head-to-head** accrual (RC, `PLAN-REACHABILITY-CONSOLIDATION`) — closed-sell round-trips carrying the
-    five-way exit co-log (`joinSuggestion`'s `coLog` marker), bucketed into the scorer's (side × class ×
-    regime) cells, so the weekly retro shows WHEN `join-reach-outcomes.mjs` has a scorable cell without polling —
-    and the **Ring-3 rank-denoise** accrual (`PLAN-ESTIMATOR-HONEST-SELL`) — the same round-trips filtered by
+    prints the F1-gate progress line (general calibration), a static pointer to `join-reach-outcomes.mjs`
+    (the **Reachability head-to-head** accrual was DELETED — that scorer needs no closed round-trip, so the
+    count gated nothing; `joinSuggestion`'s `coLog` marker is still written but now has no reader),
+    and the **Ring-3 rank-denoise** accrual (`PLAN-ESTIMATOR-HONEST-SELL`) — closed round-trips filtered by
     the FORWARD-exit co-log (`joinSuggestion`'s `fwdLog` marker = `estConfidence.forwardPeak`), the gate that
     tracks when the forward-vs-reach-fold head-to-head (`aggregateForwardExit`) becomes scorable, the
     evidence Ring-3's promotion of the forward exit into `estimateRank`/`screen.json` is deferred on),
@@ -1457,7 +1456,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
 
     **`join-reach-outcomes.mjs`** (2026-08-27, PLAN-REACHABILITY-CONSOLIDATION — the RC head-to-head,
     forward-scored. The tool carries FIVE overlapping ways to price an exit (reach-fold · reachRelief ·
-    asym · depth · pressure); RC-S1/RC-S2 co-log all of them on every read and nothing had ever read that
+    asym · depth · pressure); RC-S1/RC-S2 co-log them RAGGEDLY — see the Coverage table, which runs from
+    100% down to under 1% — and nothing had ever read that
     log. PRODUCER: the `reachable`/`estSell`/`asym`/`depthExit` co-logs on `suggestions.jsonl` + the
     monthly archives via `readSuggestionLines()`; forward-scored against the 1h
     `pipeline/.market-archive.sqlite` through `pipeline/lib/market/forward-reach.mjs`. Per estimator, per
@@ -1468,11 +1468,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     itself. The header of
     `pipeline/lib/render/reachability.mjs` is the ONE home for that reasoning; don't re-derive it.
     **⚠ THE METRIC CANNOT RANK EXIT ESTIMATORS, and no conclusion here may be read as if it did.**
-    `reached` and `headroomPct` are the SAME comparison (`reached ⟺ gap ≥ 0`, derived at
-    `reachability.mjs:52`), so the two reported columns are ONE statistic printed twice, not two
-    corroborating facts. Both are monotone in the ask price, so the ordering they produce is a
-    PRICE-LEVEL ordering — and `quickSell*`, the declared null, beats every contender on both columns at
-    every horizon tested. Read literally this surface says "always instasell", which nobody believes: an
+    `reached` and `headroomPct` are the SAME PER-ROW comparison (`reached ⟺ gap ≥ 0`, derived at
+    `reachability.mjs:52`), and both are monotone in the ask price, so the REACH ordering is a
+    PRICE-LEVEL ordering: `quickSell*`, the declared null, maximises the reach column in every MATCHED
+    pool. But the two REPORTED columns are different functionals of that one quantity — a RATE and a
+    MEDIAN — so they can and do rank differently: `depth` sits above `quickSell*` on gap in the
+    depth-matched pool at every horizon tested. Neither ordering is a quality ordering.
+    Read literally this surface says "always instasell", which nobody believes: an
     ask that misses costs a RE-LIST, not the trade, and nothing here expresses that cost. The sibling
     `join-reach-basis.mjs` already solved this exact problem (`mcnemarCost`, a cost ratio `r`, a
     four-regime map, `rStar`); until that is ported, this command DESCRIBES reach and gap and ranks nothing.
@@ -1481,8 +1483,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     incumbents sit near zero — the opposite of what RC1 ("retire reachRelief in favour of pressure") and
     RC2 ("merge asym into the pressure band") assumed. **That finding is HORIZON-CONDITIONAL, and the
     default horizon is the adversarial one for pressure's own class:** on one matched pool pressure's gap
-    runs −2.9% (reach 27%) at H=6, −1.6% (38%) at H=24, and **+0.2% (54%) at H=96** — where it is the
-    CLOSEST of all five to zero. H=24 is the premise DT1 measured and retired for big-ticket, and
+    is NEGATIVE at H=6, still negative at H=24, and turns slightly POSITIVE at H=96 — where it is the
+    CLOSEST of all five to zero. Run `--horizon 6/24/96` and read the sign flip; don't quote a digit here. H=24 is the premise DT1 measured and retired for big-ticket, and
     pressure is the big-ticket estimator. Quote the horizon with any claim off this surface, and never
     the phrase "prices past the market" unqualified.
     **Compare on the gap column, never the conditional headroom** — headroom conditions on reaching, which selects

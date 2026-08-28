@@ -153,13 +153,13 @@ ok('DE3: the two-lens clause is flag-gated at EVERY call site, watch included', 
   assert.ok(watch.includes('depth: PRESSURE_EXIT ? it._depthExit : null, reachable: PRESSURE_EXIT ? it._reachable : null'),
     'watch must gate BOTH lenses — gating only the pressure half leaves the depth floor rendering alone, which its own contract forbids');
   const quote = fs.readFileSync('pipeline/commands/quote-items.mjs', 'utf8');
-  let at = quote.indexOf('depthReachClause({');
-  assert.ok(at > 0, 'the quote-items call sites still exist to be checked');
-  while (at > 0) {
-    assert.ok(quote.lastIndexOf('if (PRESSURE_EXIT', at) > quote.lastIndexOf('\n  rows.push', at),
-      'every quote-items depthReachClause call sits under an if (PRESSURE_EXIT ...) branch');
-    at = quote.indexOf('depthReachClause({', at + 1);
-  }
+  const calls = [];
+  for (let at = quote.indexOf('depthReachClause({'); at > 0; at = quote.indexOf('depthReachClause({', at + 1)) calls.push(at);
+  assert.ok(calls.length > 0, 'the quote-items call sites still exist to be checked');
+  calls.forEach((at, k) => {
+    assert.ok(quote.lastIndexOf('if (PRESSURE_EXIT', at) > (k === 0 ? -1 : calls[k - 1]),
+      'quote-items depthReachClause call ' + (k + 1) + ' of ' + calls.length + ' has no if (PRESSURE_EXIT ...) gate between it and the previous call');
+  });
 });
 
 /* formatAsymFill — the ◆ asym fill clause pair. The BUSINESS REQUIREMENT: a reach count must never be

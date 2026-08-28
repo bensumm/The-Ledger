@@ -257,15 +257,15 @@ some of the five).
   narrow removal, Ben's call; git-revivable). They were fully-built + fixture-tested but powered ONLY the
   manual `--depth` inspector's per-day flow tables + the low-side "CATCH AT ≥X" line, never a decision
   surface. **`clearableAsk` SURVIVES** — correcting this section's earlier "inspector-only" claim: it feeds
-  the LIVE DE3 `depthExit` shadow on `watch-positions.mjs`/`quote-items.mjs` (a Gate-B head-to-head
-  challenger), so it was kept; the `--depth` inspector's "BOOK AT ≤X" clearableAsk line stays.
+  the LIVE DE3 `depthExit` shadow on `watch-positions.mjs`/`quote-items.mjs` (a head-to-head challenger,
+  scored by `join-reach-outcomes.mjs`), so it was kept; the `--depth` inspector's "BOOK AT ≤X" clearableAsk line stays.
 - **`weekdayProfile`** is genuinely new (no prior day-of-week tooling existed) but is amplitude-mode
   only and n≈3-4/cell — correctly labeled as a lean, but worth flagging that it's the thinnest
   sample of any signal in the inventory that still prints a number.
 - **`demandRegime`/`hourlyPressure`** (Extension B DC1/DC3) — **REMOVED 2026-07-22** (same removal;
   git-revivable). They powered only the `--pressure` per-hour demand-cycle inspector block + the scan's
   DC3 inform note/shadow, never a gate/rank. **`demandPressure` + `reachableBand` (Extension A) SURVIVE** —
-  they are the price source for the `--est-sell pressure` sell-model + the Gate-B accrual marker, retired
+  they are the price source for the `--est-sell pressure` sell-model + the RC co-log marker, retired
   later (if ever) via `PLAN-REACHABILITY-CONSOLIDATION` RC1's flag, not this cleanup.
 
 ---

@@ -10,6 +10,45 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The correction that was itself wrong — round two of the RC review (pipeline/docs only)
+
+Two adversarial passes over the 0.74.11 doc-correction wave, one briefed to attack that wave's own
+fixes. Both came back non-empty, and three of the four load-bearing findings were IN the corrections.
+
+**The headline claim was refutable from the command's own output.** 0.74.11 said the two reported
+columns are "one statistic printed twice" and that `quickSell*` "beats every contender on both
+columns". The per-row identity (`reached ⟺ gap ≥ 0`) is real, but the two REPORTED columns are
+different functionals of it — a rate and a median — and they rank differently: `depth` sits above
+`quickSell*` on gap in the depth-matched pool at every horizon tested. Re-measured across all 12
+tables at H=24, `quickSell*` is also beaten on the reach column twice and tied twice, so
+"beats every contender" fails in both directions. What survives is narrower and still sufficient:
+the reach ordering is a price-level ordering, which is why no ranking may be read off this surface.
+Corrected at all five sites — README, CLAUDE.md, `/morning`, the `reachability.mjs` comment that
+asserted the columns "cannot disagree", and the shipped console footer that said it to the operator
+on every run.
+
+**The regression pin for the two-lens gate was vacuous at one of its two sites.** `emit.test.mjs`
+anchored on `lastIndexOf('\n  rows.push')`, which is `-1` for every call site in
+`quote-items.mjs` — nothing there is indented two spaces — so the assertion degenerated to "the
+string appears somewhere earlier in the file". Ungating the second call site left the suite green.
+Replaced with a 1:1 interleave assertion (gate *k* between call *k−1* and call *k*) and
+mutation-tested: ungating either site now fails, and ungating site 2 — the mutation that survived —
+fails by name.
+
+**Pressure's 100% co-log coverage was an inclusion criterion printed as a measurement.** The scorer
+admits a row only when `reachable` is present, and that field IS the pressure band, so pressure
+cannot print below 100% and every comparison is conditioned on its read succeeding. Labelled in the
+table and stated in the module header rather than left for a reader to derive.
+
+Also: README described a `--report` accrual this wave had deleted, and contradicted itself one
+paragraph later on whether the co-log is ragged; `MARKET-ANALYSIS.md` still documented the
+`--est-sell` space form as silently failing after it was changed to exit with an error; two
+`SIGNAL-AUDIT.md` lines still named the retired Gate B.
+
+Per the triage rule, derived numbers were DELETED rather than re-derived — the wave's own "38%"
+was wrong (37%), its pool size had already drifted in a day, and the console footer hardcoded three
+figures nothing would ever recompute. Each is now a qualitative claim plus the command to run.
+
 ### The reachability head-to-head, and the metric that could not rank (RC, 0.74.11)
 
 2026-08-27/28. PLAN-REACHABILITY-CONSOLIDATION set out to retire three of five overlapping exit
@@ -34,8 +73,8 @@ prices that. The sibling `join-reach-basis.mjs` already carries the missing half
 cost ratio, a four-regime map); until it is ported, this command describes and does not rank.
 
 The headline is also HORIZON-CONDITIONAL, and the default horizon was the adversarial one for the
-estimator being judged: pressure's gap runs −2.9% (reach 27%) at H=6, −1.6% (38%) at H=24, and +0.2%
-(54%) at H=96 — closest to zero of all five at 96h. H=24 is the premise DT1 measured and retired for
+estimator being judged: pressure's gap is negative at H=6, still negative at H=24, and turns slightly
+positive at H=96 — closest to zero of all five at 96h. H=24 is the premise DT1 measured and retired for
 big-ticket, which is pressure's own class. Docs now state the horizon with every claim.
 
 The lesson, which redirects the program: "which estimator is best" is the wrong question. There is no
@@ -45,8 +84,8 @@ work is one parameterized function over a measured reach curve, not a winner amo
 
 Also in this wave, from adversarial review: the two-lens depth/pressure clause was rendering
 UNGATED on the default `watch-positions.mjs` pass while both `quote-items.mjs` sites were flag-gated
-— on 12 of 13 logged rows the pressure ask sat above that row's own quoted sell, once by 3.7m on a
-109.5m lot. Gating only the pressure half would have left the depth floor rendering alone, which
+— the pressure ask sits above the row's own quoted sell on essentially every co-logged row, by
+construction of the no-peak-cap doctrine. Gating only the pressure half would have left the depth floor rendering alone, which
 `emit.mjs` forbids as a size-honest floor that under-reads on a liquid book; both lenses are now
 gated together and a mutation-tested static pin in `emit.test.mjs` holds all three call sites
 uniform. `--est-sell` now rejects the space form that was silently swallowed as an item target.

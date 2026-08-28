@@ -122,8 +122,8 @@ reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Oper
 - **The sell-top proposal is a NAMED, swappable MODEL** (PC3, `js/estimators/sell-models/`): the neutral
   **`reach-fold`** (default) above, and the opt-in TRIAL **`pressure`** (PB4). `--est-sell=reach-fold|pressure`
   selects it — **the `=` is REQUIRED** on `quote-items.mjs`/`watch-positions.mjs` (they match
-  `a.startsWith('--est-sell=')`); a space-separated `--est-sell pressure` silently fails TWICE, ignoring
-  the flag and then swallowing the bare `pressure` as an item name to quote (**`--pressure-exit` = legacy sugar for `--est-sell pressure`**); the model only PROPOSES a
+  `a.startsWith('--est-sell=')`); a space-separated `--est-sell pressure` is now REJECTED with an
+  error (it used to fail silently twice — ignoring the flag, then quoting the bare `pressure` as an item) (**`--pressure-exit` = legacy sugar for `--est-sell pressure`**); the model only PROPOSES a
   price — the shell keeps the non-skippable floors (ordering clamps, BE floor, declared-exit anchor) so no
   model can price past break-even or the live book. Under the `pressure` model Est. buy/sell become the
   `reachableBand` legs (deep reachable bid → bold reachable ask), reranking the console scan by the pressure
