@@ -156,9 +156,23 @@ ok('DE3: the two-lens clause is flag-gated at EVERY call site, watch included', 
   const calls = [];
   for (let at = quote.indexOf('depthReachClause({'); at > 0; at = quote.indexOf('depthReachClause({', at + 1)) calls.push(at);
   assert.ok(calls.length > 0, 'the quote-items call sites still exist to be checked');
+  // Brace-match each gate to its block extent, rather than comparing offsets: a positional test
+  // both fails legitimate refactors (two calls under one gate) and is masked by an unrelated gate.
+  const blocks = [];
+  for (let i = quote.indexOf('if (PRESSURE_EXIT'); i > 0; i = quote.indexOf('if (PRESSURE_EXIT', i + 1)) {
+    const open = quote.indexOf('{', i);
+    if (open < 0) continue;
+    let depth = 0, j = open;
+    for (; j < quote.length; j++) {
+      if (quote[j] === '{') depth++;
+      else if (quote[j] === '}' && --depth === 0) break;
+    }
+    if (depth === 0) blocks.push([open, j]);
+  }
+  assert.ok(blocks.length > 0, 'no if (PRESSURE_EXIT ...) block parsed — the brace matcher is broken, not the code');
   calls.forEach((at, k) => {
-    assert.ok(quote.lastIndexOf('if (PRESSURE_EXIT', at) > (k === 0 ? -1 : calls[k - 1]),
-      'quote-items depthReachClause call ' + (k + 1) + ' of ' + calls.length + ' has no if (PRESSURE_EXIT ...) gate between it and the previous call');
+    assert.ok(blocks.some(([a, b]) => at > a && at < b),
+      'quote-items depthReachClause call ' + (k + 1) + ' of ' + calls.length + ' does not lie inside an if (PRESSURE_EXIT ...) block');
   });
 });
 

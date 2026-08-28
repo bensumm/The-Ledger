@@ -7,8 +7,10 @@ table there (its gap is negative, and `reachability.mjs:42` defines positive gap
 table; an earlier draft of this line had that inverted). **RC1 and RC2 as specified below both point the wrong
 way** and must not be executed on this evidence — read §7 before acting on §3.
 **Two limits bound every claim below.** (1) The scorer CANNOT RANK: `reached` and `headroomPct` are the
-same comparison, both monotone in price, and the `quickSell*` null beats every contender on both — so the
-ordering is a price-level ordering and "best estimator" is not in evidence. Ranking needs the cost model
+same PER-ROW comparison, both monotone in price, and `quickSell*` — the null — maximises the reach column
+in every matched pool, so the reach ordering is a price-level ordering and "best estimator" is not in
+evidence. (The two REPORTED columns are different functionals of that comparison and can rank
+differently; neither ordering is a quality ordering.) Ranking needs the cost model
 `join-reach-basis.mjs` already carries. (2) The headline is HORIZON-CONDITIONAL: pressure's gap is −2.9%
 at H=6, −1.6% at H=24 and **+0.2% at H=96**, closest to zero of the five — and H=24 is the horizon DT1
 retired for big-ticket, pressure's own class. Per-topic working doc (PLANNING.md lifecycle). Cross-linked from

@@ -341,7 +341,7 @@ function report(o) {
   // needs none. join-reach-outcomes.mjs ships and scores co-logged reads forward against the 1h archive.
   console.log(`\n# Reachability head-to-head (RC)`);
   console.log(`  Scorer SHIPPED — run: node pipeline/commands/join-reach-outcomes.mjs [--horizon H]`);
-  console.log(`  It DESCRIBES reach/gap; it does NOT rank (the two columns are one statistic and the quickSell null beats every contender on both). Nothing gated here.`);
+  console.log(`  It DESCRIBES reach/gap; it does NOT rank — see that command's own footer for why. Nothing gated here.`);
 
   // --- Ring-3 / rank-denoise readiness (PLAN-ESTIMATOR-HONEST-SELL, the display honest-sell redesign) --
   // The THIRD gate, distinct from F1 (fill-rate) and RC (five-way exit retire): promoting the drift-adjusted

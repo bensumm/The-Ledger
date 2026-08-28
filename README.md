@@ -1456,8 +1456,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
 
     **`join-reach-outcomes.mjs`** (2026-08-27, PLAN-REACHABILITY-CONSOLIDATION — the RC head-to-head,
     forward-scored. The tool carries FIVE overlapping ways to price an exit (reach-fold · reachRelief ·
-    asym · depth · pressure); RC-S1/RC-S2 co-log them RAGGEDLY — see the Coverage table, which runs from
-    100% down to under 1% — and nothing had ever read that
+    asym · depth · pressure); RC-S1/RC-S2 co-log them RAGGEDLY — see the Coverage table the command
+    prints — and nothing had ever read that
     log. PRODUCER: the `reachable`/`estSell`/`asym`/`depthExit` co-logs on `suggestions.jsonl` + the
     monthly archives via `readSuggestionLines()`; forward-scored against the 1h
     `pipeline/.market-archive.sqlite` through `pipeline/lib/market/forward-reach.mjs`. Per estimator, per

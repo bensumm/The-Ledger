@@ -9,9 +9,10 @@ being quoted anywhere else.
 ## 0. The reframe this plan is built on
 
 `join-reach-outcomes.mjs` was built to rank the five co-logged exit estimators and could not,
-for a reason its own footer now states: its two columns are one statistic
-(`reached ⟺ gap ≥ 0`, derived at `pipeline/lib/render/reachability.mjs:52`), and both are
-monotone in the ask price, so every ordering it prints is a price-level ordering. Verified
+for a reason its own footer states: its two columns derive from ONE per-row comparison
+(`reached ⟺ gap ≥ 0`, at `pipeline/lib/render/reachability.mjs:52`) that is monotone in the ask
+price, so the reach ordering it prints is a price-level ordering. (The two REPORTED columns are
+different functionals of it and can rank differently — that does not rescue either ordering.) Verified
 live (measured 2026-08-28, `--horizon 24`): on the matched pool the reach ordering is exactly
 the inverse of the price ordering — pressure 37% (prices highest), reachFold 74%,
 quickSell* 81% (prices lowest, "wins"). Read literally the metric says "always instasell."
@@ -104,21 +105,49 @@ price-vs-probability comparable — exists in `join-reach-basis.mjs` (`mcnemarCo
    5m buckets carry a print, so a max over the sparse 5m series can MISS a print the 1h bucket
    caught. There is little to average away when an hour holds one or two prints, which is why the
    1h average is nearly unbiased there.
+   ⚠ **THE THIN-ITEM HALF OF THAT TABLE IS CONFOUNDED — corrected on review, 2026-08-28.** The
+   near-zero deltas below ~35 prints/h do NOT establish that thin items are unbiased. The 5m
+   archive is **50.6 days deep against 1h's 91.5**, and within that era the thin items carry
+   **2–3 of a possible 12 5m buckets per hour, with 0% of hours fully covered** (Twisted bow,
+   Ancestral robe top, Elysian spirit shield: zero complete hours in 92 days). A max over a series
+   that sparse cannot exceed the 1h max, so the measurement reads ~0 whether the bias is absent or
+   merely unmeasurable. Those two cases are NOT distinguished by anything in the table.
+   The a-priori mechanism still favours "genuinely small" — an hour holding one or two prints has
+   little to average away, which is exactly what `js/windowread.mjs`'s avg-bound header already
+   asserts — but that is a mechanism argument, not this measurement. Do not cite the table for it.
+
+   **PRIOR ART — this question was already litigated in this repo, and the plan must not re-open it
+   blind.** `pipeline/lib/market/fill-surface.mjs` carries `grainBiasPp(grain, tier, premium)`,
+   measured on a PAIRED sample (n=330 over ~115 items, McNemar), and `build-fill-surface.mjs`
+   settled the instrument choice explicitly: **build at 1h despite the measured bias**, because a
+   5m build trades ~9pp of calibration bias for an unusable sample, and carry the bias as a
+   REPORTED correction that is never applied. Note also that `grainBiasPp` finds the bias positive
+   at LOW premiums and gone by +8%, while the spike above finds it GROWING out to +3%. Both are
+   provisional and `grainBiasPp`'s own header says its SHAPE is not measured, only its direction —
+   so the disagreement is recorded here, not resolved.
+
    **Consequences, all binding:**
-   (a) The remedy is `max(1h, 5m)` and **must stay a MAX — never "prefer 5m"**, which would
-       silently degrade every thin big-ticket item. Chunk 1 pins this with a thin-item fixture.
-   (b) **The fix buys commodity accuracy and buys big-ticket patient asks almost nothing.** The
-       instrument is not *good* on thin items, it is merely not *averaging* — a resting ask still
-       fills against ticks we cannot see. This limit is real and unfixable with stored data.
-   (c) §1.5's taxonomy exemplars are **differentially** contaminated: Ranarr's "cliff" is heavily
-       instrument-shaped, Ancestral's "fat tail" barely at all, so the cliff-vs-fat-tail contrast
-       SHRINKS on the fixed instrument. The two curves were partly pushed apart by the measuring
-       device. Chunk 1 must re-derive all three before the taxonomy claim is quoted, and if the
-       contrast does not survive, §1.5's "shape difference IS the taxonomy" premise is weakened —
-       which is a chunk-1 finding, not something to settle here.
-   (d) chunk 4 would otherwise re-penalise `pressure` for the same reason the dead scorer did —
-       pressure exists to price into peaks a 1h average cannot see — **but note this correction
-       mostly does NOT reach pressure's own big-ticket class**, so it is not a rehabilitation.
+   (a) **Chunk 1 builds the outcome at 1h — NOT a 1h/5m hybrid.** An earlier draft of this plan
+       specified `max(1h, 5m)`; that is REVERSED. A max can only add information, so it is not
+       *wrong*, but it makes the instrument NON-UNIFORM — denser on liquid items than thin ones,
+       and present for only the recent 55% of the archive — and this surface's entire output is
+       cross-item and cross-horizon comparison. A comparison instrument that varies in sensitivity
+       with the thing being compared is the worse failure. This also restores consistency with the
+       `build-fill-surface.mjs` precedent instead of contradicting it silently.
+   (b) **The bias is REPORTED, not applied** — the same doctrine `grainBiasPp` already holds.
+       Chunk 1 emits it as `grainBiasPp`-compatible output rather than minting a second name for
+       one quantity, and emits **`fiveMinCoverage`** (fraction of the window's 5m buckets that
+       carry a print) BESIDE it, so a reader can tell "measured, small" from "not measurable".
+       Without that second field the first is unreadable on exactly the items that matter most.
+   (c) §1.5's taxonomy exemplars are **differentially** contaminated — Ranarr's "cliff" is heavily
+       instrument-shaped, Ancestral's "fat tail" of unknown contamination (unmeasurable, per the
+       confound above) — so the cliff-vs-fat-tail contrast may be partly an artifact of the
+       measuring device. Chunk 1 must re-derive all three and report `fiveMinCoverage` alongside
+       before the taxonomy claim is quoted. If the contrast does not survive, §1.5's "shape
+       difference IS the taxonomy" premise is weakened — a chunk-1 finding, not settled here.
+   (d) chunk 4 must not read a `pressure` penalty as physical without checking the same axis:
+       pressure exists to price into peaks a 1h average cannot see, and the correction is largest
+       on liquid items rather than pressure's own big-ticket class.
    (e) §6.1's "upper bound" claim is retracted (see there), on the liquid half.
 6. **Normalization does the work trend-conditioning was assumed to do — for the up-vs-down split
    specifically.** (Adversarially re-measured 2026-08-28 on an independent re-implementation: the
@@ -260,23 +289,25 @@ byte-identical across the move against a frozen archive fixture.
 minIndependent=8, now })` → `{ refHigh, disp, grid, nOrigins, independentWindows, coveredDays,
 thin }`. `refHigh` reuses `recentQuant(days,'ask',0.5,3)` (do not re-derive); `disp` = IQR of
 trailing-14d daily highs (export windowread's `iqr` rather than duplicating); outcomes via
-`maxHighWithin`/`covers` taken as **max(1h, 5m)** per §1.5b, with the per-item 1h↔5m delta emitted
-as `instrumentBiasPp` (a diagnostic the inspector prints, never a correction applied silently, and
-the field §6.1 requires a reader to consult before assuming an error direction);
+`maxHighWithin`/`covers` at **1h — a UNIFORM instrument, not a 1h/5m hybrid** (§1.5b(a), reversing
+an earlier draft and matching the `build-fill-surface.mjs` precedent). The 1h↔5m delta is emitted as
+a REPORTED diagnostic, never applied, reconciled with the existing `grainBiasPp` rather than named
+afresh — and always **beside `fiveMinCoverage`**, since on a thin item a ~0 delta means "not
+measurable", not "not biased" (§1.5b);
 isotonic cleanup both axes; per-H refusal (`thin:true` + reason) when the **binomial CI half-width
 at the surface's own p exceeds `maxCiHalfWidth` (default 15pp)** — a width bound, not a count,
-because `minIndependent=8` admits a ±32pp interval as a price input (review F6). Short horizons
+because a count floor of 8 admits an interval tens of pp wide as a price input (review F6) — the
+floor must bound the WIDTH, not the count. Short horizons
 price while H=96 refuses. Chunk 1 ALSO emits **`bailNetOnMiss[z][H]`** — E[bail | the ask missed]
 — from the same replay: conditional on missing, the market at H is systematically lower (measured
 −0.53% at z=0.5 across 120 items), and §2's unconditional bail flatters high asks by an error that
 grows with the ask (review F3). Also `surfaceProb(surface, ask, H)` and `surfaceShape(surface)`. Every constant PLACEHOLDER n≈0
 except those measured here.
 **Acceptance**: fixture-pinned against a frozen archive slice of Soul rune / Ranarr / Ancestral —
-reproducing the **re-derived** §1.5 curves on the fixed instrument, NOT the contaminated ones
-printed there today (§1.5b); an assertion that the 5m leg actually moved the outcome on a liquid
-fixture, so the hybrid cannot silently degrade to 1h-only; **and a THIN-item fixture asserting the
-hybrid never scores BELOW 1h-alone** — on a thin item ~half the 5m buckets are empty, so a
-"prefer 5m" implementation loses prints the 1h bucket caught (§1.5b); property tests (monotone in z and H; refusal fires; unresolved
+reproducing the **re-derived** §1.5 curves, NOT the contaminated ones printed there today (§1.5b);
+**a thin-item fixture asserting `fiveMinCoverage` is reported and that a ~0 bias on a low-coverage
+item is labelled unmeasurable rather than printed as zero** — the confound §1.5b names is only
+caught by making it visible; property tests (monotone in z and H; refusal fires; unresolved
 windows dropped not counted — **mutation-verify this one**, the vacuous-test failure has
 happened twice in this repo's joiners).
 **Proves it wrong**: held-out calibration failing beyond binomial noise on a ≥100-item sample —
@@ -396,8 +427,7 @@ entry and stop.
    On liquid items the two errors are of comparable size with no established dominance; on thin
    items the instrument error is small and the upper-bound reading roughly holds.** So the
    direction of the net error is ITEM-DEPENDENT and must be read off `instrumentBiasPp`, never
-   assumed. Both halves are *labelled, not modelled*. Estimating
-   the queue haircut from our own placed offers inherits both traps: estimating it from our own placed offers inherits both traps
+   assumed. Both halves are *labelled, not modelled*. Estimating the queue haircut from our own placed offers inherits both traps: estimating it from our own placed offers inherits both traps
    (fills execute at the tool's own suggestion; offers exist only where the operator acted). A
    future accrual join over `offers.json` could bound it — F1-class, not a dependency here.
 2. **One era.** 92 days, roughly one-and-a-bit update cycles. The update-cycle dynamic makes the
