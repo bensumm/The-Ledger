@@ -640,8 +640,9 @@ and no ambiguity to argue over. **The surface ships as a DESCRIPTION layer, chun
 arms, in both era halves, under both bail conventions, on independent windows and at every horizon on
 the deployable arm. But its margin over `reachFold`, today's default, STRADDLES ZERO: the two
 incumbents at the top are tied on this evidence, and the finding is not that one of them won. It is
-that the surface lost — `askStar+fold` sits below both of them and below `quickSell*`, the live
-instabuy, which is the trivial null this whole plan set out to beat.
+that the surface lost — `askStar+fold` sits below both of them, and a per-ITEM sign test puts it behind
+`asym` on three items in four (p≈2e-4) while making it a COIN FLIP against `quickSell*`. So the durable
+claim is NO BETTER than the live instabuy, not worse than it; an earlier pooled-mean reading said worse.
 NO FIGURES ARE QUOTED HERE, deliberately, for the reason chunk 3 recorded: the archive is live and a
 digit written down here rots. Run the command.
 
@@ -714,6 +715,19 @@ stops strictly before the origin, the outcome window still starts after it (so t
 to neither side), and a mutant reverting the cut reddens the group. Chunk 1 was checked for the same
 class and is clean — `windowStats` drops the day containing its `now`, so the surface's own reference
 never read that bucket.
+
+**THE ONE MEASUREMENT ARTIFACT FOUND, and it flatters the loser.** Sweeping a FIXED z across the grid
+and scoring it at every origin gives an empirical edge curve that peaks at z≈0 and appears to fall off a
+cliff immediately above it. It is not a cliff. `reached` is `top >= ask`, and `refHigh` is the median of
+three ACTUAL printed daily highs, so an ask exactly at the reference collects exact-equality matches: at
+z=0 the inclusive reach rate exceeds the strict (`top > ask`) one by over 12pp, and a level a
+half-basis-point higher scores the same as the strict z=0. On a sticky-priced item the same
+`avgHighPrice` recurs, so equality is common — and a real queue does not fill an ask sitting at a level
+already crowded with resting offers, which makes this another face of "reached is not filled",
+concentrated exactly at the reference. **It inflates whatever sits at z≈0, and `askStar+fold`'s median z
+IS 0.00** — so the artifact favours the contender that lost, and the null branch is if anything
+understated. Worth its own chunk if the surface is ever revived: the fix is not simply `>`, since a print
+AT your ask is weak evidence either way.
 
 **Acceptance, as met:** no-look-ahead is mutation-verified (deleting a truncation reddens the
 suite); the pure core is fixture-pinned on a deterministic synthetic series; the report prints the

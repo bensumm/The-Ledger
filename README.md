@@ -1654,9 +1654,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `reachFold`, today's default sell model, has a cluster CI that STRADDLES ZERO, so nothing here
     separates them and no claim should. What IS separated is where the surface lands: `askStar`'s
     deficit against the leader has a CI clear of zero with the same sign across the sensitivity
-    horizons and both era halves, and the deployable `askStar+fold` sits below BOTH incumbents AND
-    below `quickSell*`, the live instabuy — the trivial null. That is the pre-registered criterion,
-    run in the direction nobody wanted.
+    horizons and both era halves, and the deployable `askStar+fold` sits below BOTH incumbents. A
+    per-ITEM sign test — no bootstrap, no distributional assumption — puts it behind `asym` on three
+    items in four, and behind `reachFold` too. Against `quickSell*`, the live instabuy, that same test
+    is a COIN FLIP: the surface is NO BETTER than the trivial null, which is a weaker claim than "worse
+    than it" and is the one the evidence carries. That is the pre-registered criterion, run in the
+    direction nobody wanted.
     **TWO ARMS, because bare `askStar` gates its own pool.** It refuses a large minority of origins
     (thin cells and grid-top optima), so the estimator arm is CONDITIONED on it consenting to price.
     The report scores the deployable policy separately — `askStar+fold`, the surface where it prices
@@ -1710,6 +1713,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     the bail shifts only the REACHED rows, so contenders that reach at different rates move apart. (3) The one-step LADDER (relist `LADDER_Z_STEP`
     dispersions lower for a second window on a miss) lifts every contender, most the ones that ask
     highest, so Option E has real headroom and a single-shot score is a FLOOR on a relist policy.
+    **One measurement artifact is known and it favours the loser**: `reached` is `top >= ask` while
+    `refHigh` is a median of PRINTED daily highs, so an ask at the reference collects exact-equality
+    matches — over 12pp of the z=0 reach rate, vanishing a half-basis-point higher. It inflates whatever
+    prices at z≈0, which is where `askStar+fold`'s median sits, so the null branch is if anything
+    understated. `plans/PLAN-REACH-SURFACE.md` chunk 4 is the ONE home for it.
     NO LOOK-AHEAD is the load-bearing invariant, it is mutation-verified, and it is an hour finer than
     it looks: an archive bucket is stamped with the START of its period, so the bucket AT an origin is
     future data. (The store-lag does NOT establish that — the fetcher only ever requests the last

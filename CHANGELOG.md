@@ -71,9 +71,10 @@ PLAN-REACH-SURFACE's §0 headline claim is downgraded in place. The top of the t
 and they are TIED — `asym` leads it on both arms, in both era halves, under both bail conventions, on
 independent windows and at every horizon on the deployable arm, but its margin over `reachFold`
 straddles zero, so nothing separates them. The finding is not that one incumbent won: it is that the
-surface lost, with `askStar+fold` landing below both of them AND below `quickSell*`, the live
-instabuy — the trivial null. No figures here on purpose: the archive is live, and successive runs of
-this same command moved every headline number while leaving every conclusion intact.
+surface lost, with `askStar+fold` landing below both of them and NO BETTER than `quickSell*`, the live
+instabuy — a per-item sign test makes that pair a coin flip, so "no better than the trivial null" is the
+claim, not "worse than it". No figures here on purpose: the archive is live, and successive runs of this
+same command moved every headline number while leaving every conclusion intact.
 
 **The acceptance check inverted the answer once, which is the whole reason the plan demanded it.**
 Contenders are RECOMPUTED from the series truncated at each origin, so this scores reconstructions
@@ -117,6 +118,15 @@ nothing may be retired on a gap narrower than the noise in the instrument that m
 guard blocks a contender whose reconstruction the acceptance check cannot bound over a minimum row
 count — one matched row is not a bound, and treating `n > 0` as one had let a single-row contender
 through. Chunk 8 inherits the guards rather than a prose hedge.
+
+**A measurement artifact was found afterwards, and it favours the loser.** A fixed-z sweep makes the
+empirical edge curve look like it falls off a cliff just above the reference; it does not. `reached` is
+`top >= ask` and `refHigh` is a median of PRINTED daily highs, so an ask exactly at the reference
+collects exact-equality matches — over 12pp of the z=0 reach rate, gone a half-basis-point higher. It
+inflates whatever prices at z≈0, and that is exactly where `askStar+fold`'s median z sits, so the null
+branch is understated rather than overstated. The tie at the top was separately checked and is real: a
+per-item sign test splits `asym` and `reachFold` 30/29, and they are literally the same number on a
+third of origins while genuinely differing on the rest.
 
 **What this opens**: the one-step ladder lifts every contender, most the ones that ask highest, so a
 single-shot score is a FLOOR on a relist policy and Option E is the live lead, not the surface.
