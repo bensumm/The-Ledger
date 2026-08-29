@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.62
+version: 1.63
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -269,12 +269,10 @@ threshold or the watchlist read, not a missing manual judgment call — flag it 
 ## 3. Interpret each verdict
 
 **Vocabulary — the ONE home is `pipeline/MONITORING.md` step 4** (the PLAN-3 gate tree + the
-momentum-up verdicts). Every verdict the script can emit — NO-READ, DIURNAL-WATCH, SHOCK-WATCH,
-CUT, LIST-TO-CLEAR, CUT-CANDIDATE, WATCH — fresh entry, HOLD — ask filling, the momentum-up
-HOLD — list high / HOLD — watch, and the VN-2/VN-3 display states PARKED — at break-even /
-HOLD — per thesis (persistence-gated labels; an `(X arming ~Nm)` suffix means the change hasn't
-confirmed yet) — is defined there with what each means and does. Read it there;
-don't re-derive it here. The script emitted the verdict; your job is to **render it as the action
+momentum-up verdicts). The set is deliberately NOT listed here: a copy of it lived in this file and
+drifted, naming `CUT-CANDIDATE` for a branch that cannot produce it and omitting the falling-regime
+`SELL @ X` / `CUT @ X` pair and `NO QUOTE` entirely. An `(X arming ~Nm)` suffix on any of them means
+the change has not confirmed yet. Read the set there; don't re-derive it here. The script emitted the verdict; your job is to **render it as the action
 line in §4, against the per-item dossier** — a verdict is a prompt for judgment, not an order
 (the CANCEL-BID-on-a-thin-book and fresh-chase-entry examples in MONITORING step 4).
 
@@ -412,14 +410,16 @@ PF1.) State the discount-vs-friction numbers explicitly when recommending the pa
 tripwire fired on a 1-in-1000 overshoot (16.49m against a 16.50m line) that stabilized
 immediately — the floor "break" was 20k deep and the item recovered within the hour. A
 structural tripwire should require conviction of the break before executing: a print
-**meaningfully through** the level (~0.5%+) or two consecutive passes below it, not a
+**meaningfully through** the level (~0.5%+) or below it for long enough to persist, not a
 grazing touch. This tightens WHEN the tripwire fires; it does not soften obeying it once
 fired (the override-discipline rule above stands). **`watch-positions.mjs` now enforces this
 mechanically (V4, arm-then-confirm):** its structural-break headline ALERT fires only when the
-live instabuy is `< cut-trigger` (≥ `CUT_TRIGGER_DELTA` below support) OR below support for two
-consecutive passes; a single graze *arms* (a visible note) instead of alerting. Likewise a
-Gate-D `CUT-CANDIDATE` needs two consecutive underwater-liquid passes to become a headline
-alert. The **Gate-2 breakdown `CUT` is exempt — it still alerts immediately** (a live breakdown
+live instabuy is `< cut-trigger` (≥ `CUT_TRIGGER_DELTA` below support) OR below support for
+`ALERT_PERSIST_MS`; a shorter graze *arms* (a visible note) instead of alerting. Likewise a
+Gate-D `CUT-CANDIDATE` needs `ALERT_PERSIST_MS` of underwater-liquid time to become a headline
+alert. **The bar is ELAPSED TIME, not a pass count** — this file said "two consecutive passes"
+for both, which reads as 60 minutes at `--watch 30` and 2 minutes at a 1m dip loop, wrong in
+both directions. Never quote a pass count when timing a cut; `watchstate.mjs` owns the value. The **Gate-2 breakdown `CUT` is exempt — it still alerts immediately** (a live breakdown
 is not a thing to sit on).
 
 **Limit-blocked CROSSING (2026-07-05):** a bid at/above the live instasell prints CROSSING

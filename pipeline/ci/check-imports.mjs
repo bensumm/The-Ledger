@@ -7,8 +7,8 @@
  * `import { … dayHighFrom5m }` rode a whole-file commit while estimators.mjs stayed behind, ESM-erroring
  * on a clean checkout). This check closes that gap.
  *
- * SCOPE (extended 2026-08-10): the pipeline ENTRYPOINTS ⋃ `js/**` ⋃ `pipeline/lib/**` — 126 files. It
- * scanned entrypoints ONLY until then; see the MODULE_ROOTS block below for why that gap mattered.
+ * SCOPE (extended 2026-08-10): the pipeline ENTRYPOINTS ⋃ `js/**` ⋃ `pipeline/lib/**`. It scanned
+ * entrypoints ONLY until then; see the MODULE_ROOTS block below for why that gap mattered.
  * WHAT: for each scanned file it STATICALLY parses the `import { … } from './rel.mjs'` statements
  * and verifies every named/default import actually exists in the TARGET module's exports. It dynamic-
  * imports only the TARGET modules (pipeline/lib/*, js/*, pipeline/probes/* — all pure, DOM-free, side-
@@ -50,8 +50,8 @@ const COMMANDS = IS_MAIN ? fs.readdirSync(path.join(HERE, '..', 'commands'))   /
 // USED but never imported, which `node --check` (syntax-only) cannot see and which no test executed. The
 // app's own modules are the WORST place to have the blind spot: `js/**` is what the deployed page runs,
 // and CI's browser smoke never opens a Trends item, so a bad name there reaches users.
-// Measured BEFORE wiring this: 93 files across js/** + pipeline/lib/**, ZERO unbound names. So this costs
-// nothing today — it is pure lock-in of an already-clean state, which is the cheapest kind of guard.
+// Measured BEFORE wiring this: ZERO unbound names across js/** + pipeline/lib/**. So this costs nothing
+// today — it is pure lock-in of an already-clean state, which is the cheapest kind of guard.
 const MODULE_ROOTS = [path.join(HERE, '..', '..', 'js'), path.join(HERE, '..', 'lib')];
 function walkModules(dir, out = []) {
   let entries; try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }

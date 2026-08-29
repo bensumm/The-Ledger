@@ -2432,9 +2432,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     blinded the scan to the rest of the file). Deliberately OVER-binds parameters, catch params, labels
     and class fields: a false positive is a mysterious CI failure on correct code, which is worse than a
     missed detection. **Scope EXTENDED 2026-08-10 (Ben-directed) to the ENTRYPOINTS ⋃ `js/**` ⋃ `pipeline/lib/**`** —
-    126 files, 1,141 imports, 808 constant references, still ~0.3s. It previously scanned
-    `pipeline/commands/*.mjs` ONLY, leaving 93 app/lib files unscanned with the gap recorded as "latent,
-    not live" — and that latency is exactly how the 2026-08-09 `ReferenceError` shipped. `js/**` is the
+    still ~0.3s. The file/import/constant counts are DELETED rather than re-derived — they had drifted
+    on every one of the three, and the tool prints the true values on every run. It previously scanned
+    `pipeline/commands/*.mjs` ONLY, leaving the app and lib files unscanned with the gap recorded as
+    "latent, not live" — and that latency is exactly how the 2026-08-09 `ReferenceError` shipped. `js/**` is the
     worst place to have it, since that is what the deployed page runs while the browser smoke never opens
     an item. The extension cost nothing: 0 violations measured across the newly-covered files BEFORE
     wiring, so it is pure lock-in of an already-clean state. Both halves were mutation-proved IN THE NEW

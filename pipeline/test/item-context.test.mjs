@@ -275,15 +275,20 @@ ok('VN-4: NO thesis → the bare breakdown-CUT text is byte-unchanged, on both s
 ok('staleBookBanner: null age → unavailable form', () => {
   assert.equal(staleBookBanner(null), 'held basis positions.json unavailable');
 });
-ok('staleBookBanner: fresh age (≤ threshold) → age only, no ⚠', () => {
+ok('staleBookBanner: recent age → the content-change age only', () => {
   const s = staleBookBanner(10);
-  assert.match(s, /positions\.json 10m old/);
+  assert.match(s, /positions\.json last changed 10m ago/);
   assert.ok(!s.includes('⚠'));
 });
-ok('staleBookBanner: past the stale threshold → ⚠ + re-sync prompt', () => {
+// The age is CONTENT age: sync-fills writes positions.json only when the reconstruction changes, so
+// this clock advances on a trade, not on a sync. It must not warn or prompt a re-sync — both callers
+// already sync before they read, so the old ⚠ fired on the normal state (no trade in 25 minutes) and
+// told the agent to re-run the sync that had just run.
+ok('staleBookBanner: past the threshold → says WHY, and never warns or prompts a re-sync', () => {
   const s = staleBookBanner(STALE_BOOK_MIN + 1);
-  assert.match(s, /⚠ stale/);
-  assert.match(s, /sync-fills\.mjs/);
+  assert.match(s, /no position-affecting trade since/);
+  assert.ok(!s.includes('⚠'), 'content age is not staleness');
+  assert.ok(!/sync-fills/.test(s), 'the callers already auto-sync; prompting again is the cry-wolf');
 });
 
 console.log(`\n${pass} checks passed.`);

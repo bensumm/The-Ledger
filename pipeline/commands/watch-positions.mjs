@@ -56,7 +56,7 @@ import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP,
 import { limitWindow, buysByItem } from '../lib/capital/limits.mjs';   // DL2 — buy-limit-aware FLUSH clause
 import { fmtP, fmt } from '../../js/money-format.js';
 import { briefLine } from '../../js/watchcore.js';   // --brief compact book: format owned by the script
-import { renderHeldVerdict, pathsStage, renderPathLine, rawHeldToken, heldDisplay } from '../lib/market/item-context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line; VN-1 — persistence-gated display layer
+import { renderHeldVerdict, pathsStage, renderPathLine, rawHeldToken, heldDisplay, staleBookBanner } from '../lib/market/item-context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line; VN-1 — persistence-gated display layer
 import { loadIgnored } from '../lib/ignored.mjs';   // MERCH-book quarantine (farming/loot) for the live-offer view
 import { loadWatchlistIds } from '../lib/config/watchlist.mjs';
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs } from '../lib/market/marketfetch.mjs';   // vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
@@ -452,9 +452,9 @@ function heldAlert(it) {
       if (mv.gate === 2)
         // Gate-2 breakdown CUT — EXEMPT from conviction gating: escalate immediately (the invariant).
         return { level: mv.verdict, msg: `${mv.verdict} ${name} @ ${fmtP(mv.listAt)} — 2h breakdown & underwater; free the capital.` };
-      // Gate-D CUT-CANDIDATE — headline only once conviction confirms (2 consecutive underwater
-      // passes). Until then it's armed: fall through so no headline fires (the armed note is emitted
-      // in the table loop). If it just escalated, alert with the confirmation count.
+      // Gate-D CUT-CANDIDATE — headline only once conviction confirms (ALERT_PERSIST_MS of
+      // underwater time, not a pass count). Until then it is armed: fall through so no headline fires
+      // (the armed note is emitted in the table loop).
       if (gate && gate.escalate && gate.reason === 'cut-candidate') {
         const um = Math.max(0, Math.round(((it._deltas && it._deltas.underwaterMs) || 0) / 60000));
         return { level: mv.verdict, msg: `${mv.verdict} ${name} @ ${fmtP(mv.listAt)} — underwater through a liquid window, sustained ~${um}m; free the capital.` };
@@ -480,7 +480,7 @@ function heldAlert(it) {
     }
   }
   // Structural-break escalation (V4) — a CONVINCING break of the V2 tripwire (≥δ below support, or
-  // 2 consecutive passes below support). Independent of the mom verdict; not gated by underwater.
+  // below support for ALERT_PERSIST_MS). Independent of the mom verdict; not gated by underwater.
   // R9 (PLAN-VIZ-LAYER VZ2a): convictionGate (raw price vs. support/cut-trigger) and
   // heldDisplay/momVerdict (the full persistence-gated judgment) are TWO SEPARATE state machines that
   // can genuinely disagree, so this branch must NOT hardcode the headline word to CUT regardless of the
@@ -1264,11 +1264,11 @@ async function main() {
   }
   if (!TARGETS_ONLY) {
     summaryLines.push(posAge != null
-      ? `  held basis positions.json ${posAge}m old${posAge > 25 ? ' ⚠ stale — a very recent trade may not show yet' : ''}` +
+      ? '  ' + staleBookBanner(posAge) +
         (offersInfo && !offersInfo.err
           ? ` · offer basis live log, newest line ${offersInfo.staleMin}m ago${noise.length ? ` · noise ignored: ${noise.length} offer(s) under ${fmtP(NOISE_OFFER_GP)} total` : ''}`
           : ` · offer basis unavailable (${offersInfo ? offersInfo.err : 'skipped'}) — active offers not covered this pass`)
-      : '  held basis positions.json unavailable');
+      : '  ' + staleBookBanner(null));
     if (incidentalNames.length) summaryLines.push(`  incidental inventory, ignored: ${incidentalNames.join(', ')}`);
   }
   summaryLines.push(`  loop /loop ${loopMin}m node pipeline/commands/watch-positions.mjs${tokens.length ? ' ' + tokens.map(t => `"${t}"`).join(' ') : ''}  (tightest cadence across ${all.length} item${all.length > 1 ? 's' : ''})`);

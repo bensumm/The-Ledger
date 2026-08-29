@@ -229,43 +229,38 @@ export function marginBudgetNote(state) {
    is untouched) and NOT any pricing; watch-positions.mjs consumes { escalate, armed, reason } to route an
    escalation into the headline block (escalate) vs. a visible armed NOTE (armed) vs. nothing.
 
-   Inputs (all from the current pass; the cross-pass counts come from computeDeltas):
+   Inputs (all from the current pass; the elapsed fields come from computeDeltas):
      verdict, gate          — momVerdict()'s verdict string + gate (e.g. 'CUT-CANDIDATE'/'D', 'CUT'/2)
-     passesUnderwater       — consecutive underwater-liquid passes (V1 counter)
+     underwaterMs           — ELAPSED ms the lot has been underwater-liquid
      price                  — live instabuy (clear-now price)
      support, cutTrigger    — V2 structural support + the (support−δ) tripwire
-     passesBelowSupport     — consecutive passes with price below support (V4 counter)
+     belowSupportMs         — ELAPSED ms price has been below support
+     breakdownMs            — ELAPSED ms in a live 2h breakdown
+     persistMs              — the confirm bar every elapsed field is compared against (ALERT_PERSIST_MS)
 
-   THESIS (TG1) — the agent-written declared-hold-plan input. `thesis = {exitPrice, tripwire, horizon}`
-   (from pipeline/lib/holdthesis.mjs, watch-READ-ONLY) plus `underwater` (live instabuy < break-even).
-   A patient/accumulation hold is DEFINITIONALLY underwater on the instant-clear from the moment its
-   bid fills, so the UNDERWATER/CUT-CANDIDATE headline cries wolf every pass on a lot where being
-   underwater IS the plan. When a thesis is declared and the live price still holds ABOVE the declared
-   tripwire, the expected-underwater signal is SILENCED to an armed NOTE (no headline) — the real risk
-   is the tripwire, not break-even. Below the tripwire it falls through to the normal V4/V7 escalation
-   so the genuine break headlines. momVerdict is UNTOUCHED — the verdict still SAYS underwater
-   (honest); only the headline is gated. Absent a thesis, behavior is byte-identical to today.
+   THESIS (TG1) — `thesis = {exitPrice, tripwire, horizon}` (holdthesis.mjs, READ-ONLY) plus
+   `underwater`. A patient hold is DEFINITIONALLY underwater from the moment its bid fills, so the
+   headline cries wolf on a lot where being underwater IS the plan. Above the declared tripwire that
+   signal is SILENCED to an armed note; below it, normal escalation. momVerdict is UNTOUCHED — the
+   verdict still SAYS underwater; only the headline is gated.
 
    PRECEDENCE (highest first):
-     1. Gate-2 breakdown CUT — EXEMPT: escalates IMMEDIATELY, unconditionally, never gated. This is
-        the byte-identical breakdown invariant — a live 2h breakdown while underwater is not a thing
-        to sit on; delaying it is the exact failure that cost the bludgeon exit. NEVER silenced by a
-        thesis (a real breakdown is real risk, thesis or not).
-     1b. THESIS silence (TG1; VN-2 widened) — a declared-thesis lot whose live price is still ABOVE
-        the tripwire → ARM (visible note), no headline, for the underwater/CUT-CANDIDATE signals AND
-        (VN-2) for LIST-TO-CLEAR: on a declared hold the pre-peak trough's "clear at the band top"
-        is exactly the expected dip the declared abort level supersedes — the band-flip frame was
-        re-litigating the plan (PLAN-VERDICT-NOISE RC7). Below the tripwire → fall through (a
-        LIST-TO-CLEAR resumes its own #4 arm-then-confirm). The Gate-2 CUT exemption (#1) is
-        untouched — a real breakdown is never thesis-silenced.
-     2. Structural break CONVINCINGLY broken — price ≥δ below support (i.e. below the cut-trigger) OR
-        below support for 2 consecutive passes → escalate. Codifies the override-discipline
-        "require conviction (0.5% or two passes)"; the direct fix for the 2026-07-06 too-tight
-        tripwire (a level broke −0.9% then bounced within one pass — arm-then-confirm would hold).
-     3. Gate-D clean-momentum CUT-CANDIDATE — arm-then-confirm: must survive 2 consecutive
-        underwater-liquid passes before escalating; the 1st pass ARMS (visible note, not a headline).
-     4. A single non-convincing graze of support (below support, not through the trigger, <2 passes)
+     1. Gate-2 breakdown CUT — EXEMPT: escalates IMMEDIATELY, unconditionally, never gated, never
+        thesis-silenced. A live 2h breakdown while underwater is not a thing to sit on (the bludgeon
+        exit is what delaying it cost).
+     1b. THESIS silence (TG1; VN-2 widened) — a declared-thesis lot still ABOVE its tripwire → ARM,
+        no headline, for underwater/CUT-CANDIDATE AND for LIST-TO-CLEAR (on a declared hold the
+        pre-peak trough's "clear at the band top" re-litigates the plan the abort level supersedes).
+        Below the tripwire → fall through, a LIST-TO-CLEAR resuming its own #4.
+     2. Structural break CONVINCINGLY broken — price ≥δ below support (below the cut-trigger) OR
+        below support for at least persistMs → escalate. The override-discipline "require conviction
+        (0.5% or persistence)"; fixes a tripwire that fired on a −0.9% graze that bounced at once.
+     3. Gate-D clean-momentum CUT-CANDIDATE — arm-then-confirm: must survive persistMs of
+        underwater-liquid time before escalating; before that it ARMS (visible note, not a headline).
+     4. A non-convincing graze of support (below support, not through the trigger, under persistMs)
         → ARM the structural break (visible note), no headline.
+     5. LIST-TO-CLEAR (gate 2, verdict LIST-TO-CLEAR) is NOT the #1 exemption and IS gated here — #1b
+        cross-references this rule, which was missing from the list.
    Anything else → neither escalate nor armed. */
 export function convictionGate({ verdict, gate,
   price = null, support = null, cutTrigger = null,

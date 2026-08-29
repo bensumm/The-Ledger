@@ -10,6 +10,60 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The away-scoped pass again beat the in-region one: a banner that cried wolf all day
+
+CLAUDE.md rule 10 requires one review pass scoped AWAY from the region just worked. Its yield this
+round, over code the reach-surface wave never touched.
+
+**A staleness banner measuring the wrong clock, and instructing a no-op.** `positions.json` is written
+only when the reconstruction CHANGES — `positionsSig` deliberately excludes `generatedAt` so a fresh
+timestamp alone never triggers a write. But `readOpenPositions` derives its age from `generatedAt` and
+`staleBookBanner` rendered that as staleness, so the ⚠ fired on the normal state (no position-affecting
+trade in 25 minutes) and told the agent to run the sync that SY1 auto-runs at the top of both callers.
+Reproduced directly at the write gate, and seen live on a watch pass whose banner read in the
+thousands of minutes with the book perfectly current. That is a
+permanent cry-wolf on the surface Ben uses most, and it trains the agent to discount the one signal that
+would matter on a genuinely stale book. The banner now says what it measures — `last changed Nm ago`,
+with `(no position-affecting trade since — not a staleness warning)` past the threshold — and the ⚠ and
+the re-sync prompt are DELETED, with the test rewritten to assert their absence.
+
+**The same banner's "ONE home" claim was false.** Its header said it exists so both positions surfaces
+word the age identically; measured, only `quote-items.mjs` imported it. `watch-positions.mjs` still
+hand-rolled the line with a hardcoded `posAge > 25` and a different wording, so the two demonstrably did
+not match. It now imports the shared function, which also deletes the unguarded literal. The header's
+claim that the age comes from positions.json's mtime was false too — it comes from `generatedAt`, which
+is how the drift hid. Verified by running the changed line: the watch dump now carries the shared text.
+
+**A verdict vocabulary that named a verdict the code cannot emit on the branch it described.**
+`pipeline/MONITORING.md` — the declared ONE home — said a falling regime with no live break "lands
+CUT-CANDIDATE (take the small loss)". `CUT-CANDIDATE` is reachable only from Gate D, which requires
+clean momentum; the falling branch splits on break-even into `SELL @ X (falling — clear in profit)` and
+`CUT @ X (falling & underwater)`. Both halves of the sentence were wrong, including calling a profitable
+clear a small loss. Fixed from the code. The two COPIES of the verdict set — in `docs/GLOSSARY.md` and
+the `/positions` skill, both of which cite MONITORING as the one home while enumerating it themselves —
+are DELETED rather than corrected: a set copied into three files had drifted in all three.
+
+**An escalation bar documented in PASS COUNTS while the code counts TIME.** `convictionGate`'s header
+listed `passesUnderwater`/`passesBelowSupport` — neither is a parameter — and stated "2 consecutive
+passes" for two rules the code gates on `ALERT_PERSIST_MS` of elapsed time. The same file explains at
+length why the bar is time-based on purpose (a pass-count threshold means polling twice as often
+manufactures alerts twice as fast), so the header contradicted its own module. The claim had propagated
+to MONITORING, the `/positions` skill and two `watch-positions.mjs` comments, one of which sat three
+lines above code reading a millisecond field. It is what the agent tells Ben when timing a cut, and it
+was wrong in both directions: at `--watch 30` "two passes" reads as 60 minutes against a 4-minute bar;
+on a 1-minute dip loop it reads as 2. Header fixed from the signature, pass-count phrasing deleted
+downstream, and the precedence list gained the LIST-TO-CLEAR rule its own cross-reference pointed at.
+
+**Derived numbers in prose, wrong again.** README's `check-imports.mjs` entry — the declared one home —
+stated three counts; all three had drifted, and the tool prints the true values on every run. Deleted
+rather than re-derived, along with two more in the source header.
+
+Findings deliberately NOT acted on, recorded so they are not re-chased: `momVerdict`'s consumer list in
+`js/quotecore.js` is stale, but re-listing files in prose is what regresses — it wants a pointer to
+`check-verdict-guards.mjs`, not a fresh list. `check-imports.mjs`'s `MODULE_ROOTS` omits
+`pipeline/daemons/**` and `pipeline/probes/**`, but running the exported checker over them found ZERO
+violations, so it is shape, not a live gap.
+
 ### Reach surface chunk 3: the inspector ships a price, and two forces fight over it
 
 `pipeline/commands/read-exit-surface.mjs` is the first surface that turns the measured reach surface

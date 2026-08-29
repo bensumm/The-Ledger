@@ -121,9 +121,10 @@ Print-only — it never writes trade data. Each run emits:
      chain — `watch-positions.mjs` sources the ask from the live exchange log, `quote-items.mjs --positions` from the
      root `offers.json` — so **`HOLD — ask filling` prints on BOTH** (previously only watch could, as
      quote-items.mjs had no offer read). Both surfaces render via the one `renderHeldVerdict`.
-   - **regime falling** (drift ≤ −5%) with no live break still lands **CUT-CANDIDATE** (list
-     to clear at the instabuy — take the small loss before a bigger one; the 0.20.0
-     falling-item rule).
+   - **regime falling** (drift ≤ −5%) with no live break splits on break-even, and neither branch is
+     `CUT-CANDIDATE` (that word is Gate D's, and Gate D requires clean momentum): at-or-above BE it is
+     **`SELL @ <instabuy>` — falling regime, clear in profit**; below BE it is
+     **`CUT @ <instabuy>` — falling & underwater**. The 0.20.0 falling-item rule.
    - **24h-cycle guard (unchanged) — input vs. decision.** The guard still governs its own
      question: *"the price is genuinely lower; is there a **proven, backtested hour-of-day
      recovery pattern** that justifies holding?"* — default **cut** unless proven. Daily/hourly
@@ -604,7 +605,9 @@ of the numbered signals, in more detail:
    lows watch-positions.mjs already fetches for the window line (`lib/levels.mjs` — **no new fetch**).
    The line itself is context (it names the level; `CUT_TRIGGER_DELTA` is an unvalidated
    placeholder), but as of **V4** a *convincing* break of this tripwire drives the arm-then-confirm
-   structural-break alert in item 1 (`< cut-trigger`, or 2 consecutive passes below support).
+   structural-break alert in item 1 (`< cut-trigger`, or below support for `ALERT_PERSIST_MS`).
+   THE BAR IS ELAPSED TIME, NOT A PASS COUNT, deliberately: a pass-count threshold means polling
+   twice as often manufactures alerts twice as fast. `watchstate.mjs` is the ONE home for the value.
 6. **RECOVERY-READ line** (V6, ADVISORY, OUTPUT-ONLY — nested under a held/bid note), e.g.
    `recovery-read: likely recovers — post-trough hour · flat regime · at support (a lean, not a
    probability)`. It answers the question every non-clean position poses — *recover above break-even,

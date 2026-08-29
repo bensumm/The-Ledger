@@ -118,9 +118,10 @@ These are different things at different levels — kept as two words on purpose.
 - **posture** — active (at the desk, price to fill) vs. overnight (walk away, deep bids only).
 
 ### Verdicts & validation
-- **verdict** — the gate-tree call on a held lot: NO-READ / DIURNAL-WATCH / SHOCK-WATCH / CUT /
-  LIST-TO-CLEAR / HOLD / CUT-CANDIDATE, plus display states PARKED (at break-even) and HOLD — per
-  thesis. Persistence-gated (escalations arm-then-confirm). The ONE home is `pipeline/MONITORING.md`.
+- **verdict** — the gate-tree call on a held lot, persistence-gated so escalations arm then confirm.
+  The vocabulary is NOT listed here: it is enumerated in `pipeline/MONITORING.md` step 4, the ONE
+  home, and a copy of it in this file had drifted (it named a verdict the code cannot emit on the
+  branch it described, and omitted three the code does emit).
 - **validator** — a pure check run on every surface returning pass / caution / reject. Its *action* is
   per-thesis: **gate** (verdict stands — reject drops the row) vs. **inform** (annotate only). Examples:
   reach, durable-floor, trajectory, buy-limit, dip-direction.
