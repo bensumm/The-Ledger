@@ -38,7 +38,7 @@
  * origin: overlapping windows share outcomes, so the raw count overstates precision.
  */
 import { windowStats, recentQuant, iqr } from './windowread.mjs';
-import { HOUR, firstIndexAfter, maxHighWithin, covers } from './forward-reach.mjs';
+import { HOUR, firstIndexAfter, maxHighWithin, covers, endLowWithin } from './forward-reach.mjs';
 
 export const DEFAULT_HORIZONS_H = [2, 6, 12, 24, 48, 96];
 export const DEFAULT_Z_GRID = [-1, -0.5, -0.25, -0.1, 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.5, 2, 3, 4];
@@ -65,19 +65,6 @@ export function wilsonHalfWidth(p, n, zCrit = 1.96) {
 /* windowStats reads `pt.timestamp`; the archive and forward-reach both use `.ts`. Bridged here rather
  * than in windowStats, whose every other caller already passes the `timestamp` shape. */
 const statsView = series => series.map(p => ({ ...p, timestamp: p.ts }));
-
-/* The end-of-window instasell: the LAST bucket in (from, from+windowH] printing an avgLowPrice. The
- * miss branch's payoff in §2's EV, returned as a PRICE — net() stays at chunk 2's single call site
- * rather than being applied twice. Pooled across origins it must be carried in z, never gp: over this
- * archive's span a big ticket moves 20%, so a pooled gp bail is not comparable to a current refHigh. */
-function endLowWithin(series, from, windowH) {
-  const end = from + windowH * HOUR;
-  let last = null;
-  for (let i = firstIndexAfter(series, from); i < series.length && series[i].ts <= end; i++) {
-    if (series[i].avgLowPrice != null) last = series[i].avgLowPrice;
-  }
-  return last;
-}
 
 /* refHigh/disp as of `at`, from complete days strictly before it. windowStats drops the day
  * containing `at`, which is what makes this no-look-ahead. Requires the FULL `nights` window: a disp

@@ -10,6 +10,91 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Reach surface chunk 4: the decisive backtest, and the null branch fired
+
+`pipeline/commands/join-exit-ev.mjs` scores a POLICY rather than a prediction: at each archive origin,
+list at each contender's ask for H hours; if the 1h archive reaches it, credit `net(ask)`; else bail at
+the window's last instasell, less the cost of having waited. That metric is not monotone in the ask —
+raising it raises the payoff and lowers the odds of collecting it — which is precisely what
+`join-reach-outcomes.mjs` could not do, and it prices every contender at every origin, so the pool is
+matched by construction instead of by whatever the deployed surfaces happened to co-log.
+
+**The pre-registered null branch fired, on both arms.** `askStar`'s deficit against the best incumbent
+has an item-clustered CI clear of zero at the decisive spec, the same sign in all three sensitivity
+horizons, and the same sign in both era halves — no flip to invalidate it, no ambiguity to argue over.
+So the reach surface ships as a DESCRIPTION layer, chunk 5's default `sellModel` swap is CANCELLED, and
+PLAN-REACH-SURFACE's §0 headline claim is downgraded in place. The top of the table is two INCUMBENTS
+and they are TIED — `asym` leads it on both arms, in both era halves, under both bail conventions, on
+independent windows and at every horizon on the deployable arm, but its margin over `reachFold`
+straddles zero, so nothing separates them. The finding is not that one incumbent won: it is that the
+surface lost, with `askStar+fold` landing below both of them AND below `quickSell*`, the live
+instabuy — the trivial null. No figures here on purpose: the archive is live, and successive runs of
+this same command moved every headline number while leaving every conclusion intact.
+
+**The acceptance check inverted the answer once, which is the whole reason the plan demanded it.**
+Contenders are RECOMPUTED from the series truncated at each origin, so this scores reconstructions
+rather than the deployed estimators, and nothing else in the plan bounds that swap. The check measures
+each recomputed ask against the ask that estimator actually logged — and caught `asym` being rebuilt as
+the RAW quantile while the deployed estimator logs the ORDERING-GUARDED level `max(quickSell, quantile)`.
+Correcting it moved `asym` from LAST place to FIRST. Two prior explanations for that divergence were
+tested and refuted before the real one was found: the reconstructed day COUNT matches the logged one on
+300 of 300 rows, and the archive is 24-of-24-bucket complete on 90 of 93 days, so neither a missing day
+nor a coverage gap was doing it. The check also sets the report's resolution — even `quickSell*`, a
+single archive field, reconstructs a fraction of a percent off its logged value, so any narrower gap is
+not real — and `askStar` has no row in it and cannot, having never been deployed.
+
+**Three earlier readings did not survive contact with outcomes.** Chunk 3's delay-cost story does not
+carry, and the sweep meant to test it turned out to be an identity: a miss scores an edge of exactly
+zero, so a fixed-ask contender's mean edge is `edge(0) + cost × reach`, which is the reach column
+again. The crossover is now solved in closed form rather than swept past. Pricing the wait reorders the
+incumbents at a large enough cost and does not rescue the surface at any cost in range. The bail convention settles chunk 1's open owner question sideways — switching from
+the aggressive `avgLow` bail to the passive `avgHigh` one turns EVERY contender's edge negative while
+leaving the WINNER unchanged — the order below first place does move, since a bail shifts only the
+reached rows and contenders reach at different rates. And
+`askStar` declines to price where the returns are highest — most incumbents earn MORE on the origins it
+refused — so the estimator arm is measured on the lower-return half of the market, which is why the
+unconditioned deployable arm is reported beside it rather than instead of it.
+
+**Two additions were made before the first full run and disclosed rather than tidied away**: a second
+arm (`askStar+fold`, the fallback policy chunk 5 would have shipped, scored over every origin, because
+bare `askStar` gates its own pool by refusing a large minority of them) and the bail sensitivity. Both
+arms must clear before a swap is licensed — a stricter bar than the plan set, never a looser one. The
+pre-registered retirement criterion is applied as a computed table rather than argued: it NOMINATES,
+chunk 8 executes, reference lines are excluded because a ruler is not an estimator, and a contender the
+acceptance check cannot bound at all is BLOCKED however large its deficit. `depth` is currently that
+contender — zero overlapping rows and a size convention invented here, since no archive origin has a
+held lot — so its last place is not evidence about the deployed depth read.
+
+**The criterion tried to nominate the shipped default, and that is a finding about the criterion.**
+As pre-registered, `reachFold` qualified on sign agreement across horizons — while its deficit sits
+BELOW the report's own reconstruction resolution, which makes it not a measurement. So the criterion
+gained the term it was missing: a nomination under the resolution floor is BLOCKED in code, because
+nothing may be retired on a gap narrower than the noise in the instrument that measured it. A second
+guard blocks a contender whose reconstruction the acceptance check cannot bound over a minimum row
+count — one matched row is not a bound, and treating `n > 0` as one had let a single-row contender
+through. Chunk 8 inherits the guards rather than a prose hedge.
+
+**What this opens**: the one-step ladder lifts every contender, most the ones that ask highest, so a
+single-shot score is a FLOOR on a relist policy and Option E is the live lead, not the surface.
+
+**Self-review found a one-hour look-ahead under the green suite.** Archive buckets are stamped with the
+START of their period, so the bucket AT an origin is future data, and an inclusive
+read cut handed it to every contender that touches the live pair: `quickSell*`, the band proxy feeding
+`reachFold`, and `asym`'s ordering guard, which is three of the top four including the winner. The
+no-look-ahead test could not see it: its fixture perturbed rows strictly PAST the origin while the leak
+was the bucket AT it. Both fixed, with a mutant that reverts the cut, and the read cut now FLOORS its
+timestamp to the hour so a wall-clock co-log entry cannot see the bucket straddling it either. Chunk 1
+was checked for the same class and is clean. **The first evidence offered for the stamping convention
+was circular** and is recorded as wrong: a store-lag over an hour follows from the fetcher only ever
+asking for the last COMPLETE hour, so it reads the same under either convention. Comparing a 1h
+bucket's volume against the twelve 5m buckets on each side is what settles it.
+
+Three of the suite's mutants exist only because a FIXTURE was too narrow — the ordering guard did not bind on a smooth sinusoid, and no reference line topped its
+table — which is recorded in the suite header: an assertion over data that never reaches the branch is
+not coverage. `endLowWithin` moved from `js/reach-surface.mjs` to `js/forward-reach.mjs` beside a new
+`endHighWithin`, both off one `lastPrintWithin`, because the two bails are different policies and a
+consumer must say which it charges. Full result: README's `join-exit-ev.mjs` entry.
+
 ### The away-scoped pass again beat the in-region one: a banner that cried wolf all day
 
 CLAUDE.md rule 10 requires one review pass scoped AWAY from the region just worked. Its yield this

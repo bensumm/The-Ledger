@@ -1,6 +1,8 @@
 # PLAN-REACH-SURFACE — one exit function: the reach surface `p(ask, H)`
 
-**Status: CHUNKS 0-3 SHIPPED; 4-9 PROPOSED.** Drafted 2026-08-28, successor to
+**Status: CHUNKS 0-4 SHIPPED; 5 CANCELLED; 6-9 PROPOSED.** ⚠ **Chunk 4's pre-registered NULL BRANCH
+FIRED** — the surface DESCRIBES and does not price better than what is already deployed. Read chunk 4
+before quoting §0 or any chunk-1/2/3 measurement as a reason to price off the surface. Drafted 2026-08-28, successor to
 `PLAN-REACHABILITY-CONSOLIDATION` (whose scorer shipped and whose premise did not survive).
 All measurements here were run against the live repo on that date. Spike measurements
 (marked SPIKE) used ad-hoc scripts and MUST be reproduced by the chunk-1 fixtures before
@@ -16,6 +18,12 @@ different functionals of it and can rank differently — that does not rescue ei
 live (measured 2026-08-28, `--horizon 24`): on the matched pool the reach ordering is exactly
 the inverse of the price ordering — pressure 37% (prices highest), reachFold 74%,
 quickSell* 81% (prices lowest, "wins"). Read literally the metric says "always instasell."
+
+⚠ **DOWNGRADED BY CHUNK 4.** The reframe below is still the right diagnosis of the OLD scorer, and the
+surface it motivated is real and useful as a description. What did NOT survive is the implied promise
+that a surface-derived ask would price better: measured against realized net gp over the archive, the
+EV-argmax ask LOSES to an incumbent the tool already ships. Every "the thing to build is" sentence in
+this section should be read as "the thing that was built and then measured", not as a live claim.
 
 The correct conclusion is not "build a better scorer." It is: **"which estimator is best" has
 no answer, because there is no best ask independent of (a) how long you will wait and (b) what
@@ -621,7 +629,101 @@ crash rather than a refusal on a hand-built stats.
 **25 assertion groups, 15 mutants killed.** One property is deliberately NOT mutation-verified and the
 suite says so: `foldAsk`'s `: null` return fallback is unreachable behind its own preconditions.
 
-### Chunk 4 — The decisive backtest: `pipeline/commands/join-exit-ev.mjs`
+### Chunk 4 — The decisive backtest: `pipeline/commands/join-exit-ev.mjs`  ✅ SHIPPED — **NULL BRANCH**
+
+**THE RESULT.** The pre-registered null branch fired on both arms. `askStar`'s deficit against the best
+incumbent has an item-clustered CI clear of zero at the decisive spec, the same sign in all three
+sensitivity horizons, and the same sign in both era halves — so there is no era flip to invalidate it
+and no ambiguity to argue over. **The surface ships as a DESCRIPTION layer, chunk 5's default
+`sellModel` swap is CANCELLED, and §0's headline claim is downgraded in place above.** The winner is
+`asym`, the ordering-guarded quantile ask the tool already deploys — it leads the pooled table on both
+arms, in both era halves, under both bail conventions, on independent windows and at every horizon on
+the deployable arm. But its margin over `reachFold`, today's default, STRADDLES ZERO: the two
+incumbents at the top are tied on this evidence, and the finding is not that one of them won. It is
+that the surface lost — `askStar+fold` sits below both of them and below `quickSell*`, the live
+instabuy, which is the trivial null this whole plan set out to beat.
+NO FIGURES ARE QUOTED HERE, deliberately, for the reason chunk 3 recorded: the archive is live and a
+digit written down here rots. Run the command.
+
+**As shipped**, matching the spec below with three additions made before the first full run and
+disclosed in the file header rather than tidied away:
+(a) a SECOND arm — `askStar+fold`, the fallback policy chunk 5 would actually have shipped, scored over
+EVERY origin, because bare `askStar` refuses a large minority of origins and therefore gates its own
+pool; both arms must clear before a swap is licensed, a stricter bar than this plan set;
+(b) a BAIL-CONVENTION sensitivity, which settles chunk 1's open owner question (see below);
+(c) an UNBOUNDED-RECONSTRUCTION block on the retirement criterion, so a contender the acceptance check
+cannot score at all can never nominate a deployed estimator for retirement.
+
+**THE ACCEPTANCE CHECK INVERTED THE ANSWER ONCE.** The plan required it, and it earned its place
+immediately: `asym` was being reconstructed as the RAW quantile while the deployed estimator logs the
+ORDERING-GUARDED level `max(quickSell, quantile)`. Correcting that moved `asym` from LAST place to
+FIRST — i.e. the head-to-head's entire answer was a reconstruction bug until the check caught it. It
+also fixes the report's own resolution: even `quickSell*`, a single archive field, reconstructs a
+fraction of a percent off its logged value, so a narrower head-to-head gap is not real. `askStar` has
+no row there and cannot — it was never deployed — so the check bounds the INCUMBENTS ONLY.
+
+**THREE PRIOR READINGS DID NOT SURVIVE.**
+1. **Chunk 3's delay-cost story does not carry to outcomes, and the sweep that tested it was an
+   identity.** Chunk 3 found the EV argmax landing on rarely-reached cells and shipped a crossover
+   audit for it. Here a miss scores an edge of exactly zero, so a fixed-ask contender's mean edge is
+   `edge(0) + cost × reach` — an identity, which makes the sweep almost redundant against the reach
+   column and makes a sweep that stops short report "no crossover" when one exists. The crossover is
+   now solved in closed form. Pricing the wait reorders the incumbents at a large enough cost; it does
+   not rescue the surface at any cost in range.
+2. **The bail convention settles chunk 1's open question, and not the way it was framed.** Switching
+   from the aggressive `avgLow` bail (cross the spread into a standing bid) to the passive `avgHigh`
+   one (rest at the ask level) turns EVERY contender's edge negative — listing at any of these asks
+   does worse than simply resting — while leaving the WINNER unchanged. The order BELOW first place
+   DOES move, because a bail shifts only the REACHED rows and contenders reach at different rates. So
+   the choice is load-bearing for the level and for the runner-up ordering, and not for the headline.
+3. **`askStar` declines to price where the returns are highest.** Most incumbents earn MORE on the
+   origins it refused, so the pool it consents to is the lower-return half of the market and the
+   estimator arm is measured only there. That is why both arms are reported: the deployable one is not
+   conditioned, and comparing the two deficits is the check — not an assumption about which way the
+   conditioning runs.
+
+**WHAT THIS OPENS.** The one-step ladder (relist `LADDER_Z_STEP` dispersions lower for a second window
+on a miss) lifts EVERY contender, most the ones that ask highest. A single-shot score is a FLOOR on a
+relist policy, not its ceiling, so Option E is the live lead, not the surface. And `pressure` —
+whose reconstruction the acceptance check bounds tightly — carries a deficit that clears the
+pre-registered retirement criterion; the command NOMINATES, chunk 8 executes, and the BID side
+survives regardless (this scores the ASK leg only).
+
+**⚠ THE CRITERION TRIED TO NOMINATE THE SHIPPED DEFAULT, AND A GUARD STOPPED IT.** As pre-registered,
+`reachFold` — today's default `sellModel` — qualified on sign agreement across horizons. Its deficit
+is SMALLER than the report's own reconstruction resolution floor, so it is not a measurement at all,
+and the nomination is now BLOCKED in code rather than hedged in prose: **nothing may be retired on a
+gap narrower than the noise in the instrument that measured it.** A second guard blocks any contender
+whose reconstruction the acceptance check cannot bound over a minimum row count — one matched row is
+not a bound. Both were added because the criterion as pre-registered pointed at the shipped default,
+which is the useful part of the exercise: the criterion needed a resolution term and did not have one.
+Chunk 8 inherits the guards, not the hedge.
+
+**WHAT SELF-REVIEW FOUND, and it is the entry worth reading.** The chunk shipped its no-look-ahead
+invariant, its mutation test for it, and a green suite — and still leaked an hour. An archive bucket is
+stamped with the START of its period, so the bucket AT an origin covers the hour AFTER it; the read cut
+was inclusive, so every contender that touches the live pair (`quickSell*`, the band proxy feeding
+`reachFold`, and `asym`'s ordering guard — three of the top four, including the WINNER) saw an hour of
+future. **The first evidence offered for the convention was circular and is recorded here as wrong**:
+a store-lag over an hour follows from the fetcher only ever asking for the last COMPLETE hour, so it
+reads identically under either stamping. What actually settles it is comparing a 1h bucket's volume
+against the twelve 5m buckets on each side. The suite could not
+see it because its no-look-ahead fixture perturbed rows strictly PAST the origin while the leak was the
+bucket AT it — a green assertion over data that cannot reach the defect. Both are fixed: `readableCut`
+stops strictly before the origin, the outcome window still starts after it (so that bucket now belongs
+to neither side), and a mutant reverting the cut reddens the group. Chunk 1 was checked for the same
+class and is clean — `windowStats` drops the day containing its `now`, so the surface's own reference
+never read that bucket.
+
+**Acceptance, as met:** no-look-ahead is mutation-verified (deleting a truncation reddens the
+suite); the pure core is fixture-pinned on a deterministic synthetic series; the report prints the
+funnel, the effective-n honesty block, the per-cell ITEM counts beside the origin counts, and the
+delayCost sweep. Every property is mutation-verified; the suite header carries the mutant table and
+the count, which is where a count belongs.
+
+---
+
+_The original chunk-4 spec, kept for what it pre-registered:_
 The head-to-head the failed scorer could not be. **Recompute-per-origin** (the
 `join-depth-outcomes` precedent): at each origin, truncate the series to `ts` (no look-ahead),
 recompute each contender's ask from the truncated series, then score **realized net gp/unit** of
@@ -653,7 +755,11 @@ fixture-pinned pure core; the report prints the funnel, the effective-n honesty 
 **Proves it wrong**: the null branch, or instability — a ranking flipping sign between era
 halves invalidates the pooled headline and blocks retirement.
 
-### Chunk 5 — Surface integration: the `curve` sell model + co-log
+### Chunk 5 — Surface integration: the `curve` sell model + co-log  ❌ CANCELLED by chunk 4
+The default `sellModel` swap this chunk exists to perform is exactly what chunk 4's null branch
+cancels. Do NOT build it on the current evidence. If a future surface variant beats the incumbents
+under the same pre-registered criterion, this spec is the one to revive — unchanged.
+
 `js/estimators/sell-models/curve.mjs` + one registry line in `SELL_TOP_MODELS` (the seam PC3
 built for exactly this). `propose(ctx)` reads `extra.reachSurface`; absent surface ⇒ degrade to
 reach-fold. The shell's non-skippable floors apply unchanged — the curve can never propose past

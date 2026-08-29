@@ -60,3 +60,20 @@ export function maxHighWithin(series, from, windowH) {
 export function covers(series, until) {
   return !!(series && series.length && series[series.length - 1].ts >= until);
 }
+
+/* The LAST bucket in (from, from+windowH] printing `field`, as a PRICE; tax is the caller's. */
+export function lastPrintWithin(series, from, windowH, field) {
+  if (!series || !series.length) return null;
+  const end = from + windowH * HOUR;
+  let last = null;
+  for (let i = firstIndexAfter(series, from); i < series.length && series[i].ts <= end; i++) {
+    if (series[i][field] != null) last = series[i][field];
+  }
+  return last;
+}
+
+/* The end-of-window bail for a seller whose ask was never reached: `endLowWithin` crosses the spread
+ * into a standing bid, `endHighWithin` rests at the ask level. Different policies that rank contenders
+ * differently, so a consumer must say which it charges. */
+export const endLowWithin = (series, from, windowH) => lastPrintWithin(series, from, windowH, 'avgLowPrice');
+export const endHighWithin = (series, from, windowH) => lastPrintWithin(series, from, windowH, 'avgHighPrice');

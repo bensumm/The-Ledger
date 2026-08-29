@@ -866,7 +866,9 @@ Everything in this section is a per-day tally over a fixed lookback: "the level 
 `read-exit-surface.mjs` (PLAN-REACH-SURFACE chunk 3) answers a different question off the same archive —
 `p(ask, H)`, the probability an ask is reached within a HORIZON, replayed from thousands of origins — and
 inverts it into an EV-maximizing ask. It is INFORM-ONLY and gates nothing; nothing in the tables above
-reads it. Two rules carry out of its gate (`plans/PLAN-REACH-SURFACE.md` §1c, the ONE home for the
+reads it — and chunk 4's backtest (`join-exit-ev.mjs`) measured that EV-maximizing ask against realized
+net gp and found it BEATEN by a deployed incumbent, so treat the surface as a description of where a
+level sits, never as a price to quote. Two rules carry out of its gate (`plans/PLAN-REACH-SURFACE.md` §1c, the ONE home for the
 numbers): a probability target answers "how long", never "how much", so a p≥pTarget level is not a price;
 and the argmax sits on a plateau, so it is quoted as a band. Its behaviour and limits: README's entry.
 

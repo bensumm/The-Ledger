@@ -93,7 +93,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   re-exports it as `quantile`, `retrojoin.mjs` aliases `quantileOf`),
   `forward-reach.mjs` (the shared FORWARD-SCORING primitives over the 1h archive — `touchedAt` (bid
   side, `avgLowPrice`), `reachedWithin` / `maxHighWithin` (ask side, `avgHighPrice`), `covers`,
-  `firstIndexAfter`. **Lives in `js/` as of PLAN-REACH-SURFACE chunk 0** (it was
+  `firstIndexAfter`, and the END-OF-WINDOW bail pair `endLowWithin` / `endHighWithin` off one
+  `lastPrintWithin(series, from, windowH, field)` (chunk 4 homed them here; `js/reach-surface.mjs` had
+  carried a private `endLowWithin` twin). The two bails are DIFFERENT POLICIES for a seller whose ask
+  was never reached — cross the spread into a standing bid (`avgLow`, chunk 1's choice) or rest at the
+  ask level (`avgHigh`) — and `join-exit-ev.mjs` measures that they rank contenders differently, so a
+  consumer must say which it charges rather than inheriting one. **Lives in `js/` as of PLAN-REACH-SURFACE chunk 0** (it was
   `pipeline/lib/market/forward-reach.mjs`; that path is now a one-line re-export shim so every
   pipeline importer resolves byte-identically, the `pipeline/lib/signal/estimators.mjs` pattern). The
   move is what lets `js/reach-surface.mjs` build the surface from the same walk the joiners score
@@ -165,7 +170,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `read-exit-surface.mjs` owns that. The chunk-2 stop-or-go gate and what it measured live in
   `plans/PLAN-REACH-SURFACE.md` §1c, the ONE home (don't restate its numbers here — they were, once).
   The one rule to carry out of it: **`pTarget` must never pick a price.** It answers "how long",
-  never "how much"),
+  never "how much". ⚠ **And chunk 4 has now measured what `askStar` is worth**: scored against realized
+  net gp over the archive it LOSES to a deployed incumbent, decisively enough to fire the plan's
+  pre-registered null branch. Everything above is still how the arithmetic works; none of it is a
+  reason to price an offer off `askStar`. See `join-exit-ev.mjs`),
   `windowread.mjs` (P2 — pure window-range/reach math:
   **`windowReliability`** (DT4, 2026-08-10 — the split-half hours gate: parity-split the last
   `WINDOW_RELIABLE_NIGHTS` (14) days, `hourProfile` each half, Pearson-correlate the de-trended devLow/devHi
@@ -1625,8 +1633,98 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     number** — see `plans/PLAN-REACH-SURFACE.md` §5 chunk 3, the ONE home; don't restate it here. **INFORM-ONLY: gates nothing, prices no offer, writes only
     `pipeline/.cache/last-report/exit-surface.json`.** `MIN_COVERED_DAYS`/`PLATEAU_TOL_FRAC`/
     `P_STAR_FLOOR`/`delayCost`/`pTarget` are all PLACEHOLDER and printed beside the numbers they moved.
-    Chunk 4's `join-exit-ev.mjs` is what scores any of this against realized gp; until then it
-    DESCRIBES. `--horizon`/`--price`/`--qty`/`--delay-cost`/`--p-target`/`--nights`/`--json`.)
+    Chunk 4's `join-exit-ev.mjs` HAS now scored it, and the answer was NO — read that entry before
+    quoting this one; what survives here is the description, not a pricing recommendation. `--horizon`/`--price`/`--qty`/`--delay-cost`/`--p-target`/`--nights`/`--json`.)
+
+    **`join-exit-ev.mjs`** (PLAN-REACH-SURFACE chunk 4 — the decisive backtest, and **the
+    pre-registered NULL BRANCH FIRED: `askStar` does not beat the best incumbent, so the reach surface
+    ships as a DESCRIPTION layer, chunk 5's default `sellModel` swap is CANCELLED, and the plan's
+    headline claim is downgraded.** Read that before quoting anything else here.
+    **What it scores is a POLICY, not a prediction**: at each origin, list at the contender's ask for H
+    hours; if the 1h archive reaches it, credit `net(ask)`; else bail at the window's last instasell,
+    less the cost of having waited. That metric is NOT monotone in the ask — raising it raises the
+    payoff and lowers the odds of collecting it — which is exactly what `join-reach-outcomes.mjs`
+    could not do, and why that command DESCRIBES where each estimator prices while this one ranks.
+    Every contender is priced at EVERY origin, so the pool is matched by construction rather than by
+    whatever the deployed surfaces happened to co-log.
+    **THE TOP OF THE TABLE IS TWO INCUMBENTS, AND THEY ARE TIED.** `asym` (the ordering-guarded
+    quantile ask `max(quickSell, the 14-day ask quantile)` — `asymEstimate`'s deployed level) leads
+    the pooled table on both arms, in both era halves, under both bail conventions, on independent
+    (non-overlapping) windows and at every horizon on the deployable arm. But its margin over
+    `reachFold`, today's default sell model, has a cluster CI that STRADDLES ZERO, so nothing here
+    separates them and no claim should. What IS separated is where the surface lands: `askStar`'s
+    deficit against the leader has a CI clear of zero with the same sign across the sensitivity
+    horizons and both era halves, and the deployable `askStar+fold` sits below BOTH incumbents AND
+    below `quickSell*`, the live instabuy — the trivial null. That is the pre-registered criterion,
+    run in the direction nobody wanted.
+    **TWO ARMS, because bare `askStar` gates its own pool.** It refuses a large minority of origins
+    (thin cells and grid-top optima), so the estimator arm is CONDITIONED on it consenting to price.
+    The report scores the deployable policy separately — `askStar+fold`, the surface where it prices
+    and reach-fold where it refuses, which is what chunk 5 would have shipped — over EVERY origin, and
+    both arms must clear before a swap is licensed. That is a stricter bar than the plan set, never a
+    looser one. The refused-vs-priced split is printed because it settles the direction of the
+    conditioning: most incumbents earn MORE on the origins `askStar` declined, so what it consents to
+    price is the LOWER-return half of the market and the estimator arm is measured only there. Read
+    the two arms' deficits against each other rather than assuming the conditioning runs one way.
+    **THE ACCEPTANCE CHECK IS NOT CEREMONY — it inverted the result once already.** Contenders are
+    RECOMPUTED from the truncated series, so this scores reconstructions rather than the deployed
+    estimators, and nothing else in the plan bounds that swap; the report therefore opens by measuring
+    each recomputed ask against the ask that estimator actually logged, over the overlapping
+    `(itemId, ts)` rows. It caught `asym` being rebuilt as the RAW quantile while the deployed
+    estimator logs the GUARDED level — correcting it moved `asym` from last place to first. It also
+    fixes the report's own resolution: even `quickSell*`, which is a single archive field, reconstructs
+    a fraction of a percent off its logged value (an hourly average against a live print), so a
+    head-to-head gap narrower than that is not real. `askStar` has NO row in that table and cannot —
+    it was never deployed, so the check bounds the INCUMBENTS ONLY. A contender the check scores zero
+    rows for is marked `†` UNBOUNDED in every table and can never be nominated for retirement; `depth`
+    is currently that contender, and its size is a convention invented here (a fixed fraction of daily
+    flow) because no archive origin has a held lot, so its last-place finish is not evidence about the
+    deployed depth read.
+    **The pre-registered RETIREMENT criterion is applied, not argued** — deficit CI clear of zero at
+    the decisive spec plus the same sign in ≥2 of 3 sensitivity horizons, reference lines excluded,
+    unbounded reconstructions blocked, an era sign flip blocking. It NOMINATES; **chunk 8 executes, and
+    a nomination is not a retirement.** Bid-side consumers survive either way — this scores the ASK leg
+    only. Run the command for the current nomination list rather than quoting one from here.
+    **THE CRITERION TRIED TO NOMINATE THE SHIPPED DEFAULT, AND A GUARD STOPPED IT — that exchange is
+    the most useful thing this chunk produced.** As pre-registered, `reachFold` qualified: a deficit
+    against the leader whose sign repeated across horizons. But that deficit is SMALLER than the
+    report's own reconstruction resolution — the figure the acceptance check prints two sections
+    earlier — so it is not a measurement, and a nomination under the floor is now BLOCKED in code
+    rather than hedged in prose. Nothing may be retired on a gap narrower than the noise in the
+    instrument that measured it. The same guard, plus a row floor on what counts as a bounded
+    reconstruction, leaves exactly one live nomination; run the command for it rather than quoting
+    one from here.
+    **Three sensitivities are load-bearing and two of them moved something.** (1) The `delayCost` sweep
+    turns out to be an ALGEBRAIC IDENTITY, not a robustness check: a miss scores an edge of exactly
+    zero, so a contender whose ask does not move with the cost has mean edge `edge(0) + cost × reach`
+    — which means the sweep carries nothing the reach column did not already, and a sweep that stops
+    short reports "no crossover" when there is one. The crossover is now SOLVED in closed form and
+    printed. What it says is that a higher-reaching estimator overtakes the leader only once waiting
+    costs a substantial fraction of the item's own price per unit per window — and that nothing in the
+    range promotes `askStar`, so the chunk-3 reading that a free wait was doing the work does not
+    survive contact with realized outcomes. (2) The BAIL CONVENTION settles chunk 1's open owner question in an
+    unexpected way: switching from the aggressive `avgLow` bail (cross the spread) to the passive
+    `avgHigh` one (rest at the ask level) turns EVERY contender's edge negative — listing at any of
+    these asks does worse than simply resting — while leaving the WINNER unchanged. The order BELOW
+    first place does move, which is why both conventions are scored instead of one being inherited:
+    the bail shifts only the REACHED rows, so contenders that reach at different rates move apart. (3) The one-step LADDER (relist `LADDER_Z_STEP`
+    dispersions lower for a second window on a miss) lifts every contender, most the ones that ask
+    highest, so Option E has real headroom and a single-shot score is a FLOOR on a relist policy.
+    NO LOOK-AHEAD is the load-bearing invariant, it is mutation-verified, and it is an hour finer than
+    it looks: an archive bucket is stamped with the START of its period, so the bucket AT an origin is
+    future data. (The store-lag does NOT establish that — the fetcher only ever requests the last
+    COMPLETE hour, so a lag over an hour is a property of the fetch policy and reads the same under
+    either convention. Comparing a 1h bucket's volume against the twelve 5m buckets on each side of it
+    does establish it.) `readableCut`
+    stops strictly before it and the outcome window starts after it, leaving that bucket to neither
+    side; contenders, reference and dispersion are all rebuilt from what remains, and deleting any of
+    the truncations reddens the suite. INFORM-ONLY: gates nothing, writes nothing, prices no offer. Honest limits — one
+    92-day era and one update cycle; `reached ≠ filled` (queue position is invisible in a bucketed
+    aggregate, so every reach rate bounds a real offer from ABOVE and flatters the HIGH asks most);
+    origins overlap unless thinned and every origin of an item shares one price path, so read the ITEM
+    counts, never the origin counts — the per-cell table prints both for that reason.
+    `--items`/`--stride`/`--horizon`/`--delay-cost-frac`/`--depth-qty-frac`/`--bail`/`--min-rows`/
+    `--warmup-days`/`--acceptance-n`/`--json`.)
 
     **`join-reach-basis.mjs`** (2026-08-13, PLAN-REACH-BASIS-DECISION — settles the digest's
     recent-3-vs-full-window ask-reach split that `screen-flip-niches.mjs`'s header had flagged as KNOWN,
