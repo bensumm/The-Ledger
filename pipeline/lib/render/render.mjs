@@ -71,7 +71,7 @@ import { gradeCls, fmtP } from '../../../js/money-format.js';
                (a fired gate flag) below — a screen/quote row's regime line + any REJECT/CAUTION note.
      context = every inform-only family: diurnal, forecast, ask-headroom, asym, window-clear,
                reach-relief, pressure-exit, guide-anchor, stale-exit, reach-placement, window-exit, and screen's footer inform
-               families (caution / trajectory-reach / headroom / window-clear / asym / demand — those
+               families (caution / trajectory-reach / headroom / window-clear / asym — those
                ride as PRE-FORMATTED strings, not typed kinds, so they carry no NOTE_KINDS entry; their
                tier is context by this doctrine). Rendered + relayed by default, same as core.
      shadow  = never entered a report object: suggestions.jsonl analytics fields (estBuy/estSell/
@@ -101,7 +101,6 @@ export const NOTE_KINDS = {
   reachRelief:  { prefix: '  ↥ ',  tier: TIER.context },  // PLAN-LIQUIDITY-REACH reach-fold relief
   pressureExit: { prefix: '  ◇ ',  tier: TIER.context },  // PB4 pressure-exit TRIAL line (opt-in flag)
   reachPlacement: { prefix: '  ⊙ ', tier: TIER.context }, // PLAN-QUOTE-PLACEMENT — the read-window-range.mjs placement percentile folded onto the quote
-  trajectory:   { prefix: '  ⌁ ',  tier: TIER.context }, // the multi-day shape read (trajectoryRead) folded onto the quote (fang under-read fix); the DAILY TRAJECTORY rows above it ride as plain strings (V5-block pattern)
   fcTrack:      { prefix: '  ⇅ ',  tier: TIER.context }, // PLAN-DRIFT-VS-CRASH — the phase-aligned floor/ceiling slope-asymmetry + floor-break read (floorCeilingTrack), folded directly under the trajectory read
   windowExit:   { prefix: '  ↗ ',  tier: TIER.context },  // PLAN-POSITIONS-WINDOW-READ — the auto-surfaced ask-side typical-exit read on a big-ticket held lot (read-window-range.mjs --ask, folded in)
   askReachDecay: { prefix: '  ↕ ', tier: TIER.context },  // PLAN-DIURNAL-TRIAGE DT3 — is the intended ask sliding out of reach? (askReachDecay/askReachDecayNote), folded onto every price-recommendation surface. Replaced the `hourlyDrift` kind when the per-hour slope was deleted; same sigil/tier — it is a reach read, same family.

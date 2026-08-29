@@ -17,11 +17,14 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { GOVERNED_DOCS } from '../ci/lint-guard-lists.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
 const GUARD = join(ROOT, 'pipeline', 'ci', 'lint-guard-lists.mjs');
-const DOCS = ['CLAUDE.md', 'docs/FLOW.md', '.claude/skills/cleanup/SKILL.md'];
+// IMPORTED, not restated: a hardcoded copy here is a second home for the governed set, and it went
+// stale the first time a doc was added — the fixture wrote 3 docs while the guard demanded 4.
+const DOCS = GOVERNED_DOCS;
 
 const workflow = (checksScripts, smokeScripts = []) => `name: checks
 jobs:

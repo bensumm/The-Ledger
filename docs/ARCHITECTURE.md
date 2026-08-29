@@ -62,7 +62,18 @@ structurally prevented.
 | E8 | Tax/break-even math has exactly ONE home | *(proposed — a `no-tax-math-outside-quotecore/money-math` check)* | a `breakEven`/`netMargin`/`maxBuyForExit` defined outside `js/quotecore.js`/`js/money-math.js` |
 | E9 | The app-imported module set is known and acknowledged (APP_VERSION blast radius) | *(proposed — the RC-C app-import manifest test, ships with the directory hierarchy)* | a new app import of a shared module without updating the manifest |
 
+| E10 | Every auto-discovered acceptance fixture passes | `pipeline/ci/run-tests.mjs` (discovers `pipeline/test/*.test.mjs`) | any suite exiting non-zero |
+| E11 | No locally-runnable daemon can write to git | `pipeline/ci/check-daemon-safety.mjs` | a registered daemon importing or shelling the git writer; scope is REGISTRY-derived, not a directory listing |
+| E12 | Every `diurnalForecast`/`driftExitFrom` call passes `phase` as a RESOLVABLE value | `pipeline/ci/check-forecast-guards.mjs` | a `phase` read off an object `computeQuote` never returns — which silently disables the post-shock refusal |
+| E13 | Every production `momVerdict()` threads `lotCtx` | `pipeline/ci/check-verdict-guards.mjs` | a call site that drops the softening context |
+| E14 | Comment volume and dated narrative only ever ratchet DOWN | `pipeline/ci/lint-comments.mjs` (+ `comment-budget.json`) | a file over its baseline, or a new file over NEW_FILE_CAPS |
+| E15 | Every `PLAN-*` reference resolves to a plan on disk | `pipeline/ci/lint-plan-refs.mjs` | a citation to a deleted plan — the only existence guard `plans/` has |
+| E16 | Every gating guard is NAMED in each doc that enumerates the `checks` job | `pipeline/ci/lint-guard-lists.mjs` | a guard added to `checks.yml` but absent from a governed doc — including this table |
+
 E8–E9 are *proposed*: their rule is real but the guard isn't built yet. Until then they're ⚖️ judgment.
+E10–E16 were absent for the whole life of this table, so seven CI-ENFORCED rules read here as ⚖️
+judgment — backwards for exactly the rules most likely to be quietly loosened. This table is now
+governed by `lint-guard-lists.mjs`, so a guard added to `checks.yml` and not added here fails CI.
 
 ---
 

@@ -168,6 +168,17 @@ async function run() {
     failures.push(`volDay pin: a ZERO daily-volume item graded ${cap.grade} — THIN_GRADE_CAP did not fire. `
       + 'The Finder is reading /1h (STATE.VOL), `thin` reverted to `volDay > 0`, the `|| it.volume` fallback is back, or THIN_VOL_DAY moved.');
 
+  const sortKeyAfter = async (value) => {
+    await page.selectOption('#sortSel', value);
+    return page.evaluate(() => { try { return JSON.parse(localStorage.getItem('sort:finder') || 'null'); } catch { return null; } });
+  };
+  const optionValues = await page.evaluate(() => [...document.querySelectorAll('#sortSel option')].map(o => o.value));
+  for (const v of optionValues) {
+    const stored = await sortKeyAfter(v);
+    if (!stored || stored.key !== v) failures.push(`sortSel: choosing "${v}" left the finder sorted by `
+      + `${stored ? stored.key : 'nothing'} — no matching column in finderSort, so the control is dead.`);
+  }
+
   if (!liq.found)       failures.push('volDay pin: the liquid fixture row never rendered — fixture or browse gate changed');
   else if (!liq.grade)  failures.push(`volDay pin: no grade parsed for the liquid row (title="${liq.title}")`);
   else if (!ABOVE_CAP.includes(liq.grade))

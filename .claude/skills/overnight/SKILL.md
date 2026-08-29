@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.26
+version: 1.27
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -15,7 +15,7 @@ confirmed live, 2026-07-16). The sizing prose supplements the tables, it doesn't
 **Relay both surfacing tiers — nothing trimmed speculatively (R10, 2026-07-16).** The render layer
 labels every note family a TRACKING tier — `core` (verdicts, alerts, the WATCHLIST, the accumulation
 table) and `context` (the inform-only families: diurnal, forecast, ask headroom, asym, window-clear,
-reach relief, demand). _judgment:_ **both render AND relay by default** — there is NO default-hidden
+reach relief). _judgment:_ **both render AND relay by default** — there is NO default-hidden
 middle tier, so surface the context notes too. The tier registry lives in `pipeline/lib/render/render.mjs`'s
 header — the ONE registry; don't restate tiers here.
 

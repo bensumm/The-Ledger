@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.63
+version: 1.64
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -41,11 +41,11 @@ sections plus your own prose:
   carries the same pair inline — relay both halves of that cell (PP2).** _(judgment: honesty +
   read-the-row discipline; wording enforced in `pipeline/lib/render/emit.mjs` `formatAsymFill`, rendered
   into the cell by `js/estimators/cells.mjs`)_ `asymPair` scores each level against the SAME array it
-  was drawn from, so `pAsk` is 0.86 on 89.9% of 8,300 logged rows and `pBid` 0.29 on 86.5% — the
+  was drawn from, so `pAsk` is 0.86 on the large majority of logged rows and `pBid` 0.29 likewise — the
   `ASYM_P_LO`/`ASYM_P_HI` quantiles read back, not per-item measurements. "printed 12/14d" is a rank
   position in an in-sample window; it is not a fill probability, and the deep bid is touched about 4
   days in 14 — a level to leave resting, not a fill to plan a lot around. The ask ordering guard binds
-  on ~71% of rows (recomputed 71.1%, 2,133/3,001; it read 69.7% off a smaller pool — the ~70% shape is
+  on ~70% of rows (the denominator grows with accrual — the shape is
   the durable claim, the digits accrue), which is why the clause names the quoted price and the measured
   level separately (`ask X (= live instabuy, above the Y level that printed N/14d)`); collapsing those
   two numbers into one is the error the wording exists to prevent.
@@ -56,8 +56,8 @@ sections plus your own prose:
   mechanisms — do not expect either to appear because the other is fixed. So read the clause on
   `/scan` and a per-item quote, and do NOT go looking for it here (tracked in `PLAN.md`s folded
   PLAN-PATIENT-PAIR section, open item 1). What follows describes it where it does render.
-  **And the pair is now MEASURED, which is what to carry into any read of it:** over 39,110 rows /
-  766 items the deep bid is touched **17.8%** within 24h against a logged `pBid` of 31.1%, the ask is
+  **And the pair is now MEASURED, which is what to carry into any read of it:** over the accruing pool
+  the deep bid is touched **17.8%** within 24h against a logged `pBid` of 31.1%, the ask is
   reached **~24%** given the touch against a logged `pAsk` of 86.8%, and the round trip completes
   **4.3%** — **1.5% on big-ticket**. MEASURED, because an earlier version of this line asserted big-ticket
   is "where nearly all held capital sits" and that was never checked: over 438 closed lots / 5.19b gp,

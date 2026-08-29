@@ -89,9 +89,9 @@ reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Oper
   paired: the fold PRICE and the probability beside it must declare the SAME basis, or one row contradicts
   itself on a regime-changed item. What changed is *which* basis both use. **Recent-3 is four-valued** — at
   n=3 the fraction can only be 0, ⅓, ⅔ or 1, so one night's print swings it by a third of its range, which
-  is the noisiest input the estimator has. Forward-scoring backs the flip: over 6,016 ask rows with a real
-  8h outcome, a higher full-window reach fraction printed **9.8pp** more often within-item (78 items vs 36,
-  p=0.0001) — a resolution the 14-night window can carry and a 3-night one cannot. **This also retires a
+  is the noisiest input the estimator has. The flip rests on RESOLUTION — a 3-night window is four-valued,
+  which a 14-night one is not — and NOT on the forward-scoring result once quoted here: that prior is
+  recorded as unreproducible (its script was never committed), so its digits are deliberately absent. **This also retires a
   standing caveat**: the display P and the RANK's P (`js/estimators/families.mjs`) were deliberately
   different numbers under RB-3 and are now the same basis, so `P(ask)~` in the Est. cells and `P~` in the
   Rank cell agree. The freshness signal is **shown, not discarded** — the `0/3 · 12/14` divergence token is
@@ -128,8 +128,8 @@ reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Oper
   model can price past break-even or the live book. Under the `pressure` model Est. buy/sell become the
   `reachableBand` legs (deep reachable bid → bold reachable ask), reranking the console scan by the pressure
   net; sell ≥ live, declared exit still wins the sell leg (break-even rides as the `estSellFloorBind` display
-fact, not an overwrite — E1; the one real-price consumer, watch-positions' pressure list-at, uses that
-floor-bound value so a LIST price never sits below break-even), and a **reliability-gated ceiling**
+fact, not an overwrite — E1; a sub-BE list-at is the damage-control price and renders beside its
+break-even, unfloored — `watch-positions.mjs`'s `heldLa` is the one home for that), and a **reliability-gated ceiling**
   lets a fully-reliable read exceed the observed 24h high (reliability<1 keeps the `dayHighFrom5m` cap). The
   conservative depth floor renders beside as the reference; a LOUD banner flags every surface as un-calibrated
   (n≈0). **The `pressure` model keeps its uncalibrated prices out of `screen.json`** — since publishing is
@@ -157,9 +157,10 @@ floor-bound value so a LIST price never sits below break-even), and a **reliabil
   symmetric (churn) lap, nulled by a declared exit, and byte-identical when the trend is absent/stable/
   extending. INFORM-only, n≈0 PLACEHOLDER; a `fade` marker rides `confidence` for the F1 shadow.
 - **The held-lot depth floor + pressure-reachable (PLAN-DEPTH-EXIT, inform-only).** On a held lot,
-  `watch-positions` now renders TWO measured lenses beside the reach count: the **depth floor**
+  `watch-positions` renders, UNDER `--pressure-exit` ONLY, two measured lenses beside the reach count: the **depth floor**
   (`clearableAsk` — the highest ask whose at-or-above instabuy flow absorbs `×4` the lot on ≥75% of
-  days; strictly conservative, since 1h bucket AVERAGES smooth away the peaks a resting ask fills at)
+  days; a CENTRAL estimate, not the conservative floor its own wording long claimed — measured at roughly
+  the median of the window's hourly highs, see README's `join-depth-outcomes.mjs` entry)
   and the **pressure-reachable band** (`reachableBand` — `base ± band·φ(ln medVolHi/medVolLo)`, the
   buyer/seller-balance read that says how far beyond the smoothed center the tape realistically
   reaches). The floor never renders alone (it under-reads a liquid book — the Soul-rune 394-vs-397
@@ -175,7 +176,7 @@ floor-bound value so a LIST price never sits below break-even), and a **reliabil
   executes at the ask you typed); `join-reach-outcomes.mjs` does this and DESCRIBES rather than ranks — the deprecate-then-
   remove migration is architected in `PLAN-REACHABILITY-CONSOLIDATION.md` (nothing retires on theory).
 - **Confidence rides IN the price cell** as the recent-3 reach (`0/3`, `recencySplit`) — the
-  freshness-honest signal and the fold basis; the full window shows beside it only on divergence
+  freshness-honest signal; the full window shows beside it only on divergence
   (`0/3 · 12/14` = stale); `–` = no read.
 
 PLACEHOLDER model (n≈3–14); `estBuy`/`estSell`/`estConfidence` ride `suggestions.jsonl` for F1.

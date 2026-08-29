@@ -80,7 +80,7 @@ export function estPairCells(est) {
   // THE BASIS — CORRECTED 2026-08-09. This block used to say the ask-leg factor is on the DISPLAY
   // (recent-3) basis while the rank stays full-window, "so these two are NOT the same number and are not
   // meant to be… Never claim they match." Both halves are FALSE since the 2026-08-09 flip: `pair.mjs`
-  // computes this factor with `{prefer:'full'}` (`:128`, `:266`) — the SAME basis as the rank — so the
+  // computes this factor with `{prefer:'full'}` at both call sites — the SAME basis as the rank — so the
   // display-vs-rank divergence is retired and the numbers DO agree in basis.
   // This mattered more than a stale comment: `pair.mjs:113-116` pins the invariant that its `frac` and
   // `pFill` must ALWAYS declare the same basis, and this file documented the OPPOSITE, pointing readers

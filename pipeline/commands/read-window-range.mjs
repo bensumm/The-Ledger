@@ -519,8 +519,10 @@ for (const want of positionals) {
   // scored/verify read can't skip the trajectory in favour of just the reach/placement fields (the
   // under-read this prevents: reading reach/placement and ignoring the `days` series sitting in the
   // same dump). Console rendering of data already in `result.days`/`profMargin` — no new computation,
-  // no JSON/number change. Gated on a scored/verify run (a bid/ask/exit/depth level or --profile).
-  const isVerifyRun = BID != null || ASK != null || EXIT != null || DEPTH_QTY != null || A.profile !== undefined;
+  // no JSON/number change. Gated on a LEVEL run — bid/ask/exit/depth. It used to name --profile too, a
+  // term that could never admit a row (a profile-only run hits the trajectory block's own `continue`
+  // first, and --profile WITH a level is already admitted by the level).
+  const isVerifyRun = BID != null || ASK != null || EXIT != null || DEPTH_QTY != null;
   if (isVerifyRun && scored.length) {
     log(`  --- DAILY TRAJECTORY (window low/high per day, oldest→newest)`);
     for (const [key, n] of scored) log(`    ${key}  low ${fmt(n.low)}  high ${fmt(n.hi)}`);

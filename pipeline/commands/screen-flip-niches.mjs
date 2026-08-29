@@ -1782,8 +1782,9 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   for (const n of driftNotes) footerLines.push(`ℹ drift-exit — ${n}`);
   // PART II: the asym-fill inform block — decision support only (P_bid = optionality annotation, never a
   // rank input by default; the shadow `asym` ledger field is the F1 A/B data). The class-rate line is
-  // emitted ONCE, after the rows, and only when a row actually printed: it is a 766-item rate, so
-  // per-row placement would read as this item's fill probability. Wording is emit.mjs's, never restated.
+  // emitted ONCE, after the rows, and only when a row actually printed: it is a CLASS rate over the
+  // measured pool, so per-row placement would read as this item's fill probability. Wording — and the
+  // pool size — are emit.mjs's constants, never restated here.
   for (const n of asymNotes) footerLines.push(`◆ asym fill — ${n}`);
   if (asymNotes.length) footerLines.push(`◆ asym fill — ${asymClassRateNote()}`);
   // EF1(a): the dead-bid repriced-entry alternative — additive decision support; the row's headline

@@ -4,7 +4,7 @@ import { tax, netMargin, netMarginQty, now, clamp } from './money-math.js';
 import { fmt, fmtP, pad2, fmtHour, sgn } from './money-format.js';
 import { svgLine, svgBars } from './charts-static.js';
 import { createChart } from './charts-interactive.js';                                  // CL: interactive chart (diurnal viz)
-import { hourProfile, deriveDiurnalRange, windowStats, windowReliability, fitWindowMismatchNote, WINDOW_RELIABLE_NIGHTS } from './windowread.mjs';   // shared diurnal peak-timing math (same module the console uses); windowStats → the daily series driftExitFrom's slopes read (Chunk 5); windowReliability (DT4b) → the split-half gate on the ★ badge, the SAME verdict the console gates hour-display on (hourConcentration was dropped here 2026-08-10 — measured non-discriminator, see renderDiurnal)
+import { hourProfile, deriveDiurnalRange, windowStats, windowReliability, fitWindowMismatchNote, displayFitNights, WINDOW_RELIABLE_NIGHTS } from './windowread.mjs';   // shared diurnal peak-timing math (same module the console uses); windowStats → the daily series driftExitFrom's slopes read (Chunk 5); windowReliability (DT4b) → the split-half gate on the ★ badge, the SAME verdict the console gates hour-display on (hourConcentration was dropped here 2026-08-10 — measured non-discriminator, see renderDiurnal)
 import { reachValidator, floorValidator, trajectoryValidator } from './validate.mjs';   // TV: validator notes split across their viz (inform-only)
 import { termStructure } from './termstructure.mjs';                         // TV: durable multi-week floor/ceiling/typical-swing + trajectory shape (shared)
 import { diurnalForecast, fmtEta, driftExitFrom } from './forecast.mjs';                    // TV: forward 24h projection off the daily rhythm (shared, provisional n≈0); driftExitFrom (PLAN-OSCILLATION-CYCLE Chunk 5) — the drift-adjusted exit LEVEL beside the forecast readout
@@ -457,8 +457,8 @@ function renderTermNote(ts, it){
   el.innerHTML='<span class="mini">Structure (inform-only): </span>'+parts.join(' <span class="mini">·</span> ')+
     ' <span class="ccap">Multi-week floor &amp; path shape — the “buy the base, not the knife” read; thresholds placeholder (n≈0).</span>';
 }
-/* TV: the "Forward forecast" section — forecast.mjs diurnalForecast projects the next 24h off the
-   SAME hourProfile the Diurnal timing chart reads (parity). Answers "not buyable at a good price now —
+/* TV: the "Forward forecast" section — diurnalForecast over the same series as the Diurnal chart, NOT
+   the same FIT (this follows DT4b; the chart's window is the user's toggle). Answers "not buyable now —
    when ~?": next trough (bid) + next peak (ask) with eta/window/band, else a LOUD degrade reason
    (post-shock, live-band violation, thin/flat series). The chart plots the projected LOW curve (the
    "when does it get cheap" line) with the trough marked. Provisional (PF, n≈0) — the forecast caveat
@@ -476,7 +476,9 @@ function renderForecast(profSeries, qrow, it, showAnalysis, s6h){
   if(forecastChart){ try{ forecastChart.destroy(); }catch(_){ } forecastChart=null; }
   if(!showAnalysis){ el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
-  let prof=null; try{ prof=hourProfile(profSeries||[], {nights:7}); }catch(_){ prof=null; }
+  let fcRel=null; try{ fcRel=displayFitNights(profSeries||[], {nights:7}); }catch(_){ fcRel=null; }
+  const fcNights=fcRel?fcRel.fitNights:7;
+  let prof=null; try{ prof=hourProfile(profSeries||[], {nights:fcNights}); }catch(_){ prof=null; }
   const liveLo=(qrow&&qrow.quickBuy!=null)?qrow.quickBuy:it.low;
   const liveHi=(qrow&&qrow.quickSell!=null)?qrow.quickSell:it.high;
   // phase() off the 6h series — NOT `qrow.phase`, which never existed (computeQuote returns no such

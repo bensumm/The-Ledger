@@ -31,6 +31,7 @@ export const GOVERNED_DOCS = [
   'CLAUDE.md',
   'docs/FLOW.md',
   '.claude/skills/cleanup/SKILL.md',
+  'docs/ARCHITECTURE.md',
 ];
 
 /**

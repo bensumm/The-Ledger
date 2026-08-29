@@ -34,11 +34,15 @@ export function writeLastReport(kind, reports) {
    argv = process.argv.slice(2). A bare flag (no value, or followed by another --flag)
    becomes `true`; otherwise the next token is its string value. Returns a plain object.
    (Was duplicated verbatim in screen-flip-niches.mjs + add-manual-fill.mjs.) --- */
+/* `--k=v` AND `--k v` both bind k. Only the space form used to, so `--est-sell=pressure` bound the key
+ * `est-sell=pressure` and the screen silently ran its default. An unknown KEY is still discarded here. */
 export function parseArgs(argv) {
   const A = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith('--')) continue;
+    const eq = a.indexOf('=');
+    if (eq > 2) { A[a.slice(2, eq)] = a.slice(eq + 1); continue; }
     const k = a.slice(2);
     const v = argv[i + 1];
     if (v === undefined || v.startsWith('--')) A[k] = true;

@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 3.3
+version: 3.4
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -52,7 +52,7 @@ table to paste. Bare/quiet is for the agent's own reasoning passes only.
 **Relay both surfacing tiers — nothing trimmed speculatively (R10, 2026-07-16).** The render
 layer labels every note family a TRACKING tier — `core` (grades/verdicts, alerts, the WATCHLIST,
 the fired REJECT/CAUTION footer) and `context` (the inform-only families: diurnal, forecast, ask
-headroom, asym fill, window-clear, reach relief, demand). _judgment:_ **both render AND relay by
+headroom, asym fill, window-clear, reach relief). _judgment:_ **both render AND relay by
 default** — there is NO default-hidden middle tier, so surface the context footer notes too, don't
 drop them to "keep it short." A note family only stops being surfaced once real sessions evidence
 it's consistently unused (a future ruling, never a per-pass call). The tier registry lives in
@@ -62,21 +62,21 @@ it's consistently unused (a future ruling, never a per-pass call). The tier regi
   whole clause, never just the price and the tally.** _(judgment: honesty discipline over an
   inform-only note; the wording is enforced in `pipeline/lib/render/emit.mjs` `formatAsymFill`, the ONE
   home)_ `js/windowread.mjs`'s `asymPair` scores each level against the SAME array the level was drawn
-  from, so `pAsk` comes back 0.86 on 89.9% of 8,300 logged rows and `pBid` 0.29 on 86.5% — 12/14 and
+  from, so `pAsk` comes back 0.86 on the large majority of logged rows and `pBid` 0.29 likewise — 12/14 and
   4/14, the `ASYM_P_LO`/`ASYM_P_HI` quantiles restated. Treat "printed 12/14d" as a rank position in an
   in-sample window, never as a probability the offer fills, and never build a ranking or a
   recommendation on it. Two more things ride with that: the ask ordering guard BINDS on ~71% of rows
-  (recomputed 71.1%, 2,133/3,001 — it read 69.7% off a smaller pool; the denominator grows with accrual,
-  so treat the ~70% shape as the durable claim and re-derive the digits rather than quoting them), which is why the clause splits `ask X (= live instabuy, above the Y
+  (the denominator grows with accrual, so ~70% is the durable claim — re-derive the digits rather than
+  quoting them, which is why none appear here), which is why the clause splits `ask X (= live instabuy, above the Y
   level that printed N/14d)` — the price and the level the count belongs to are DIFFERENT numbers and
   relaying one as the other is the specific error this wording exists to prevent; and the deep bid is
   touched roughly 4 days in 14, so it is a resting level to leave sitting, not a fill to plan around.
   **And the measurement now exists — relay the footer line, it is the number Ben actually needs.**
-  `join-asym-outcomes.mjs` forward-scored the pair off the 1h archive over 39,110 rows / 766 items:
+  `join-asym-outcomes.mjs` forward-scored the pair off the 1h archive over the accruing pool:
   the deep bid is touched **17.8%** of the time within 24h (logged `pBid` claims 31.1%), the ask is
   reached **~24%** given that touch (logged `pAsk` claims 86.8%), and the **round trip completes
   4.3%** — **1.5% on big-ticket**. The screen prints that once as a trailing `◆ asym fill —` footer
-  under the per-row notes; it is a CLASS rate over 766 items, never this row's, and touched/reached ≠
+  under the per-row notes; it is a CLASS rate over the measured pool, never this row's, and touched/reached ≠
   filled so it bounds a real offer from ABOVE. Read it as: the patient pair is a level worth resting
   at, not a trade to plan a day around, and on a big-ticket item least of all.
 - **A BE-floored `Est. sell` cell is not the whole verdict — read the `patient:` clause inside it

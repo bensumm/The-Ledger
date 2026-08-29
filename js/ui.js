@@ -25,7 +25,8 @@ export const finderSort=makeSortable({
     {key:'roi', type:'num', get:r=>r.roi},
     {key:'fill', type:'num', get:r=>r.fill},
     {key:'turn', type:'num', get:r=>r.turn},
-    {key:'pph', type:'num', get:r=>r.pph}
+    {key:'pph', type:'num', get:r=>r.pph},
+    {key:'volume', type:'num', get:r=>r.volume}
   ],
   onSort:()=>{ syncSortSel(); renderFinder(); }
 });

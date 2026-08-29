@@ -340,8 +340,8 @@ export function formatAsymFill(ae, ap, { fmt: fmtFn = fmtP } = {}) {
  * quantiles. That is stated on each row, but a reader still has to supply "…and so how often does
  * this actually complete?" from nowhere. These are that number, forward-measured off the 1h archive.
  *
- * It belongs in a FOOTER, emitted ONCE per surface, and not on the row — it is a CLASS rate over
- * 766 items, not this item's. Attaching it per-row would read as a per-item fill probability, which
+ * It belongs in a FOOTER, emitted ONCE per surface, and not on the row — it is a CLASS rate over the
+ * measured pool (`ASYM_MEASURED_ITEMS` below), not this item's. Attaching it per-row would read as a per-item fill probability, which
  * is the exact error the row wording already works to avoid.
  *
  * touched/reached ≠ filled (no queue position, no partials, no competition at the level), so these

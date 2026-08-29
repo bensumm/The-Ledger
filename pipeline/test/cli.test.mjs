@@ -16,6 +16,10 @@
  *     is pinned in pipeline/test/format.test.mjs. The divergence is deliberate (PLAN Discovered note).
  *   - median = mean of the two middle values for an even length, the middle for odd, null for an
  *     empty/absent array, and NEVER mutates its input.
+ *   - parseArgs binds a flag under BOTH `--k=v` and `--k v`. Only the space form used to bind, so a
+ *     documented `--est-sell=pressure` produced the key `est-sell=pressure`, every resolver read
+ *     `est-sell` as undefined, and the screen ran its DEFAULT model with no error — a flag that did
+ *     nothing, indistinguishable in output from not passing it.
  *   - liqClassOf boundaries: <100 → thin, [100,1000) → mid, ≥1000 → liquid, null → unknown
  *     (the NY2.4 liquidity vocabulary).
  */
@@ -23,7 +27,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseGp, median, writeLastReport } from '../lib/render/cli.mjs';
+import { parseArgs, parseGp, median, writeLastReport } from '../lib/render/cli.mjs';
 import { liqClassOf } from '../lib/render/suggestlog.mjs';
 
 let pass = 0;
@@ -93,6 +97,19 @@ ok('writeLastReport: the returned repo-relative path is where the file actually 
   } finally {
     try { rmSync(abs); } catch { /* best-effort cleanup */ }
   }
+});
+
+ok('parseArgs binds --k=v and --k v identically, and neither swallows the other', () => {
+  assert.deepEqual(parseArgs(['--est-sell=pressure']), { 'est-sell': 'pressure' });
+  assert.deepEqual(parseArgs(['--est-sell', 'pressure']), { 'est-sell': 'pressure' });
+  assert.deepEqual(parseArgs(['--json']), { json: true });
+  assert.deepEqual(parseArgs(['--mode=all', '--publish']), { mode: 'all', publish: true });
+  // a value may itself contain '=' — only the FIRST one separates
+  assert.deepEqual(parseArgs(['--filter=a=b']), { filter: 'a=b' });
+  // '--=x' has no key before the '=', so it must not be split there
+  assert.deepEqual(parseArgs(['--=x']), { '=x': true });
+  // the space form still consumes its value rather than leaving it a positional
+  assert.deepEqual(parseArgs(['--item', 'Blood rune', '--json']), { item: 'Blood rune', json: true });
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

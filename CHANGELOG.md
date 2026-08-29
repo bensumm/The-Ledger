@@ -10,6 +10,50 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.75.0 — three controls that reported doing something they did not do
+
+The away-scoped review pass required by rule 10 found a family, not a list: a flag, a dropdown and a
+card that each ran, returned cleanly, and did not do what they said. None errored, none was visible to
+`node --check`, the import guards, the 131 suites or the smoke job.
+
+**`--est-sell=pressure` silently ran the default model.** `parseArgs` split on space only, so
+`--est-sell=pressure` bound the key `est-sell=pressure`; every resolver read `est-sell` as undefined
+and fell back to `reach-fold`. The value guard passes, because it checks the RESOLVED value and never
+whether the flag was understood — so the output is indistinguishable from a bare scan. The break is in
+the KEY, so every `--est-sell` value inherits it, and `quote-items.mjs` accepts only the `=` form while
+the screen accepted only the space form. Fixed in `parseArgs` — both forms now bind everywhere — with a
+mutation-verified test. An unrecognised KEY is still discarded silently; that class is still open.
+
+**"Sort: Volume" in the Finder was a dead control.** `finderSort` had no `volume` column and
+`setSort` early-returns on an unknown key, so selecting it left the previous sort in place with no
+error — and made the `volume` member of `syncSortSel`'s whitelist unreachable. One column added, and
+the smoke test now walks EVERY `#sortSel` option and asserts the stored sort key became the selected
+value: reverting the column reddens it by name.
+
+**The Trends forecast card fitted 7 nights while the chart above it fitted 14, and its own header
+claimed parity.** It now follows DT4b (`displayFitNights`) like the four pipeline surfaces already do,
+and the comment says what is true. A mismatch disclosure was built, measured on 400 real items, and
+REMOVED: it rendered on 389 of them, which is a permanent banner rather than a signal — and
+`displayFitNights` closes the gap rather than disclosing it, which is the whole difference between the
+two halves of that rule.
+
+**Beyond the three:** `read-window-range.mjs`'s trajectory gate named `--profile` as an admitting term
+that could never admit a row (a profile-only run hits an earlier `continue`) — verified by running all
+four flag combinations, dead term deleted, README corrected. `docs/ARCHITECTURE.md`'s 🔒 table named 5
+of the 12 CI guards, so seven ENFORCED invariants read there as ⚖️ judgment; the seven are added and the
+table is now governed by `lint-guard-lists.mjs`, which had listed it as its own blind spot. Its test
+was importing a hardcoded copy of the governed set — now the real one.
+
+**Deleted rather than corrected**, per the derived-numbers rule: a retired `⌁ read:` note README claimed
+twice still renders (plus its registry entry, which nothing pushed); a BE-floor premise
+`PLAN-ESTIMATOR-HONEST-SELL` reverted and the code comment contradicts; recent-3 called "the fold
+basis" when both call sites pass `prefer:'full'` — the third file to carry that exact error; a
+`+9.8pp/n=6,016` result quoted as settled in three places while README calls it unreproducible thirteen
+hundred lines earlier; `clearableAsk` called a conservative floor after being measured at the median;
+two held-lot lenses described as default when both are `--pressure-exit`-gated; a `demand` note family
+that does not exist; and the asym pool digits, which had drifted in six places including a comment
+sitting thirteen lines above the constant that contradicted it.
+
 ### Reach surface chunk 4: the decisive backtest, and the null branch fired
 
 `pipeline/commands/join-exit-ev.mjs` scores a POLICY rather than a prediction: at each archive origin,
