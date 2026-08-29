@@ -233,7 +233,7 @@ reads the logged record, so both inherit the operator's selection. This one does
    inversion and the inspector all work identically off a pooled curve. Chunk 5's per-item surface
    field becomes pooled + normalization. Chunk 4 is unchanged and matters more.
 
-   **NEW CHUNK-2 ACCEPTANCE GATE, and it is a stop-or-go.** Pooled leaves ~10pp of MAE on p. Whether
+   **NEW CHUNK-2 ACCEPTANCE GATE, and it is a stop-or-go. IT RAN — the result is §1c, and it is GO.** Pooled leaves ~10pp of MAE on p. Whether
    that is tolerable for a PRICE depends entirely on how flat EV is near its optimum, which is a cheap
    chunk-2 computation: perturb the curve by +/-10pp and measure how far `askStar` moves. If the
    optimum is flat, 10pp is fine and the price is trustworthy. **If it is sharp, the surface cannot
@@ -280,6 +280,84 @@ Two smaller corrections chunk 2 inherits:
      one non-thin cell, and H=96 at 19 independent windows read thin=false with its whole mid-range
      individually thin. The horizon's verdict is the cell nearest p=0.5 — the widest interval on the
      curve, and where an EV maximum sits.
+
+## 1c. THE CHUNK-2 STOP-OR-GO GATE — measured, and the answer is GO
+
+**SPIKE.** The harness is not in the tree and these numbers are not fixture-reproduced. Chunk 4's
+`join-exit-ev.mjs` supersedes the whole section with realized gp; until it runs, quote §1c only from
+here. Per §0's rule, nothing in it belongs in README or a module header as a number.
+
+§1b left the estimator as pooled `p(z,H)` + per-item `refHigh`/`disp`, carrying ~9.9pp of held-out
+MAE on p, and pre-registered a gate before chunk 3: perturb the curve by the error we measured and
+see whether `askStar` survives it. That gate ran. It passes, and it also killed one default.
+
+**The perturbation is PER-CELL**, because that is the shape of the measured error. sd = MAE / √(2/π)
+= 12.4pp for a mean-zero normal. `iid-mono` (noise, then z-monotonicity repaired) is the INDEPENDENT
+extreme, not the realistic case — a curve is wrong systematically as well as per-cell, and the
+correlated rows below are WORSE at the tail than the row supplying the headline. Raw `iid` is the
+pessimistic per-cell bound. 135 items, 120 draws each, H=24, `delayCost` 0 (the comparison table
+below uses 183 — same criterion, different sample cap: 150 vs 200 candidate items). A uniform ±10pp shift is shown as a contrast —
+note it does NOT leave the argmax alone, since ∂EV/∂p = net(ask) − net(bail) varies with z.
+
+| perturbation | argmax moved | \|Δask\| med | p90 | p99 | EV regret, % of the achievable gain: med | p90 | p99 |
+|---|---|---|---|---|---|---|---|
+| iid (pessimistic) | 88.1% | 1.93% | 18.7% | 71.4% | 14.3% | 65.7% | 100% |
+| **iid-mono (independent extreme — the headline)** | **81.0%** | **0.71%** | **6.86%** | **25.7%** | **8.2%** | **31.9%** | **76.9%** |
+| uniform ±10pp shift | 50.0% | 0.08% | 18.7% | 66.0% | 0.0% | 47.4% | 92.7% |
+| ±10pp tilt across z | 71.5% | 1.97% | 22.3% | 81.1% | 5.4% | 89.2% | 100% |
+
+Read on its own this is ambiguous — the ask wanders (p90 of 6.9% of price) while the EV cost of the
+wandering is small (median 8.2% of the gain). **"Flat" is only meaningful against an alternative**, so
+the gate was decided on the comparison instead: what share of the achievable EV gain does each way of
+picking a price capture? Normalized per item as
+`(EV(contender) − EV(worst grid z)) / (EV(oracle) − EV(worst grid z))`, truth = the item's own curve,
+pooled computed LEAVE-ONE-OUT, 183 items:
+
+| contender | H=6 | H=24 | H=48 | H=96 |
+|---|---|---|---|---|
+| oracle (its own curve, in-sample — a ceiling, not a contender) | 100% | 100% | 100% | 100% |
+| **pooled curve, leave-one-out** | **92.7%** | **91.2%** | **90.4%** | **88.5%** |
+| **the best CONSTANT z, which is z=0 at every horizon** — ask the recent-3 median daily high | 87.3% | 87.2% | 84.8% | 81.7% |
+| its own curve + the measured error | 86.0% | 86.6% | 85.6% | 85.3% |
+| fixed z = +0.5 | 77.2% | 78.5% | 79.9% | 78.6% |
+| fixed z = +1 | 70.9% | 71.2% | 73.3% | 74.4% |
+| the p ≥ 0.70 level | 17.7% | 54.3% | 71.0% | 78.4% |
+
+**GO.** The pooled curve captures 88–93% of the oracle's gain while using no item-specific shape at
+all, and it beats the strongest simple null by **4.0–6.8pp**, with an item-bootstrap 95% CI clear of
+zero and the same sign at all four horizons (H=6 +5.42 [2.79, 8.11] · H=24 +4.03 [1.65, 6.43] ·
+H=48 +5.63 [3.36, 8.27] · H=96 +6.77 [4.59, 9.32]; win/tie/lose over items 101/32/50 · 83/42/58 ·
+96/39/48 · 96/38/49 — it loses on about a third of items and wins bigger than it loses).
+**"Strongest" was checked, not assumed**, after review challenged it: the null was re-maximized over
+all 16 grid levels, in-sample AND leave-one-out, and z=0 is the argmax at every horizon — the margin
+is identical to two decimals either way. The review's fixture-scale counter-example (the best
+constant drifting up with H) does not survive 183 items. The margin is modest and the null is strong: most
+of the value is in the z normalization, exactly as §1b concluded, and the curve adds a few points on
+top — largely at the bad tail, where pooled holds a p10 of 78.8% against the null's 69.7% at H=24.
+
+**And it killed a default. `pTarget` must never pick a price.** The p ≥ 0.70 level is the worst
+contender at short horizons — 17.7% of the gain at H=6, against 87.3% for asking the median of the
+last three daily highs — because a fixed probability target ignores what the ask is worth. *That
+figure is partly a grid artifact: at short H the p≥0.70 level lands on the grid BOTTOM for most
+items, which is also the denominator's worst cell, so widening the grid downward would make it look
+worse still. The MECHANISM carries the rule, not the number.* It is a
+sound answer to "how long will this take at price P" and an unsound one to "what should I ask".
+Chunk 3 must present `horizonForAsk` as a horizon read and `askStar` as the price, never blend them.
+
+**Limits, and they matter.** The leave-one-out is over ITEMS, not over TIME: the pooled curve is
+built from the other 182 items over the SAME 92-day window the truth curve is measured on, so it
+carries era-wide co-movement the fixed-z null structurally cannot. §1b's 9.90pp figure came from a
+TEMPORAL split; this one does not, and "leave-one-out" here must not be read as out-of-sample. For
+the same reason the four horizons are not four independent confirmations — same origins, nested
+windows — and the item-level bootstrap treats items as independent, which era co-movement violates,
+so the CIs are probably narrower than stated.
+Truth is the item's OWN in-sample curve, so this measures the objective's
+SENSITIVITY, not realized profit — every contender faces the same truth, which makes the RANKING fair
+and the absolute levels optimistic. The denominator (`oracle − worst grid price`) includes deliberately
+terrible prices, so "captures 87%" is not "earns 87% of available profit". 183 items at the
+well-covered end (≥1900 1h rows), one 92-day era, one update cycle. **Chunk 4 remains the decisive
+test** — this gate says the surface can carry a price, not that the price beats the incumbents on
+realized gp.
 
 ## 2. The objective function (what makes ranking possible at all)
 
@@ -431,7 +509,7 @@ FALSE for chunk 1 as written**: `check-dead-exports` refuses a library with no p
 and the first consumer is chunk 3. 10 of 10 mutants killed; the two that the FIRST test draft let
 live, and why, are named in the suite header.
 
-### Chunk 2 — Inversions + EV
+### Chunk 2 — Inversions + EV  ✅ SHIPPED (the stop-or-go gate is §1c: GO)
 `askStar(surface, H, { bailNet, delayCost=0 })` maximizes §2's EV over the z-grid using
 `breakEven`/`tax`, taking the miss-branch payoff from chunk 1's **`bailNetOnMiss[z][H]`** rather
 than an unconditional bail (review F3 — the unconditional form flatters high asks); `horizonForAsk(surface, ask, { pTarget })` returns the smallest grid H with
@@ -442,6 +520,25 @@ highest z); round-trip `horizonForAsk(askForHorizon(H,pTarget),pTarget) ≤ H`. 
 assertion**: `askStar` landing on the top z is a REFUSAL (widen or say so), never a price —
 measured 7 of 120 items hit the grid top, which is a too-short grid, not an optimum (review F2).
 **Proves it wrong**: nothing empirical — this chunk is arithmetic; its correctness is the tests.
+**As shipped**: `js/exit-ev.mjs` (`evCurve`/`askStar`/`askForHorizon`/`horizonForAsk`), 18
+assertion groups, 11 mutants killed. `@provisional-api` on every export until chunk 3, so this lands
+CI-green without the dead-export waiver chunk 1 needed.
+**What self-review found** (three, and two are LATENT guards rather than live defects — a
+non-positive ask needs `disp/refHigh > 1`, and a dropped TOP cell needs almost every origin to miss):
+the ask guard, the grid edges reading the DECLARED zGrid rather than the SCORED cells, and
+`horizonForAsk` trusting grid order for "smallest". Only the third was reachable on a real surface.
+**What ADVERSARIAL review found, and it was the useful pass:** (1) the stated REASON for the
+per-cell bail was BACKWARDS in four documents and the test pinned the wrong direction on an inverted
+synthetic — E[bail|miss] RISES with the ask, so per-cell prices at or ABOVE the unconditional form
+(measured above on 114 of 183 items at H=24, below on 8, and 9 of 9 fixture item×H cells); (2) four
+mutants survived, two on properties README stated as contracts — `net()`'s tax was unpinned on both
+legs, and a tax asymmetry is 2% of price against an EV spread of 0.4–3.7% of refHigh, so it would
+swamp the signal it sits inside; (3) `horizonForAsk` carried a second copy of `surfaceProb`'s
+interpolation that had already dropped `ciHalf` on 1,818 of 1,818 compared rows — DELETED, it now
+calls `surfaceProb`; (4) `askForHorizon`'s own annotation handed chunk 3 the price §1c forbids.
+One finding was REFUTED by re-measuring at scale: see §1c's strongest-null note. **CONSEQUENCE FOR CHUNK 3 (from §1c): `pTarget` must never pick a
+price.** Present `horizonForAsk` as the horizon read and `askStar` as the price; do not offer the
+p≥pTarget level as an ask.
 
 ### Chunk 3 — The inspector ships a price: `pipeline/commands/read-exit-surface.mjs`
 `node pipeline/commands/read-exit-surface.mjs "<item>" [--horizon H] [--price P] [--qty N]

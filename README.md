@@ -137,6 +137,33 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   from ABOVE, and every consumer must say so. What chunk 1 MEASURED — including that
   PLAN-REACH-SURFACE §1.5's taxonomy premise did not survive and its ordering inverted — is §1b of
   that plan, the ONE home; don't restate it here),
+  `exit-ev.mjs` (PLAN-REACH-SURFACE chunk 2 — the inversions that turn a reach surface into a PRICE.
+  `evCurve(surface,H,{bailNet,delayCost})` scores every level of one horizon at
+  `EV = p·net(ask) + (1−p)·(net(bail) − delayCost)` (tax from `money-math.js`, the ONE definition);
+  `askStar` is its argmax, `askForHorizon` the highest level clearing `pTarget`, and
+  `horizonForAsk` the SMALLEST horizon clearing it — returned with the full p-by-H row, so the
+  threshold never travels alone; p is read through `reach-surface.mjs`'s `surfaceProb`, the ONE
+  interpolation, so every row carries its `ciHalf`. Six properties are load-bearing and each has a
+  killed mutant in `pipeline/test/exit-ev.test.mjs`: (1) **EV has an interior maximum on real curves** — the property
+  the co-log scorer lacked, and without it nothing can rank; (2) **the miss payoff is PER-CELL**
+  (`bailZOnMiss`) because that is the conditional expectation the decomposition asks for — and its
+  MEASURED DIRECTION is the opposite of the intuition: at a low ask only a catastrophic window
+  misses, so E[bail|miss] is WORST there and rises toward the unconditional value as the ask climbs,
+  which means per-cell prices at or ABOVE the unconditional form, never below (an earlier version of
+  this entry, the module header and the test all asserted the reverse);
+  (3) **`delayCost` is charged to the MISS branch only** — on both branches it is a constant at fixed
+  H and cannot move the argmax at all, so the asymmetry is what makes waiting cost anything;
+  (4) **a maximum on the last SCORED z is a refusal**, not a price (the edge is the scored one, not
+  the declared grid — a dropped cell would otherwise pass as interior); (5) **`net()` is the ONE tax
+  definition on BOTH legs** — a tax asymmetry is 2% of price, larger than the whole EV spread being
+  optimized over; (6) **`horizonForAsk` reads horizons ascending** regardless of grid order.
+  `@provisional-api` until chunk 3's `read-exit-surface.mjs` consumes it. **`askStar` is an argmax over
+  a PLATEAU, not a point** — adjacent cells sit within a few basis points of refHigh of each other,
+  decided off a p known to a few pp, so a consumer must present a band and never a false point;
+  chunk 3 owns that. The chunk-2 stop-or-go gate and what it measured live in
+  `plans/PLAN-REACH-SURFACE.md` §1c, the ONE home (don't restate its numbers here — they were, once).
+  The one rule to carry out of it: **`pTarget` must never pick a price.** It answers "how long",
+  never "how much"),
   `windowread.mjs` (P2 — pure window-range/reach math:
   **`windowReliability`** (DT4, 2026-08-10 — the split-half hours gate: parity-split the last
   `WINDOW_RELIABLE_NIGHTS` (14) days, `hourProfile` each half, Pearson-correlate the de-trended devLow/devHi
@@ -544,14 +571,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `backup.js` (export/import),
   `main.js` (entry point — event wiring + init, loaded as `<script type="module">`)
 - `pipeline/test/fixtures/reach-surface.json` — frozen 1h/5m archive slices behind
-  `pipeline/test/reach-surface.test.mjs`, as `[ts, avgHighPrice, avgLowPrice]` triples. Three `curve`
+  `pipeline/test/reach-surface.test.mjs` AND `pipeline/test/exit-ev.test.mjs`, as
+  `[ts, avgHighPrice, avgLowPrice]` triples. Three `curve`
   items (Soul rune / Ranarr weed / Ancestral robe top) pin the re-derived p(z,H=24) curves; two
   `grain` items with their 5m series (one liquid, one thin) exercise the coverage split that
   distinguishes "measured, small" from "not measurable"; one `hviol` item carries a REAL 12.1pp
   H-monotonicity violation, because the three curve items are all already ordered and a synthetic
   violator is hard to build (z re-normalizes per origin and cancels a manufactured tail spike).
   Regenerate from the archive if the era it freezes stops being representative; the pinned curve
-  values in the test move with it.
+  values in the test move with it — and so do `exit-ev.test.mjs`'s interior-maximum, non-monotone and
+  per-cell-bail groups, which assert properties of THIS DATA as well as of the code. Read a failure
+  there as "check the fixture era" before suspecting chunk-2 arithmetic.
 - `manifest.json`, `icon-*.png` — PWA manifest and icons
 - `fills.json` — raw real-trade event stream synced from RuneLite; the pipeline source
   `positions.json` is FIFO-reconstructed from (the app fetches the derived `positions.json`,

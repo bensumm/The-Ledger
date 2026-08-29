@@ -10,6 +10,49 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Reach surface chunk 2: EV can price, and the probability target cannot (pipeline/plan only)
+
+`js/exit-ev.mjs` inverts the reach surface into a price. `EV(ask,H) = p·net(ask) + (1−p)·(net(bail) −
+delayCost)`, `askStar` its argmax, `horizonForAsk` the smallest horizon clearing `pTarget`. EV is not
+monotone in the ask, which is the whole point — the co-log scorer this plan replaced could not rank
+because its metric was.
+
+Three design choices are load-bearing and each has a killed mutant. The miss payoff is PER-CELL,
+because that is the conditional expectation the decomposition asks for — and adversarial review
+caught the stated REASON backwards in four places before this landed. The measured direction is the
+opposite of the intuition: at a low ask only a catastrophic window misses, so E[bail|miss] is WORST
+there and rises toward the unconditional value as the ask climbs. Per-cell therefore prices at or
+ABOVE the unconditional form, never below. `delayCost` is charged to the MISS branch only — on both branches it
+is a constant at fixed H and cannot move the argmax at all, so the asymmetry is what makes waiting
+cost anything on the price axis. And an optimum on the last SCORED level is a refusal rather than a
+price; the edge is the scored one, not the declared grid, since a dropped cell would otherwise let an
+optimum at the last scorable level pass as interior.
+
+**The stop-or-go gate ran and it is GO.** §1b left ~9.9pp of held-out MAE on the pooled p, and the
+open question was whether EV's optimum is flat enough to survive it. Perturbed per-cell at the
+measured error, the ask wanders — p90 of 6.9% of price — while the EV cost of the wandering is small.
+That is ambiguous alone, so the decision was made on a comparison instead: the share of the achievable
+EV gain each pricing rule captures, truth being the item's own curve, pooled computed leave-one-out.
+The pooled curve captures 88–93% of the oracle's gain using no item-specific shape at all, and beats
+the strongest simple null (ask the recent-3 median daily high) by 4.0–6.8pp with an item-bootstrap CI
+clear of zero and the same sign at H=6/24/48/96. The margin is modest and the null is strong: the
+normalization carries most of the value, and the curve adds a few points on top, mostly at the bad
+tail.
+
+The same gate killed a default. The p ≥ 0.70 level is the WORST contender at short horizons — 17.7%
+of the achievable gain at H=6 against 87.3% for the naive rule — because a fixed probability target
+ignores what the ask is worth. `pTarget` answers "how long will this take at price P" and must never
+answer "what should I ask"; chunk 3 presents the two separately.
+
+Limits: truth is the item's own in-sample curve, so this measures the objective's sensitivity, not
+realized profit — the ranking is fair, the absolute levels are optimistic, and the denominator
+includes deliberately terrible prices. 183 items at the well-covered end, one 92-day era. Chunk 4
+remains the decisive test.
+
+No `APP_VERSION` bump: `js/exit-ev.mjs` is not app-imported and nothing the browser loads changed.
+Full gate result: `plans/PLAN-REACH-SURFACE.md` §1c. Module contract: README's `exit-ev.mjs` entry.
+
+
 ### A sort basis that drifted in prose, and a flag that swallowed 20m (pipeline/docs only)
 
 Three findings from a review pass scoped deliberately away from the reach-surface work.
