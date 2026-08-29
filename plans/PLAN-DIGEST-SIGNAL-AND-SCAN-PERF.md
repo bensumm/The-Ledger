@@ -4,7 +4,16 @@
 because they share one file (`pipeline/commands/screen-flip-niches.mjs`) and therefore one
 parallel-safety contract — but they are otherwise unrelated and can ship in either order.**
 
-- **Workstream A — digest SIGNAL.** The `--digest` block ranks rows by `capEff × deployable` and
+> ⚠ **WORKSTREAM A'S FOUNDING PREMISE NO LONGER DESCRIBES THE CODE (2026-08-28).** Two things went
+> out from under it. **`sell unreliable` was DELETED** (SEP12, `40ee02b`) after it measured worse
+> than not gating at all below cost ratio ~1.29 — so §0.1's anchor board, claim A1's priority-1
+> reading and every count of it below describe a rule that no longer exists. And **DS2 SHIPPED in the
+> same wave**, going further than specified: the reach cell prints `NN% <basis-mark>`, not a glyph.
+> Separately, AF1 moved the comparator off `capEff × deployable` to `rank`. Read the rest of this
+> workstream as a record of what was true in 2026-08, not as open work; DS0/DS1 are what remain.
+
+- **Workstream A — digest SIGNAL.** *(as of 2026-08-07, superseded — see the banner above.)* The
+  `--digest` block ranks rows by `capEff × deployable` and
   never reads the reach column it prints, so its top slots go to rows its own verdict calls
   `sell unreliable`. CHANGES WHAT BEN SEES → every chunk is gated behind a measurement chunk.
 - **Workstream B — scan PERFORMANCE.** A cold `--mode all` run is 14–17s wall; ~40% of it is one
@@ -360,7 +369,11 @@ reversible.
 
 ---
 
-### DS2 — make the reach cell honest (counts, not a glyph) **[S]** · do-first — **now the PRIMARY Workstream-A deliverable**
+### DS2 — make the reach cell honest (counts, not a glyph) **[S]** · ✅ **SHIPPED VIA SEP12 (2026-08-25)**
+
+> Shipped beyond spec: the cell renders `NN% <basis-mark>` — the fraction AND its basis — and no
+> `✓`/`✗` remains in the digest (`screen-flip-niches.mjs`, `digestCells`). The text below is the
+> original specification, kept for its rationale.
 
 > **PROMOTED (2026-08-07).** With DS4 shelved by the DS1 pilot, this is the whole of the signal work
 > that ships. It is also *directly* supported by the pilot: the four cells have materially different
@@ -950,7 +963,8 @@ cut-first                           DS7        SP4 (don't bother)
 | | **DS7** | The information is already on screen three lines lower. Cut this first if the wave needs trimming. |
 | **SHELVED** | **DS4** | ❌ Its own gate rejected it: a 0/3 ask prints **55.4%** of the time within 24h. Revive only on a narrower predictive *conjunction*, never on the gradient alone. |
 
-**Shipping sequence (revised 2026-08-07):** `SP5-tick ✅done → SP1 → DS0 → DS2 + DS6 → SP2 → SP5-code → DS8 + DS9`,
+**Shipping sequence (revised 2026-08-07; DS2 has since shipped via SEP12, and Workstream A's premise
+is superseded — see the banner at the top):** `SP5-tick ✅done → SP1 → DS0 → DS2 + DS6 → SP2 → SP5-code → DS8 + DS9`,
 with the full DS1 and DS3/DS5 as follow-ons.
 
 *Why the tick goes first:* it is the only step with **no code at all** (one `Set-ScheduledTask`

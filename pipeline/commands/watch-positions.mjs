@@ -6,7 +6,7 @@
  * recent fills / held count, no market fetch). This re-quotes every held/target item live via
  * js/quotecore.js, classifies it by item TYPE, and drives a human-executed polling session (/loop, ~1–3 min):
  *   - per-item CLASS  → recommended attention cadence + which playbook applies
- *   - live re-quoted buy-at / list-at prices (list-at is ALWAYS break-even-floored)
+ *   - live re-quoted buy-at / list-at prices (list-at break-even-floored, bar the honest sub-BE CUT)
  *   - DROP / CUT alerts via the SHARED chunk-6 cut-trigger momVerdict()
  *   - a compact per-item RISK read (spread · two-sided liquidity · regime · ticket/exposure) with an
  *     adverse-selection warning, and the scalp/market-make playbook gated to ranging-wide-spread items ONLY.
@@ -322,7 +322,7 @@ function recoveryReadFor(it) {
 
 
 // --- ACTION line for a HELD lot. Sell-side framing is HONEST (clear-vs-hold), never
-// "out-run the drop". List-at is break-even-floored. momVerdict() (chunk 6) runs FIRST so a
+// "out-run the drop". momVerdict() (chunk 6) runs FIRST so a
 // 2h breakdown escalates before the lagging multi-day regime confirms.
 // P0: the prose is now the SHARED renderer (renderHeldVerdict verbose) in pipeline/lib/item-context.mjs —
 // the ONE home quote-items.mjs --positions renders from too, so the two surfaces can't disagree on a held

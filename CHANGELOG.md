@@ -10,6 +10,50 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Four things a review found by looking away from the work (pipeline/docs only)
+
+CLAUDE.md rule 10 says to scope one review pass away from the region just worked. This is that pass's
+yield, over a region nothing in the reach-surface wave touched.
+
+**An honesty caveat that oversold its own sample.** The scan's weekday-amplitude note ended with a
+hardcoded `— n≈3–4/cell, a lean not a law` while printing the real per-cell n in the same sentence.
+Measured across all 208 cached 1h series: 1,456 cells, n=2 on 60%, n=3 on 40%, n=4 on 0.27%, median 2
+— and on the last live scan, 3 of 3 emitted notes read n=2 or n=3. The cause is that the call asks
+for 28 nights and the archive holds 15–25. The fragment is DELETED rather than re-derived; the real n
+is already rendered beside it, and a re-derived range would drift again as the archive grows.
+
+**A stale verdict set in the registry agents consult.** `docs/SIGNAL-AUDIT.md` listed the digest's
+triage vocabulary including `sell unreliable`, deleted on 2026-08-25 for measuring worse than not
+gating at all, and omitted both `spread closed now` (the priority-1 rule) and the `mirage top!`
+escalation. `lint-docs` is green on it — the guard sees denylisted terms and stale constants, not a
+verdict set that drifted. Corrected from the code, with the deletion recorded so it cannot be re-added
+by someone who finds the name and no explanation.
+
+**A plan advertising its own shipped deliverable as the primary open work.** PLAN-DIGEST-SIGNAL's DS2
+was headed "do-first — now the PRIMARY Workstream-A deliverable"; SEP12 shipped it in August and went
+further, replacing the reach glyph with `NN%` plus its basis mark. Worse, the whole workstream rests
+on two premises that are gone: AF1 moved the comparator off `capEff × deployable`, and the
+`sell unreliable` rule its founding anchor board is made of no longer exists. DS2 is marked SHIPPED
+and the workstream carries a banner; DS0/DS1 are what remain open. This is rule 10's named class —
+a closed plan read as live work costs a whole session.
+
+**A header that would reinstate a bug this repo already reverted.** `watch-positions.mjs` said
+"list-at is ALWAYS break-even-floored". It is not, by construction: gate D's block is guarded by
+`if (underwater && ts5m)`, and `underwater` means `quickSell < breakEven`, so the CUT-CANDIDATE branch
+guarantees a sub-BE list-at. That is deliberate — PLAN-ESTIMATOR-HONEST-SELL reverted the floor
+precisely so a cut prints an honest cut price — and the header was a leftover from before the revert.
+Rare (the CUT family is 38 of 28,409 ledger rows) but expensive: an editor trusting it re-adds the
+floor and silently deletes the honest price. The genuinely-floored claims elsewhere
+(`MONITORING.md`'s FLUSH alert, `item-context.mjs`'s literal) were checked and left alone.
+
+One assigned finding was REFUTED and is recorded so it is not re-chased: `pipeline/MONITORING.md`'s
+fenced blocks are command invocations, not stdout, except one explicitly headed "Historical layout",
+and every inline output phrase in it matches the code. A second, `weekdayProfile` throwing on a null
+series with zero test coverage, is real in SHAPE and unreachable in fact — its only call site sits
+behind a `hasData` guard, measured 208 of 208 clean — so it is left alone rather than given a test
+suite that costs more than the defect.
+
+
 ### Reach surface chunk 2: EV can price, and the probability target cannot (pipeline/plan only)
 
 `js/exit-ev.mjs` inverts the reach surface into a price. `EV(ask,H) = p·net(ask) + (1−p)·(net(bail) −

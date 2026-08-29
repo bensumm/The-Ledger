@@ -650,7 +650,7 @@ export function askReachDecayNote(decay, { ask = null, fmt = String } = {}) {
 // transitions) can matter. §1's honesty correction: NO day-of-week tooling existed anywhere in the repo
 // (hourProfile is hour-of-day only) — this is the net-new weekday sibling. It buckets the per-day daily
 // range by LOCAL weekday over ~3–4 weeks of the 1h archive and reports the per-weekday MEDIAN amplitude %
-// with the n PER CELL (n≈3–4/weekday over 28 nights — state it EVERY print; a lean, not a law, rule 4).
+// with the n PER CELL — the archive rarely holds 28 days, so state the real n every print (rule 4).
 // PURE over an already-fetched 1h series (reuses windowStats — the same full-day per-day hi/lo buckets).
 export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export const WEEKDAY_MIN_DAYS = 7;   // fewer scored days than this ⇒ null (can't bucket a week across weekdays)

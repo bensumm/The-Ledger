@@ -2317,7 +2317,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
     // Only surfaced when the hold crosses a day boundary (holdDays > 1) so leg-2 lands on a different weekday.
     if (AMP_HOLD_DAYS > 1) {
       const wp = weekdayProfile(ts1h, { nights: 28 });
-      if (wp && wp.best && wp.worst) informNotes.push(`${name}: weekday amplitude — widest ${wp.best.label} (~${(wp.best.ampPct * 100).toFixed(1)}%, n=${wp.best.n}), thinnest ${wp.worst.label} (~${(wp.worst.ampPct * 100).toFixed(1)}%, n=${wp.worst.n}) — n≈3–4/cell, a lean not a law`);
+      if (wp && wp.best && wp.worst) informNotes.push(`${name}: weekday amplitude — widest ${wp.best.label} (~${(wp.best.ampPct * 100).toFixed(1)}%, n=${wp.best.n}), thinnest ${wp.worst.label} (~${(wp.worst.ampPct * 100).toFixed(1)}%, n=${wp.worst.n}) — a lean, not a law`);
     }
     // PLAN-OSCILLATION-CYCLE Chunk 2 shadow-log (now GATED by Chunk 3): `driftShadow` was computed ONCE at
     // the gate stage above and is REUSED here (no double-compute). As of Chunk 3 the same margin also DROVE

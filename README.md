@@ -987,7 +987,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   and therefore one parallel-safety contract. **A — digest SIGNAL:** as of that plan's writing
   `buildDigestBlock`'s comparator ranked on `capEff × deployable` and never read the `reach` column it
   prints, so its top slots went to rows its own `digestVerdict` calls `sell unreliable` (live anchor 2026-08-07: 9 of 11 rendered rows,
-  top four graded C/C/D/B-, the only `A- fill-now` row at #5). Chunks DS0 (log the digest's computed
+  top four graded C/C/D/B-, the only `A- fill-now` row at #5). **BOTH HALVES OF THAT PREMISE ARE GONE:**
+  AF1 moved the comparator to `rank`, and SEP12 DELETED the `sell unreliable` verdict outright and
+  shipped DS2's honest reach cell. The plan carries a banner saying so; what remains open is DS0/DS1. Chunks DS0 (log the digest's computed
   fields — `verdict`/`reachHit`/`reachDays`/`marginTrend`/`crossable`/`deployable`/`rankKey`/
   `capEffRealizable`/`digestRank`, none of which survive a pass today) → DS1 (a read-only
   market-counterfactual study, `report-digest.mjs`: *did the quoted ask actually print within
