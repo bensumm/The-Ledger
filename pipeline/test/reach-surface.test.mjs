@@ -4,7 +4,8 @@
  *
  * Synthetic rows for every property; one FROZEN archive slice
  * (fixtures/reach-surface.json) for the curve pin and the grain diagnostic. No sqlite, no fetch,
- * no clock — `now` is passed everywhere.
+ * no clock — `now` is passed everywhere AND the timezone is pinned, because windowStats buckets by
+ * LOCAL day and an unpinned TZ is a clock input by the back door (see the pin below).
  *
  * BUSINESS REQUIREMENTS pinned here:
  *   - NO LOOK-AHEAD. `referenceAsOf(series, t)` must equal the same call on a series truncated at t.
@@ -44,6 +45,13 @@ import {
   buildReachSurface, referenceAsOf, surfaceProb, surfaceShape,
   wilsonHalfWidth, DEFAULT_Z_GRID,
 } from '../../js/reach-surface.mjs';
+
+/* THE TIMEZONE IS A CLOCK INPUT, and this file did not pin it. `windowStats` buckets by LOCAL day, so
+ * the same frozen fixture yields a different day set — and therefore different daily highs, a different
+ * reference and a different p — depending on where the runner sits. The pinned curves below were
+ * recorded in PDT and this suite had been RED on every CI run since it landed, three chunks deep,
+ * while passing on the author's machine. Pinned to UTC and re-recorded under the pin. */
+process.env.TZ = 'UTC';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -237,9 +245,9 @@ ok('FIXTURE PIN: the re-derived p(z, H=24) curves for the three plan exemplars',
   }
   // Pinned so a refactor cannot move the curve silently. These are the RE-DERIVED numbers on the
   // uniform 1h instrument in z units — NOT the raw-% figures PLAN-REACH-SURFACE §1.5 printed.
-  assert.deepEqual(pin['Soul rune'],          [0.806, 0.655, 0.587, 0.552, 0.548, 0.490, 0.465, 0.410, 0.381, 0.323, 0.261, 0.226, 0.074, 0.035, 0.019, 0.019]);
-  assert.deepEqual(pin['Ranarr weed'],        [0.923, 0.865, 0.761, 0.632, 0.545, 0.461, 0.403, 0.339, 0.306, 0.277, 0.206, 0.190, 0.103, 0.055, 0.013, 0.000]);
-  assert.deepEqual(pin['Ancestral robe top'], [0.829, 0.635, 0.487, 0.419, 0.377, 0.323, 0.271, 0.210, 0.165, 0.145, 0.039, 0.013, 0.000, 0.000, 0.000, 0.000]);
+  assert.deepEqual(pin['Soul rune'],          [0.827, 0.687, 0.603, 0.580, 0.580, 0.515, 0.502, 0.440, 0.388, 0.342, 0.277, 0.221, 0.075, 0.049, 0.000, 0.000]);
+  assert.deepEqual(pin['Ranarr weed'],        [0.915, 0.870, 0.762, 0.625, 0.560, 0.498, 0.446, 0.362, 0.290, 0.257, 0.202, 0.160, 0.078, 0.039, 0.000, 0.000]);
+  assert.deepEqual(pin['Ancestral robe top'], [0.831, 0.658, 0.495, 0.436, 0.375, 0.329, 0.290, 0.248, 0.186, 0.147, 0.026, 0.013, 0.000, 0.000, 0.000, 0.000]);
 });
 
 ok('the §1.5 taxonomy contrast does NOT survive z-normalization — pinned as a finding, not a hope', () => {
