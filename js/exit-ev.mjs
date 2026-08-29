@@ -21,7 +21,6 @@ const priceAt = (surface, z) => surface.refHigh + z * surface.disp;
 
 /* Every scorable cell of one horizon, ask in gp. A cell with no bail and p < 1 is dropped rather
  * than scored against an invented payoff. */
-// @provisional-api: consumed by PLAN-REACH-SURFACE chunk 3 (read-exit-surface.mjs) and chunk 4.
 export function evCurve(surface, H, { bailNet = null, delayCost = DEFAULT_DELAY_COST } = {}) {
   const row = rowAt(surface, H);
   if (!row || !Number.isFinite(surface.refHigh) || !(surface.disp > 0)) return null;
@@ -45,7 +44,6 @@ export function evCurve(surface, H, { bailNet = null, delayCost = DEFAULT_DELAY_
 }
 
 /* argmax EV over the z grid. Returns the winning cell plus the refusal flags a consumer must print. */
-// @provisional-api: consumed by PLAN-REACH-SURFACE chunk 3 and scored by chunk 4.
 export function askStar(surface, H, opts = {}) {
   const curve = evCurve(surface, H, opts);
   if (!curve) return null;
@@ -68,7 +66,8 @@ export function askStar(surface, H, opts = {}) {
 /* The highest grid ask whose p at H clears pTarget. ITS `ask` IS NOT A PRICE — a probability target
  * ignores what the ask is worth, and PLAN-REACH-SURFACE §1c measured it as the worst rule tried at
  * short horizons. Round-trip partner of `horizonForAsk`; do not print its `ask`. */
-// @provisional-api: the round-trip partner of horizonForAsk (PLAN-REACH-SURFACE chunk 3).
+// @test-only: the round-trip inverse of horizonForAsk. PLAN-REACH-SURFACE §1c forbids its ask as a
+// price, so it has no production consumer BY DESIGN — do not wire one.
 export function askForHorizon(surface, H, pTarget = DEFAULT_P_TARGET) {
   const row = rowAt(surface, H);
   if (!row || !Number.isFinite(surface.refHigh) || !(surface.disp > 0)) return null;
@@ -80,7 +79,6 @@ export function askForHorizon(surface, H, pTarget = DEFAULT_P_TARGET) {
 /* The smallest grid horizon whose p at this ask clears pTarget, WITH the full p-by-H row — the
  * threshold never travels alone, and `met:false` still returns the row. Reads p through
  * `surfaceProb`, the ONE interpolation, so every row carries its `ciHalf`. */
-// @provisional-api: consumed by PLAN-REACH-SURFACE chunk 3 (--price).
 export function horizonForAsk(surface, ask, { pTarget = DEFAULT_P_TARGET } = {}) {
   if (!surface?.grid?.length || !Number.isFinite(ask) || !Number.isFinite(surface.refHigh) || !(surface.disp > 0)) return null;
   const z = (ask - surface.refHigh) / surface.disp;

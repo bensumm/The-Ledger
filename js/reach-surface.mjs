@@ -88,9 +88,8 @@ function endLowWithin(series, from, windowH) {
  * mostly the TREND rather than the volatility, inflating z and making the curve read as a cliff.
  * 'detrended' takes the IQR of day-over-day CHANGES instead. The seam exists so the two can be
  * compared on the shipped code path; 'level' stays the default until that comparison decides. */
-// @provisional-api: the query-time reference read, consumed by PLAN-REACH-SURFACE chunk 3's
-// read-exit-surface.mjs inspector. Exported now so the no-look-ahead invariant is assertable as an
-// equality rather than inferred from an aggregate.
+// @test-only: exported so the no-look-ahead invariant is assertable as an EQUALITY rather than
+// inferred from an aggregate. The chunk-3 inspector reads the built surface, not this.
 export function referenceAsOf(series, at, { nights = 14, refN = 3, dispMode = 'level' } = {}) {
   if (!Array.isArray(series) || !series.length) return null;
   return referenceAt(series, statsView(series), at, nights, refN, dispMode);
@@ -206,8 +205,6 @@ export function surfaceShape(surface, atH = 24) {
 
 /* p for a live ask at horizon H. Linear between z nodes; OUTSIDE the grid it clamps and flags
  * `extrapolated` rather than extending the curve — off-grid is a refusal to price, not a number. */
-// @provisional-api: reads a live ask off the surface; consumed by PLAN-REACH-SURFACE chunk 2
-// (askStar/horizonForAsk) and chunk 3's inspector.
 export function surfaceProb(surface, ask, H) {
   if (!surface || !Number.isFinite(ask)) return null;
   const row = surface.grid.find(r => r.h === H);
@@ -262,9 +259,6 @@ function grainDiagnostic(fiveMin, oneHourSeries, origins, zGrid, horizonsH, stri
  *   series:  ts-ascending 1h archive rows {ts, avgHighPrice, avgLowPrice, ...}.
  *   fiveMin: optional 5m rows, same shape, for the grain diagnostic only. Never an outcome source.
  * Returns null when the item lacks the history to place a single origin. */
-// @provisional-api: the surface itself. Chunk 1 of PLAN-REACH-SURFACE ships the builder; its first
-// operator surface is chunk 3's read-exit-surface.mjs, and chunk 5 wires it into the sell-model
-// registry. Landing the builder alone is deliberate — chunk 4 scores it before anything prices off it.
 export function buildReachSurface(series, {
   nights = 14,
   refN = 3,

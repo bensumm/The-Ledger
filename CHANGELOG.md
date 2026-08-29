@@ -10,6 +10,82 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Reach surface chunk 3: the inspector ships a price, and two forces fight over it
+
+`pipeline/commands/read-exit-surface.mjs` is the first surface that turns the measured reach surface
+into a number an operator can act on. Per item it prints the `p(z,H)` grid with levels in gp, `askStar`
+at each `--horizon` **as a band over its plateau**, the horizon read when `--price` is given, and the
+incumbent exit estimators placed on that same surface as `(ask, z, p@H)` rows — the point of the whole
+plan, five conventions replaced by one ruler. Chunk 2's `pTarget` prohibition is honoured structurally:
+the price and the horizon are separate fields off separate functions, and `askForHorizon` is now
+`@test-only` with no production consumer by design.
+
+**The finding was not in the plan.** On some items the EV argmax lands on a cell that reaches only a few
+percent of the time, with the never-reached cells a rounding error behind it. That is the arithmetic
+behaving exactly as specified and an operator being handed a price they would never fill at. No figures
+appear here on purpose: the archive is live, and the headline argmax this was written from moved a full
+grid step within half an hour of being measured. Two things ship in response, both VISIBLE rather
+than corrective: an argmax under `P_STAR_FLOOR` is flagged rather than printed bare, and every priced
+horizon reports its **delay-cost crossover** — the smallest cost-of-waiting at which its own answer
+changes, what it changes to, and that cost as a share of the reference. It is solved rather than searched
+(EV is linear in `delayCost` per cell, slope −(1−p)), so it costs nothing to print.
+
+**The cause was written down wrong first, and self-review caught it — the same failure shape as chunk 2's
+backwards bail reason, one chunk later.** The first draft asserted a single cause: with delayCost 0 the
+wait is free, so the argmax drifts up. The discriminating test is to swap the per-cell miss payoff for the
+unconditional one while HOLDING delayCost at 0 — if the argmax drops, the bail was doing the work, not the
+free wait. It drops the argmax by more than a full grid step on the very item the claim was written from,
+and does not move it at all on the next item tried. Two forces, dominating on different items, and neither
+is "the" cause. The code now RUNS that swap per item and prints which one is doing the work,
+rather than any document asserting it.
+
+A second single-cause claim from this chunk is recorded as wrong so it is not re-derived: an initial sweep
+at `--delay-cost` 0/1m/5m/20m showed the argmax not moving, which reads as "delayCost cannot discipline
+this." The sweep was too small, not the mechanism — it stopped an order of magnitude short of the crossover
+the closed form names, and bracketing that crossover holds the argmax below it and moves it to exactly the
+predicted cell above. The claim was checked against the behaviour it predicts before it was believed, per
+rule 11, and the check now lives in the suite rather than in this paragraph.
+
+**Defects self-review caught before any reviewer saw it.** The depth incumbent was handed a
+`ts`-keyed archive series while `windowread`'s whole family reads `timestamp`, so it silently produced
+nothing. `fmt` collapsed every z cell of a sub-100k item onto `6k` AND two adjacent cells of a 1.4b item
+onto `1.38b` — a price column that cannot distinguish two prices is not an inspector, so levels render as
+exact gp with the locale pinned. And `foldAsk` guarded `stats.his` while `recencySplit` walks
+`stats.days`, which is a crash rather than a refusal on a hand-built stats object. And an off-grid
+`--horizon` degraded into a table of dashes under a header naming that horizon instead of being refused
+at the argument.
+
+**Adversarial review found four live defects the 22 green groups were blind to, and every one was a
+place where the data disagreed with the render.** A REFUSED horizon still carried a full quote in
+`--json` and the report dump: the render skipped it, the data did not, so a machine consumer read an
+ask off every grid-top row — measured on all of them. `MIN_COVERED_DAYS` was a TAUTOLOGY, comparing
+against a field pinned to `nights`: the thin-history branch fired zero times at the default and
+refused every item at `--nights 10`, blaming the item for the operator's own flag; the floor now
+reads real archive coverage, which makes the plan's acceptance criterion true rather than true by
+accident. The ΔEV column rendered a header naming a horizon it had no data for whenever the placement
+horizon was not priced — the exact defect the comment two lines above it claimed to have avoided. And
+the band contradicted its own doctrine in both directions: mostly a single cell while the footer said
+"quote the band, not the point", and on a dead curve wide enough to include a level that never
+printed. It now names its endpoint reach and the footer says what it means. Two smaller ones: the
+sign-inversion flag printed below the bold price with no magnitude, and its first real hit was worth
+0.02% of the item; and `bailDrivenDrift`'s comparator is the top-cell bail, not the unconditional one.
+
+**Every derived number this entry originally carried has been deleted.** Review reproduced the
+headline argmax 25 minutes later and found it had moved a full grid step, and three samples of the
+guard-firing rates disagreed by 2x — the archive is live, so a figure written into prose here is wrong
+by the time anyone reads it. The mechanisms stay, the digits go to the command that prints them.
+
+The series is read from the SQLite archive, not `/timeseries`: the API's ~15 days cannot fill a 14-night
+reference window plus a replay. A `<14`-covered-day item refuses with a sentence and carries no ask field
+at all, so a consumer cannot read a price off a refusal by accident. `--json` emits the report objects and
+nothing else. INFORM-ONLY — it gates nothing and prices no offer; chunk 4's `join-exit-ev.mjs` is what
+scores any of it against realized gp.
+
+25 assertion groups, 15 mutants killed. One property is deliberately NOT mutation-verified and the suite
+says so on its own line: `foldAsk`'s `: null` return fallback is unreachable behind its own preconditions,
+so it is a total-function return rather than a behaviour. No `APP_VERSION` bump — nothing the browser
+loads changed.
+
 ### Four things a review found by looking away from the work (pipeline/docs only)
 
 CLAUDE.md rule 10 says to scope one review pass away from the region just worked. This is that pass's

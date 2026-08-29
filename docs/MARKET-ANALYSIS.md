@@ -861,6 +861,15 @@ DAYS but rarely IN its peak window. Band-is-the-edge: on a liquid stable-regime 
 buys at band lows / sell at band tops (never below break-even). Full judgment: the `/scan` skill's
 WINDOW-CLEAR PRICING step.
 
+**The reach COUNT and the reach SURFACE are different instruments — don't read one as the other.**
+Everything in this section is a per-day tally over a fixed lookback: "the level printed on k of N days."
+`read-exit-surface.mjs` (PLAN-REACH-SURFACE chunk 3) answers a different question off the same archive —
+`p(ask, H)`, the probability an ask is reached within a HORIZON, replayed from thousands of origins — and
+inverts it into an EV-maximizing ask. It is INFORM-ONLY and gates nothing; nothing in the tables above
+reads it. Two rules carry out of its gate (`plans/PLAN-REACH-SURFACE.md` §1c, the ONE home for the
+numbers): a probability target answers "how long", never "how much", so a p≥pTarget level is not a price;
+and the argmax sits on a plateau, so it is quoted as a band. Its behaviour and limits: README's entry.
+
 **"Reached" is the 1h bucket AVERAGE crossing a level — not a ceiling on a resting order; read the
 PERCENTILE PLACEMENT alongside it (Finding 3, 2026-07-17; AC4a shipped the placement read).**
 `reachedDays`/`touchedDays` (`read-window-range.mjs --ask/--bid`) count days where the hourly average

@@ -157,10 +157,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   the declared grid — a dropped cell would otherwise pass as interior); (5) **`net()` is the ONE tax
   definition on BOTH legs** — a tax asymmetry is 2% of price, larger than the whole EV spread being
   optimized over; (6) **`horizonForAsk` reads horizons ascending** regardless of grid order.
-  `@provisional-api` until chunk 3's `read-exit-surface.mjs` consumes it. **`askStar` is an argmax over
+  Consumed by chunk 3's `read-exit-surface.mjs`, which is why the `@provisional-api` markers are gone
+  from every export but `askForHorizon` — that one is now `@test-only` and has no production consumer
+  BY DESIGN, since §1c forbids its ask as a price. **`askStar` is an argmax over
   a PLATEAU, not a point** — adjacent cells sit within a few basis points of refHigh of each other,
   decided off a p known to a few pp, so a consumer must present a band and never a false point;
-  chunk 3 owns that. The chunk-2 stop-or-go gate and what it measured live in
+  `read-exit-surface.mjs` owns that. The chunk-2 stop-or-go gate and what it measured live in
   `plans/PLAN-REACH-SURFACE.md` §1c, the ONE home (don't restate its numbers here — they were, once).
   The one rule to carry out of it: **`pTarget` must never pick a price.** It answers "how long",
   never "how much"),
@@ -1587,6 +1589,45 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     null) but `optSell*` is the tool's OWN band edge, so beating it beats a sibling. **GATES NOTHING.**
     `--horizon`/`--min-n`/`--item`/`--json`.)
 
+    **`read-exit-surface.mjs`** (PLAN-REACH-SURFACE chunk 3 — the first surface that ships a PRICE off
+    `js/reach-surface.mjs` + `js/exit-ev.mjs`. Reads the 1h series from
+    `pipeline/.market-archive.sqlite` (the API's ~15-day `/timeseries` cannot fill a 14-night reference
+    window plus a replay), one `/latest`+`/5m`+`/6h` fetch per item for the live quote, and prints, per
+    item: the p(z,H) grid with levels in gp and a **ΔEV column** against the argmax so the plateau is
+    auditable cell by cell; `askStar` at each `--horizon` **as a BAND**, never a point; the incumbent
+    exit estimators placed on that same surface as (ask, z, p@H) rows; the flavor line; and the guards.
+    **It answers two different questions and never blends them** — `askStar` is the PRICE and
+    `horizonForAsk` (`--price`) is the HORIZON read. `askForHorizon`'s p≥pTarget level is deliberately
+    NOT offered as an ask: PLAN-REACH-SURFACE §1c measured it as the worst pricing rule tried at short
+    horizons. **The load-bearing output nobody expected is the delay-cost crossover.** On some items
+    the argmax lands on a cell that reaches only a few percent of the time, so each priced horizon
+    also reports the smallest `delayCost` at which its own answer changes, the answer it changes to,
+    and that cost as a share of the reference price. It is SOLVED, not searched: EV is linear in
+    `delayCost` per cell with slope −(1−p), so the crossing has a closed form, and the test asserts it
+    is self-consistent (the argmax has moved just above it and has not just below). An argmax under
+    `P_STAR_FLOOR` is FLAGGED rather than printed bare. **TWO different forces push that argmax up and
+    the report refuses to conflate them** — a first draft asserted one of them and was wrong on the
+    very item it was written from: (a) `--delay-cost 0` makes a miss cost little more than the bail,
+    and (b) the per-cell miss payoff RISES with the ask, crediting a high ask with a better
+    consolation prize (chunk 1's `bailZOnMiss`; chunk 2 measured per-cell pricing at or ABOVE the
+    unconditional form). Swapping (b) for the unconditional bail while holding (a) fixed separates
+    them, and `bailDrivenDrift` runs exactly that swap PER ITEM and prints which one is doing the
+    work — measured on the row, never asserted in prose. The `fold` row is a **RECONSTRUCTION** and says so on the row — the deployed estimator also
+    sees diurnal/asym/dayHigh/placement and an anchor nudge this surface does not build, the same
+    divergence `read-window-range.mjs`'s fold block already documents. **REFUSALS CARRY NO PRICE, at
+    BOTH levels** — an item whose archive holds under `MIN_COVERED_DAYS` days with a high print
+    refuses whole, and a single horizon whose argmax lands on the grid top nulls its own ask/z/p/band
+    so `--json` and the dump cannot serve a number the row's own text disowns (they did, on every
+    grid-top row, until review measured it). Note the floor reads REAL archive coverage, NOT
+    `surface.coveredDays` — that field is pinned to `nights`, so a floor against it is a tautology
+    that fires zero times at the default and refuses every item below it. `--json` emits the report
+    objects and nothing else. **The guards are reached, not decorative, but the RATE is not a fixed
+    number** — see `plans/PLAN-REACH-SURFACE.md` §5 chunk 3, the ONE home; don't restate it here. **INFORM-ONLY: gates nothing, prices no offer, writes only
+    `pipeline/.cache/last-report/exit-surface.json`.** `MIN_COVERED_DAYS`/`PLATEAU_TOL_FRAC`/
+    `P_STAR_FLOOR`/`delayCost`/`pTarget` are all PLACEHOLDER and printed beside the numbers they moved.
+    Chunk 4's `join-exit-ev.mjs` is what scores any of this against realized gp; until then it
+    DESCRIBES. `--horizon`/`--price`/`--qty`/`--delay-cost`/`--p-target`/`--nights`/`--json`.)
+
     **`join-reach-basis.mjs`** (2026-08-13, PLAN-REACH-BASIS-DECISION — settles the digest's
     recent-3-vs-full-window ask-reach split that `screen-flip-niches.mjs`'s header had flagged as KNOWN,
     UNDECIDED and forbidden to "fix" either way without a measurement. PRODUCER: `estConfidence`
@@ -2856,7 +2897,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     root-level `heartbeat.json` (LW3 — watch-log's browser-facing 30s pulse): this one is desk-only,
     whole-fleet, never fetched by the app. Missing/corrupt → `{}`, never throws. Disposable), and the AO1
     `last-report/<kind>.json`
-    dumps (`screen.json`/`quote.json`/`watch.json`/`watchlist.json`) — the compact-JSON render.mjs report object(s)
+    dumps (`screen.json`/`quote.json`/`watch.json`/`watchlist.json`, plus `exit-surface.json` — which is NOT a render.mjs
+report object but `read-exit-surface.mjs`'s own report array) — the compact-JSON render.mjs report object(s)
     the last run of each market-read CLI built, overwritten with "last run" semantics. **NOT written on
     every run** — three of the four producers return before their dump on a degenerate path
     (`quote-items.mjs` exits at `:618`/`:655`; `watch-positions.mjs` returns on "Nothing to watch";

@@ -1,6 +1,6 @@
 # PLAN-REACH-SURFACE — one exit function: the reach surface `p(ask, H)`
 
-**Status: CHUNKS 0-1 SHIPPED; 2-9 PROPOSED.** Drafted 2026-08-28, successor to
+**Status: CHUNKS 0-3 SHIPPED; 4-9 PROPOSED.** Drafted 2026-08-28, successor to
 `PLAN-REACHABILITY-CONSOLIDATION` (whose scorer shipped and whose premise did not survive).
 All measurements here were run against the live repo on that date. Spike measurements
 (marked SPIKE) used ad-hoc scripts and MUST be reproduced by the chunk-1 fixtures before
@@ -540,7 +540,7 @@ One finding was REFUTED by re-measuring at scale: see §1c's strongest-null note
 price.** Present `horizonForAsk` as the horizon read and `askStar` as the price; do not offer the
 p≥pTarget level as an ask.
 
-### Chunk 3 — The inspector ships a price: `pipeline/commands/read-exit-surface.mjs`
+### Chunk 3 — The inspector ships a price: `pipeline/commands/read-exit-surface.mjs`  ✅ SHIPPED
 `node pipeline/commands/read-exit-surface.mjs "<item>" [--horizon H] [--price P] [--qty N]
 [--delay-cost gp] [--p-target f] [--json]`. Prints the p(z,H) table with levels in gp; `askStar`
 at strategy-relevant horizons; `horizonForAsk` when `--price` given; **each incumbent's current
@@ -553,6 +553,73 @@ for X if I'll wait H?", "how long to clear X at price P?"); `docs/MARKET-ANALYSI
 reason, not a number; `--json` returns before any table.
 **Proves it wrong**: an operator-visible contradiction — e.g. `askStar(24h)` below quickSell on
 a liquid item (a sign inversion). Add as an assertion, not a hope.
+**As shipped**, differing from the spec above where building it revealed something: the series comes
+from the SQLITE ARCHIVE, not `/timeseries` (the API's ~15 days cannot fill a 14-night reference window
+plus a replay — the spec did not say where the series came from and the obvious reading was wrong);
+the price is printed as a BAND over its plateau, per chunk 2's consequence note; `depth` joins the
+incumbents when `--qty` is given, making it six rows rather than five; and the p-grid carries a **ΔEV
+column** so the plateau the band names is auditable cell by cell rather than asserted.
+**THE FINDING, and it was not in the plan.** On some items the EV argmax lands on a cell that reaches
+only a few percent of the time, with the never-reached cells a rounding error behind it. That is the
+arithmetic behaving correctly and an operator being handed a number they would never fill at. NO
+FIGURES ARE QUOTED HERE and that is deliberate — the archive is live, so an argmax written down as a
+specific (z, p) pair moved a full grid step within half an hour of being measured, and three separate
+samples of the guard-firing rates disagreed by 2x. Run the command; it prints them. Two things ship in response, both visible
+rather than corrective: an argmax under `P_STAR_FLOOR` is FLAGGED, and every priced horizon reports
+its **delay-cost crossover** — the smallest cost-of-waiting at which its own answer changes, what it
+changes to, and that cost as a share of the reference. The crossover is SOLVED, not searched (EV is
+linear in `delayCost` per cell, slope −(1−p)), and the solver was checked against the behaviour it
+predicts before being believed: bracketing the predicted cost held the argmax below it and moved it to
+exactly the predicted cell above it. The suite pins that self-consistency on every fixture item and
+horizon, which is where the check belongs — a number here would just rot.
+**THE CAUSE WAS WRITTEN DOWN WRONG FIRST, AND SELF-REVIEW CAUGHT IT — the same failure shape as
+chunk 2's backwards bail reason, one chunk later.** The first draft asserted a single cause: "with
+delayCost 0 waiting is free, so the argmax drifts up." The discriminating test is to swap the
+per-cell bail for the unconditional one while HOLDING delayCost at 0 — if the argmax drops, the bail
+was doing the work, not the free wait. Run at H=24 it drops the argmax by more than a full
+grid step on the very item the claim was written from, and does not move it at all on the next item
+tried. So there are TWO forces, they dominate on different items, and neither is "the" cause. The
+code now RUNS that swap per item (`bailDrivenDrift`) and prints which one is doing the work, rather
+than any document asserting it. Adversarial review independently reproduced the swap and measured
+BOTH branches reachable across hundreds of priced rows, so the "not the cause" branch is not a
+fail-open. Two earlier single-cause claims from this chunk are recorded as wrong so they are not
+re-derived: that one, and an initial "delayCost does not move the argmax at all", which came off a
+sweep that stopped an order of magnitude short of the crossover the solver names.
+**THE FALSIFIER IS REACHED, and the guards are not decoration — but the RATE is not a fixed number.**
+Two independent sweeps at H=24 both found the low-fill flag, the grid-top refusal and the
+below-the-market proxy firing on a material minority of items — and disagreed with each other by
+roughly 2x on every one of the three, because the archive moves under the measurement. So the durable
+claim is the SHAPE (a material minority, not a rare edge), never the digits, and the fixture suite
+pins the mechanisms rather than the rates. The live inversion detector does fire on real runs, and it
+now prints the gap as a SHARE of price, because the first hit found was worth 0.02% of a 515m item —
+reached, but not by itself evidence the guard matters. Chunk 4 must account for these rows rather
+than pooling over them.
+**What ADVERSARIAL review found, and four of the six were live defects the tests were blind to:**
+(1) a REFUSED horizon still carried a full quote in `--json` and the dump — the render skipped it, the
+data did not, so a machine consumer read an ask off every grid-top row; (2) `MIN_COVERED_DAYS` was a
+TAUTOLOGY: it compared against `surface.coveredDays`, which is pinned to `nights`, so the thin-history
+branch fired zero times at the default and refused every item at `--nights 10`, blaming the item for
+the operator's own flag — the floor now reads real archive coverage and the plan's own acceptance
+criterion is true rather than true by accident; (3) the ΔEV column rendered a header naming a horizon
+it had no data for whenever the placement horizon was not priced, which is the exact defect the
+comment two lines above claimed to have avoided; (4) the band contradicted its own doctrine in both
+directions — mostly a single cell while the footer said "quote the band, not the point", and on a dead
+curve wide enough to include a level that never printed, so it now names its endpoint REACH and the
+footer says what it means; (5) the sign-inversion flag printed BELOW the bold price and carried no
+magnitude, and the first hit found was worth 0.02% of the item — it now leads and prints the share;
+(6) `bailDrivenDrift`'s comparator is the TOP-CELL bail, not the unconditional one, and the two
+coincide only when that cell reaches ~0. Review also confirmed the crossover algebra and composition,
+independently reproduced the two-force result, and verified the not-mutation-verified declaration is
+true rather than an excuse. Every derived number this chunk had put in prose was DELETED after review
+showed the headline argmax had moved a full grid step within half an hour and three samples of the
+guard-firing rates disagreed by 2x.
+**What self-review found**: the incumbent depth read was handed a `ts`-keyed archive series while
+`windowread`'s family reads `timestamp` (silently no-op'd); `fmt` collapsed every z cell of a sub-100k
+item onto one label AND two adjacent cells of a 1.4b item onto `1.38b`, so the price column could not
+distinguish two prices; and `foldAsk` guarded `stats.his` while `recencySplit` walks `stats.days`, a
+crash rather than a refusal on a hand-built stats.
+**25 assertion groups, 15 mutants killed.** One property is deliberately NOT mutation-verified and the
+suite says so: `foldAsk`'s `: null` return fallback is unreachable behind its own preconditions.
 
 ### Chunk 4 — The decisive backtest: `pipeline/commands/join-exit-ev.mjs`
 The head-to-head the failed scorer could not be. **Recompute-per-origin** (the
