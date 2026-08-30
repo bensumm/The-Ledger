@@ -716,6 +716,31 @@ to neither side), and a mutant reverting the cut reddens the group. Chunk 1 was 
 class and is clean — `windowStats` drops the day containing its `now`, so the surface's own reference
 never read that bucket.
 
+**IS IT A SPECIALIST? NO — and the way it fails is the strongest evidence in this chunk.** Losing on
+average would not settle usability: if the wins concentrated somewhere nameable AT THE READ, the right
+shape is a router, not a default. Nine ex-ante features were declared before looking (surface thinness ·
+the low-fill flag · shape label · shape spread · liqClass · fcTrack direction · relative dispersion ·
+big-ticket · how far the surface's z sits from asym's), every bucket with n≥150 reported rather than the
+best one, and every split required to hold sign across era halves.
+
+`askStar+fold` is BEHIND in every one of the ~30 buckets. Not one positive stable cell. The two that come
+closest to parity — thin-liquidity items, and origins where the surface AGREES with asym to within 0.25z
+— are precisely the two that FAIL the era-half stability check, which is the signature of noise. And the
+second of those is not a win in any case: agreeing with asym earns asym's result.
+
+**The gradient is the finding.** Its deficit grows with how much it ASSERTS: worst on fat-tail shapes
+(the flattest reach curves, where the argmax is least determined), worst where its own CI is widest,
+worst where relative dispersion is highest, and worst of all where its z sits FURTHEST from asym's. The
+more the surface disagrees with the quantile rule, the more it loses. That is what a noisy divergence
+looks like, not a signal being drowned.
+
+**The oracle ceiling is real but not addressable.** Perfect per-origin choice among the four rules beats
+the best single rule by roughly half again its edge — but that number is a max over four correlated
+noisy outcomes and is upward-biased by construction, not an achievable target, and NONE of the nine
+features recovers any of it. Across the same buckets `asym` leads nearly everywhere; the two exceptions
+are big-ticket (thin: 7 items) and the surface's own low-fill rows, where `reachFold` leads. A router
+built on any declared feature reduces to "always asym", which is the best single rule already.
+
 **THE ONE MEASUREMENT ARTIFACT FOUND, and it flatters the loser.** Sweeping a FIXED z across the grid
 and scoring it at every origin gives an empirical edge curve that peaks at z≈0 and appears to fall off a
 cliff immediately above it. It is not a cliff. `reached` is `top >= ask`, and `refHigh` is the median of
