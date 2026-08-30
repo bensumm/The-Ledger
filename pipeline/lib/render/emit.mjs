@@ -26,7 +26,7 @@
  * structuralSupport / convictionGate) and decides NOTHING — it just orders + formats them. It
  * changes no verdict, no alert, no row selection (V5 is output-format-only).
  */
-import { fmtP, fmt, fmtHourRange } from '../../../js/money-format.js';
+import { fmtP, fmt, fmtHour, fmtHourRange } from '../../../js/money-format.js';
 import { fmtHoldHorizon, realityClause } from '../../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT2 — formatTimedLap's hold-horizon renderer; PLAN-DIURNAL-RECENCY-GUARD — realityClause: the spike-top/stale clause appended to the ASK/BID bits
 
 /**
@@ -79,7 +79,7 @@ export function heldListAt(row, be, mv) {
  */
 export function heldNoteBlock({
   name, verdict, window: win, reliableReason, pressure, staleLive,
-  conviction, delta, tripwire, recovery, path, marginBudget,
+  conviction, delta, tripwire, recovery, path, marginBudget, reachRead,
   listAt, breakEven, fillProgress,
 }) {
   const lines = [];
@@ -108,11 +108,22 @@ export function heldNoteBlock({
   //     across reprices this hold (watchstate.mjs marginBudgetNote). ADVISORY only — never an alert
   //     input; surfaced so a chase doesn't silently surrender its whole edge one small step at a time.
   if (marginBudget) lines.push(`    ${marginBudget}`);
+  if (reachRead) lines.push(`    ${reachRead}`);
   // 5. SELL/LIST-AT (+ break-even) + fill-progress — GUARANTEED (the standing user rule above).
   const sellBits = [`sell: list @ ${fmtP(listAt)}`, `break-even ${fmtP(breakEven)}`];
   if (fillProgress) sellBits.push(fillProgress);
   lines.push(`    ${sellBits.join(' · ')}`);
   return lines;
+}
+
+export function formatReachMargin(rm) {
+  if (!rm || (!rm.trend && !rm.pace)) return null;
+  const sg = v => v == null ? '—' : (v >= 0 ? '+' : '') + fmt(v);
+  let c = `margin ${sg(rm.cushionNow)} today`;
+  if (rm.trend) c += ` · cushion ${rm.trend === 'fading' ? '⚠ ' : ''}${rm.trend} ${sg(rm.cushionFrom)}→${sg(rm.cushionTo)} (${rm.nRecent}d)`;
+  if (rm.pace && rm.pace.stale) c += ` · pace n/a (live ${rm.pace.ageMin != null ? Math.ceil(rm.pace.ageMin) + 'm' : ''} stale)`;
+  else if (rm.pace) c += ` · pace ${sg(rm.pace.gap)} vs ${fmtHour(rm.pace.hour)} median${rm.pace.onPace ? '' : ' ⚠ lagging'}`;
+  return c;
 }
 
 /**

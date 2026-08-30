@@ -286,7 +286,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   below supersedes it; what survives is the floor/ceiling/livePos fields that note now carries) + **`floorCeilingTrack`/`formatFloorCeiling`**
   (PLAN-DRIFT-VS-CRASH, 2026-07-22 — the phase-aligned floor+ceiling **slope-asymmetry** classifier that
   `trajectoryRead`'s single min-low/max-high collapse washes out: reads the daily-LOW track and daily-HIGH
-  track SEPARATELY, each a robust recent-window least-squares slope classified `rising|flat|falling` + a
+  track SEPARATELY, each a recent-window least-squares slope (windowed, so a short trailing wiggle
+  cannot flip it; a volatile END day can — OLS endpoint leverage) classified `rising|flat|falling` + a
   raw-sign trailing micro-`run` for duration, plus a discrete **floor-break** flag (latest completed low vs
   the prior-lookback floor); combines the two slopes + the break into `crash-risk` (break dominates) /
   `healthy-trend` / `compressing-up` / `mild-cooldown` / `cooling` / `ranging`. REQUIREMENT #1 phase-alignment:
@@ -1339,7 +1340,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     --hourly` (the summary line; rides `--json` as `result.hourly.askDecay`), `quote-items.mjs` (an
     `askReachDecay` note on a bare ask/bid quote and on held/watched positions),
     `screen-flip-niches.mjs`'s `--digest` (a bounded top-X enrichment pass; never gates/drops a row and no
-    longer alters any verdict). **DELETED 2026-08-09 (DT3): the per-hour `Δ/d` column, the `hourlyDrift`
+    longer alters any verdict), and `watch-positions.mjs` (inside the big-ticket/watchlist `reachRead` line). **DELETED 2026-08-09 (DT3): the per-hour `Δ/d` column, the `hourlyDrift`
     slope export + its uniform/split synthesis, its shared note renderer, and the digest's
     `⚠ falling — verify (~X/d)` relabel** — measured 49.7% direction, beat predict-no-change on 6 of 380
     items. INFORM-ONLY, n≈0; fixture-tested in `pipeline/test/hourly-lmh.test.mjs` (incl. a stays-deleted
@@ -2273,6 +2274,18 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `emit.mjs` (V5 — PURE `heldNoteBlock`/`heldListAt`: the watch loop's stable, consistently-ordered
     per-HELD-lot note block — `verdict · conviction · Δ · tripwire · recovery-read (V6) · path (P4b) ·
     sell/list-at (+ break-even) · fill-progress`, with the sell line GUARANTEED on every held lot;
+    plus `reachRead` (rendered after the margin-budget line) — the list-at level's movement read, built
+    from `formatReachMargin` + `askReachDecayNote`. `formatReachMargin(rm)` is the ONE home for the
+    COMPACT `askExitRead().ask.reachMargin` clause, shared by `quote-items.mjs`'s windowExit note and
+    `watch-positions.mjs`'s held block; `read-window-range.mjs` keeps the VERBOSE per-day form + the
+    composite price-to-sell-EARLY trigger, deliberately not folded in. **The shared renderer makes the
+    WORDING identical, NOT the content:** `reachMargin`'s pace clause requires `profile` + `live`, which
+    `quote-items.mjs` passes to `askExitRead` and `watch-positions.mjs` does not, so watch renders the
+    cushion trend WITHOUT the same-day pace read. That is a real gap, not a formatting choice — see
+    PLAN.md Discovered. **Reading the clause: `trend` is an OLS fit over all N recent days while
+    `cushionFrom→cushionTo` are the RAW first and last of them, so the label and the pair answer
+    different questions and can disagree. It is NOT robust to a volatile end-day — OLS gives endpoints
+    maximum leverage (`plans/PLAN-SIGNAL-RECENCY.md` retracted that claim; do not reintroduce it).**
     orders/formats already-computed pieces, decides nothing — output-format-only; PLAN-DIURNAL-TIMING
     DT2 adds `formatTimedLap(lap, {fmt})` here too — the ONE shared renderer for a `js/windowread.mjs`
     `diurnalTimedLap` result, SUPERSEDING the old per-call-site diurnal text so `screen-flip-niches.mjs`
@@ -2437,8 +2450,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (judged on the RATE, so a partial newest day can't false-trigger); both functions share ONE internal
     bucketing helper. Consumers: `read-window-range.mjs --hourly` (the summary line via
     `js/windowread.mjs`'s `askReachDecayNote`), `quote-items.mjs` (an `askReachDecay` note on a bare quote
-    + held/watched positions), `screen-flip-niches.mjs --digest` (a bounded top-X enrichment) and
-    `--mode reverse`'s thin rows. **This module's header carries the DON'T-REBUILD TOMBSTONE for
+    + held/watched positions), `screen-flip-niches.mjs --digest` (a bounded top-X enrichment), `--mode reverse`'s thin rows, and
+    `watch-positions.mjs` (the held-lot `reachRead` line). **This module's header carries the DON'T-REBUILD TOMBSTONE for
     `hourlyDrift`** — the per-hour least-squares slope + uniform/split synthesis deleted 2026-08-09 after
     measuring 276.7bp vs 197.8bp median per-item MAE against predict-no-change, winning on 6 of 380 items,
     and 49.7% direction; no window length fixes it, and `THIN_DRIFT_DAYS=7` died with it. Read the

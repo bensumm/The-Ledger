@@ -349,7 +349,7 @@ export function trajectoryRead(days, { liveRef = null } = {}) {
 //                          eased ~2k/day. NOT a crash — the floor still sits far above its prior trough.
 //                          A 2-day wiggle is NOT a trend (the robustness lesson this helper must encode).
 //   • SOULREAPER (trend) — floor AND ceiling rising hard, new highs daily → healthy.
-// floorCeilingTrack reads the two tracks SEPARATELY — a robust recent-window LEAST-SQUARES slope on each,
+// floorCeilingTrack reads the two tracks SEPARATELY — a recent-window LEAST-SQUARES slope on each,
 // classified rising|flat|falling with a per-day gp step — and combines the two slopes + a discrete
 // FLOOR-BREAK flag into an asymmetry label. THE CLASSIFIER'S DISCRIMINATORS ARE floor/ceiling slope
 // ASYMMETRY + the floor-break; that IS the drift-vs-crash trajectory classifier.
@@ -377,7 +377,7 @@ export function trajectoryRead(days, { liveRef = null } = {}) {
 // `run` (the trailing consecutive-same-direction micro-run, raw-sign) + `nUsed` so a caller reports
 // DURATION ("floor flat over 5d, softened 2d") instead of a verdict that flips on one day. All FC_*
 // thresholds are PLACEHOLDERS pending F1.
-export const FC_MIN_DAYS = 5;          // fewer COMPLETED days than this ⇒ null (can't fit a robust slope)
+export const FC_MIN_DAYS = 5;          // fewer COMPLETED days than this ⇒ null (can't fit a slope)
 export const FC_RECENT_N = 5;          // the recent completed-day window the slope is fit over
 export const FC_FLAT_FRAC = 0.005;     // |slope|/latest-level per day below this ⇒ 'flat' (0.5%/day; RELATIVE,
                                        // so one threshold works across a 100k item and a 40m one; PLACEHOLDER, F1)
@@ -385,8 +385,10 @@ export const FC_BREAK_LOOKBACK = 13;   // floor-break = latest low vs the min of
 export const FC_OSC_FRAC = 0.4;        // R6: daily-mid direction-flip fraction ≥ this on a 'ranging' item ⇒ 'oscillating' (PLACEHOLDER, F1; carried over from trajectoryRead's retired shape read — the one signal fc's slope-direction classifier can't express)
 export const PT_PROJECT_N = 1;         // forward-projection horizon in periods (days); 1 = "next period". PLACEHOLDER, F1
 
-// projectTrajectory(days, extractFn, opts) — THE ONE recency-weighted trajectory primitive (PLAN-SIGNAL-RECENCY R1).
-// Generalizes floorCeilingTrack's inner per-track read (a robust recent-window LEAST-SQUARES slope → dir, a
+// projectTrajectory(days, extractFn, opts) — THE ONE recency-SCOPED trajectory primitive (PLAN-SIGNAL-RECENCY R1).
+// Scoped, NOT weighted: the fit is unweighted OLS over a recent window, so an END day carries maximum
+// leverage and a middle one carries none (pinned by windowread.test.mjs; do not call it robust).
+// Generalizes floorCeilingTrack's inner per-track read (a recent-window LEAST-SQUARES slope → dir, a
 // trailing raw-sign micro-run for DURATION, and an optional discrete DOWNWARD break) to an ARBITRARY per-day
 // scalar pulled by `extractFn`, and ADDS a forward projection (`latest + slope × projectN`) so the read points
 // FORWARD ("where's the level likely to be next period"), not only backward. floorCeilingTrack is now a
@@ -733,9 +735,9 @@ export function askExitRead(stats, { ask = null, stats5m = null, recentN = RECEN
 // settling ONTO a cooling peak (godsword: 40.6m reached 3/3 recent while the cushion collapsed +1.3m→
 // +0.1m; "rising vs the 2-week base" masked it). reachMargin folds three reads off the SAME per-day
 // windowStats buckets (zero new fetch) + the in-hand hourProfile:
-//   trend        fading|stable|extending — the robust least-squares SLOPE of the cushion over the recent
-//                marginN days (R4: projectTrajectory, was mean-of-halves — a single volatile end-day swung
-//                both half-means), the FITTED first→last change thresholded at MARGIN_FADE_FRAC × level.
+//   trend        fading|stable|extending — the least-squares SLOPE of the cushion over the recent marginN
+//                days (R4: projectTrajectory), FITTED first→last change thresholded at MARGIN_FADE_FRAC ×
+//                level. NOT robust to a volatile end-day: OLS gives the ENDPOINTS max leverage (SIGNAL-RECENCY).
 //   cushionNow   the most-recent day's cushion (how much room is left over/under the level TODAY).
 //   pace         today's live vs the reaching-day median for THIS hour-of-day (from hourProfile) — a
 //                same-day "is today tracking the days that reached?" read; null when there's no live or
@@ -763,16 +765,15 @@ export function reachMargin(days, side, level, { recentN = RECENT_NIGHTS, margin
   const reachedRecent = recent.filter(d => d.reached).length;
   let trend = null, cushionFrom = null, cushionTo = null, cushionSlope = null;
   if (recent.length >= minDays) {
-    // R4 (PLAN-SIGNAL-RECENCY): the cushion TREND is the robust least-squares SLOPE over the recent cushion
-    // series (projectTrajectory), NOT the mean-of-halves difference — a single volatile day at either end
-    // swung both half-means (the single-noisy-sample sensitivity the primitive exists to resist). SAME
+    // R4 (PLAN-SIGNAL-RECENCY): the cushion TREND is the least-squares SLOPE over the recent cushion
+    // series (projectTrajectory), NOT the mean-of-halves difference — one shared primitive, not two. SAME
     // level-relative threshold: classify the FITTED total change (slope × span) vs level × MARGIN_FADE_FRAC.
     // we consume only rt.slope/rt.nUsed here (NOT rt.dir/rt.run) — projectTrajectory's own flat-band is
     // relative to `latest`, which for a cushion is degenerate near zero, so we threshold the fitted change
     // against level × MARGIN_FADE_FRAC below (the item's PRICE level, the right basis) instead.
     const rt = projectTrajectory(recent.map(d => [d.key, d]), d => d.cushion, { minDays, recentN: marginN });
     cushionSlope = rt ? rt.slope : null;
-    const delta = (rt && rt.slope != null) ? rt.slope * (rt.nUsed - 1) : null;   // robust fitted first→last cushion change
+    const delta = (rt && rt.slope != null) ? rt.slope * (rt.nUsed - 1) : null;   // fitted first→last cushion change
     const thresh = level * MARGIN_FADE_FRAC;
     trend = delta == null ? null : delta <= -thresh ? 'fading' : delta >= thresh ? 'extending' : 'stable';
     cushionFrom = recent[0].cushion;   // display endpoints (first recent day → today), replacing the half-means

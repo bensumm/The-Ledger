@@ -26,6 +26,22 @@ const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
 
 const sellLine = lines => lines.find(l => l.includes('sell: list @'));
 
+/* --- reachRead — its position in the note contract ---------------------------------------------- */
+ok('reachRead renders after marginBudget and before the guaranteed sell line', () => {
+  // MUTANT: reorder reachRead before marginBudget — red. (After the sell line is already covered by
+  // the sell-line-is-LAST case below; this case earns its keep on the marginBudget ordering alone.)
+  const lines = heldNoteBlock({
+    name: 'Dragon warhammer', verdict: 'HOLD.',
+    marginBudget: 'margin budget: given back 6.2% of the original ask',
+    reachRead: 'reach: margin +275 today · cushion fading +49→+275 (7d)',
+    listAt: 30_000_000, breakEven: 29_000_000,
+  });
+  assert.equal(lines.length, 4);
+  assert.ok(lines[1].includes('margin budget'));
+  assert.ok(lines[2].includes('reach: margin'));
+  assert.ok(lines[3].startsWith('    sell: list @'));
+});
+
 /* --- the sell line is ALWAYS present, and is always LAST -------------------------------------- */
 ok('a quiet held lot (no conviction/delta/tripwire) still emits the sell line, last', () => {
   const lines = heldNoteBlock({

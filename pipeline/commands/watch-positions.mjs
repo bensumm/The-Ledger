@@ -63,7 +63,7 @@ import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs 
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readExchangeLog, activeOffers, restartBlindSuspects } from '../lib/reconstruct/offers.mjs';
 import { logSuggestions, suggestionEntry, reachableShadow, depthExitShadow, asymShadow, windowExitShadow } from '../lib/render/suggestlog.mjs';   // DE3/RC-S1: shared reachable/depthExit/asym ledger-shadow reshapers (one home, no drift across watch/screen/quote); WC1: windowExitShadow (the window-clear ask-rung forward record)
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, diurnalTimedLap, clearableAsk, reachableBand, asymPair, askExitRead } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots; RC-S1: asymPair for the head-to-head co-log; WC1: askExitRead for the window-clear ask-rung shadow; PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the two direct hourProfile+deriveDiurnalRange call sites below (the shadow-log bid/ask + the diurnalAsk fallback) — same bid/ask/peakWindow values, one shared composition
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, diurnalTimedLap, clearableAsk, reachableBand, asymPair, askExitRead, askReachDecayNote } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots; RC-S1: asymPair for the head-to-head co-log; WC1: askExitRead for the window-clear ask-rung shadow; PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the two direct hourProfile+deriveDiurnalRange call sites below (the shadow-log bid/ask + the diurnalAsk fallback) — same bid/ask/peakWindow values, one shared composition
 import { estimatePair, asymEstimate, estConfLean, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/signal/estimators.mjs';   // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION): the reachRelief-family estSell + asym pair, co-logged beside depthExit/reachable for the head-to-head; PC3 — SELL_TOP_MODELS validates --est-sell
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // RC-S1: the neutral band thesis for the held-lot est/asym shadow (same convention as quote-items --positions)
 import { blindWarningLine } from '../lib/reconstruct/logblind.mjs'; // LH2 restart-blindness header line
@@ -73,7 +73,8 @@ import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALER
 import { cycleTick, cycleNoteLines } from '../lib/timing/cyclewatch.mjs'; // PLAN-OSCILLATION-CYCLE Chunk 4 — the opt-in (--cycle) adaptive cycle-expectation loop (INFORM-ONLY, ALERTS-never-places)
 import { driftExitFrom } from '../../js/forecast.mjs'; // Chunk 1/2 — the drift-adjusted trough/peak prior the cycle loop tracks (REUSED, not forked)
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from '../lib/signal/levels.mjs';   // V2 support/cut-trigger
-import { heldNoteBlock, heldListAt, depthReachClause } from '../lib/render/emit.mjs';   // V5 standardized per-held emit contract; DE3 depth/pressure clause
+import { heldNoteBlock, heldListAt, depthReachClause, formatReachMargin } from '../lib/render/emit.mjs';   // V5 standardized per-held emit contract; DE3 depth/pressure clause
+import { askReachDecay } from '../lib/market/hourly-lmh.mjs';
 import { recoveryRead, recoveryLine, recoveryTrigger } from '../lib/signal/recovery.mjs';   // V6 advisory recover-vs-drop forecast
 import { freedCapital } from '../lib/capital/freed-capital.mjs';   // V6 companion — freed-capital redeploy prompt
 import { bookUtilization, totalCapital } from '../lib/capital/capital-utilization.mjs';   // YV1 (#3) — working-vs-parked capital line
@@ -729,7 +730,7 @@ async function main() {
   for (const it of held) {
     it.gate = { escalate: false, armed: false, reason: null };
     it._deltas = null; it._support = null; it._cutTrigger = null; it._thesis = null; it._pathCtx = null; it._display = null;
-    it._depthExit = null; it._reachable = null; it._estShadow = null; it._asymShadow = null; it._estPressure = null; it._windowExit = null;
+    it._depthExit = null; it._reachable = null; it._estShadow = null; it._asymShadow = null; it._estPressure = null; it._windowExit = null; it._reachRead = null;
     it._cycle = null;   // Chunk 4 (--cycle): the per-item cycle-expectation tick result (null unless --cycle)
     // DE3 (PLAN-DEPTH-EXIT): the held lot's WHOLE-DAY depth floor (clearableAsk — what this qty can
     // book at, the plan's v1 whole-day decision) + pressure-driven reachable band (reachableBand),
@@ -786,6 +787,9 @@ async function main() {
             list, live: it.row.quickSell ?? null,
             peakWindow: (dr && dr.peakWindow) ? [dr.peakWindow.startH, dr.peakWindow.endH] : null,
           });
+          const reachBits = [formatReachMargin(aer && aer.ask && aer.ask.reachMargin),
+            askReachDecayNote(askReachDecay(it.ts1h, { days: 3, ask: list }), { ask: list, fmt })].filter(Boolean);
+          it._reachRead = reachBits.length ? `reach: ${reachBits.join(' · ')}` : null;
         }
       }
     } catch { /* inform-only — never block a pass */ }
@@ -1120,7 +1124,7 @@ async function main() {
       pressure: pressureText(row.pressure, { compact: true }),
       reliableReason: row.reliable ? null : row.reliableReason,
       staleLive,
-      conviction, delta, tripwire, recovery, path: pathLine, marginBudget,
+      conviction, delta, tripwire, recovery, path: pathLine, marginBudget, reachRead: it._reachRead,
       listAt: heldLa, breakEven: be,
       fillProgress: listed || null,
     }));

@@ -55,7 +55,7 @@ import { buysByItem, limitWindow } from '../lib/capital/limits.mjs';   // LM1 �
 import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/market/guideanchor.mjs';   // YP1 advisory
 import { buildItemContext, renderHeldVerdict, renderPathLine, staleBookBanner } from '../lib/market/item-context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line; COD-4 — the shared positions.json-age banner
-import { depthReachClause, formatTimedLap, formatAsymFill, asymClassRateNote } from '../lib/render/emit.mjs';   // PB4 — the shared two-lens depth-floor/pressure clause (rendered beside the pressure prices); PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site); formatAsymFill — the shared ◆ asym fill clause pair (screen emits the same line)
+import { depthReachClause, formatTimedLap, formatAsymFill, asymClassRateNote, formatReachMargin } from '../lib/render/emit.mjs';   // PB4 — the shared two-lens depth-floor/pressure clause (rendered beside the pressure prices); PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site); formatAsymFill — the shared ◆ asym fill clause pair (screen emits the same line)
 import { loadState, ALERT_PERSIST_MS } from '../lib/thesis/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/thesis/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 additive reverse-flip pending block (read-only)
@@ -901,16 +901,9 @@ async function runPositions() {
           // 39.75m@64m lesson) — and, equally, never mistake an unchanged-but-current price for a stale one.
           if (row.quickSell != null) parts.push(`live instabuy ${fmt(row.quickSell)}${liveAgeTag(row.quoteAgeMin?.sell, { freshMin: QUICK_FRESH_MIN })}`);
           if (aer.grain5m) parts.push(`5m-grain reached ${aer.grain5m.reachedDays}/${aer.grain5m.nDays} · ${pct(aer.grain5m.placement)}`);
-          // reach-margin FADE clause — the cushion trend + today's pace, compact (full per-day read is read-window-range's job)
-          const rm = aer.ask && aer.ask.reachMargin;
-          if (rm && (rm.trend || rm.pace)) {
-            const sg = v => v == null ? '—' : (v >= 0 ? '+' : '') + fmt(v);
-            let c = `margin ${sg(rm.cushionNow)} today`;
-            if (rm.trend) c += ` · cushion ${rm.trend === 'fading' ? '⚠ ' : ''}${rm.trend} ${sg(rm.cushionFrom)}→${sg(rm.cushionTo)} (${rm.nRecent}d)`;
-            if (rm.pace && rm.pace.stale) c += ` · pace n/a (live ${rm.pace.ageMin != null ? Math.ceil(rm.pace.ageMin) + 'm' : ''} stale)`;
-            else if (rm.pace) c += ` · pace ${sg(rm.pace.gap)} vs ${fmtHour(rm.pace.hour)} median${rm.pace.onPace ? '' : ' ⚠ lagging'}`;
-            parts.push(c);
-          }
+          // reach-margin FADE clause — cushion trend + today's pace (emit.mjs owns the wording).
+          const rmText = formatReachMargin(aer.ask && aer.ask.reachMargin);
+          if (rmText) parts.push(rmText);
           // PLAN-DIURNAL-RECENCY-GUARD — flag when the profile's PEAK level is spike-inflated/stale, so a
           // held-lot exit anchored to an unreachable peak (the leather 4,375 anchor) shows its typical.
           //

@@ -17,6 +17,7 @@
  */
 import assert from 'node:assert/strict';
 import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, placement, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, softBuyRead, formatSoftBuy, windowReliability, softBuyHoursClause, WINDOW_RELIABLE_R, SOFT_BUY_AT_FLOOR_PCT, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS, reachMargin, MARGIN_MIN_DAYS } from '../../js/windowread.mjs';
+import { projectTrajectory } from '../../js/windowread.mjs';   // PLAN-SIGNAL-RECENCY R1 — the shared trajectory primitive
 import { SECOND_PROMINENCE_FRAC } from '../../js/windowread.mjs';   // PLAN-MULTI-PEAK-WINDOWS — the secondary-window prominence gate
 import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-WINDOW-CLEAR B1
 import { clearableAsk } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1 (depthDays/clearableBid removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
@@ -194,10 +195,10 @@ ok('reachMargin ASK: a collapsing cushion over the ask reads FADING (the godswor
   const days = [day('d1', 90, 130), day('d2', 90, 128), day('d3', 90, 125),
                 day('d4', 90, 122), day('d5', 90, 121), day('d6', 90, 120)];   // highs stepping toward the 100 ask
   const rm = reachMargin(days, 'ask', 100, { marginN: 6 });
-  assert.equal(rm.trend, 'fading', 'newer-half cushion < older-half by > threshold ⇒ fading');
+  assert.equal(rm.trend, 'fading', 'the fitted cushion change is below −threshold ⇒ fading');
   assert.equal(rm.cushionNow, 20, 'most-recent cushion = 120 − 100');
   assert.equal(rm.reachedRecent, 6, 'all 6 recent highs still clear the ask (reached), but the cushion is shrinking');
-  assert.ok(rm.cushionFrom > rm.cushionTo, 'older-half cushion is larger than newer-half (the collapse)');
+  assert.ok(rm.cushionFrom > rm.cushionTo, 'the first recent cushion exceeds the latest (the collapse)');
 });
 
 ok('reachMargin R4: the rebased trend tracks the genuine multi-day cushion direction THROUGH a mid-series spike (least-squares, not a 2-bucket diff)', () => {
@@ -208,7 +209,26 @@ ok('reachMargin R4: the rebased trend tracks the genuine multi-day cushion direc
                 day('d4', 90, 145), day('d5', 90, 140), day('d6', 90, 135), day('d7', 90, 130)];
   const rm = reachMargin(days, 'ask', 100, { marginN: 7 });
   assert.equal(rm.trend, 'fading', 'the fitted slope reads the genuine decline despite the mid-series spike');
-  assert.ok(rm.cushionSlope < 0, 'cushionSlope is the robust per-day least-squares slope (negative = fading)');
+  assert.ok(rm.cushionSlope < 0, 'cushionSlope is the per-day least-squares slope (negative = fading)');
+});
+
+ok('projectTrajectory is recency-SCOPED, not recency-WEIGHTED: an END outlier flips the slope, a MIDDLE one does not', () => {
+  // Pins the claim PLAN-SIGNAL-RECENCY retracted and that kept coming back as "robust to a volatile
+  // end-day". Unweighted OLS leverage is ∝ |i − x̄|: maximal at the ends, zero at the centre.
+  const mk = ys => ys.map((y, i) => ['d' + String(i).padStart(2, '0'), { v: y }]);
+  const fit = ys => projectTrajectory(mk(ys), d => d.v, { minDays: 5, recentN: ys.length });
+  const clean = fit([100, 110, 120, 130, 140, 150, 160]);
+  const endBad = fit([100, 110, 120, 130, 140, 150, 40]);
+  const midBad = fit([100, 110, 120, 40, 140, 150, 160]);
+  assert.equal(clean.dir, 'rising');
+  // epsilon, not equal: the property is exact in real arithmetic (zero leverage at the centre) but a
+  // summation reorder inside slopePerStep could shift float rounding ~1 ulp — that is not a regression.
+  assert.ok(Math.abs(midBad.slope - clean.slope) < 1e-9, 'a MIDDLE outlier sits at zero leverage — the slope is untouched');
+  assert.equal(endBad.dir, 'falling', 'a single END outlier inverts the sign — this fit is NOT robust to it');
+
+  // ...but the claim it IS entitled to: a short trailing wiggle cannot flip a real trend (the maul).
+  const maul = fit([116500, 118000, 120000, 121500, 123000, 124000, 125000, 124800, 124600]);
+  assert.equal(maul.dir, 'rising', 'the last two days tick DOWN; the windowed fit still reads rising');
 });
 
 ok('reachMargin ASK: a steady cushion reads STABLE; BID mirror scores level−low', () => {

@@ -77,6 +77,16 @@ export const DENYLIST = [
     reason: 'the --digest block sorts on `rank` (AF1), not on capEff x deployable capital — that key survives only as a tie-break, and the printed digest header is the ONE place the basis is stated. The CODE is covered: the rank-tie-break assertion in capeff-digest goes RED against the old comparator, so this bounds PROSE recurrence only. NOT in files, deliberately: .claude/skills/scan/SKILL.md names the old basis in order to say it was replaced, and CHANGELOG/PLAN.md/plans/* are the dated record',
   },
   {
+    id: 'ols-slope-called-robust',
+    // NEGATION-BLIND, so the patterns stay these exact live-form literals and nothing wider: the
+    // honest retractions ("NOT robust to a volatile end-day", "not recency-WEIGHTED") must not match.
+    pattern: /robust ((recent-window|per-day) )?least-squares|robust to a single (noisy|volatile) day/i,
+    files: ['CLAUDE.md', 'README.md', 'docs/MARKET-ANALYSIS.md', 'docs/GLOSSARY.md',
+            'docs/SIGNAL-AUDIT.md', 'docs/ARCHITECTURE.md', 'docs/FLOW.md',
+            'js/windowread.mjs', 'pipeline/test/windowread.test.mjs'],
+    reason: 'the OLS slope is recency-SCOPED, not robust: one volatile END day flips its sign (endpoint leverage, pinned by windowread.test.mjs). Say "a short trailing wiggle cannot flip a windowed trend" — that is the claim the fit has earned',
+  },
+  {
     id: 'hourly-drift-slope-live',
     // The per-hour drift SLOPE described as a live read. Deleted 2026-08-09 (PLAN-DIURNAL-TRIAGE DT3)
     // after measuring 49.7% direction and beating predict-no-change on 6 of 380 items. Per the
@@ -91,10 +101,7 @@ export const DENYLIST = [
   },
   {
     id: 'amplitude-retired-estimators',
-    // The amplitude lane burned through THREE P(fill) estimators in two days (DT1/DT1b, 2026-08-09) and
-    // the retired names kept resurfacing in prose long after the code moved: an adversarial audit found
-    // them still live in a spec-registry comment, a test assertion message, GLOSSARY, README and two
-    // module comments. This entry is the mechanical catch for that recurrence.
+    // Retired amplitude P(fill) estimator names (DT1/DT1b) that kept resurfacing in prose:
     //   `daily-reach-2leg`        — pFill2leg's basis label; the product-of-marginals was measured
     //                               independence-FALSE and deleted. Survives only in plans/ (historical).
     //   `two-leg daily-reach family` — the same estimator described as the live amplitude family.

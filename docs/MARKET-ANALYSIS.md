@@ -831,8 +831,8 @@ it fires** — a non-decaying or ask-less read stays silent rather than padding 
 clause. It renders on `read-window-range.mjs --hourly` (the summary line; the raw per-day L/M/H columns
 remain and are exactly the eyeball job the `Δ/d` column automated badly), `quote-items.mjs` (a bare
 ask/bid quote and every held/watched big-ticket position), `screen-flip-niches.mjs --digest` (a BOUNDED
-enrichment on the top-X picks ONLY, after ranking — the 1h-series fetch is too heavy pre-rank), and
-`--mode reverse`'s thin big-ticket rows. INFORM-ONLY, n≈0 — it never gates, prices, ranks, or feeds a
+enrichment on the top-X picks ONLY, after ranking — the 1h-series fetch is too heavy pre-rank),
+`--mode reverse`'s thin big-ticket rows, and `watch-positions.mjs` (the held-lot `reachRead` line). INFORM-ONLY, n≈0 — it never gates, prices, ranks, or feeds a
 cut/alert input, and it no longer alters any displayed verdict. `/schedule`'s reverse-flip rows lost their
 drift note outright: that surface never had an ask level to score reach against, so the surviving read has
 nothing to say there (the generic pre-rendered note slot on `reverseFlipCycleNotes` remains, unfed, for a

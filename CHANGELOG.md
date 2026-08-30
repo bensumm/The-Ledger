@@ -10,6 +10,96 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The reprice trigger that could not compute, and the two reads that already existed (pipeline/docs only)
+
+A plan to build a movement-conditioned reprice trigger was written, adversarially reviewed twice, and
+**killed by both reviews from opposite directions**. Kept here because the reasoning is the deliverable
+and the plan itself was never committed — this entry is its only record.
+
+**The novel part was arithmetically constant.** The proposed trigger was `p(ask,H)` as-of-listing minus
+`p(ask,H)` today — same price, same horizon, so the difference was meant to isolate pure level shift.
+But `p` depends on the ask only through `z = (ask − refHigh)/disp`, and `referenceAt`
+(`js/reach-surface.mjs`) derives both from the median/IQR of COMPLETE DAILY highs strictly before the
+origin, keyed by LOCAL calendar date. Both are step functions of the day boundary: two instants in the
+same local day see a bit-identical reference, so the term is exactly zero all day and steps at midnight.
+Measured: zero same-day changes, under every construction tried including maximally-separated instants.
+The reference steps at midnight — usually, not always. The residual intraday drift was not market
+movement but the origin set growing by one. A trigger scoped to
+2–24h was built on an instrument that moves once a day — and both of its motivating anchors (a
+25-minute floor crack; an intraday knife) are events it structurally cannot see.
+
+**Two movement reads already shipped, on the exact gate the plan proposed.** `askReachDecay`
+(`pipeline/lib/market/hourly-lmh.mjs`) predicts next-day ask reach at 12.2% vs 30.8% out-of-sample,
+holding under stratification — though, as its existing homes say, that is measured on a fill
+PROXY over one 20-day window at a synthetic ask level, and is inform-only. It, plus `reachMargin`,
+already rendered on held lots in `quote-items.mjs` under `cost ≥ BIG_TICKET_GP || watchlist`.
+`watch-positions.mjs` imported neither. So the measured gap was between two of our own surfaces, not a
+gap in the tool. And `plans/PLAN-FIRST-ASK.md` had already tested the alerting premise and found "no
+meaningful missed cohort and no alerting deliverable here" — measured under the current campaign
+grouping, which the finding below inflates, so the direction survives but the split does not.
+
+**What shipped instead.** `watch-positions.mjs` now renders both reads as a new `heldNoteBlock` field
+(`reachRead`, after the margin-budget line), off the `askExitRead` it already computed for the shadow log and the `ts1h` already in
+hand — no new fetch. The compact cushion clause moved to `emit.mjs formatReachMargin`, one home for
+both surfaces, verified output-identical by exhaustive differential test against the old inline block. `read-window-range.mjs` keeps
+the verbose per-day form. **The two surfaces are NOT at parity and the wording cannot make them so:**
+`reachMargin`'s pace read needs `profile` + `live`, which `quote-items.mjs` passes and watch does not,
+so watch shows the cushion trend without the "is today tracking?" half. Closing that needs an
+`hourProfile` watch does not currently hold — logged under PLAN.md Discovered rather than bolted on.
+
+Nothing prescriptive was added: the plan's headline option, "step to today's reachable level at the p
+originally accepted", is the `pTarget`-as-price rule `PLAN-REACH-SURFACE` §1c already settled as
+forbidden, via a function whose own header reads `do not wire one`.
+
+**A display property, and the WRONG explanation for it — corrected here because it was written down.**
+`reachMargin` can print `cushion ⚠ fading +49→+275`, a falling label beside a rising pair. The
+observation is real; its RATE is not a stable quantity — it moves several-fold with how the ask level is
+constructed, so no denominator is quoted. The first explanation given for it — "a robust
+least-squares fit resisting a volatile end-day" — was FALSE. `slopePerStep` is unweighted OLS, whose
+leverage is ∝ (i − x̄), so the endpoints carry MAXIMUM weight; a volatile last day swings the fit more
+than a coarse average, not less. `plans/PLAN-SIGNAL-RECENCY.md` retracted exactly this wording in
+2026-07 with "Do NOT cite single-end-day robustness anywhere". It had survived in `js/windowread.mjs` at
+BOTH the `reachMargin` call site AND the `projectTrajectory` primitive that performs the fit — where it
+additionally described itself as "recency-WEIGHTED", the same error in the other direction and the actual
+source of the wrong sentence above — and a later review round found it STILL live in README's
+`floorCeilingTrack` registry entry and `docs/SIGNAL-AUDIT.md` after the windowread purge had been
+declared complete. The fit is recency-SCOPED: unweighted OLS over a recent window. All found sites are
+fixed, the property is PINNED BY A TEST instead of asserted in a comment, and the live-form wording is
+now DENYLISTED in `lint-docs.mjs` (`ols-slope-called-robust`), since it regressed in prose repeatedly — one END outlier inverts the slope's sign, while the identical
+outlier at the centre leaves it unchanged (the test pins this to within float noise, deliberately
+not bit-equality — a summation reorder is not a regression). The claim the fit IS entitled to, and which measures true,
+is pinned beside it: a short trailing wiggle cannot flip a windowed trend (the maul). The
+honest reading: `trend` is the OLS FITTED total change over all N recent days, while
+`cushionFrom→cushionTo` are the RAW first and last of those same N — two different statistics of one
+series, which can disagree.
+
+**Found and NOT fixed: `groupCampaigns` stitches parallel listings into false reprices.** A campaign is
+CLOSED by `prev.state === 'complete' || (o.tsOpen - prev.tsClose) > REPRICE_GAP`. An offer opening while
+the previous is still live on a DIFFERENT slot yields a NEGATIVE gap, which FAILS the gap arm — so unless the overlapped offer
+ended `complete` (the disjunction's other arm, which still closes correctly), the campaign is not
+closed and the concurrent listing is appended as a reprice. The false stitch is scoped to overlapped
+offers ending cancelled or open. It affects a
+material minority of reprice steps on both sides; every count here moves with the book, so re-derive it
+rather than carrying one forward.
+
+A fix WAS written and then **reverted**, which is the part worth recording. Splitting on any overlap
+also split the common case where a reprice is executed PLACE-THEN-CANCEL (replacement onto a free slot,
+original cancelled seconds later — verified in the raw log for item 13263). Adding a 60s tolerance
+narrowed that, and scored PAIRWISE against a multi-chain reference the tolerant fix is strictly better
+than HEAD — it removes a large block of wrong merges and introduces no new ones. It was reverted anyway,
+because it is PARTIAL: it cannot reach the successions that are MISSED, which is the second defect.
+**The root cause is the grouping KEY, not the boundary test** — `current` is keyed `itemId:type` and
+holds one chain, so two genuine parallel ladders interleave and a real succession is dropped. The
+existing false stitches were accidentally masking that undercount. Landing half the fix would churn
+every campaign-derived baseline and still leave the keying wrong, so it waits for the whole fix. Logged
+under PLAN.md Discovered.
+
+(It was first scored on a net campaign-COUNT delta, which is the wrong instrument and is recorded here
+so it is not reached for again: `campaigns + steps` is invariant, so over- and under-merging CANCEL
+inside it and a grouping can look accurate by making both errors at once.)
+
+Pipeline, shared-render and one `js/` COMMENT only; no app behaviour changed, so no `APP_VERSION` bump.
+
 ### 0.75.0 — three controls that reported doing something they did not do
 
 The away-scoped review pass required by rule 10 found a family, not a list: a flag, a dropdown and a

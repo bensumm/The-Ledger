@@ -278,10 +278,10 @@ to more consumers, not invent a new module.**
 
 ### Why `floorCeilingTrack` is the right base, not a new build
 
-`floorCeilingTrack` already has the three properties a recency-weighted primitive needs:
+`floorCeilingTrack` already has the three properties a recency-scoped primitive needs:
 1. A **least-squares slope** over a recent window (not a mean-of-halves, not a single delta) —
-   robust to a single noisy day (the "maul" 2-day-wiggle-isn't-a-trend lesson is baked into its
-   own header).
+   a short trailing wiggle cannot flip a windowed trend (the "maul" lesson, baked into its own
+   header). NOT robust to a volatile END day — OLS endpoint leverage; see the R4 honesty caveat above (§3, Tier-3).
 2. A **discrete break trigger** (floor-break vs the prior lookback) that catches the fang/godsword
    "stepped under its multi-day trough" case a smooth slope alone would blur.
 3. A **duration-reporting `run` field** so a caller states "flat over 5d, softened 2d" instead of a
