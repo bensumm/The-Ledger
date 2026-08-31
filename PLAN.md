@@ -408,12 +408,13 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 
 ## Other unscheduled notes
 
-- **ARMED for the NEXT wave: the hybrid-review experiment** (`plans/PLAN-HYBRID-REVIEW.md`,
-  Ben 2026-08-29). At the next wave's adversarial-review round, run BOTH arms on the same diff,
-  blind: Arm A = the current 2-broad-agent default; Arm B = narrow sonnet finder swarm → strong
-  verify stage. Metrics, briefs, and the decision rule are pre-registered in the plan — read it
-  BEFORE launching the round, since the arms must go out together and uncontaminated. One run
-  decides nothing by itself (n=1); it starts the accrual.
+- **Hybrid-review experiment — wave 1 RUN (2026-08-30), accrual open** (`plans/PLAN-HYBRID-REVIEW.md`,
+  Ben 2026-08-29). Both arms ran blind on the forward-record honesty wave's diff; results + scored
+  predictions live under the plan's dated Results heading. Headline: the blind-spot branch fired
+  BOTH directions (B missed cross-file prose findings A caught; A measured as clean a live-data
+  defect B fixture-caught), so any adopted hybrid keeps a broad agent AND the verify stage. n=1 —
+  no adoption call; the decision rule wants 2–3 waves. NEXT wave's review round: run wave 2 per the
+  plan (finder cap 8 this time; aim finders at code seams, not doc claims).
 
 - **Verdict-layer temporal memory (V1–V6) — DONE, `PLAN-VERDICT.md` folded + deleted.** Cross-pass
   memory, conviction gating, standard emit contract, advisory recovery-read + capital companion —
@@ -579,34 +580,26 @@ the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the co
 
 ## Discovered
 
-- **A pure-prior `n:0` annihilates a real sample count through `Math.min` on two logged lanes
-  (2026-08-29).** `js/estimators/families.mjs` states at its own head that `n:0` means "no
-  observations, pure prior" — a DIFFERENT claim from "zero observations were available". But
-  `screen-flip-niches.mjs`'s value row and `watchlist-report.mjs`'s `estFields` both log
-  `estN: Math.min(pFill.n, ttf.n)`, and `ttfValue` is prior-only (`estR(..., 0, ...)`) by
-  construction. So every VALUE row records `estN: 0` while discarding `pFillValue`'s real
-  `coverageDays` — and the value lane logs no `estConfidence`, so unlike the reach lanes the
-  discarded count is not recoverable from the row. `estBasis` still reads `floor-proximity/multiday-prior`,
-  which is the surviving witness that the ttf leg was a prior. (The RISING lane is NOT a victim:
-  `pFillRising` is itself `estR(..., 0, 'regime-prior')`, so both legs are priors, `Math.min`
-  discards nothing, and `estN: 0` is the honest record there — scope any fix to the value lane.)
-  This matters because `estN` is exactly the field F1 would filter on: a threshold of "n ≥ k"
-  silently drops the value lane entirely. **The fix is a
-  design call, not a one-liner** — `estN: pFill.n` would assert a count the ttf leg does not have, so
-  the honest options are logging the pair or defining `estN` as "the observation-backed leg's n, prior
-  legs excluded". Decide the semantics before touching either call site. Found away-scope; no consumer
-  reads `estN` today, which is why nothing has surfaced it.
+- **~~A pure-prior `n:0` annihilates a real sample count through `Math.min`~~ — FIXED (2026-08-30,
+  `estSampleN`).** The semantics decision this entry demanded: `estN` = the observation-backed
+  sample count — min over legs with n>0, a pure-prior leg excluded rather than annihilating, all
+  legs priors → 0 (which is the honest record on the RISING lane, where `pFillRising` is itself a
+  prior). Matches the DT1b amplitude convention already in the file; which leg was a prior stays
+  recoverable from `estBasis`. One home (`js/estimators/families.mjs`, beside `estR`), both
+  `Math.min` call sites (value row, watchlist `estFields`) rebased onto it, mutation-pinned in
+  `estimators.test.mjs`. Forward-record note (corrected by the 2026-08-30 review — the first draft
+  claimed band rows were unchanged): every MIXED row changes, and the dominant band-table population
+  (a reach-based pFill leg against a velocity-prior ttf) flips estN 0→its reach n — far more rows than
+  the value lane; only rows with both legs priors, or both observed, keep their old estN.
 
-- **`leanValidators` cannot distinguish a validator that PASSED from one that ABSTAINED
-  (2026-08-29).** `js/validate.mjs`'s `degrade()` and its thin-sample branch both return
-  `status:'pass'` — deliberately, since neither should reject on missing input — and `leanValidators`
-  drops every `pass` that carries no `validatorError`. A row whose validators all ran clean and a row
-  whose validators all declined to run therefore serialize to the same bytes (no `validators` key at
-  all). The bias is ONE-DIRECTIONAL: `analyze.mjs` cannot read an abstention as a reject, so this
-  inflates the denominator of any validator hit-rate and never the numerator — every measured gate looks
-  weaker than it is. **The fix mirrors the branch directly above it**: `validatorError` is already
-  logged explicitly as a `pass` with a flag, precisely because a crashed validator is a non-answer
-  wearing a pass; a degraded one is the same shape and wants the same treatment. Two lines.
+- **~~`leanValidators` cannot distinguish a validator that PASSED from one that ABSTAINED~~ — FIXED
+  (2026-08-30, `abstain: true`).** `degrade()` and the thin-sample branch mark their pass-shaped
+  non-answers `abstain: true`, and `leanValidators` logs them the way it already logged
+  `validatorError` (the branch directly above — a crashed validator and a degraded one are the same
+  non-answer shape). An all-abstained row no longer serializes identically to an all-clean one; the
+  one-directional hit-rate-denominator inflation stops accruing at this commit. `analyze.mjs` counts
+  only `status === 'reject'`, so rows either side of the boundary read compatibly. Mutation-pinned in
+  `validate.test.mjs`.
 
 - **`reachability.mjs` scores a pre-E2 break-even SUBSTITUTION as the fold estimator's own price
   (2026-08-29).** Before the E2 commit a BE-floored row set `estSell = breakEven(estBuy)` — the fold
@@ -622,41 +615,25 @@ the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the co
   `join-reach-basis` cost-model port, as a `readRows` exclusion — a prose caveat is the wrong fix here,
   since the caveat would carry a number that regresses.
 
-- **`groupCampaigns` mis-groups campaigns in BOTH directions, and the boundary test is the wrong lever
-  (2026-08-29).** Two defects that mask each other. (a) A campaign is CLOSED by
-  `prev.state === 'complete' || (o.tsOpen - prev.tsClose) > REPRICE_GAP`. An offer opening while the
-  previous is still live on a DIFFERENT slot yields a NEGATIVE gap, which FAILS the gap arm — so unless
-  the overlapped offer ended `complete` (the other arm of the disjunction, which closes correctly),
-  the campaign is not closed and the concurrent listing is appended as a reprice. Scoped to overlapped
-  offers ending cancelled or open. (b) `current` is keyed
-  `itemId:type` and holds ONE chain, so two genuine parallel ladders on one item+side interleave and a
-  real succession is dropped. (a) *inflates* the reprice count and (b) *deflates* it at comparable
-  scale, so they partly mask each other — measure both before and after, and re-derive rather than
-  carrying any figure from here (every one of them moves with the book). **A boundary-test fix was
-  written and REVERTED**: with a 60s place-then-cancel tolerance it is strictly better than HEAD
-  PAIRWISE (fewer wrong merges, no new ones), but it removes (a) while leaving (b) exposed, so it is a
-  partial fix that would churn every campaign-derived baseline twice. Score any candidate PAIRWISE — a
-  net campaign-COUNT delta is degenerate, since `campaigns + steps` is invariant and the two error
-  directions cancel inside it. **The fix is multi-chain
-  keying — an offer joins the chain it genuinely succeeds — which also makes any overlap tolerance
-  moot.** Consumers: `join-outcomes.mjs` (one stdout line, plus `repriceCount`/`reprices` serialized
-  into `outcomes.json`, the F1 input), `join-window-clears.mjs`'s fill rate, and `velocityTag`'s
-  denominator on the scan. Any campaign-derived baseline — `PLAN-FIRST-ASK` §1.1/§1.2 included — must be
-  re-derived after this lands, NOT carried across.
+- **~~`groupCampaigns` mis-groups campaigns in BOTH directions~~ — FIXED (2026-08-30, multi-chain
+  keying).** Each parallel ladder is its own chain; an offer joins the chain it succeeds (same slot
+  wins outright, then closest-closing within [−`REPLACE_OVERLAP_TOL`, `REPRICE_GAP`]); completion
+  terminates. Scored PAIRWISE on the real book per this entry's own rule: false stitches (predecessor
+  live past tolerance, merged anyway) to ZERO; definite same-slot successions recovered rose; every
+  non-merged place-then-cancel candidate decomposed to a completion split or a closer same-slot
+  predecessor — no unexplained case. One earlier claim here measured WRONG and is withdrawn: the
+  overlap tolerance is NOT made moot by multi-chain keying (without it, place-then-cancel splits), so
+  `REPLACE_OVERLAP_TOL` ships. Consumers rebuilt (`join-outcomes`, `join-window-clears` run clean);
+  **every grouping-derived baseline from before the fix — `PLAN-FIRST-ASK` §1.1/§1.2 flagged in place —
+  must be re-derived, not carried.** Pinned by `pipeline/test/campaigns.test.mjs`.
 
-- **`watch-positions.mjs`'s reach-margin clause is missing its pace half (2026-08-29).** `reachMargin`'s
-  `pace()` returns null without both `profile` and `live`; `quote-items.mjs` passes both to
-  `askExitRead`, watch passes neither, so the monitoring loop shows the cushion TREND without the
-  same-day "is today tracking the days that reached?" read — on the surface where it matters most.
-  `diurnalTimedLap` computes an `hourProfile` internally and discards it, so the cheap fix is exposing
-  it on that return rather than a second `hourProfile` call. **Caveat before doing it:** the same `aer`
-  feeds `windowExitShadow`, and `suggestlog.mjs` serializes `reachMargin.pace` into `suggestions.jsonl`,
-  so the forward record's content changes from that commit on. Related and independent:
-  `suggestlog.mjs`'s pace projection records the stale-REFUSAL marker as a pace reading (it reads
-  `gap` off a refusal that has none → `null`, and drops `stale`/`ageMin` entirely), so a
-  refusal is distinguishable from a genuine no-read ONLY by an undocumented shape (a pace object whose `gap` is null vs no pace object at all) — the `stale`/`ageMin` labels themselves are dropped, so the WHY is gone even though the rows remain classifiable. No count is quoted here on purpose: the
-  reader is `readSuggestionLines()` — active ledger PLUS the monthly archives — and a rate measured off
-  the active file alone is the exact halving that function's own header warns about.
+- **~~`suggestlog.mjs`'s pace projection records the stale-REFUSAL marker as a pace reading~~ —
+  FIXED (2026-08-30, both halves).** `diurnalTimedLap` exposes `.profile` and watch threads it plus
+  the stale-guarded live into `askExitRead` (watch `windowExit` rows carry `pace` from that commit
+  on — a forward-record content change to remember when joining across it), and `windowExitShadow`
+  now serializes a refusal AS a refusal (`{stale, ageMin, hour, n}`) instead of fabricating
+  `gap: null` and dropping the why. Mutation-pinned in `suggestlog.test.mjs`. Rows logged before the
+  boundary keep the lossy shape — classifiable only by their gap-null signature.
 
 - **The "certain-pair" screen is unsatisfiable on BIG-TICKET specifically — not "by construction" (2026-08-27).**
   Pairing the certain bid (max daily low) with the certain ask (min daily high) nets negative on **0 of 31**

@@ -373,7 +373,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   missing data and never throw. `runValidators(ctx,{specs})` drives a PER-THESIS plan (`{key,mode,window}`
   from `js/flip-niches.mjs`) — `gate` (verdict stands) vs `inform` (`informFlags`: annotate-only, clamped to
   pass, would-have verdict logged via `leanValidators`). `worstStatus`/`flags`. Screens DROP reject + FLAG
-  caution + SHOW inform notes; explicit asks/held/watchlist never hidden. NOT app-imported → no APP_VERSION),
+  caution + SHOW inform notes; explicit asks/held/watchlist never hidden. App-imported via `js/trends.js`
+  (TV) — a behavioral change here needs the smoke test + the APP_VERSION rule),
   `termstructure.mjs` (P3 — pure DOM-free multi-day term structure over a daily-mid `[{ts,mid}]` series:
   the 1/3/7/14/28d `termStructure` (median/low/high/pctInRange per lookback), a durable **floor** (low
   quantile of the longest multi-week lookback), a robust **ceiling** (P5 — the symmetric high quantile
@@ -883,7 +884,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   A **BIG-TICKET held row** (`quote-items.mjs --positions` / `watch-positions.mjs`, lot ≥ `BIG_TICKET_GP`
   or watchlisted) also carries a lean **`windowExit`** object (WC1, PLAN-WINDOW-CLEAR-OUTCOMES,
   2026-07-20) — the FORWARD record of the surfaced window-clear ask RUNG: `{ list, live, peakWindow:
-  [startH,endH], hiReach:{reached,n,recentHit,recentDays,placement}, fiveReach:{reached,n,placement}|null }`
+  [startH,endH], hiReach:{reached,n,recentHit,recentDays,placement}, fiveReach:{reached,n,placement}|null,
+  reachMargin:{trend,cushions,reachedRecent/nRecent,pace}|null }` (field-by-field schema: `suggestlog.mjs`'s
+  header, the ONE home; a stale-refusal pace logs `{stale, ageMin}`, never a fabricated gap)
   off `js/windowread.mjs askExitRead` (reshaped by `suggestlog.mjs windowExitShadow`). It logs the surfaced
   list level, the diurnal peak window it targets, and the TWO competing reach signals SIDE-BY-SIDE — daily-
   HIGH (1h avgHigh) reach and the less-smoothed 5m-grain reach — so a later WC2 join against `fills.json`
@@ -1967,8 +1970,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `join-outcomes.mjs` used to run inline, lifted here VERBATIM so the forward-join siblings
     (`join-window-clears.mjs`) reuse ONE reconstruction (the FIFO helpers stay in `reconstruct.mjs`; this
     only adds campaign GROUPING + `stampFirstFill` + `campaignBase` — the base per-campaign fields
-    placement/first-fill/terminal/fill-fraction). `join-outcomes.mjs` now imports it; the move is byte-identical
-    (proven by diffing its `--json` before/after). Owns `REPRICE_GAP`/`MANUAL_SLOT`),
+    placement/first-fill/terminal/fill-fraction). `groupCampaigns` is MULTI-CHAIN per item+side: each
+    parallel ladder is its own chain and an offer joins the chain it genuinely succeeds — same slot wins
+    outright (a freed slot reused cannot be parallel), then closest-closing within
+    [−`REPLACE_OVERLAP_TOL`, `REPRICE_GAP`]; a predecessor still live past the tolerance is a parallel
+    listing, never a forced stitch, and completion always terminates a chain. (The old single-chain map
+    both stitched parallel listings into false reprices and interleaved genuine ladders — scored pairwise
+    on the real book at the fix: false stitches to zero, definite same-slot successions up, every
+    non-merged place-then-cancel candidate explained by a completion split or a closer same-slot
+    predecessor. Grouping-derived baselines from before the fix don't carry across.) Pinned by
+    `pipeline/test/campaigns.test.mjs`. `join-outcomes.mjs` imports it. Owns
+    `REPRICE_GAP`/`REPLACE_OVERLAP_TOL`/`MANUAL_SLOT_MIN`),
     `offers.mjs` (exchange-log discovery + open-offer
     semantics; P0 also adds `readOffersSnapshot`/`askFromSnapshot`/`bidFromSnapshot` — the OTHER-machine-safe
     reader of the flat root `offers.json`, normalized to the `{price,filled,total}` shape the context
@@ -2278,11 +2290,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     from `formatReachMargin` + `askReachDecayNote`. `formatReachMargin(rm)` is the ONE home for the
     COMPACT `askExitRead().ask.reachMargin` clause, shared by `quote-items.mjs`'s windowExit note and
     `watch-positions.mjs`'s held block; `read-window-range.mjs` keeps the VERBOSE per-day form + the
-    composite price-to-sell-EARLY trigger, deliberately not folded in. **The shared renderer makes the
-    WORDING identical, NOT the content:** `reachMargin`'s pace clause requires `profile` + `live`, which
-    `quote-items.mjs` passes to `askExitRead` and `watch-positions.mjs` does not, so watch renders the
-    cushion trend WITHOUT the same-day pace read. That is a real gap, not a formatting choice — see
-    PLAN.md Discovered. **Reading the clause: `trend` is an OLS fit over all N recent days while
+    composite price-to-sell-EARLY trigger, deliberately not folded in. Both surfaces thread `profile` +
+    `live` into `askExitRead` (watch reads the profile off `diurnalTimedLap`'s `.profile`, with the
+    same stale-live guard quote builds), so the clause — pace read included — is at parity; the one
+    remaining content difference is the SEPARATE 5m-grain line (watch passes `stats5m: null`, honestly). **Reading the clause: `trend` is an OLS fit over all N recent days while
     `cushionFrom→cushionTo` are the RAW first and last of them, so the label and the pair answer
     different questions and can disagree. It is NOT robust to a volatile end-day — OLS gives endpoints
     maximum leverage (`plans/PLAN-SIGNAL-RECENCY.md` retracted that claim; do not reintroduce it).**
@@ -2874,7 +2885,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     consecutive-underwater/below-support counters' reset policy + V4 `convictionGate` arm-then-confirm
     escalation incl. the breakdown-exempt invariant), `levels.test.mjs` (V2 — higher-low support /
     cut-trigger + graceful degradation), `emit.test.mjs` (V5 — the per-held emit contract: the
-    guaranteed sell line + fixed field order + `heldListAt` precedence), `recovery.test.mjs` (V6 — the
+    guaranteed sell line + fixed field order + `heldListAt` precedence), `campaigns.test.mjs` (the
+    multi-chain `groupCampaigns` grouping: parallel listings never stitched, ladders recovered whole,
+    place-then-cancel overlap kept, completion terminates, same-slot wins the join — the load-bearing cases name their mutant), `recovery.test.mjs` (V6 — the
     advisory recover-vs-drop composition, the spike confidence-cap, and the trigger gating) and
     `freed-capital.test.mjs` (V6 — freed-capital detection + the first-seen/stale-gap/grown-lot anti-misfire
     guards), `fetchcache.test.mjs` (FC1 — the opt-in fetch cache's TTL hit/miss + byte-identical

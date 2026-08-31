@@ -40,7 +40,8 @@ Sell campaigns over **2026-07-01 .. 08-21**. A reprice is not visible inside one
 exists once placements are chained into a per-lot campaign.
 
 Reproduced this session off the SHIPPED primitive (see §1.3), 1,420 sell offers → 610 campaigns,
-591 with a `complete` terminal:
+591 with a `complete` terminal (⚠ 2026-08-30: measured under the pre-multi-chain `groupCampaigns` —
+re-derive before reuse, per the same flag on §1.2):
 
 | reprices | n | median hold | median first→last ask move |
 | --- | ---: | ---: | ---: |
@@ -61,7 +62,8 @@ suspicion, not a finding.
 
 Not "which lots do we miss". Campaigns sitting ≥8h before selling split **untouched 5 / repriced
 58** — the owner catches nearly every stalled lot, so there is no meaningful missed cohort and no
-alerting deliverable here. The open question is only:
+alerting deliverable here. (⚠ 2026-08-30: measured under the pre-multi-chain `groupCampaigns`, which
+inflated reprice stitching — the direction survives, the split does not; re-derive before reuse.) The open question is only:
 
 > **Can the FIRST ask be set so that fewer lots need four reprices?**
 
@@ -85,7 +87,8 @@ Dated decisions. Every open question below is decided or carries a flagged propo
   two-homes topology this repo's planning doc names as how forks are born. FA1 **extends** it.
 - **R-b (2026-08-25, measured).** *The 3-hour gap heuristic is not a foundation risk.* Sweeping the
   stitch gap 20min → 6h moves the reprice rate 41% → 42% and the campaign count 610 → 605. The
-  parameter is near-insensitive over an 18× range. FA1 still **publishes** the sweep, but it is a
+  parameter is near-insensitive over an 18× range. (⚠ 2026-08-30: swept under the pre-multi-chain
+  `groupCampaigns` — re-derive before reuse.) FA1 still **publishes** the sweep, but it is a
   one-table acceptance criterion, not a research chunk.
 - **R-c (2026-08-25, measured).** *Read `fills.json`, not the raw `~/.runelite/exchange-logger/`
   logs.* `fills.json` retains `placed` (2,241) and `cancelled` (1,264) events **with the offer

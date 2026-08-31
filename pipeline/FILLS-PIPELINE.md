@@ -490,7 +490,7 @@ correction mechanism for genuine mislogged events — see §5.1.) ~~Note: `join-
 `collapseOffers`/`matchTrades` directly … so its campaign boundaries do not yet get this dedupe.~~
 **CLOSED (noted 2026-08-09).** `join-outcomes.mjs` no longer touches those helpers directly — it imports
 `reconstructCampaigns` from `pipeline/lib/reconstruct/campaigns.mjs`, whose pipeline is
-`dedupeSnapshots → collapseOffers → stampFirstFill → groupCampaigns` (`campaigns.mjs:63`). Campaign
+`dedupeSnapshots → collapseOffers → stampFirstFill → groupCampaigns` (`campaigns.mjs`). Campaign
 boundaries DO get the dedupe. Don't re-open this from the stale wording.
 
 ## 11. Outcomes dataset (O1 — the algorithm-feedback foundation)
@@ -568,8 +568,9 @@ committed**.
 `node pipeline/commands/join-outcomes.mjs [--report] [--no-bands] [--json] [--min-n N] [--band-hours H]`. Writes
 gitignored `outcomes.json` (rebuildable any time; `outcomes.json` + `.cache/outcomes-bands/` are in
 `.gitignore`). A **campaign** = one intent to trade: a same-item/same-side chain of offers
-`placed → … → terminal`, with cancel-replace successions (re-place within `REPRICE_GAP`, 20 min)
-stitched into one campaign carrying a reprice list. Per campaign: placement ts/price, reprice
+`placed → … → terminal`, joined per `groupCampaigns`' multi-chain rule (same-slot first, then
+closest-closing within the overlap/reprice window; parallel ladders stay separate campaigns and may
+overlap in time), each carrying a reprice list. Per campaign: placement ts/price, reprice
 count/steps, time-to-first-fill, time-to-complete (or terminal state + filled fraction), **band
 percentile at placement**, 2h spread + limiting-side volume, realized net after tax where it
 closes a FIFO lot, and the nearest **prior** suggestion for the item (≤ `SUGGEST_WINDOW`, 6h;

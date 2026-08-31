@@ -2061,6 +2061,9 @@ export function diurnalTimedLap(series, {
     // than assume the one it passed in. On a PASSING item the gate moves the LEVELS too, not just the
     // hours: hours and levels are one fit. See displayFitNights.
     reliability, reliable: reliability.reliable, fitNights, degraded: false,
+    // the hourProfile this lap was fitted from — exposed so a caller can feed reachMargin's pace read
+    // (askExitRead { profile }) without a second hourProfile pass. timedLapShadow does not serialize it.
+    profile,
   };
 }
 

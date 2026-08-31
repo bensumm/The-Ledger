@@ -63,6 +63,13 @@ const clamp01 = x => clamp(x, 0, 1);   // reuse the imported clamp — was a dup
 const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
 const estR = (value, n, basis) => ({ value, n, basis });
 
+// estSampleN(...ests) — the observation-backed n behind a logged pair: min over legs with n>0 (a pure-
+// prior leg carries no count and must not annihilate the other's via Math.min); all-priors → 0.
+export const estSampleN = (...ests) => {
+  const ns = ests.map(e => (e && e.n) || 0).filter(n => n > 0);
+  return ns.length ? Math.min(...ns) : 0;
+};
+
 /* --- named PLACEHOLDER priors (rule 4 — unvalidated; retrojoin.mjs measures the real numbers) ------
    The intraday/multiday TTF priors intentionally MIRROR retrojoin.mjs's HORIZON_INTRADAY_SEC /
    HORIZON_MULTIDAY_SEC in magnitude, but they are a deliberate SIBLING, not an import: retrojoin's
@@ -87,10 +94,8 @@ export const PFILL_ASKREACH_FLOOR    = 0.25;  // two-leg P (Proposal A, PLAN-GRA
                                               // floors the weight HERE (not to 0) so a stale fortnight demotes a
                                               // large-net item hard without zeroing it — SOFT by design
                                               // (rule 4: n≈14 per item, F1/retrojoin calibrates the magnitude).
-// EF1(b) (PLAN-ESTIMATOR-FIDELITY) — the PLACEMENT BOUND on the 'symmetric' (churn) ask-reach exemption.
-// MOVED here from screen-flip-niches.mjs (was its digest-local MIRAGE_PLACEMENT — same constant, now
-// single-sourced; the digest's mirage-top rule imports it back). PLACEHOLDER (n≈0, invented per
-// PLAN-CAPITAL-EFFICIENCY-AND-DIGEST §10 Q3); reused per EF1(b)'s "reuse, don't invent" ruling.
+// EF1(b) — the PLACEMENT BOUND on the 'symmetric' (churn) ask-reach exemption; single-sourced here,
+// the digest's mirage-top rule imports it back. PLACEHOLDER (n≈0; "reuse, don't invent").
 export const MIRAGE_PLACEMENT = 0.85;
 // EF1(a) — the DEAD-BID floor: an entry-leg P (from a REAL reach read) below this marks the quoted bid
 // as effectively dead, and estimateRank computes a REPRICED-ENTRY alternative (entry at the live

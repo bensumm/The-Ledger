@@ -59,8 +59,8 @@ export function worseOf(a, b) { return (SEVERITY[b] ?? 0) > (SEVERITY[a] ?? 0) ?
 function staleFlagBump(status) { return status === 'pass' ? 'caution' : status; }
 
 const round2 = x => (x == null ? null : Math.round(x * 100) / 100);
-/* a degrade-to-pass result with a no-data-shaped evidence note (never a reject on missing input). */
-function degrade(key, note) { return { key, status: 'pass', reason: note, evidence: { note } }; }
+/* degrade-to-pass (never a reject on missing input); abstain marks the non-answer for leanValidators. */
+function degrade(key, note) { return { key, status: 'pass', reason: note, abstain: true, evidence: { note } }; }
 
 // --- reachValidator ---------------------------------------------------------------------------
 // PLACEHOLDER thresholds (rule 4 — none validated; the study that would tune them is F1/P6):
@@ -139,7 +139,7 @@ export function reachValidator(ctx) {
   };
 
   // too little history behind the level → never reject on a thin sample (the degrade rule).
-  if (n < REACH_MIN_DAYS) return { key, status: 'pass', reason: 'thin-sample', evidence: { ...evidence, note: 'thin-sample' } };
+  if (n < REACH_MIN_DAYS) return { key, status: 'pass', reason: 'thin-sample', abstain: true, evidence: { ...evidence, note: 'thin-sample' } };
 
   // base status off the full-window reach fraction, then the RC1 stale bump.
   let status = frac <= REACH_REJECT_FRAC ? 'reject'
@@ -599,10 +599,10 @@ export function worstStatus(results) {
 export function flags(results) { return (results || []).filter(r => r.status !== 'pass'); }
 
 /* leanValidators(results) — the compact list for the suggestions ledger (YS2 lean-include: returns
-   undefined when nothing fired, so a clean row's logged shape is unchanged). Includes both GATE flags
-   (status !== pass) AND INFORM findings that would-have gated (gatedStatus set, mode:'inform') — the
-   latter is the track record that later justifies promoting an inform validator (e.g. trajectory) to
-   gate; a plain inform pass with no gatedStatus is not logged (nothing to learn from). */
+   undefined when nothing fired, so a clean row's logged shape is unchanged). Includes GATE flags
+   (status !== pass), INFORM findings that would-have gated (gatedStatus set, mode:'inform'), and
+   pass-shaped NON-ANSWERS (`validatorError`/`abstain` — unlabeled these inflated every hit-rate
+   denominator). A plain inform pass with no gatedStatus is still not logged. */
 export function leanValidators(results) {
   const out = [];
   for (const r of results || []) {
@@ -610,6 +610,7 @@ export function leanValidators(results) {
     // A crashed validator is 'pass' by policy, so both branches below would skip it — log it explicitly.
     // It fires only when a validator actually throws, so a healthy row's logged shape is unchanged.
     else if (r.validatorError) out.push({ key: r.key, status: 'pass', reason: r.reason, validatorError: true });
+    else if (r.abstain) out.push({ key: r.key, status: 'pass', reason: r.reason, abstain: true });
     else if (r.mode === 'inform' && r.gatedStatus) out.push({ key: r.key, status: r.gatedStatus, reason: r.reason, mode: 'inform' });
   }
   return out.length ? out : undefined;

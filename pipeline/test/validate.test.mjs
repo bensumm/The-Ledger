@@ -58,7 +58,12 @@ ok('runValidators returns the registry results; worstStatus/flags/leanValidators
   assert.ok(res.every(r => r.status === 'pass'), 'no data → every validator degrades to pass');
   assert.equal(worstStatus(res), 'pass');
   assert.equal(flags(res).length, 0);
-  assert.equal(leanValidators(res), undefined, 'a clean row logs no validators field (YS2 lean-include)');
+  const lean = leanValidators(res);
+  // MUTANT: drop the abstain branch from leanValidators — red (lean comes back undefined).
+  assert.equal(lean.length, res.length, 'every abstention is logged — an all-abstained row is NOT a clean row');
+  assert.ok(lean.every(v => v.status === 'pass' && v.abstain === true), 'each logged as pass + abstain, mirroring validatorError');
+  assert.equal(leanValidators([{ key: 'x', status: 'pass', reason: 'ok' }]), undefined,
+    'a GENUINE pass (ran on data, no abstain flag) still logs nothing (YS2 lean-include)');
 });
 ok('runValidators degrades a THROWING validator to pass, LOUDLY and into the ledger', () => {
   // ⚠ This MUST call the real runValidators. The previous version of this test hand-rolled a copy of the

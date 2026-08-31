@@ -118,6 +118,57 @@ plan folds and dies per lifecycle.
   rejection/adoption per the decision rule. On adoption, amend CLAUDE.md rule 10 + fold this
   plan; on rejection, record the result in PLAN.md Discovered + fold this plan.
 
+## Results — 2026-08-30, wave 1 (the forward-record honesty wave, diff over 345b03d)
+
+Both arms ran blind on the same uncommitted diff. Deviations from the design, recorded first:
+NINE finders launched against the stated cap of 8 (orchestrator error — the cap stands for the
+next run); one Arm-B candidate (the pace-refusal serializer) was a REDISCOVERY of an
+already-recorded PLAN.md Discovered item, so it counts toward verify-stage adjudication value
+(it forced the fold-into-this-wave decision) but not novel yield; and the wall-clock figures
+for two agents are contaminated by session idle time between turns (duration_ms spans
+notification gaps, not compute), so metric (5) is unusable this wave except for the clean
+parallel-finder band.
+
+| metric | Arm A (2 broad, session model) | Arm B (9 Sonnet finders + 2 strong verifiers) |
+| --- | --- | --- |
+| findings reported | 12 | 16 candidates |
+| confirmed by shared judge | 10 | 11 (7 actioned + 4 confirmed-no-impact) |
+| load-bearing after triage | 5 | 3 |
+| total subagent tokens | 344,009 | 1,209,361 (find 1,018,739 + verify 190,622) |
+| wall-clock | contaminated (see above) | finders 141,924–382,447 ms in parallel |
+| verify-stage kill rate | — | 5/16 refuted (31%) |
+| overlap | both: 4 · only-A: 8 · only-B: 12 (4 actioned) | same row, one measurement |
+
+Pre-registered predictions, scored: **"A wins on cross-file findings and confirmed-rate" — TRUE**
+(cross-file 8–0: the false "band rows are unchanged" claim caught against the ledger's actual
+population, the un-rewritten PLAN Discovered entry, the untracked test file, the README schema
+omission, two stale single-chain headers — Arm B's nine narrow finders missed every one, including
+the CHANGELOG finder that verified that exact sentence against source but never against data).
+**"B's kill rate lands high" — FALSE** (31%; the finder briefs' self-triage did its job, so the
+kill-rate branch of the decision rule does NOT fire — the brief is not defective). **"B wins on
+coverage breadth" — mixed**: B went deeper per cluster and produced the single highest-severity
+find of the whole run — the join-outcomes bare-timestamp keying that was leaking one campaign's
+realised P/L into other items' campaigns placed the same second, fixture-reproduced by a finder,
+then scope-CORRECTED by the verify stage, which found the live cross-item instance on the real
+book that the finder had missed and refuted the finder's "pre-change this was safe" causal claim.
+Arm A's broad pass measured that exact code path as clean. The blind-spot branch of the decision
+rule FIRES in both directions: B missed confirmed cross-file findings A caught (the predicted
+class, now measured), and A missed a confirmed live-data defect B caught — any adopted hybrid
+keeps a broad agent AND the verify stage.
+
+Verify-stage value beyond the kill count: it killed one candidate quoting pre-wave text, proved
+one shape unreachable at source, identified one proposed fix as a recorded anti-pattern (the
+nights-literal pinning that was tried and reverted on 2026-08-10), and adjudicated the
+fold-vs-defer call on the pace serializer with a live measurement (refusal rows were already the
+majority pace shape). None of that came from the finders.
+
+Token-efficiency this wave: A produced a load-bearing find per ~69k tokens, B per ~403k — but the
+two arms' yields were disjoint in KIND (A: corpus/cross-file prose truth; B: deep per-cluster
+code defects with runnable fixtures), so the per-token ratio understates B where severity is
+concerned. n=1; no adoption call (rule above stands — 2–3 waves needed). Next run: cap finders
+at 8, aim finder clusters at code seams rather than doc claims (docs were A's territory twice
+over), and record wall-clock from launch-to-notification timestamps rather than duration_ms.
+
 ## Honesty (rule 4)
 
 Every threshold here (finder cap 8, ~15-candidate verifier split, ~70% kill rate, 2–3 waves) is

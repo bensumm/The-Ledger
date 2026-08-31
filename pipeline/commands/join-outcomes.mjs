@@ -12,9 +12,9 @@
  *   node pipeline/commands/join-outcomes.mjs --json      dump the campaigns array to stdout (no file write)
  *   flags: --min-n <N> (report cell floor, default 8) · --band-hours <H> (band basis, default 2)
  *
- * A CAMPAIGN = one intent to trade: a same-item/same-side chain of offers,
- * `placed → … → terminal`, with cancel-replace successions (a cancel then a re-place within
- * REPRICE_GAP) STITCHED into ONE campaign carrying a reprice list. Per campaign we record:
+ * A CAMPAIGN = one intent to trade: a same-item/same-side chain of offers, `placed → … → terminal`,
+ * joined per groupCampaigns' multi-chain rule (same-slot first, then closest-closing within the
+ * overlap/reprice window) — parallel ladders are SEPARATE campaigns that may overlap in time. Per campaign we record:
  *   placement ts/price · reprice count/steps · time-to-first-fill · time-to-complete (or the
  *   terminal state + filled fraction) · band percentile at placement (trailing-2h 5m band, the
  *   SAME basis as patientTargets) · 2h spread + limiting-side volume · realized net after tax
@@ -144,12 +144,12 @@ async function build() {
   // (this path used to bypass it, so a phantom terminal could spawn a phantom campaign; PLAN Discovered fix).
   const { closed, campaigns } = reconstructCampaigns(events);
   CLOSED_LOTS = closed;                                       // expose for report()'s concentration read
-  const realisedBySellTs = new Map();                        // sell offer tsOpen -> realised net after tax
-  for (const t of closed) { if (t.withdrawn) continue; realisedBySellTs.set(t.sellTs, (realisedBySellTs.get(t.sellTs) || 0) + t.realised); }
+  const realisedBySellTs = new Map();                        // itemId:sellTs -> realised net after tax (item-qualified: same-second placements across items are real on this book)
+  for (const t of closed) { if (t.withdrawn) continue; const k = t.itemId + ':' + t.sellTs; realisedBySellTs.set(k, (realisedBySellTs.get(k) || 0) + t.realised); }
   // YS1: round-trip hold (sellTs - buyTs) per closed lot, keyed by the sell offer tsOpen -> holdTimeSec
   const holdBySellTs = new Map();
-  for (const t of closed) { if (t.withdrawn || t.buyTs == null || t.sellTs == null) continue;
-    (holdBySellTs.get(t.sellTs) || holdBySellTs.set(t.sellTs, []).get(t.sellTs)).push(t.sellTs - t.buyTs); }
+  for (const t of closed) { if (t.withdrawn || t.buyTs == null || t.sellTs == null) continue; const k = t.itemId + ':' + t.sellTs;
+    (holdBySellTs.get(k) || holdBySellTs.set(k, []).get(k)).push(t.sellTs - t.buyTs); }
 
   // suggestions ledger, ascending per item, for the nearest-prior join. SR1: read the ACTIVE
   // ledger + every monthly archive (readSuggestionLines) — after rotation the active root file
@@ -219,7 +219,7 @@ async function build() {
     let realised = null;
     if (c.type === 'sell') {
       realised = 0; let matched = false;
-      for (const o of c.offers) if (realisedBySellTs.has(o.tsOpen)) { realised += realisedBySellTs.get(o.tsOpen); matched = true; }
+      for (const o of c.offers) { const k = c.itemId + ':' + o.tsOpen; if (realisedBySellTs.has(k)) { realised += realisedBySellTs.get(k); matched = true; } }
       if (!matched) realised = null;   // an unmatched sell (pre-log inventory) — no fabricated profit
     }
 
@@ -229,7 +229,7 @@ async function build() {
     let holdTimeSec = null;
     if (c.type === 'sell') {
       const hs = [];
-      for (const o of c.offers) { const arr = holdBySellTs.get(o.tsOpen); if (arr) hs.push(...arr); }
+      for (const o of c.offers) { const arr = holdBySellTs.get(c.itemId + ':' + o.tsOpen); if (arr) hs.push(...arr); }
       if (hs.length) holdTimeSec = Math.round(median(hs));
     }
     const st = states ? states[idx] : null;

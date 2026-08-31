@@ -8,7 +8,7 @@ import { computeQuote } from '../../../js/quotecore.js';
 import { tax } from '../../../js/money-math.js';
 import { fmt, fmtP } from '../../../js/money-format.js';
 import { FLIP_NICHES } from '../../../js/flip-niches.mjs';
-import { estimateRank, fmtTtf } from './estimators.mjs';
+import { estimateRank, fmtTtf, estSampleN } from './estimators.mjs';
 import { expUnits } from './gatecandidates.mjs';
 import { rateItem, CONF_THIN_N_FLOOR } from './rating.mjs';
 import { stdCells, RANK_TABLE_HEADERS } from '../render/cli.mjs';
@@ -24,7 +24,7 @@ export function estFields(er) {
   return {
     bid: er.pair.bid, ask: er.pair.ask,
     pFill: round2(er.pFill.value), ttfSec: er.ttf.value, rank: Math.round(er.rank),
-    estBasis: `${er.pFill.basis}/${er.ttf.basis}`, estN: Math.min(er.pFill.n, er.ttf.n),
+    estBasis: `${er.pFill.basis}/${er.ttf.basis}`, estN: estSampleN(er.pFill, er.ttf),
   };
 }
 

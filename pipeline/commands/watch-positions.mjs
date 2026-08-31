@@ -755,9 +755,7 @@ async function main() {
           ? { reachedDays: reachedDays(dayStats.his, it.row.optSell), nDays: dayStats.his.length, recentHit: askRc?.recentHit, recentDays: askRc?.recentDays } : null;
         const bidReach = (dayStats.lows.length && it.row.optBuy != null)
           ? { reachedDays: touchedDays(dayStats.lows, it.row.optBuy), nDays: dayStats.lows.length, recentHit: bidRc?.recentHit, recentDays: bidRc?.recentDays } : null;
-        // PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the hourProfile+deriveDiurnalRange pair —
-        // SAME nights/liveLo/liveHi as before, so dr.bid/dr.ask/dr.peakWindow (read below for the shadow
-        // log + the windowExit peak-window record) come out identical to the old direct call.
+        // DT3: one lap supplies dr.bid/dr.ask/dr.peakWindow (shadow log + windowExit record) and .profile.
         const lap = diurnalTimedLap(it.ts1h, { nights: 14, liveLo: it.row.quickBuy ?? null, liveHi: it.row.quickSell ?? null });
         const dr = lap.degraded ? null : lap;
         const estBase = {
@@ -777,12 +775,16 @@ async function main() {
         // lot (lotValue ≥ BIG_TICKET_GP or a watchlist member — the same force-include the incidental filter
         // uses). Records the surfaced rung (declared exit ?? optSell) + the diurnal peak window it targets +
         // both reach signals via the SHARED askExitRead (zero new fetch — reuses dayStats/dr). HONESTY (WC1
-        // core item 5): the 5m grain is null here — watch keeps no 14-night 5m archive open this pass (it
-        // closes the snapshot after the accrual append), so fiveReach is honestly null, never faked; the
-        // quote --positions surface carries the 5m grain. Inform-only — nothing rendered.
+        // core item 5): the 5m grain is null here — watch keeps no 14-night 5m archive open this pass, so
+        // fiveReach is honestly null, never faked; quote --positions carries the 5m grain. The shadow log
+        // is inform-only; the reachRead line below renders on the held note block.
         if (it.lotValue != null && (it.lotValue >= BIG_TICKET_GP || wlWindow.has(it.id))) {
           const list = (thesisFor(holdThesisStore, it.id)?.exitPrice ?? null) ?? (it.row.optSell ?? null);
-          const aer = askExitRead(dayStats, { ask: list, stats5m: null });
+          // profile off the in-hand lap + stale-guarded live (quote-items' shape) so the pace read runs here too
+          const aerLive = { lo: it.row.quickBuy ?? null, hi: it.row.quickSell ?? null,
+            staleLo: !!it.row.quickStale?.buy, staleHi: !!it.row.quickStale?.sell,
+            loAgeMin: it.row.quoteAgeMin?.buy ?? null, hiAgeMin: it.row.quoteAgeMin?.sell ?? null };
+          const aer = askExitRead(dayStats, { ask: list, stats5m: null, profile: dr ? dr.profile : null, live: aerLive });
           it._windowExit = windowExitShadow(aer, {
             list, live: it.row.quickSell ?? null,
             peakWindow: (dr && dr.peakWindow) ? [dr.peakWindow.startH, dr.peakWindow.endH] : null,

@@ -30,6 +30,7 @@ import {
   PFILL_PRIOR, PFILL_DEPTH_SLOPE, PFILL_BREAKDOWN_PENALTY, PFILL_ASKREACH_FLOOR,
   TTF_INTRADAY_PRIOR_SEC, TTF_MULTIDAY_PRIOR_SEC, TTF_REF_VOL, TTF_SAT_DAYS, TTF_VEL_MAX,   // TTF_VEL_MAX — the 0.74.2 zero-volume pin
   RISING_PFILL_CONFIRMED, RISING_PFILL_UNCONFIRMED,
+  estSampleN,
 } from '../lib/signal/estimators.mjs';
 
 let pass = 0;
@@ -1050,6 +1051,14 @@ ok('EF1(a) dead-bid reprice: fires exactly on (real-reach entry P < floor) AND (
   assert.equal(estimateRank(FLIP_NICHES.band, EF1_ROW, { askReach: goodAsk }).repriced, null, 'prior-basis entry (no real reach read) → no reprice');
   assert.equal(estimateRank(FLIP_NICHES.band, { ...EF1_ROW, optBuy: EF1_ROW.quickBuy }, { reach: deadBid, askReach: goodAsk }).repriced, null, 'quoted bid already AT live → nothing to reprice');
   assert.ok(DEADBID_PFILL_FLOOR > 0 && DEADBID_PFILL_FLOOR < 1, 'the floor is a named placeholder in (0,1)');
+});
+
+ok('estSampleN: a pure-prior leg (n:0) never annihilates the observed leg\'s count', () => {
+  // MUTANT: revert to Math.min over all legs — red (value's coverageDays would log as 0).
+  assert.equal(estSampleN({ n: 12 }, { n: 0 }), 12, 'value lane: coverageDays survives the prior ttf leg');
+  assert.equal(estSampleN({ n: 0 }, { n: 0 }), 0, 'rising lane: both legs priors — 0 IS the honest record');
+  assert.equal(estSampleN({ n: 7 }, { n: 9 }), 7, 'both legs observed — plain min, unchanged semantics');
+  assert.equal(estSampleN(null, { n: 3 }), 3, 'a missing leg is treated as a prior, not a crash');
 });
 
 console.log(`\nAll ${pass} estimator checks passed.`);

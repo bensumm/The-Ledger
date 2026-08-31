@@ -8,6 +8,57 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## 2026-08-30 — the forward-record honesty wave (the four Discovered items the review rounds left)
+
+Four fixes, each executing a PLAN.md Discovered entry recorded by the 2026-08-29 review rounds; every
+one mutation-pinned by a test, none changes the app (`js/` edits are shared-module, pipeline-consumed).
+
+**Validator abstentions now serialize distinctly from passes.** `degrade()` and the thin-sample branch
+mark their pass-shaped non-answers `abstain: true`, and `leanValidators` logs them the way it already
+logged `validatorError` — an all-abstained row no longer serializes identically to an all-clean one,
+which had been inflating every measured gate's hit-rate denominator (one-directionally: abstentions
+could never read as rejects). `analyze.mjs` counts only `status === 'reject'`, so the new entries are
+back-compatible; rows logged before this commit still carry the old shape.
+
+**Watch's reach-margin clause gained its pace half.** `diurnalTimedLap` now exposes the `hourProfile`
+it always computed (`.profile` — not serialized by `timedLapShadow`), and `watch-positions.mjs`
+threads it plus a stale-guarded live (same shape `quote-items.mjs` builds, so the 64-min-godsword
+refusal fires identically) into `askExitRead`. Executed on real archive data: the pace clause renders
+on the watch composition, including the `⚠ lagging` branch, and a stale ask-side print degrades to
+`pace n/a`. Forward-record note: watch's `windowExit` rows carry `pace` from this commit on.
+
+**`groupCampaigns` is multi-chain.** Each parallel ladder is its own chain; an offer joins the chain
+it genuinely succeeds — same slot wins outright (a just-freed slot reused cannot be parallel), then
+closest-closing within [−`REPLACE_OVERLAP_TOL`, `REPRICE_GAP`]; completion still terminates. Scored
+PAIRWISE on the real book per the Discovered entry's own rule: false stitches (predecessor live past
+the tolerance, merged anyway) went to zero; definite same-slot successions recovered rose; and every
+place-then-cancel candidate that did not merge decomposed cleanly into a completion split or a closer
+same-slot predecessor — no unexplained case. One prior claim withdrawn as measured-wrong: multi-chain
+keying does NOT make the overlap tolerance moot (without it, place-then-cancel splits), so
+`REPLACE_OVERLAP_TOL` ships. `join-outcomes`/`join-window-clears` rebuilt clean; campaign-derived
+baselines from before this commit (`PLAN-FIRST-ASK` §1.1/§1.2 flagged in place) must be re-derived, not
+carried. New `pipeline/test/campaigns.test.mjs`; the load-bearing cases name their mutant.
+
+**`estN` means the observation-backed sample count.** New `estSampleN` in `families.mjs` (the file
+that defines `n:0` = pure prior): min over legs WITH observations, prior legs excluded rather than
+annihilating through `Math.min`, all-priors → 0 — which is the honest record on the rising lane and
+exactly what the DT1b amplitude convention already did. Value rows now log their real
+`coverageDays` — and (corrected by review: the first draft claimed band rows were unchanged) the
+dominant band-table population, a reach-based pFill leg against a velocity-prior ttf, flips estN
+0→its reach n too; only rows with both legs priors, or both observed, are unchanged. F1 can
+threshold `estN ≥ k` without silently dropping the value lane.
+
+Three review-round fixes ride along. `windowExitShadow` serializes a stale-refusal pace as a refusal
+(`{stale, ageMin}`) instead of fabricating `gap: null` — closing the surviving half of the pace
+Discovered entry, which this wave's watch threading would otherwise have doubled the producers of.
+`join-outcomes.mjs` keys its realised/hold lookups by item + placement second instead of the bare
+second, which had been leaking one campaign's realised P/L into every other item's campaign placed in
+the same second (one live instance on the book; pre-existing — the multi-chain change would have added
+a same-item class). And `groupCampaigns` gains a same-second determinism pin (secondary slot sort key)
+plus a test pinning the same-slot join rule, which a slot-blind mutant previously survived.
+
+Pipeline/shared-module only; no APP_VERSION bump.
+
 ## Recent
 
 ### The reprice trigger that could not compute, and the two reads that already existed (pipeline/docs only)

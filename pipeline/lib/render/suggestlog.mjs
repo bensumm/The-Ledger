@@ -52,8 +52,8 @@
  *              PLACEHOLDER (n=13/12, own-book-biased) even though Path-A drives the console primary sort.
  *   posture?, tripwire?, fillWindowHrs?, thesis?, validators?, path?  YS2 forward context a backfill cannot
  *              invent: the posture the read was made under, the named structural level watched, predicted
- *              time-to-fill, one-line intent (NO PII), the compact non-pass validator flags (js/validate.mjs
- *              leanValidators), the INFERRED entry-path key (js/flip-niches.mjs defaultPath; explicit
+ *              time-to-fill, one-line intent (NO PII), the compact validator record — non-pass results plus
+ *              pass-shaped non-answers, validatorError/abstain; all-ran-clean logs no key (js/validate.mjs leanValidators), the INFERRED entry-path key (js/flip-niches.mjs defaultPath; explicit
  *              hold-thesis > inferred > null). A script logs only what it can HONESTLY compute.
  *   estBuy? / estSell? / estConfidence?  reconciliation-estimator pair off estimatePair (strategy-aware entry,
  *              declared-exit-anchored, reach-folded, BE-floored) plus lean evidence { askRecHit?, askRecDays?,
@@ -436,7 +436,9 @@ export function windowExitShadow(aer, { list = null, live = null, peakWindow = n
     cushionFrom: rm.cushionFrom == null ? null : Math.round(rm.cushionFrom),
     cushionTo: rm.cushionTo == null ? null : Math.round(rm.cushionTo),
     reachedRecent: rm.reachedRecent, nRecent: rm.nRecent,
-    pace: rm.pace ? { gap: Math.round(rm.pace.gap), onPace: rm.pace.onPace, hour: rm.pace.hour, n: rm.pace.n } : null,
+    pace: !rm.pace ? null
+      : rm.pace.stale ? { stale: true, ageMin: rm.pace.ageMin ?? null, hour: rm.pace.hour, n: rm.pace.n }
+      : { gap: Math.round(rm.pace.gap), onPace: rm.pace.onPace, hour: rm.pace.hour, n: rm.pace.n },
   } : null;
   return { list, live, peakWindow, hiReach, fiveReach, reachMargin };
 }
@@ -527,8 +529,7 @@ export function timedLapShadow(lap) {
 // written ONLY when the caller supplies a non-null value, so a caller that omits it logs a byte-identical
 // row and suggestions.jsonl does not balloon (SR1). join-outcomes.mjs joinSuggestion reads each `?? null`.
 // Field semantics live ONCE, in the header schema — the notes here cover only what a call site must not get
-// wrong. P2: `validators` is js/validate.mjs leanValidators' compact non-pass flag list, so a clean
-// (all-pass) row's logged shape is unchanged.
+// wrong.
 // ⚠ DON'T REBUILD: a PREDICTED `velocityClass` param does not belong here. No caller ever supplied one, and
 // the prediction is just the item's dominant class from buildVelocityIndex(outcomes.json), which the join
 // recomputes for free. The MEASURED velocityClass (velocity.mjs, off a real round-trip) is a different

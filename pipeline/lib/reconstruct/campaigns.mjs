@@ -2,17 +2,11 @@
  * campaigns.mjs — the SHARED sell/buy CAMPAIGN reconstruction primitive (WC2, PLAN-WINDOW-CLEAR-OUTCOMES).
  *
  * A CAMPAIGN = one intent to trade: a same-item/same-side chain of offers, `placed → … → terminal`,
- * with cancel-replace successions (a cancel then a re-place within REPRICE_GAP) STITCHED into ONE
- * campaign carrying a reprice list. This is the exact campaign build join-outcomes.mjs has always run
- * (dedupeSnapshots → collapseOffers → stampFirstFill → groupCampaigns), lifted here VERBATIM so the
- * forward-join siblings (join-window-clears.mjs, and any future outcome joiner) reuse ONE reconstruction
- * instead of re-implementing it — the CLAUDE.md reconstruction rule (matchTrades/collapseOffers are
- * NEVER re-implemented). join-outcomes.mjs now imports reconstructCampaigns from here; the move is pure
- * (its outcomes.json output is byte-identical — proven by diffing --json before/after the extraction).
- *
- * FIFO helpers (collapseOffers / matchTrades / dedupeSnapshots) still live in reconstruct.mjs — the ONE
- * home for the money path; this module only adds the campaign GROUPING + first-fill stamping + the base
- * per-campaign field derivation (campaignBase) on top of them.
+ * with cancel-replace successions STITCHED into one campaign carrying a reprice list. The ONE campaign
+ * reconstruction — join-outcomes.mjs and join-window-clears.mjs (and any future outcome joiner) import
+ * it rather than re-implementing (the CLAUDE.md reconstruction rule). FIFO helpers
+ * (collapseOffers/matchTrades/dedupeSnapshots) stay in reconstruct.mjs — the ONE home for the money
+ * path; this module adds grouping + first-fill stamping + campaignBase on top.
  */
 import { collapseOffers, matchTrades, dedupeSnapshots } from './reconstruct.mjs';
 
@@ -41,23 +35,44 @@ export function stampFirstFill(events, offers) {
   }
 }
 
-// Group offers into campaigns (cancel-replace stitching). A completed offer, or a gap > REPRICE_GAP,
-// ends the current campaign for that item+side; anything else is a reprice appended to it.
+// s: place-then-cancel — a replacement lands up to this BEFORE its original's cancel (free slot first).
+export const REPLACE_OVERLAP_TOL = 60;
+
+// MULTI-CHAIN campaign grouping per item+side: each parallel ladder is its own chain; an offer joins
+// the chain it SUCCEEDS (predecessor closed within REPRICE_GAP before this open, or
+// REPLACE_OVERLAP_TOL after it). A predecessor still live past the tolerance = a parallel listing →
+// new chain, never a forced stitch; completion always terminates a chain. Pinned by campaigns.test.mjs.
 export function groupCampaigns(offers) {
-  const current = new Map();   // item:type -> in-progress campaign
+  const open = new Map();   // item:type -> open chains (one per live ladder)
   const camps = [];
-  for (const o of [...offers].sort((a, b) => a.tsOpen - b.tsOpen)) {
+  for (const o of [...offers].sort((a, b) => a.tsOpen - b.tsOpen || a.slot - b.slot)) {
     if (o.type === 'withdraw' || o.type === 'banked') continue;   // not a market flip intent
     const key = o.itemId + ':' + o.type;
-    let c = current.get(key);
-    if (c) {
-      const prev = c.offers[c.offers.length - 1];
-      if (prev.state === 'complete' || (o.tsOpen - prev.tsClose) > REPRICE_GAP) { camps.push(c); c = null; }
+    let chains = open.get(key);
+    if (!chains) { chains = []; open.set(key, chains); }
+    // retire chains nothing can join anymore: completed, or closed > REPRICE_GAP before this open.
+    for (let i = chains.length - 1; i >= 0; i--) {
+      const last = chains[i].offers[chains[i].offers.length - 1];
+      if (last.state === 'complete' || (last.tsClose != null && o.tsOpen - last.tsClose > REPRICE_GAP)) {
+        camps.push(chains[i]); chains.splice(i, 1);
+      }
     }
-    if (!c) { c = { itemId: o.itemId, type: o.type, offers: [] }; current.set(key, c); }
-    c.offers.push(o);
+    // SAME SLOT wins outright (a just-freed slot reused cannot be parallel), then closest-closing.
+    let best = null, bestGap = Infinity, bestSlot = false;
+    for (const ch of chains) {
+      const last = ch.offers[ch.offers.length - 1];
+      if (last.tsClose == null) continue;   // still open at this offer's open = parallel
+      const gap = o.tsOpen - last.tsClose;
+      if (gap > REPRICE_GAP || gap < -REPLACE_OVERLAP_TOL) continue;
+      const slotMatch = last.slot === o.slot;
+      if ((slotMatch && !bestSlot) || (slotMatch === bestSlot && Math.abs(gap) < bestGap)) {
+        best = ch; bestGap = Math.abs(gap); bestSlot = slotMatch;
+      }
+    }
+    if (!best) { best = { itemId: o.itemId, type: o.type, offers: [] }; chains.push(best); }
+    best.offers.push(o);
   }
-  for (const c of current.values()) camps.push(c);
+  for (const chains of open.values()) camps.push(...chains);
   return camps.sort((a, b) => a.offers[0].tsOpen - b.offers[0].tsOpen);
 }
 
