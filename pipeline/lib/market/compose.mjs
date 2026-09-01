@@ -13,10 +13,10 @@
    existing goldens/tests): flag ?? fallback, exactly as the inline ternaries did before.
 
    RETURN SHAPE — `{ active, shadow: [] }`, ACTIVE-PLUS-SHADOW, never exclusive-or (Ben's refinement,
-   codifying what the --pressure-exit precedent already does):
+   codifying what the retired --pressure-exit trial's precedent established):
      - `active`  — the single selection that feeds the DISPLAYED / PUBLISHED number.
      - `shadow`  — names of variants that should still RUN each pass and log to suggestions.jsonl
-                   (the existing asym/estConfLean/pressure shadow-field convention) WITHOUT touching
+                   (the existing asym/estConfLean shadow-field convention) WITHOUT touching
                    the display. Populated (PC3) from the optional `shadowPool` argument, minus whatever
                    is `active` (a model never shadows itself). No `shadowPool` ⇒ `shadow` is `[]`
                    (byte-identical to PC1). Callers derive the pool from a model registry via
@@ -31,8 +31,8 @@
    it must not touch the filesystem on import). A minimal shape:
      { "sellModel": "reach-fold", "volSource": "rolling", "modes": ["band","churn","value"] }
 
-   Consumers: screen-flip-niches.mjs (mode / vol-source / asym / phase-rescue / pressure-exit),
-   quote-items.mjs + watch-positions.mjs (pressure-exit). */
+   Consumers: screen-flip-niches.mjs (mode / vol-source / asym / phase-rescue / est-sell),
+   quote-items.mjs + watch-positions.mjs (est-sell). */
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -76,7 +76,7 @@ export function resolve(category, { flag, config, fallback, shadowPool = [] } = 
    `defaultShadow === true`), for passing as resolve()'s `shadowPool`. A "default shadow" is a model
    that should RUN + log to suggestions.jsonl on EVERY pass regardless of which model is active (the
    neutral reach-fold today; a future safe-quantile) — so its number always reaches the F1 retro co-log.
-   A trial model that only runs when explicitly active (pressure) sets defaultShadow:false and is absent
+   A trial model that only runs when explicitly active sets defaultShadow:false and is absent
    here. Pure: reads the registry object the caller already imported; no fetch, no registry knowledge
    baked into this module. */
 export function shadowModelsOf(registry) {
@@ -85,13 +85,12 @@ export function shadowModelsOf(registry) {
 
 /* refusePublishIfNonNeutral({ publish, publishExplicit, checks }) → the (possibly downgraded) publish
    flag. The ONE shared guard that used to be hand-copied per non-neutral estimator flag in
-   screen-flip-niches.mjs (--asym, --pressure-exit): an UN-CALIBRATED / F1-ungraduated estimator must
+   screen-flip-niches.mjs (--asym, and the since-retired --pressure-exit): an UN-CALIBRATED / F1-ungraduated estimator must
    never reach screen.json / the deployed app. `checks` is an ORDERED list of { on, message }: when a
    check is `on` and publishing is still live, an EXPLICIT `--publish` is a hard user error (print the
    check's message to stderr + exit 1), while default-on publish is quietly downgraded to off (so an
    exploration run needs no --no-publish). Order matters only for which message an explicit-publish
-   conflict prints first — pass the checks in the same order the inline copies ran (asym, then
-   pressure). Behaviour-identical to the two removed inline blocks. */
+   conflict prints first — pass the checks in the order the inline copies ran. */
 export function refusePublishIfNonNeutral({ publish, publishExplicit, checks = [] } = {}) {
   for (const c of checks) {
     if (publish && c.on) {

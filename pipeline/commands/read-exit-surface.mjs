@@ -6,7 +6,9 @@
  * is NOT offered as an ask — §1c measured it as the worst rule tried at short horizons.
  *
  * The incumbent exit estimators are placed on the same surface as (ask, p@H) points, which is the
- * whole point of the plan: one ruler instead of five conventions. The fold row is a RECONSTRUCTION off
+ * whole point of the plan: one ruler instead of parallel conventions. (`pressure` left that ruler
+ * 2026-08-30 — retired from exit pricing by join-exit-ev.mjs's criterion; its logged history stays
+ * readable via reachability.mjs.) The fold row is a RECONSTRUCTION off
  * a synthetic quote row, the read-window-range.mjs precedent — it is labelled as one because the
  * deployed estimator sees inputs this surface does not build.
  *
@@ -29,7 +31,7 @@ import { parseArgs, parseGp, mdTable, writeLastReport } from '../lib/render/cli.
 import { open as openArchive } from '../lib/market/archive.mjs';
 import { buildReachSurface, surfaceProb, DEFAULT_HORIZONS_H as SURFACE_HORIZONS_H } from '../../js/reach-surface.mjs';
 import { evCurve, askStar, horizonForAsk, DEFAULT_P_TARGET, DEFAULT_DELAY_COST } from '../../js/exit-ev.mjs';
-import { windowStats, asymPair, reachableBand, clearableAsk, reachedDays, recencySplit, RECENT_NIGHTS } from '../../js/windowread.mjs';
+import { windowStats, asymPair, clearableAsk, reachedDays, recencySplit, RECENT_NIGHTS } from '../../js/windowread.mjs';
 import { estimatePair } from '../lib/signal/estimators.mjs';
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';
 import { computeQuote } from '../../js/quotecore.js';
@@ -144,8 +146,8 @@ export function incumbentAsks({ stats, live, statsSeries, qty = null, nights = 1
     push('quick*', live.quickSell, 'live instabuy — the true null, sell fills here now');
     push('opt*', live.optSell, "the tool's own 2h band edge — a sibling, not an outside check");
   }
-  const rb = stats ? reachableBand(stats) : null;
-  if (rb) push('pressure', rb.ask, `demand-balance band (pressure ${rb.pressure != null ? rb.pressure.toFixed(2) : '—'}×)`);
+  // (`pressure` was placed here as an incumbent until 2026-08-30 — RETIRED from exit pricing by
+  // join-exit-ev.mjs's pre-registered criterion; it is no longer computed as an exit-price candidate.)
   const ap = stats ? asymPair(stats) : null;
   if (ap) push('asym', ap.highReachAsk, `quantile level — its printed pAsk ${pct(ap.pAsk)} is that quantile read back, not a fill rate`);
   if (qty != null && Array.isArray(statsSeries) && statsSeries.length) {

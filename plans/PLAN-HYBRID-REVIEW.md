@@ -169,6 +169,56 @@ concerned. n=1; no adoption call (rule above stands — 2–3 waves needed). Nex
 at 8, aim finder clusters at code seams rather than doc claims (docs were A's territory twice
 over), and record wall-clock from launch-to-notification timestamps rather than duration_ms.
 
+## Results — 2026-08-31, wave 2 (the pressure-retirement wave, diff over bdea911)
+
+Both arms ran blind on the same uncommitted chunk-8 diff (40 files). Deviations, recorded first:
+NINE finders launched AGAIN against the cap of 8 — the same orchestrator error as wave 1, now
+2/2, so the cap is evidently not self-enforcing as prose and belongs in the launch checklist the
+orchestrator actually reads at dispatch time. A mid-run session rate limit (429) killed Arm A1
+and both verifiers mid-flight; all three were resumed after reset with context intact, so their
+TOKEN totals are cumulative and usable but their wall-clock is contaminated (A1's duration_ms
+reflects only the resumed segment). Clean wall-clock exists only for the 9 parallel finders and
+Arm A2.
+
+| metric | Arm A (2 broad, session model) | Arm B (9 Sonnet finders + 2 strong verifiers) |
+| --- | --- | --- |
+| findings reported | 12 | 16 deduped candidates |
+| confirmed by shared judge | 10 | 12 |
+| load-bearing after triage | 8 actioned | 9 actioned (all 7 code fixes + 2 doc) |
+| total subagent tokens | 358,242 (A1 205,277 · A2 152,965) | 1,390,039 (find 1,117,674 + verify 272,365) |
+| wall-clock | A2 497,552 ms · A1 contaminated | finders 109,735–416,583 ms in parallel · verifiers contaminated |
+| verify-stage kill rate | — | 4/16 refuted (25%; 5/16 counting one mooted) |
+| overlap | both: 4 · only-A: 4 actioned (+1 calibration) · only-B: 9 actioned | same row, one measurement |
+
+Pre-registered predictions, scored: **"A wins on cross-file findings" — WEAKENED this wave**: A
+still owned the doc-corpus class outright (the "all five competing exit estimators" README claim,
+the folded plan still marked STILL LIVE, the "five-way" co-log comment — B's finders missed all
+of them, reproducing wave 1), but Arm B's VERIFY stage — a strong model — independently produced
+two genuinely cross-file confirmations (a README pointer dangling at a deleted plan section, and
+an orphaned retraction asserted in README + `js/reach-surface.mjs` after the plan that retracted
+it was deleted), so the structural blind spot is a property of the narrow FINDERS, not of the
+arm. **"B's kill rate lands high" — FALSE again** (25%, 2/2 waves; the defective-brief branch
+does not fire). **"B wins coverage breadth" — TRUE where it counts, 2/2 waves**: B produced the
+wave's highest-severity live defect — the `--pressure-exit=1` spelling silently bypassing the
+retirement guard on all three CLIs, plus the space-value form on screen — in a code path Arm A1
+examined, PARTIALLY spotted, and self-triaged to LEAVE IT without measuring the `=` spelling.
+The verify stage measured it, upgraded it, and it became the wave's top fix. The blind-spot
+branch again fires in BOTH directions (B's finders missed corpus truth A caught; A missed or
+mistriaged the top live code defect B caught) — n=2, consistent: any adopted hybrid keeps a
+broad agent AND the verify stage.
+
+New scoring nuance this wave: FOUND is not TRIAGED. A1 sighted two defects B later confirmed
+(the value-form slip, the rerun re-nomination print) and filed both as LEAVE IT nitpicks; the
+verify stage's discriminating tests reversed both. The shared-judge/verify layer is where
+mistriage gets corrected, which no per-arm finding count captures.
+
+Token-efficiency: A produced a load-bearing find per ~45k tokens, B per ~154k — the same ~3x
+ratio as wave 1 (69k vs 403k), and the same disjointness in KIND (A: corpus/prose truth; B:
+live code defects with measured reachability). Direction after two waves is CONSISTENT on both
+counts, which is what the decision rule asked for; one more wave (or an owner ruling now) can
+settle adoption. The composition the data points at is the wave-1 corollary restated: broad
+agents + code-seam finders + a strong verify stage, with the finder cap ENCODED at dispatch.
+
 ## Honesty (rule 4)
 
 Every threshold here (finder cap 8, ~15-candidate verifier split, ~70% kill rate, 2–3 waves) is

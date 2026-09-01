@@ -110,8 +110,9 @@ function joinSuggestion(sugByItem, itemId, placementTs) {
     // YS2 forward-enrichment fields (null on legacy rows that predate the enrichment - never fabricated):
     posture: best.posture ?? null, tripwire: best.tripwire ?? null, fillWindowHrs: best.fillWindowHrs ?? null,
     thesis: best.thesis ?? null,
-    // RC (PLAN-REACHABILITY-CONSOLIDATION): did this read carry the five-way exit co-log? `reachable`
-    // (the pressure band) is logged on EVERY co-logged read (held + discovery), so it's the universal
+    // RC (PLAN-REACHABILITY-CONSOLIDATION): did this read carry the exit-estimator co-log? `reachable`
+    // (the pressure band — bid/band only since 2026-08-30, when the pressure exit ask retired) is
+    // logged on EVERY co-logged read (held + discovery), so it's the universal
     // marker the readiness dashboard counts. Boolean only — the scorer reads the raw values off the
     // suggestion itself, not this projection.
     coLog: best.reachable != null,

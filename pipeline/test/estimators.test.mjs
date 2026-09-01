@@ -426,15 +426,6 @@ ok('R5 FADE SURFACES: the fade rides the F1 shadow (estConfLean) + a caution tok
   assert.equal(estConfLean(clean).fade, undefined, 'no fade field on a clean read');
   assert.doesNotMatch(estPairCells(clean)[1].t, /fading/, 'no fade token on a clean read');
 });
-ok('R5 FADE does NOT leak into the pressure model (Fable #2: pressure replaces the sell the fold never touched)', () => {
-  const row = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
-  const rb = { bid: 900, ask: 1200, pressure: 1.8, reliability: 1 };
-  const rc = { reachedDays: 12, nDays: 14, recentHit: 3, recentDays: 3 };
-  const e = estimatePair(FLIP_NICHES.band, row, { reachable: rb, askReach: rc, askMargin: { trend: 'fading' } }, { pressureExit: true });
-  assert.equal(e.estSell, 1200, 'the pressure ask still drives the sell (unchanged by a fading neutral cushion)');
-  assert.equal(e.confidence.fade, null, 'the fade marker does NOT ride the pressure confidence');
-});
-
 ok('rev2/AC1 + AC6 STRATEGY-AWARE entry: scalp near-live; value + band + churn ALL price the band low (churn no longer folds)', () => {
   // PLAN-ESTIMATOR-POSTURE AC1: band prices the band low (like value's trough). AC6: churn's buy leg no
   // longer folds toward live either — it prices the SAME band low (the day-level reach mismeasures a tight
@@ -559,84 +550,41 @@ ok('estimatePair E1 HONEST SELL: a fully-collapsed ask is NO LONGER overwritten 
   assert.deepEqual(estConfLean(e), { askHit: 0, askDays: 14, beFloored: true, doctrine: 'band-low' });
 });
 
-// --- PB4: the pressure-exit TRIAL override (opt-in flag) ---------------------------------------
-ok('estimatePair PB4 flag-OFF: byte-identical even when a reachable band is present', () => {
+// --- PB4 pressure model: RETIRED 2026-08-30 (join-exit-ev.mjs's pre-registered criterion) --------
+// Retirement pins: `extra.reachable` is INERT in estimatePair (no model consumes it), the registry
+// carries no 'pressure' key, and a retired/unknown name degrades to reach-fold rather than throwing —
+// the property that keeps any straggler call site safe.
+ok('RETIRED pressure model: a reachable band changes nothing, and the retired name degrades to reach-fold', () => {
   const row = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
   const extra = { askReach: { reachedDays: 12, nDays: 14 }, reachable: { bid: 900, ask: 1200, pressure: 1.8, reliability: 1 } };
-  const off = estimatePair(FLIP_NICHES.band, row, extra);                       // no pressureExit
+  const withRb = estimatePair(FLIP_NICHES.band, row, extra);
   const noRb = estimatePair(FLIP_NICHES.band, row, { askReach: extra.askReach });
-  assert.equal(off.estBuy, noRb.estBuy, 'a reachable band with the flag OFF changes nothing (bid)');
-  assert.equal(off.estSell, noRb.estSell, 'a reachable band with the flag OFF changes nothing (sell)');
-  assert.equal(off.confidence.pressureExit, null, 'no pressure marker when the flag is off');
+  assert.equal(withRb.estBuy, noRb.estBuy, 'a reachable band changes nothing (bid)');
+  assert.equal(withRb.estSell, noRb.estSell, 'a reachable band changes nothing (sell)');
+  assert.ok(!('pressureExit' in withRb.confidence), 'no pressureExit confidence field survives the retirement');
+  assert.deepEqual(estimatePair(FLIP_NICHES.band, row, extra, { sellModel: 'pressure' }),
+                   estimatePair(FLIP_NICHES.band, row, extra),
+                   "the retired name 'pressure' degrades to reach-fold (never throws)");
 });
 
-ok('estimatePair PB4 flag-ON (reliable): the reachable band drives BOTH legs, sell may exceed the band top', () => {
-  const row = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
-  const rb = { bid: 900, ask: 1200, pressure: 1.8, reliability: 1 };            // ask 1200 > band top 1100
-  const e = estimatePair(FLIP_NICHES.band, row, { reachable: rb, dayHigh: 1150 }, { pressureExit: true });
-  assert.equal(e.estBuy, 900, 'Est. buy = the deep reachable bid (below the band low, ceiling live)');
-  assert.equal(e.estSell, 1200, 'Est. sell = the bold reachable ask, ABOVE the band top (reliability 1 → no dayHigh cap)');
-  assert.ok(e.confidence.pressureExit && Math.abs(e.confidence.pressureExit.pressure - 1.8) < 1e-9, 'the trial marker is set');
-});
-
-ok('estimatePair PB4 reliability-gated ceiling: a reliability<1 read keeps the dayHigh cap', () => {
-  const row = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
-  const rb = { bid: 940, ask: 1180, pressure: 1.4, reliability: 0.6 };
-  const e = estimatePair(FLIP_NICHES.band, row, { reachable: rb, dayHigh: 1120 }, { pressureExit: true });
-  assert.equal(e.estSell, 1120, 'reliability 0.6 < 1 → the pressure ask is capped at the observed 24h high');
-  const noCap = estimatePair(FLIP_NICHES.band, row, { reachable: { ...rb, reliability: 1 }, dayHigh: 1120 }, { pressureExit: true });
-  assert.equal(noCap.estSell, 1180, 'the SAME ask uncapped when the read is fully reliable');
-});
-
-ok('estimatePair PB4 invariants: BE-floored, sell ≥ live, declared exit still wins the sell leg', () => {
-  // E1: a pressure ask below break-even is NO LONGER overwritten to BE — it stays honest; estSellFloorBind
-  // carries the break-even (the one real-price consumer, watch-positions, uses that floor-bound value to list).
-  const thin = { quickBuy: 99_000, quickSell: 98_000, optBuy: 97_000, optSell: 101_000 };
-  const beF = estimatePair(FLIP_NICHES.band, thin, { reachable: { bid: 97_500, ask: 98_500, pressure: 0.9, reliability: 1 } }, { pressureExit: true });
-  assert.notEqual(beF.estSell, beF.be, 'the pressure ask stays the honest number, not overwritten to BE');
-  assert.equal(beF.estSellFloorBind, beF.be, 'the BE floor rides as a display fact (estSellFloorBind)');
-  assert.ok(beF.confidence.beFloored, 'the floor binding is surfaced');
-  assert.ok(beF.estNet < 0, 'the real negative net shows, not a fake +1');
-  // a declared exit still governs the sell leg under the flag (operator plan wins); the bid still goes pressure
-  const decl = estimatePair(FLIP_NICHES.band, { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 },
-    { reachable: { bid: 900, ask: 1300, pressure: 2, reliability: 1 }, declaredExit: 1150 }, { pressureExit: true });
-  assert.equal(decl.estSell, 1150, 'declared exit still wins the sell leg');
-  assert.equal(decl.estBuy, 900, 'the pressure deep bid still drives Est. buy');
-});
-
-ok('estimatePair PB4: a NULL reachable band under the flag degrades to the neutral estimate', () => {
-  const row = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
-  const on = estimatePair(FLIP_NICHES.band, row, { askReach: { reachedDays: 12, nDays: 14 } }, { pressureExit: true });
-  const off = estimatePair(FLIP_NICHES.band, row, { askReach: { reachedDays: 12, nDays: 14 } });
-  assert.equal(on.estSell, off.estSell, 'no reachable band ⇒ the flag is a no-op (byte-identical)');
-  assert.equal(on.confidence.pressureExit, null);
-});
-
-// --- PC3: the SELL_TOP_MODELS registry + the sellModel selection (byte-identical to the flag path) ---
-ok('PC3 SELL_TOP_MODELS: the registry keys are exactly {reach-fold, pressure}, each with the model contract', () => {
-  assert.deepEqual(Object.keys(SELL_TOP_MODELS).sort(), ['pressure', 'reach-fold']);
+// --- PC3: the SELL_TOP_MODELS registry + the sellModel selection --------------------------------
+ok('PC3 SELL_TOP_MODELS: the registry key set is exactly {reach-fold}, with the model contract', () => {
+  assert.deepEqual(Object.keys(SELL_TOP_MODELS), ['reach-fold']);
   for (const [name, m] of Object.entries(SELL_TOP_MODELS)) {
     assert.equal(m.name, name, `${name} carries its own name`);
     assert.equal(typeof m.propose, 'function', `${name} exposes propose()`);
     assert.equal(typeof m.defaultShadow, 'boolean', `${name} declares defaultShadow`);
   }
-  // reach-fold is the always-on shadow (the unbiased retro co-log); pressure is a trial, never a default shadow.
+  // reach-fold is the always-on shadow (the unbiased retro co-log).
   assert.equal(SELL_TOP_MODELS['reach-fold'].defaultShadow, true);
-  assert.equal(SELL_TOP_MODELS['pressure'].defaultShadow, false);
 });
 
-ok('PC3 sellModel selection: {sellModel:reach-fold} ≡ default; {sellModel:pressure} ≡ {pressureExit:true}; unknown → reach-fold', () => {
+ok('PC3 sellModel selection: {sellModel:reach-fold} ≡ default; unknown → reach-fold', () => {
   const row = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
-  const extra = { askReach: { reachedDays: 12, nDays: 14 }, reachable: { bid: 900, ask: 1200, pressure: 1.8, reliability: 1 }, dayHigh: 1150 };
+  const extra = { askReach: { reachedDays: 12, nDays: 14 }, dayHigh: 1150 };
   const nudge = (side, p) => side === 'ask' ? { price: p - 1 } : null;   // exercise the shell nudge on both paths
-  // reach-fold (explicit) is byte-identical to the legacy no-option default.
+  // reach-fold (explicit) is byte-identical to the no-option default.
   assert.deepEqual(estimatePair(FLIP_NICHES.band, row, extra, { nudge, sellModel: 'reach-fold' }),
-                   estimatePair(FLIP_NICHES.band, row, extra, { nudge }));
-  // pressure (explicit) is byte-identical to the legacy pressureExit:true sugar.
-  assert.deepEqual(estimatePair(FLIP_NICHES.band, row, extra, { nudge, sellModel: 'pressure' }),
-                   estimatePair(FLIP_NICHES.band, row, extra, { nudge, pressureExit: true }));
-  // an explicit sellModel WINS over the legacy boolean (sellModel:'reach-fold' ignores pressureExit:true).
-  assert.deepEqual(estimatePair(FLIP_NICHES.band, row, extra, { nudge, sellModel: 'reach-fold', pressureExit: true }),
                    estimatePair(FLIP_NICHES.band, row, extra, { nudge }));
   // an unknown model name degrades to reach-fold (never throws).
   assert.deepEqual(estimatePair(FLIP_NICHES.band, row, extra, { nudge, sellModel: 'nope' }),

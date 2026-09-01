@@ -4,7 +4,9 @@ Status: **PARTIALLY REMOVED 2026-07-22 (PLAN-REMOVE-DEPTH-PRESSURE-READS, narrow
 `depthDays`+`clearableBid` (DE1/DE6 depth per-day tables + low-side mirror) and `hourlyPressure`+`demandRegime`
 (Extension-B DC1/DC3 demand-cycle) were DELETED — inspector/inform-only reads that never fed a decision
 surface. STILL LIVE: `clearableAsk` (DE1 "BOOK AT ≤X" + the DE3 depthExit shadow), `demandPressure`/`reachableBand`
-(Extension A / the `--est-sell pressure` sell-model). DE4/DE5/DE7 remain OPEN (unbuilt). Below is the historical
+(Extension A — the band reads: reverse-flip's Sold-ref/Peak band, the bid/band co-log, the `--pressure`
+inspector; the PB4 pressure sell-model those once priced was RETIRED 2026-08-30 by join-exit-ev.mjs's
+criterion). DE4/DE5/DE7 remain OPEN (unbuilt). Below is the historical
 design narrative — not rewritten; git preserves the removed code's "why" via its original commits.** \
 Previously: DE1/DE2/DE6/PB1/PB2/DE3/PB4/PB4-app-display/PB5 LANDED (see per-chunk statuses); DE4/DE5/DE7 open.
 Per-topic working doc (PLANNING.md lifecycle step 1–2); folds into `PLAN.md` and is deleted when its

@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 3.4
+version: 3.5
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -157,14 +157,12 @@ pass" is running `run-loop.mjs --watch <min> --scan <min>` together so `watch-po
 alert-raising positions surface) rides its own cadence alongside the scan (CLAUDE.md's `/loop` row) — prefer
 that for an unattended session; this manual step covers a one-shot `/scan`.
 
-**`--pressure-exit` is OPT-IN, not default (Ben 2026-07-16 — reverted off the 2026-07-15 early-adopt).**
-_(judgment: owner call; mechanic in `js/estimators.mjs` `estimatePair({ pressureExit })`, PB4)_ Run the
-NEUTRAL screen (no flag) by default. The trial surfaced real divergence this session (Water orb's
-pressure list-at sat ~9% above the neutral number while the item was chopping through a false CUT alert)
-— un-calibrated (n≈0) is not just a disclaimer, it moved a real recommendation. Only add `--pressure-exit`
-when Ben explicitly asks to compare or price off it; running it just silently skips the publish
-write that pass (screen.json / the deployed app stay on the neutral estimator — no error, no flag
-juggling needed). The retro keeps shadow-logging both estimates either way.
+**The PB4 pressure-exit trial is RETIRED (2026-08-30, join-exit-ev.mjs's pre-registered criterion).**
+_(encoded: the trial flag errors loudly; the pressure sell model is deleted from `SELL_TOP_MODELS`)_ Run
+the NEUTRAL screen — it is the only sell model. Do not offer the retired trial as a comparison; its ask
+measured a deficit against the incumbents with a CI clear of zero at every sensitivity (the Water-orb
+"~9% above neutral through a false CUT alert" session read pointed the same way). History stays scored
+by the join commands; the bid/band pressure reads survive.
 
 **Publishing (writing `screen.json`) is now the DEFAULT, every run (Ben, 2026-07-16 — was opt-in
 behind `--publish`).** Publishing here means the LOCAL FILE WRITE only — it is NOT a git commit;
@@ -172,9 +170,9 @@ committing/pushing `screen.json` to `main` stays a wholly separate, deliberate s
 `/overnight` `sync-fills.mjs --publish` is the only thing that commits it, unrelated to this flag).
 So a bare `screen-flip-niches.mjs` run now keeps the local app's Scan tab (and a future git commit,
 whenever one happens) current with zero extra step. Use `--no-publish` for a throwaway filtered
-console read you don't want left written to disk. `--asym`/`--pressure-exit` still keep screen.json
-F1-gated on the neutral estimator — running either just silently skips the write that pass instead
-of erroring (only an EXPLICIT `--publish --asym`/`--publish --pressure-exit` combo still hard-refuses,
+console read you don't want left written to disk. `--asym` (or any non-neutral `--est-sell` model)
+still keeps screen.json F1-gated on the neutral estimator — running one just silently skips the
+write that pass instead of erroring (only an EXPLICIT `--publish` alongside it still hard-refuses,
 since that's a real conflict, not an accidental default).
 
 **After the judgment pass (§2), write a short analysis blurb for the app's Scan tab — ALWAYS,
@@ -794,8 +792,9 @@ This is the tribal layer the script can't do — apply ALL of these:
     tiny same-day lots — a NET LOSS after tax despite nominally selling above the buy). Raw
     anglerfish's own full buy limit (15,000 units) is ~10.4% of its daily volume — structurally
     oversized for its own liquidity depth, not just an unlucky trade. This is the real-data
-    explanation for why `--pressure-exit` (`js/estimators.mjs` `estimatePair`) was found too
-    optimistic this session (Water orb) and stays opt-in/`--publish`-refused: the theory
+    explanation for why the pressure-exit trial was found too
+    optimistic that session (Water orb) — and why it was eventually RETIRED outright
+    (2026-08-30, join-exit-ev.mjs's criterion): the theory
     (small clips get better prices) is directionally right, and `reachRelief` DOES scale the
     effect down by size (it conditions on `sizeRatio`) — but its full-relief threshold
     (`REACH_RELIEF_SIZE_FULL` = 2% of daily flow) sits ABOVE the measured degradation knee

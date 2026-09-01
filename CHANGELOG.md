@@ -8,6 +8,51 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## 0.76.0 — 2026-08-30 — the pressure exit ask is retired (PLAN-REACH-SURFACE chunk 8, executed)
+
+`join-exit-ev.mjs`'s pre-registered retirement criterion was run FRESH and nominated exactly one
+estimator: **`pressure` (the ASK leg)** — deficit vs `asym` −6.8% of reference with an item-clustered
+95% CI clear of zero, the same sign in all three sensitivity horizons and both era halves.
+`reachFold` also qualified on sign agreement but its deficit is smaller than the report's own
+reconstruction resolution floor, so it stays BLOCKED ("nothing may be retired on a gap narrower than
+the noise in the instrument that measured it"); `depth` stays BLOCKED as an unbounded reconstruction.
+A nomination is the only license to retire, and this one was executed:
+
+- **The pressure sell model is gone.** `js/estimators/sell-models/pressure.mjs` deleted
+  (git-revivable), its registry entry removed, `PRESSURE_EXIT_REL_FULL` and the `pressureExit`
+  legacy sugar/confidence plumbing removed from `estimatePair` — a retired/unknown `sellModel` name
+  still degrades to reach-fold rather than throwing, so any straggler call is safe.
+- **The trial flags error loudly.** `--pressure-exit` / `--est-sell=pressure` on
+  `quote-items.mjs` / `screen-flip-niches.mjs` / `watch-positions.mjs` now exit with a message naming
+  the retirement instead of silently running the neutral model; the pressure banners, the held-lot
+  pressure-exit note blocks, the console rerank, and watch's pressure list-at branch are removed.
+- **The app's "Pressure (trial)" Scan column is retired** (js/ui.js + its render.mjs twin + the
+  styles.css rules), and `screen-flip-niches.mjs --publish` no longer attaches the per-row
+  `reachable` band to screen.json rows. An old screen.json still renders — the column is simply
+  absent (and its pre-rendered `scan.html` strings lose their styling until the next nightly publish).
+- **The `reachable.ask` co-log stopped.** `reachableShadow` logs the bid/band record only;
+  `REACH_ESTIMATORS.pressure` (reachability.mjs) stays as a HISTORICAL READER — verified by
+  re-running `join-reach-outcomes.mjs` over the full ledger (~32.6k historical rows still parse and
+  score). Scoring/join commands keep recomputing pressure — they are the record, not a pricing path.
+- **BID-side and band uses survive untouched**: `reachableBand`/`demandPressure` themselves,
+  `read-window-range.mjs --pressure` (the PB2 inspector), and reverse-flip's `reverseListBand`
+  Sold-ref/Peak band.
+- Collateral: `emit.mjs`'s `depthReachClause` (DE3's two-lens clause) is deleted — its only render
+  path was gated on the retired trial flag; the `depthExit` co-log and `clearableAsk` are untouched.
+- `plans/PLAN-REACH-SURFACE.md` folded into PLAN.md's scoreboard and deleted; two lint-docs denylist
+  entries keep the retired flag/column from re-entering the operating docs as live.
+- Adversarial-review round (same day): the `=value` spellings (`--pressure-exit=1`/`=true`, and
+  screen's space form) bypassed the first-shipped guards SILENT-NEUTRAL on all three CLIs — fixed,
+  and the loud-error contract is now pinned by `pipeline/test/retired-flag.test.mjs`
+  (mutation-verified: narrowing a guard back to the bare token reddens it). `join-exit-ev.mjs`
+  re-runs annotate the pressure row "already EXECUTED 2026-08-30" (`EXECUTED_RETIREMENTS`) instead
+  of a bare NOMINATED; `join-reach-outcomes.mjs` corrects its "pressure cannot print below 100%"
+  coverage claim (true only through the retirement) and prints each matched pool's data range —
+  every matched set requires the retired ask, so those pools froze at the retirement; the lint-docs
+  selector denylist also catches the double-quoted JSON `"sellModel": "pressure"` form; and the
+  §6.1 "p bounds P(fill) from above" RETRACTION (a working bound, not a theorem) is restored at
+  both sites the fold had orphaned.
+
 ## 2026-08-30 — the forward-record honesty wave (the four Discovered items the review rounds left)
 
 Four fixes, each executing a PLAN.md Discovered entry recorded by the 2026-08-29 review rounds; every

@@ -18,7 +18,7 @@
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { heldNoteBlock, heldListAt, depthReachClause, formatAsymFill, asymClassRateNote,
+import { heldNoteBlock, heldListAt, formatAsymFill, asymClassRateNote,
   ASYM_RT_24H_PCT, ASYM_RT_24H_BIG_PCT, ASYM_MEASURED_ROWS } from '../lib/render/emit.mjs';
 
 let pass = 0;
@@ -133,63 +133,16 @@ ok('no mv → band top when it clears break-even, else max(instabuy, BE), else B
   assert.equal(heldListAt({ quickSell: null, optSell: null }, 120, null), 120);
 });
 
-/* --- depthReachClause (PLAN-DEPTH-EXIT DE3): the two-lens depth/pressure clause ---------------- */
-// The golden diff of the two paths: a NON-NULL depth read renders the size-honest floor (framed as
-// a floor, never "the" price) beside the pressure-reachable; a COLLAPSED read renders its REASON —
-// never a bare fallback (Ben's hard requirement: a silent degrade is a defect).
-ok('DE3: a non-null depth read renders the floor + the pressure-reachable beside it (two lenses)', () => {
-  const ca = { price: 394, clearFrac: 0.7857, nDays: 14, competition: 4, qty: 25000 };
-  const rb = { ask: 401, bid: 383, pressure: 1.66, reliability: 1 };
-  const s = depthReachClause({ ca, rb, qty: 25000 });
-  assert.equal(s, 'depth floor: book 25ku @ ≤394 on ~79% of 14d (est ×4 comp — size-honest, smoothing-conservative) · reachable ask ~401 / bid ~383 (pressure 1.7× buy-heavy)');
-});
-
-ok('DE3: a collapsed depth read prints its REASON (never a silent fallback), per reason', () => {
-  const insuff = depthReachClause({ ca: { price: null, reason: 'insufficient-depth', competition: 4, qty: 100 }, qty: 100 });
-  assert.equal(insuff, 'depth n/a — book absorbs <4× your 100u lot; reach fallback');
-  const thin = depthReachClause({ ca: { price: null, reason: 'thin-history', competition: 4 }, qty: 50 });
-  assert.equal(thin, 'depth n/a — too little day history; reach fallback');
-  const none = depthReachClause({ ca: { price: null, reason: 'no-prints', competition: 4 }, qty: 50 });
-  assert.equal(none, 'depth n/a — no traded buckets; reach fallback');
-});
-
-ok('DE3: reachable alone renders (depth read absent); sub-1 reliability is stated; nothing → null', () => {
-  const rbOnly = depthReachClause({ rb: { ask: 1104, bid: 968, pressure: 0.5, reliability: 0.4 } });
-  assert.equal(rbOnly, 'reachable ask ~1,104 / bid ~968 (pressure 0.5× sell-heavy, rel 0.40)');
-  assert.equal(depthReachClause({}), null, 'no reads → null (the caller keeps its current line)');
-  assert.equal(depthReachClause({ rb: { ask: null } }), null);
-});
-
-// Every depthReachClause call site must be flag-gated. watch-positions rendered the pressure ask on the
-// DEFAULT pass while both quote-items sites were gated; that asymmetry put an unlabelled ask beside the
-// list-at, and the scorer later measured that ask reaching ~37% against the incumbents' ~70%. Static
-// because the render needs a real held lot: CI has no book, so nothing else here can see this drift.
-ok('DE3: the two-lens clause is flag-gated at EVERY call site, watch included', () => {
+/* --- depthReachClause: DELETED 2026-08-30 with the pressure exit retirement -------------------- */
+// Its only render path was gated on the retired --pressure-exit trial. The retirement pin: the
+// retired clause and its trial flag must not resurface in the two commands that carried them.
+ok('RETIRED: depthReachClause and the --pressure-exit gate are gone from watch/quote', () => {
   const watch = fs.readFileSync('pipeline/commands/watch-positions.mjs', 'utf8');
-  assert.ok(watch.includes('depth: PRESSURE_EXIT ? it._depthExit : null, reachable: PRESSURE_EXIT ? it._reachable : null'),
-    'watch must gate BOTH lenses — gating only the pressure half leaves the depth floor rendering alone, which its own contract forbids');
   const quote = fs.readFileSync('pipeline/commands/quote-items.mjs', 'utf8');
-  const calls = [];
-  for (let at = quote.indexOf('depthReachClause({'); at > 0; at = quote.indexOf('depthReachClause({', at + 1)) calls.push(at);
-  assert.ok(calls.length > 0, 'the quote-items call sites still exist to be checked');
-  // Brace-match each gate to its block extent, rather than comparing offsets: a positional test
-  // both fails legitimate refactors (two calls under one gate) and is masked by an unrelated gate.
-  const blocks = [];
-  for (let i = quote.indexOf('if (PRESSURE_EXIT'); i > 0; i = quote.indexOf('if (PRESSURE_EXIT', i + 1)) {
-    const open = quote.indexOf('{', i);
-    if (open < 0) continue;
-    let depth = 0, j = open;
-    for (; j < quote.length; j++) {
-      if (quote[j] === '{') depth++;
-      else if (quote[j] === '}' && --depth === 0) break;
-    }
-    if (depth === 0) blocks.push([open, j]);
+  for (const [name, src] of [['watch-positions', watch], ['quote-items', quote]]) {
+    assert.ok(!src.includes('depthReachClause('), name + ' no longer calls the deleted clause');
+    assert.ok(!src.includes('PRESSURE_EXIT'), name + ' no longer branches on the retired trial flag');
   }
-  assert.ok(blocks.length > 0, 'no if (PRESSURE_EXIT ...) block parsed — the brace matcher is broken, not the code');
-  calls.forEach((at, k) => {
-    assert.ok(blocks.some(([a, b]) => at > a && at < b),
-      'quote-items depthReachClause call ' + (k + 1) + ' of ' + calls.length + ' does not lie inside an if (PRESSURE_EXIT ...) block');
-  });
 });
 
 /* formatAsymFill — the ◆ asym fill clause pair. The BUSINESS REQUIREMENT: a reach count must never be

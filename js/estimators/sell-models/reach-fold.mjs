@@ -2,21 +2,21 @@
  * estimators/sell-models/reach-fold.mjs (PC3, 2026-07-17) — the NEUTRAL sell-top model, extracted
  * verbatim from estimatePair's inline math. This is the DEFAULT + the always-on shadow: it is the
  * unbiased number the F1 retro co-logs on every pass (suggestions.jsonl estBuy/estSell/estConfidence),
- * whether it is the active display model or a shadow beside a non-neutral active (--est-sell pressure).
+ * whether it is the active display model or a shadow beside a non-neutral active model.
  *
- * THE SELL-MODEL CONTRACT (what every model in SELL_TOP_MODELS must honour — pressure.mjs + the future
- * safe-quantile.mjs obey the same shape):
+ * THE SELL-MODEL CONTRACT (what every model in SELL_TOP_MODELS must honour — a future variant, e.g.
+ * safe-quantile.mjs, obeys the same shape):
  *   propose(ctx) → { estBuy, buyLo, estSell, sellHi, confidence }
  *     estBuy   — the proposed buy leg (raw, PRE-nudge/clamp). The model owns the BUY doctrine.
  *     buyLo    — the model's buy FLOOR for the shell's clamp. The shell ALWAYS ceils the buy at the
- *                live INSTASELL (qb = quotecore's quickBuy = latest.low, where a buy fills) regardless — buyLo only lets a model widen the floor DOWN (pressure
- *                bids below the band low: buyLo = -Infinity). reach-fold floors at the band low.
+ *                live INSTASELL (qb = quotecore's quickBuy = latest.low, where a buy fills) regardless —
+ *                buyLo only lets a model widen the floor DOWN. reach-fold floors at the band low.
  *     estSell  — the model's INTRINSIC sell proposal (raw, PRE-nudge/clamp). The shell overrides this
  *                with a declared thesis exit when one is passed (declared governs the sell leg for EVERY
  *                model — the operator's plan wins); the model never sees/handles declaredExit.
  *     sellHi   — the model's sell CEILING for the shell's clamp (Infinity = uncapped). The shell ALWAYS
  *                floors the sell at the live INSTABUY (qs = quickSell = latest.high, where a sell fills) regardless.
- *     confidence — the per-model evidence the cell/shadow render off: { bid, ask, relief, pressureExit }.
+ *     confidence — the per-model evidence the cell/shadow render off: { bid, ask, relief, … }.
  *                The shell adds the model-free flags (beFloored, declaredAnchored, doctrine).
  *
  * NON-SKIPPABLE FLOORS a model CANNOT bypass (they live in the estimatePair SHELL, applied after propose):
@@ -158,7 +158,6 @@ export const reachFoldModel = {
         ask: askR ? { rec: askR.rec, full: askR.full, diverges: askR.diverges } : null,
         relief: reliefApplied,
         fade: fadeApplied,
-        pressureExit: null,
         // AC5/AC6: 'symmetric' when the churn fold-exemption fired — the reach counts stay in `bid`/`ask`
         // for the F1 shadow, but the cell drops the caution token (the invalidated signal must not ride the
         // cell as an implied caution) and the shadow logs foldExempt so the retro can segment.

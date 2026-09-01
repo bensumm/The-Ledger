@@ -55,10 +55,8 @@ is the full synthesis: Optimistic ∩ diurnal ∩ reach ∩ anchor, with break-e
 not an overwrite — since E1). `--raw` restores the
 model-free Quick/Optimistic (and `--asym` implies `--raw`). The app + `screen.json` render the raw
 table-v2 **decision** cells — the Grade, the rank, and the sort stay F1-gated on the NEUTRAL
-estimator — but (PB4 app-display, 2026-07-15) `screen.json` now ALSO carries an ADDITIVE per-row
-`reachable` band `{ ask, bid, pressure, reliability, … }`, and the **app's Scan tab renders a
-`Pressure (trial)` column by default** (deep reachable bid → bold ask) beside the neutral Optimistic
-reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Operating summary:
+estimator. (The PB4 per-row `reachable` band and the app Scan tab's trial column it fed were RETIRED
+2026-08-30 with the pressure exit estimator — CHANGELOG 0.76.0.) Operating summary:
 
 - **`Est. buy` is strategy-aware** (`entryDoctrine(spec)`, routed off `spec.fillShape`): **scalp** →
   near-live (bids the instasell to fill); **value** → the trough (band low, unfolded); **band** → the
@@ -120,24 +118,21 @@ reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Oper
   against realized sells. The **reach-fold itself also surfaces as a validation DATA POINT** in
   `read-window-range.mjs` (AC8, below).
 - **The sell-top proposal is a NAMED, swappable MODEL** (PC3, `js/estimators/sell-models/`): the neutral
-  **`reach-fold`** (default) above, and the opt-in TRIAL **`pressure`** (PB4). `--est-sell=reach-fold|pressure`
+  **`reach-fold`** (default) above; a future variant is one more registry line. `--est-sell=<name>`
   selects it — **the `=` is REQUIRED** on `quote-items.mjs`/`watch-positions.mjs` (they match
-  `a.startsWith('--est-sell=')`); a space-separated `--est-sell pressure` is now REJECTED with an
-  error (it used to fail silently twice — ignoring the flag, then quoting the bare `pressure` as an item) (**`--pressure-exit` = legacy sugar for `--est-sell pressure`**); the model only PROPOSES a
+  `a.startsWith('--est-sell=')`); a space-separated `--est-sell <name>` is REJECTED with an
+  error (it used to fail silently twice — ignoring the flag, then quoting the bare value as an item).
+  The model only PROPOSES a
   price — the shell keeps the non-skippable floors (ordering clamps, BE floor, declared-exit anchor) so no
-  model can price past break-even or the live book. Under the `pressure` model Est. buy/sell become the
-  `reachableBand` legs (deep reachable bid → bold reachable ask), reranking the console scan by the pressure
-  net; sell ≥ live, declared exit still wins the sell leg (break-even rides as the `estSellFloorBind` display
-fact, not an overwrite — E1; a sub-BE list-at is the damage-control price and renders beside its
-break-even, unfloored — `watch-positions.mjs`'s `heldLa` is the one home for that), and a **reliability-gated ceiling**
-  lets a fully-reliable read exceed the observed 24h high (reliability<1 keeps the `dayHighFrom5m` cap). The
-  conservative depth floor renders beside as the reference; a LOUD banner flags every surface as un-calibrated
-  (n≈0). **The `pressure` model keeps its uncalibrated prices out of `screen.json`** — since publishing is
-  default-on, a `pressure` (or `--asym`) pass **silently downgrades** the publish to off (skips it); only an
-  EXPLICIT `--publish` alongside it hard-REFUSES (loud stderr + exit). Either way the deployed app + `screen.json` + the grade
-  cutoffs stay F1-gated on the NEUTRAL estimator, and the neutral `reach-fold` runs as a SHADOW every pass
-  (the resolver's `shadow` list) so the retro co-log logs it + the pressure `reachable` separately and the
-  head-to-head stays unbiased (`PLAN-REACHABILITY-CONSOLIDATION.md`). Off the trial: byte-identical.
+  model can price past break-even or the live book. A NON-NEUTRAL active model keeps its uncalibrated
+  prices out of `screen.json` — since publishing is default-on, such a pass (like `--asym`) **silently
+  downgrades** the publish to off; only an EXPLICIT `--publish` alongside it hard-REFUSES (loud stderr +
+  exit). Either way the deployed app + `screen.json` + the grade cutoffs stay F1-gated on the NEUTRAL
+  estimator, and the neutral `reach-fold` runs as a SHADOW every pass (the resolver's `shadow` list) so
+  the retro co-log stays unbiased. **The PB4 `pressure` trial model was RETIRED 2026-08-30** by
+  `join-exit-ev.mjs`'s pre-registered criterion (its ask lost to the incumbents with a CI clear of zero
+  in every sensitivity); its trial flag now errors, and the pressure BID/band reads survive
+  (CHANGELOG 0.76.0).
 - **The ask-reach fold is liquidity/size-conditioned** (`reachRelief`): reach measures how often a
   price prints, not how much of *your* stock clears — so on a liquid book where your position is
   small vs flow the fold softens toward 1 and the sell reference de-biases toward the observed 24h
@@ -156,25 +151,20 @@ break-even, unfloored — `watch-positions.mjs`'s `heldLa` is the one home for t
   mirage (reach 3/3 today, cushion collapsing). It's ADDITIVE to the reach/relief fold, exempt on a
   symmetric (churn) lap, nulled by a declared exit, and byte-identical when the trend is absent/stable/
   extending. INFORM-only, n≈0 PLACEHOLDER; a `fade` marker rides `confidence` for the F1 shadow.
-- **The held-lot depth floor + pressure-reachable (PLAN-DEPTH-EXIT, inform-only).** On a held lot,
-  `watch-positions` renders, UNDER `--pressure-exit` ONLY, two measured lenses beside the reach count: the **depth floor**
+- **The held-lot depth + pressure shadow reads (PLAN-DEPTH-EXIT, inform-only).** On a held lot,
+  `watch-positions` still computes the **depth floor**
   (`clearableAsk` — the highest ask whose at-or-above instabuy flow absorbs `×4` the lot on ≥75% of
   days; a CENTRAL estimate, not the conservative floor its own wording long claimed — measured at roughly
   the median of the window's hourly highs, see README's `join-depth-outcomes.mjs` entry)
-  and the **pressure-reachable band** (`reachableBand` — `base ± band·φ(ln medVolHi/medVolLo)`, the
-  buyer/seller-balance read that says how far beyond the smoothed center the tape realistically
-  reaches). The floor never renders alone (it under-reads a liquid book — the Soul-rune 394-vs-397
-  lesson); a collapsed depth read always prints its REASON (`depth n/a — book absorbs <4× your lot;
-  reach fallback`) — a silent degrade is a defect. The old `size-relieved fill ~N%` relief note
-  renders only when the depth read is null (it's the fallback proxy the depth read measures
-  directly). Both shadow-log to `suggestions.jsonl` (`depthExit` incl. collapse reason + liquidity
-  class, `reachable`) for the F1 retro-join; no verdict/price/grade moves off either until DE4/PB4.
-  All constants are n≈0 placeholders (`DEPTH_*`, `PRESSURE_*` — `js/windowread.mjs`). These two
-  primitives are the successors the older `reachRelief` + `asymPair` heuristics converge on: the watch
-  held row co-logs ALL FIVE exit estimators (reach · reachRelief · asym · depth · pressure) so the F1
-  retro-join can score them head-to-head against the 1h ARCHIVE (the realized sell is circular — a GE sell
-  executes at the ask you typed); `join-reach-outcomes.mjs` does this and DESCRIBES rather than ranks — the deprecate-then-
-  remove migration is architected in `PLAN-REACHABILITY-CONSOLIDATION.md` (nothing retires on theory).
+  and the **pressure band** (`reachableBand` — `base ± band·φ(ln medVolHi/medVolLo)`, the
+  buyer/seller-balance read). Both shadow-log to `suggestions.jsonl` (`depthExit` incl. collapse reason
+  + liquidity class; `reachable`, bid/band-only since the retirement) for the F1 retro-join; neither
+  moves a verdict/price/grade, and the `size-relieved fill ~N%` relief note is the rendered read.
+  All constants are n≈0 placeholders (`DEPTH_*`, `PRESSURE_*` — `js/windowread.mjs`). The DE3 two-lens
+  RENDER clause and the trial flag that gated it were RETIRED 2026-08-30: `join-exit-ev.mjs`'s
+  pre-registered criterion retired the pressure exit ask (nothing retires on theory — this one retired
+  on a measured deficit; `join-reach-outcomes.mjs` keeps scoring the logged history and DESCRIBES
+  rather than ranks).
 - **Confidence rides IN the price cell** as the recent-3 reach (`0/3`, `recencySplit`) — the
   freshness-honest signal; the full window shows beside it only on divergence
   (`0/3 · 12/14` = stale); `–` = no read.
@@ -766,9 +756,9 @@ placeholder cutoffs.
   **unproven PLACEHOLDER** (n=13/12, own-book-biased — the `*` in the header flags it) under validate-in-real-use;
   the forward-accrual (`pathA` field on `suggestions.jsonl`, Chunk E — `{gpDay, marginU, captureFrac, cyclesDay,
   units, price, intradayRange, lane, rankInLane}`) is the formal validator/revert-trigger, not a precondition.
-  Path-A is the primary sort for the STANDARD scan (active/auto posture); the two SPECIALIZED console reranks
-  keep their own order (`--posture overnight`'s net-over-velocity accumulation board, `--pressure-exit`'s
-  trial) — Path-A is still computed, shown, and logged on those rows, only the sort defers.
+  Path-A is the primary sort for the STANDARD scan (active/auto posture); the ONE SPECIALIZED console rerank
+  keeps its own order (`--posture overnight`'s net-over-velocity accumulation board) — Path-A is still
+  computed, shown, and logged on those rows, only the sort defers.
   **CONSOLE / last-report ONLY** — the published `screen.json` (and the deployed app) keep `rateItem`'s grade
   + the NEUTRAL sort UNCHANGED (the `--publish` return is frozen on the pre-Path-A order); a later
   post-validation chunk promotes Path-A to the app. So no `APP_VERSION` bump.
@@ -869,7 +859,7 @@ Everything in this section is a per-day tally over a fixed lookback: "the level 
 inverts it into an EV-maximizing ask. It is INFORM-ONLY and gates nothing; nothing in the tables above
 reads it — and chunk 4's backtest (`join-exit-ev.mjs`) measured that EV-maximizing ask against realized
 net gp and found it BEATEN by a deployed incumbent, so treat the surface as a description of where a
-level sits, never as a price to quote. Two rules carry out of its gate (`plans/PLAN-REACH-SURFACE.md` §1c, the ONE home for the
+level sits, never as a price to quote. Two rules carry out of its gate (the folded PLAN-REACH-SURFACE §1c — `git show bdea911:plans/PLAN-REACH-SURFACE.md`, the ONE home for the
 numbers): a probability target answers "how long", never "how much", so a p≥pTarget level is not a price;
 and the argmax sits on a plateau, so it is quoted as a band. Its behaviour and limits: README's entry.
 
@@ -1125,9 +1115,9 @@ response an agent needs). Current per-script behavior (facts, not doctrine):
   (`nominateDip` → `dip-watchlist.json`, the "B feeds A" half). A flip-niche empty at the floors re-runs
   beneath it (`subFloorFallback`, grade-capped `C (sub-floor)`, stdout-only). Writing repo-root
   `screen.json` (the app Scan tab) is **DEFAULT-ON every run** (2026-07-16) — `--no-publish` opts out
-  (a throwaway filtered console read). An un-calibrated estimator DOWNGRADES that write: `--asym` or
-  `--pressure-exit` (`--est-sell pressure`) **silently skip** the publish so an exploration run needs no
-  `--no-publish`; only an EXPLICIT `--publish --asym` / `--publish --pressure-exit` combo hard-REFUSES
+  (a throwaway filtered console read). An un-calibrated estimator DOWNGRADES that write: `--asym` or a
+  non-neutral `--est-sell` model **silently skips** the publish so an exploration run needs no
+  `--no-publish`; only an EXPLICIT `--publish` alongside one hard-REFUSES
   (loud stderr + exit — `refusePublishIfNonNeutral`). **`--archive-regime` (AF5b) joins that refusal
   list** — it is a DATA-SOURCE swap, not an estimator: the 6h series behind the **Regime** column
   (`regimeDrift`) and the trajectory `phase()` read comes from the local SQLite archive instead of a

@@ -18,9 +18,9 @@
  *   ./estimators/sell-models/  the named, swappable sell-top PROPOSAL models estimatePair dispatches to
  *                              (PC3): index.mjs (the SELL_TOP_MODELS registry), reach-fold.mjs (the
  *                              neutral fold — DEFAULT + always-on shadow; owns the model CONTRACT header
- *                              + EST_REACH_SAT_FRAC/EST_BLEND_EQUAL_WEIGHTS), pressure.mjs (the PB4
- *                              pressure-exit trial + PRESSURE_EXIT_REL_FULL). A new sell-top variant is a
+ *                              + EST_REACH_SAT_FRAC/EST_BLEND_EQUAL_WEIGHTS). A new sell-top variant is a
  *                              file + one registry line, NOT a boolean threading through estimatePair.
+ *                              (The PB4 pressure trial is RETIRED — see sell-models/index.mjs.)
  *   ./estimators/cells.mjs     the render/shadow projections: EST_HEADERS, estPairCells, estConfLean.
  *
  * NOTE the families↔reach edge is a runtime function-reference cycle (reach's asymEstimate calls

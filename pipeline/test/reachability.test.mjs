@@ -40,6 +40,8 @@ test('reachPredictions: each estimator reads its OWN logged field, and a missing
   const p = reachPredictions({ reachable: { ask: 11 }, asym: { ask: 12 }, depthExit: { ask: 13 }, quickSell: 14, optSell: 15 });
   assert.equal(p.pressure, 11); assert.equal(p.asym, 12); assert.equal(p.depth, 13);
   assert.equal(p['quickSell*'], 14); assert.equal(p['optSell*'], 15);
+  // Post-retirement rows (2026-08-30) log a bid-only `reachable` — the HISTORICAL pressure key reads null.
+  assert.equal(reachPredictions({ reachable: { bid: 383, pressure: 1.1, reliability: 1, bandLow: 5, bandHigh: 2 } }).pressure, null);
   assert.equal(p.reachFold, null, 'no estSell logged → null, never a fabricated 0');
   // a depthExit that COLLAPSED carries a reason and no ask — it must not score as reachable-at-0
   assert.equal(reachPredictions({ depthExit: { collapse: 'thin book' } }).depth, null);

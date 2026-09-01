@@ -4,9 +4,9 @@
  * now the ordering SPINE / SHELL ONLY — it prepares the shared inputs, delegates the buy+sell PROPOSAL to
  * a named model from SELL_TOP_MODELS (js/estimators/sell-models/), then applies the NON-SKIPPABLE floors
  * a model can't bypass: the declared-exit anchor → anchor nudge → ordering clamps (buy ≤ live, sell ≥ live)
- * → BE floor LAST. The sell-top variants (neutral reach-fold, PB4 pressure, and later safe-quantile) are
+ * → BE floor LAST. The sell-top variants (the neutral reach-fold today; a later variant e.g. safe-quantile) are
  * named files + one registry line, NOT boolean options threading through this function (PC3 — the
- * composition seam). The render cells that consume the output live in ./cells.mjs. PURE: imports the
+ * composition seam; the PB4 pressure trial is RETIRED from exit pricing — see sell-models/index.mjs). The render cells that consume the output live in ./cells.mjs. PURE: imports the
  * money-math helpers, quotecore's breakEven (the ONE model-free BE floor), windowread's RECENCY_DIVERGE (a
  * leaf), reach.mjs's reachRelief + REACH_DEBIAS_MAX_FRAC, and the sell-model registry. Every constant here
  * is an unvalidated PLACEHOLDER (rule 4). See the js/estimators.mjs barrel header for the full doctrine and
@@ -17,14 +17,13 @@ import { breakEven } from '../quotecore.js';   // PLAN-OUTPUT-TABLE: the ONE mod
 import { RECENCY_DIVERGE } from '../windowread.mjs';   // PLAN-OUTPUT-TABLE rev1: reuse the RC1 recent-vs-full divergence threshold (windowread is a leaf — no import cycle)
 import { reachRelief, REACH_DEBIAS_MAX_FRAC, askReachFactor, reachFraction } from './reach.mjs';   // PC2: liquidity/size relief + the Part-B de-bias cap; PLAN-ESTIMATOR-HONEST-SELL E1: askReachFactor — the SAME FUNCTION the rank calls, reused (never forked) so the display reads "raw margin × P(fill)" like the rank; RB-3 (PLAN-RECENCY-BASIS) had this module on the RECENT basis while the rank stayed full-window; the 2026-08-09 FLIP moved it back — this module now calls it with `{prefer:'full'}` (`:128`, `:266`), the SAME basis as the rank, so the display-vs-rank divergence is RETIRED. See the pFill comment below; this line asserted the old split until 2026-08-09. reachFraction = the ONE recency-basis rule reachRead also folds on.
 import { driftExitFrom } from '../forecast.mjs';   // PLAN-ESTIMATOR-HONEST-SELL E1: the forward-projected exit LEVEL ("list at X") — computed in the SHELL off extra.forward (profile+days already in the caller's hand → zero new fetch). forecast→windowread(leaf) only, no cycle.
-import { SELL_TOP_MODELS } from './sell-models/index.mjs';   // PC3: the named sell-top proposal models (reach-fold / pressure / …)
+import { SELL_TOP_MODELS } from './sell-models/index.mjs';   // PC3: the named sell-top proposal models (reach-fold / …)
 
 // PC3: re-export the sell-model registry + each model's PLACEHOLDER constants through this module so the
 // js/estimators.mjs barrel (export * from ./pair.mjs) keeps every existing import path valid byte-for-byte
 // (estimators.test.mjs imports EST_REACH_SAT_FRAC from the barrel; the app/pipeline shim import the barrel).
 export { SELL_TOP_MODELS } from './sell-models/index.mjs';
 export { EST_REACH_SAT_FRAC, EST_BLEND_EQUAL_WEIGHTS, EST_FADE_DISCOUNT } from './sell-models/reach-fold.mjs';
-export { PRESSURE_EXIT_REL_FULL } from './sell-models/pressure.mjs';
 
 const clamp01 = x => clamp(x, 0, 1);   // reuse the imported clamp — was a duplicate reimplementation
 const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
@@ -36,9 +35,9 @@ const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
    BE-floor, synthesized every pass). estimatePair promotes that synthesis into first-class numbers.
 
    PC3 (2026-07-17): the buy+sell PROPOSAL is now a NAMED MODEL (js/estimators/sell-models/) the shell
-   dispatches to — the neutral reach-fold, the PB4 pressure trial, and later safe-quantile. What each
-   model proposes (the per-strategy entry doctrine, the reach-folded/relief-softened band-top sell, the
-   pressure override) is documented in its own file + the SELL-MODEL CONTRACT header in
+   dispatches to — the neutral reach-fold today, later variants one registry line each. What each
+   model proposes (the per-strategy entry doctrine, the reach-folded/relief-softened band-top sell) is
+   documented in its own file + the SELL-MODEL CONTRACT header in
    ./sell-models/reach-fold.mjs. What stays HERE, in the shell, is the ordering spine every model obeys:
 
      estSELL — DECLARED-EXIT anchor is the SHELL's, not a model's: when `extra.declaredExit` is passed the
@@ -74,8 +73,8 @@ const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
    q15/q85 twin are all untouched.
    HONESTY (rule 4): EVERY constant/weight/per-strategy placement in the models is a NAMED PLACEHOLDER,
    n≈14 per item at best; the F1 retro-join (estBuy/estSell/estConfidence shadow fields on
-   suggestions.jsonl) owns calibration. EST_REACH_SAT_FRAC / EST_BLEND_EQUAL_WEIGHTS (reach-fold.mjs) and
-   PRESSURE_EXIT_REL_FULL (pressure.mjs) are re-exported through this module for the barrel.
+   suggestions.jsonl) owns calibration. EST_REACH_SAT_FRAC / EST_BLEND_EQUAL_WEIGHTS (reach-fold.mjs)
+   are re-exported through this module for the barrel.
    ============================================================================================ */
 
 /* entryDoctrine(spec) → 'near-live' | 'trough' | 'band-low' — the per-strategy ENTRY placement (rev2;
@@ -138,7 +137,7 @@ function reachRead(r) {
   return { frac, rec, full, diverges };
 }
 
-/* estimatePair(spec, row, extra, { nudge, sellModel, pressureExit }) → { estBuy, estSell, estNet, estRoi,
+/* estimatePair(spec, row, extra, { nudge, sellModel }) → { estBuy, estSell, estNet, estRoi,
    be, estSellFloorBind, pFill, estSellForward, forwardPeak, forwardTrough, forwardConfidence,
    holdHorizonDays, patient, confidence } | null.
    PLAN-ESTIMATOR-HONEST-SELL E1 — THE HONESTY FIX: estSell is NO LONGER overwritten to break-even. Because
@@ -176,7 +175,6 @@ function reachRead(r) {
                                    high the wiki exposes). With a positive liquidity/size relief the SELL
                                    top reference widens toward it (never above it); thin book / large
                                    size / absent → the band top stands byte-identically.
-     reachable { ask, bid, pressure, reliability }  the pressure model's price source (ignored by reach-fold).
      forward   { profile, days, holdHorizonDays?, now? }  PLAN-ESTIMATOR-HONEST-SELL E1 — the "list at X"
                                    FORWARD projection inputs the CALLER already has in hand (an hourProfile +
                                    a windowStats().days series — ZERO new fetch). When present the shell
@@ -189,11 +187,11 @@ function reachRead(r) {
                                    diurnalForecast's clock for deterministic tests.
    nudge: optional (side, price) → { price }|null — the ⚓ anchor round-number nudge (pipeline passes
    modules/anchor.mjs anchorNudge; injected so this module stays pure/app-importable). Final pricing step.
-   sellModel: PC3 — which SELL_TOP_MODELS entry proposes the buy+sell legs ('reach-fold' default,
-   'pressure', later 'safe-quantile'). pressureExit:true is LEGACY SUGAR for sellModel:'pressure' (kept so
-   the three call sites + tests read identically); an explicit sellModel wins. An unknown name degrades to
-   'reach-fold'. `spec` drives the per-strategy entry doctrine (rev2). Returns null when there is no live pair. */
-export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellModel = null, pressureExit = false } = {}) {
+   sellModel: PC3 — which SELL_TOP_MODELS entry proposes the buy+sell legs ('reach-fold' default; a later
+   variant is one more registry line). An unknown name degrades to 'reach-fold' (never throws) — retired
+   names ('pressure') degrade the same way. `spec` drives the per-strategy entry doctrine
+   (rev2). Returns null when there is no live pair. */
+export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellModel = null } = {}) {
   const qb = num(row.quickBuy), qs = num(row.quickSell);
   if (qb == null || qs == null) return null;                    // no live pair → no estimate (degrade)
   const ob = num(row.optBuy) ?? qb, os = num(row.optSell) ?? qs;
@@ -215,19 +213,18 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
     ? Math.min(dayHi, Math.round(bandTop + REACH_DEBIAS_MAX_FRAC * relief * (dayHi - bandTop)))
     : bandTop;
   // --- MODEL PROPOSAL: the named sell-top model proposes both legs + its clamp bounds + confidence ----
-  // (js/estimators/sell-models/). An explicit sellModel wins; else pressureExit:true is legacy sugar for
-  // 'pressure'; else the neutral reach-fold. An unknown name degrades to reach-fold (never throws).
-  const modelName = sellModel != null ? sellModel : (pressureExit ? 'pressure' : 'reach-fold');
+  // (js/estimators/sell-models/). An unknown/retired name degrades to reach-fold (never throws).
+  const modelName = sellModel != null ? sellModel : 'reach-fold';
   const model = SELL_TOP_MODELS[modelName] || SELL_TOP_MODELS['reach-fold'];
   const ctx = { spec, row, extra, qb, qs, ob, os, bidR, askR, doctrine, relief, sizeRatio, bandTop, dayHi, topRef };
   const prop = model.propose(ctx);
   let estBuy = prop.estBuy, estSell = prop.estSell;
   const buyLo = prop.buyLo;
   let sellHi = prop.sellHi;
-  let { bid: cBid, ask: cAsk, relief: cRelief, pressureExit: cPressure } = prop.confidence;
-  const cFoldExempt = prop.confidence.foldExempt || null;   // AC5: churn sell-fold exemption marker (pressure model omits it → null)
-  const cExemptionBounded = prop.confidence.exemptionBounded || null;   // EF1(b): 'placement' when the symmetric exemption was dropped by the placement bound (pressure model omits it → null)
-  let cFade = prop.confidence.fade || null;   // R5: cushion-fade marker (pressure model omits it → null)
+  let { bid: cBid, ask: cAsk, relief: cRelief } = prop.confidence;
+  const cFoldExempt = prop.confidence.foldExempt || null;   // AC5: churn sell-fold exemption marker
+  const cExemptionBounded = prop.confidence.exemptionBounded || null;   // EF1(b): 'placement' when the symmetric exemption was dropped by the placement bound
+  let cFade = prop.confidence.fade || null;   // R5: cushion-fade marker
   // --- SHELL SPINE (the non-skippable floors — a model can propose a price, never bypass these) -------
   // DECLARED-EXIT anchor: the operator's stated target governs the SELL leg for EVERY model (NOT
   // ceiling-clamped to the band; floored to live + break-even). A declared exit suppresses the generic
@@ -247,8 +244,8 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
   // SELL fills). These two labels were REVERSED here, and read-window-range built its synthetic row from
   // the wrong ones — inverting the pair, inflating break-even and faking `beFloored`. Check a caller's
   // orientation against quotecore, not against this sentence.
-  // A model only chose the OUTER bound (buyLo can dip below the band low for a pressure
-  // deep bid; sellHi can be Infinity for a fully-reliable pressure ask or a declared exit above the band).
+  // A model only chose the OUTER bound (buyLo may sit below the band low; sellHi can be Infinity for a
+  // declared exit above the band).
   estBuy = Math.round(clamp(estBuy, buyLo, qb));
   estSell = declaredAnchored ? Math.max(Math.round(estSell), qs) : Math.round(clamp(estSell, qs, sellHi));
   // BE floor — MODEL-FREE, computed LAST but NO LONGER an OVERWRITE (PLAN-ESTIMATOR-HONEST-SELL E1). The
@@ -330,9 +327,6 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
     // R5: non-null ONLY when a fading ask cushion tightened the sell fold — { trend:'fading', discount }.
     // Feeds the F1 shadow (segments the mirage-discounted sells) + a caution token; nulled by a declared exit.
     fade: cFade,
-    // PB4: non-null ONLY when the pressure model drove the legs (the TRIAL marker) — the surface renders
-    // "(pressure N×)" in the cell so the number never reads as the calibrated default (rule 4).
-    pressureExit: cPressure,
   };
   return {
     estBuy, estSell, estNet, estRoi, be,

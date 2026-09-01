@@ -6,7 +6,7 @@
  * report object (buildWatchReport) and prints it ONCE via renderReport, instead of a sequence of
  * inline console.log calls. This pins that the rendered string is byte-for-byte the SAME as the
  * pre-VZ1 console.log sequence, over a fixture that exercises every section type (headline, alerts +
- * pressure-exit/freed/blind sub-lines, table via mdTable, notes, summary) and the --brief branch.
+ * freed/blind sub-lines, table via mdTable, notes, summary) and the --brief branch.
  *
  * The expected strings below reproduce the EXACT old console.log format (the golden), so a future
  * edit that drifts the render away from the pre-VZ1 output fails here. No live fetch — pure fixtures.
@@ -27,11 +27,10 @@ const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
 
 /* The GOLDEN reproduction of the pre-VZ1 console.log sequence for the watch output pass. This is the
    exact ordering + blank-line contract the old inline code emitted; renderReport must match it. */
-function preVZ1Golden({ headline, pressureExitWarning, alerts, freedLine, blindLine,
+function preVZ1Golden({ headline, alerts, freedLine, blindLine,
   brief, briefLines, tableHeaders, tableRows, notes, summaryLines }) {
   const L = [];
   L.push(headline);                                       // console.log(headline)
-  if (pressureExitWarning) L.push(pressureExitWarning);   // console.log(pressure-exit warning)
   for (const a of alerts) L.push(`  ⚠ ${a.msg}`);         // for … console.log('  ⚠ ' + msg)
   if (freedLine) L.push(freedLine);                       // console.log(freed) — already prefixed
   if (blindLine) L.push(blindLine);                       // console.log(blind) — already prefixed
@@ -49,10 +48,9 @@ function preVZ1Golden({ headline, pressureExitWarning, alerts, freedLine, blindL
   return L.join('\n');
 }
 
-/* --- a rich fixture: alerts + pressure-exit + freed + blind + table (held/orphan/bid/target) + notes */
+/* --- a rich fixture: alerts + freed + blind + table (held/orphan/bid/target) + notes ------------- */
 const rich = {
   headline: '# watch 2026-07-16 07:00 — ⚠ 2 ALERTS · 1 held · 1 bid · 1 unbooked ask · 1 target',
-  pressureExitWarning: '⚠ --pressure-exit: held list-at uses the UN-CALIBRATED pressure model (TRIAL; retro still scoring — not validated). The depth floor renders beside as the conservative reference.',
   alerts: [
     { level: 'CUT', msg: 'CUT Water orb @ 190 — 2h breakdown & underwater; free the capital.' },
     { level: 'UNDERWATER', msg: 'UNDERWATER Dragon bones — live sell 2,450 < break-even 2,500.' },
@@ -97,7 +95,6 @@ ok('watch: the table goes through mdTable (header + --- separator + one row per 
 const briefFix = {
   ...rich,
   headline: '# watch 2026-07-16 07:00 — all quiet · 1 held',
-  pressureExitWarning: null,
   alerts: [],
   freedLine: null,
   blindLine: null,
@@ -116,7 +113,7 @@ ok('watch --brief: headline+alerts+summary still render; table/notes skipped, br
 /* --- minimal: headline + empty alerts + empty table + no notes (all quiet, empty board) --------- */
 const minimal = {
   headline: '# watch 2026-07-16 07:00 — all quiet · empty board',
-  pressureExitWarning: null, alerts: [], freedLine: null, blindLine: null,
+  alerts: [], freedLine: null, blindLine: null,
   brief: false, briefLines: [],
   tableHeaders: rich.tableHeaders, tableRows: [], notes: [],
   summaryLines: ['=== SUMMARY ===', '  no alerts',
@@ -151,11 +148,10 @@ ok('VZ2b: the canonical Quick/Optimistic cells render "buy → sell · +net (roi
    ============================================================================================ */
 
 /* GOLDEN: the pre-VZ3 items-mode console.log sequence.
-   (opt pressure banner+'\n') · mdTable · (opt Est. explainer) · '' · notes.join('\n')  — each was its
+   mdTable · (opt Est. explainer) · '' · notes.join('\n')  — each was its
    own console.log; the single renderReport string is those contents joined by '\n'. */
-function preVZ3ItemsGolden({ pressureBanner, headers, rows, estExplainer, noteStrings }) {
+function preVZ3ItemsGolden({ headers, rows, estExplainer, noteStrings }) {
   const L = [];
-  if (pressureBanner) L.push(pressureBanner + '\n');
   L.push(mdTable(headers, rows));
   if (estExplainer) L.push(estExplainer);
   L.push('');
@@ -164,12 +160,11 @@ function preVZ3ItemsGolden({ pressureBanner, headers, rows, estExplainer, noteSt
 }
 
 /* GOLDEN: the pre-VZ3 positions-mode console.log sequence.
-   header(+'\n') · (opt banner+'\n') · staleBanner+'\n' · mdTable · '' · notes.join('\n') ·
+   header(+'\n') · staleBanner+'\n' · mdTable · '' · notes.join('\n') ·
    (opt '' 'Conviction …:' conv.join) · (paths) · (rebid) · (opt '' lateNightLine). */
-function preVZ3PositionsGolden({ header, pressureBanner, staleBanner, headers, rows, noteStrings,
+function preVZ3PositionsGolden({ header, staleBanner, headers, rows, noteStrings,
   convLines = [], pathLines = [], rebidLines = [], lateNightLine = null }) {
   const L = [header];
-  if (pressureBanner) L.push(pressureBanner + '\n');
   L.push(staleBanner + '\n');
   L.push(mdTable(headers, rows));
   L.push('');
@@ -200,8 +195,6 @@ const ITEMS_NOTE_PAIRS = [
     '  ℹ window-clear: ask 141 prints 2/14 in the 20:00–00:00 peak window — days-reach ≠ lap-clear (placeholder, n≈0)'],
   [{ kind: 'reachRelief', text: 'reach relief: liquid book (8.01m/d, buy limit ~0.2% of flow) softens the ask-reach fold 75% (PLACEHOLDER, n=1)' },
     '  ↥ reach relief: liquid book (8.01m/d, buy limit ~0.2% of flow) softens the ask-reach fold 75% (PLACEHOLDER, n=1)'],
-  [{ kind: 'pressureExit', text: 'depth floor 138 · reachable 141 for ×10000' },
-    '  ◇ depth floor 138 · reachable 141 for ×10000'],
 ];
 
 /* buildQuoteReport appends the class-rate footer ONCE whenever any note is kind:'asym' (PLAN-PATIENT-PAIR
@@ -220,7 +213,7 @@ ok('VZ3 items: report renders byte-identical to the pre-VZ3 console.log sequence
   const notes = ITEMS_NOTE_PAIRS.map(p => p[0]);
   const noteStrings = [...ITEMS_NOTE_PAIRS.map(p => p[1]), ASYM_CLASS_LINE];
   const report = buildQuoteReport({ mode: 'items', headers: itemsHeaders, rows: itemsRows, estExplainer: ITEMS_EXPLAINER, notes });
-  assert.equal(renderReport(report), preVZ3ItemsGolden({ pressureBanner: null, headers: itemsHeaders, rows: itemsRows, estExplainer: ITEMS_EXPLAINER, noteStrings }));
+  assert.equal(renderReport(report), preVZ3ItemsGolden({ headers: itemsHeaders, rows: itemsRows, estExplainer: ITEMS_EXPLAINER, noteStrings }));
 });
 
 ok('VZ3 items --raw: no Est. explainer line; table then notes still byte-identical', () => {
@@ -229,15 +222,7 @@ ok('VZ3 items --raw: no Est. explainer line; table then notes still byte-identic
   const notes = ITEMS_NOTE_PAIRS.map(p => p[0]);
   const noteStrings = [...ITEMS_NOTE_PAIRS.map(p => p[1]), ASYM_CLASS_LINE];
   const report = buildQuoteReport({ mode: 'items', headers: rawHeaders, rows: rawRows, estExplainer: null, notes });
-  assert.equal(renderReport(report), preVZ3ItemsGolden({ pressureBanner: null, headers: rawHeaders, rows: rawRows, estExplainer: null, noteStrings }));
-});
-
-ok('VZ3 items: --pressure-exit banner rides on top, byte-identical', () => {
-  const banner = '⚠ --pressure-exit: Est. buy/sell + rank use the UN-CALIBRATED pressure model (TRIAL …).';
-  const notes = ITEMS_NOTE_PAIRS.map(p => p[0]);
-  const noteStrings = [...ITEMS_NOTE_PAIRS.map(p => p[1]), ASYM_CLASS_LINE];
-  const report = buildQuoteReport({ mode: 'items', pressureBanner: banner, headers: itemsHeaders, rows: itemsRows, estExplainer: ITEMS_EXPLAINER, notes });
-  assert.equal(renderReport(report), preVZ3ItemsGolden({ pressureBanner: banner, headers: itemsHeaders, rows: itemsRows, estExplainer: ITEMS_EXPLAINER, noteStrings }));
+  assert.equal(renderReport(report), preVZ3ItemsGolden({ headers: rawHeaders, rows: rawRows, estExplainer: null, noteStrings }));
 });
 
 /* positions mode: header + stale banner + table + notes + the conviction/paths/rebid/late-night blocks */
@@ -262,14 +247,14 @@ ok('VZ3 positions: full report (header+stale+table+notes+conviction+paths+rebid+
   const rebidLines = ['  Raw anglerfish: rebid at the diurnal trough & sell the daily peak'];
   const lateNightLine = 'ℹ Late-night: 1 held position(s) may be stale/underwater by morning — re-verdict at the morning liquid window (Raw anglerfish).';
   const report = buildQuoteReport({ mode: 'positions', header: posHeader, staleBanner: posStale, headers: posHeaders, rows: posRows, notes, convLines, pathLines, rebidLines, lateNightLine });
-  assert.equal(renderReport(report), preVZ3PositionsGolden({ header: posHeader, pressureBanner: null, staleBanner: posStale, headers: posHeaders, rows: posRows, noteStrings, convLines, pathLines, rebidLines, lateNightLine }));
+  assert.equal(renderReport(report), preVZ3PositionsGolden({ header: posHeader, staleBanner: posStale, headers: posHeaders, rows: posRows, noteStrings, convLines, pathLines, rebidLines, lateNightLine }));
 });
 
 ok('VZ3 positions: minimal (no conviction/paths/rebid/late-night blocks) byte-identical', () => {
   const notes = POS_NOTE_PAIRS.map(p => p[0]);
   const noteStrings = POS_NOTE_PAIRS.map(p => p[1]);
   const report = buildQuoteReport({ mode: 'positions', header: posHeader, staleBanner: posStale, headers: posHeaders, rows: posRows, notes });
-  assert.equal(renderReport(report), preVZ3PositionsGolden({ header: posHeader, pressureBanner: null, staleBanner: posStale, headers: posHeaders, rows: posRows, noteStrings }));
+  assert.equal(renderReport(report), preVZ3PositionsGolden({ header: posHeader, staleBanner: posStale, headers: posHeaders, rows: posRows, noteStrings }));
 });
 
 ok('VZ3: formatNote prepends the exact pre-VZ3 sigil per kind; a plain string passes through unchanged', () => {
@@ -281,7 +266,7 @@ ok('VZ3: formatNote prepends the exact pre-VZ3 sigil per kind; a plain string pa
 });
 
 ok('VZ3: every note kind quote-items emits is registered in NOTE_KINDS (kinds-vs-registry)', () => {
-  const emitted = ['regime', 'guideAnchor', 'validator', 'staleExit', 'diurnal', 'forecast', 'windowClear', 'askHeadroom', 'asym', 'reachRelief', 'pressureExit'];
+  const emitted = ['regime', 'guideAnchor', 'validator', 'staleExit', 'diurnal', 'forecast', 'windowClear', 'askHeadroom', 'asym', 'reachRelief'];
   for (const k of emitted) assert.ok(NOTE_KINDS[k], `NOTE_KINDS missing kind '${k}'`);
 });
 

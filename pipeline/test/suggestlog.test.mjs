@@ -154,9 +154,11 @@ ok('YS2 forward fields are included only when supplied (lean, non-null)', () => 
 });
 
 ok('DE3 + RC-S1: the reachability head-to-head shadow fields are lean-included (co-log contract)', () => {
-  // watch held rows co-log all FIVE competing exit estimators on ONE row for the F1 head-to-head
-  // (PLAN-REACHABILITY-CONSOLIDATION): depthExit (depth), reachable (pressure), estSell (reachRelief),
-  // asym (fixed-quantile). Each is lean-included — present only when supplied.
+  // watch held rows co-log the exit estimators on ONE row for the F1 head-to-head
+  // (PLAN-REACHABILITY-CONSOLIDATION): depthExit (depth), reachable (bid/band — its ask leg stopped
+  // logging 2026-08-30 with the pressure exit retirement), estSell (reachRelief),
+  // asym (fixed-quantile). Each is lean-included — present only when supplied; suggestionEntry is a
+  // pass-through, so a HISTORICAL reachable carrying `ask` still round-trips unchanged.
   const full = suggestionEntry({ quickBuy: 393, quickSell: 396 }, { itemId: 566, cls: 'liquid', verdict: 'HOLD',
     depthExit: { qty: 25000, competition: 4, liqClass: 'liquid', ask: 394, clearFrac: 0.79 },
     reachable: { ask: 401, bid: 383, pressure: 1.66, reliability: 1, bandLow: 6, bandHigh: 2 },
@@ -184,10 +186,10 @@ ok('a removed shadow field (demandRegime) is silently ignored — the destructur
 
 ok('RC-S2: reachableShadow / depthExitShadow reshapers (shared, no drift across watch/screen/quote)', () => {
   const rb = { ask: 401, bid: 383, pressure: 1.6634, reliability: 1, bandLow: 6, bandHigh: 2, baseLow: 384 };
-  assert.deepEqual(reachableShadow(rb), { ask: 401, bid: 383, pressure: 1.66, reliability: 1, bandLow: 6, bandHigh: 2 },
-    'pressure/reliability rounded to 2dp; base* dropped (lean)');
+  assert.deepEqual(reachableShadow(rb), { bid: 383, pressure: 1.66, reliability: 1, bandLow: 6, bandHigh: 2 },
+    'the ASK leg is NOT logged (retired 2026-08-30); pressure/reliability rounded to 2dp; base* dropped (lean)');
   assert.equal(reachableShadow(null), null);
-  assert.equal(reachableShadow({ ask: null }), null, 'a degraded (null-ask) band logs nothing');
+  assert.equal(reachableShadow({ bid: null }), null, 'a degraded (null-bid) band logs nothing');
   const ca = { price: 394, clearFrac: 0.7857, competition: 4, reason: null };
   assert.deepEqual(depthExitShadow(ca, { qty: 25000, volDay: 1_200_000 }),
     { qty: 25000, competition: 4, liqClass: 'liquid', ask: 394, clearFrac: 0.79 });

@@ -28,7 +28,10 @@
  * are distinguishable; a delta without its coverage is unreadable.
  *
  * REACH IS NOT FILL. Queue position is invisible in bucketed aggregates, so p bounds P(fill) from
- * ABOVE. Every consumer must say so.
+ * ABOVE — a working bound, not a theorem: the folded plan's §6.1 retracted the theorem reading, since
+ * the 1h-average instrument pushes the other way on liquid items and the net direction is
+ * item-dependent there (read `grainBias`; `git show bdea911:plans/PLAN-REACH-SURFACE.md` §6.1).
+ * Every consumer must say so.
  */
 
 /* REFUSAL IS A WIDTH BOUND, NOT A COUNT. A cell is `thin` when its Wilson half-width exceeds

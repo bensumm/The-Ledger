@@ -151,7 +151,7 @@ COMPUTATION is thesis-agnostic but its ACTION (gate vs inform) is declared per-s
 or mutates.
 
 **Estimator variants register; they don't thread a boolean.** A swappable estimator model — today the
-`estimatePair` sell-top models (`js/estimators/sell-models/`: `reach-fold`, `pressure`) — is a named file
+`estimatePair` sell-top models (`js/estimators/sell-models/`: `reach-fold`; the `pressure` trial was retired 2026-08-30) — is a named file
 + one line in a keyed registry (`SELL_TOP_MODELS`), selected through the `compose.mjs` resolver
 (`--est-sell` / the optional pipeline config); the shell (`estimatePair`) keeps the non-skippable floors (ordering
 clamps, BE floor, declared-exit anchor) so a model only PROPOSES a price, never bypasses them.

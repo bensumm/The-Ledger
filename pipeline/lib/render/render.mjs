@@ -70,7 +70,7 @@ import { gradeCls, fmtP } from '../../../js/money-format.js';
                guaranteed held-note fields (emit.mjs `heldNoteBlock`). Also `regime` + `validator`
                (a fired gate flag) below — a screen/quote row's regime line + any REJECT/CAUTION note.
      context = every inform-only family: diurnal, forecast, ask-headroom, asym, window-clear,
-               reach-relief, pressure-exit, guide-anchor, stale-exit, reach-placement, window-exit, and screen's footer inform
+               reach-relief, guide-anchor, stale-exit, reach-placement, window-exit, and screen's footer inform
                families (caution / trajectory-reach / headroom / window-clear / asym — those
                ride as PRE-FORMATTED strings, not typed kinds, so they carry no NOTE_KINDS entry; their
                tier is context by this doctrine). Rendered + relayed by default, same as core.
@@ -99,7 +99,6 @@ export const NOTE_KINDS = {
   askHeadroom:  { prefix: '  ⤴ ',  tier: TIER.context },  // Bar-E ask-headroom / list-is-a-floor ladder
   asym:         { prefix: '  ◆ ',  tier: TIER.context },  // PART II asym deep-bid/high-reach-ask read
   reachRelief:  { prefix: '  ↥ ',  tier: TIER.context },  // PLAN-LIQUIDITY-REACH reach-fold relief
-  pressureExit: { prefix: '  ◇ ',  tier: TIER.context },  // PB4 pressure-exit TRIAL line (opt-in flag)
   reachPlacement: { prefix: '  ⊙ ', tier: TIER.context }, // PLAN-QUOTE-PLACEMENT — the read-window-range.mjs placement percentile folded onto the quote
   fcTrack:      { prefix: '  ⇅ ',  tier: TIER.context }, // PLAN-DRIFT-VS-CRASH — the phase-aligned floor/ceiling slope-asymmetry + floor-break read (floorCeilingTrack), folded directly under the trajectory read
   windowExit:   { prefix: '  ↗ ',  tier: TIER.context },  // PLAN-POSITIONS-WINDOW-READ — the auto-surfaced ask-side typical-exit read on a big-ticket held lot (read-window-range.mjs --ask, folded in)
@@ -182,7 +181,7 @@ export function renderReport(report) {
 
 /* --- renderHtmlTable(headers, rows): the STAGE-2 SEAM, now built (Ben, 2026-07-16 — "make it app
    only... it should encode HTML tables for the app to display in the scan tab"). Pipeline-side twin
-   of js/ui.js's client-side `scanTableHtml`/`scanPressureCell` — same T1 `{t,c,title}` cell shape,
+   of js/ui.js's client-side `scanTableHtml` — same T1 `{t,c,title}` cell shape,
    same markup, so screen.json can carry a PRE-RENDERED `html` string per niche and the app just
    injects it (`.innerHTML =`) instead of re-deriving HTML from raw cells client-side. This does NOT
    replace the `cells` data in screen.json (kept for back-compat / any other consumer) — `html` is an
@@ -196,19 +195,10 @@ const scText = c => (c && typeof c === 'object' && 't' in c) ? c.t : c;
 const scCls = c => (c && typeof c === 'object' && c.c) ? c.c : '';
 const scTitle = c => (c && typeof c === 'object' && c.title) ? c.title : '';
 const htmlAttr = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-const htmlPressureCell = rb => {
-  if (!rb || rb.ask == null || rb.bid == null) return '<td class="pressure-trial"></td>';
-  const rel = (typeof rb.reliability === 'number') ? rb.reliability : null, low = rel != null && rel < 0.5;
-  const px = (typeof rb.pressure === 'number') ? rb.pressure.toFixed(1) + '×' : '?';
-  const ttl = 'pressure ' + px + (rel != null ? ', reliability ' + rel.toFixed(2) : '') + ' — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.';
-  return '<td class="pressure-trial' + (low ? ' pthin' : '') + '" title="' + htmlAttr(ttl) + '">' + fmtP(rb.bid) + ' → ' + fmtP(rb.ask) +
-    ' <span class="pmeta">' + px + (low ? ' ⚠thin' : '') + '</span></td>';
-};
+// (The PB4 "Pressure (trial)" column twin was retired here with js/ui.js's — see that file.)
 export function renderHtmlTable(headers, rows) {
   if (!rows || !rows.length) return '<div class="scannone">— none —</div>';
-  const hasP = rows.some(r => r.reachable && r.reachable.ask != null);
-  const head = '<thead><tr>' + headers.map((h, i) => '<th' + (i === 0 ? ' class="left"' : '') + '>' + h + '</th>').join('') +
-    (hasP ? '<th class="pcol" title="Pressure-driven reachable band (deep bid → bold ask) — a TRIAL, un-calibrated demand read (n≈0), NOT the ranked/graded decision. The neutral Optimistic column is the conservative reference.">Pressure <span class="ptrial">(trial)</span></th>' : '') + '</tr></thead>';
+  const head = '<thead><tr>' + headers.map((h, i) => '<th' + (i === 0 ? ' class="left"' : '') + '>' + h + '</th>').join('') + '</tr></thead>';
   const body = '<tbody>' + rows.map(r => { const cells = r.cells || [];
     const tds = cells.map((c, i) => {
       const ttl = scTitle(c), t = ttl ? ' title="' + htmlAttr(ttl) + '"' : '';
@@ -216,6 +206,6 @@ export function renderHtmlTable(headers, rows) {
       if (headers[i] === 'Grade') { const g = scText(c); return '<td' + t + '><span class="grade ' + gradeCls(g) + '"' + (ttl ? ' title="' + htmlAttr(ttl) + '"' : '') + '>' + g + '</span>' + (ttl ? '<span class="thinflag" title="' + htmlAttr(ttl) + '">thin</span>' : '') + '</td>'; }
       return '<td class="' + scCls(c) + '"' + t + '>' + scText(c) + '</td>';
     }).join('');
-    return '<tr>' + tds + (hasP ? htmlPressureCell(r.reachable) : '') + '</tr>'; }).join('') + '</tbody>';
+    return '<tr>' + tds + '</tr>'; }).join('') + '</tbody>';
   return '<div class="tablewrap"><table class="scantable">' + head + body + '</table></div>';
 }

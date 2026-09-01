@@ -317,24 +317,12 @@ const scText=c=>(c && typeof c==='object' && 't' in c)?c.t:c;
 const scCls =c=>(c && typeof c==='object' && c.c)?c.c:'';
 const scTitle=c=>(c && typeof c==='object' && c.title)?c.title:'';      // S1 thin-grade honesty tooltip
 const attr=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
-// PB4 (2026-07-15) — the pressure (TRIAL) reachable band, rendered by DEFAULT beside the neutral cells.
-// screen.json carries an ADDITIVE per-row `reachable` { ask, bid, pressure, reliability } (never a
-// rank/grade/sort input — that stays F1-gated). We APPEND a "Pressure (trial)" column (the neutral
-// Optimistic column stays as the conservative reference); rule 4 — the header + tooltip say un-calibrated,
-// and a thin/low-reliability read is flagged. Absent `reachable` (older/stale screen.json) → no column.
-const scanPressureCell=rb=>{
-  if(!rb || rb.ask==null || rb.bid==null) return '<td class="pressure-trial"></td>';
-  const rel=(typeof rb.reliability==='number')?rb.reliability:null, low=rel!=null && rel<0.5;
-  const px=(typeof rb.pressure==='number')?rb.pressure.toFixed(1)+'×':'?';
-  const ttl='pressure '+px+(rel!=null?', reliability '+rel.toFixed(2):'')+' — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.';
-  return '<td class="pressure-trial'+(low?' pthin':'')+'" title="'+attr(ttl)+'">'+fmtP(rb.bid)+' → '+fmtP(rb.ask)+
-    ' <span class="pmeta">'+px+(low?' ⚠thin':'')+'</span></td>';
-};
+// The PB4 "Pressure (trial)" column was RETIRED 2026-08-30 (the pressure exit estimator lost the
+// join-exit-ev backtest and was retired from exit pricing); an older screen.json's per-row `reachable`
+// band is simply not rendered. Git-revivable.
 function scanTableHtml(headers, rows){
   if(!rows||!rows.length) return '<div class="scannone">— none —</div>';
-  const hasP=rows.some(r=>r.reachable && r.reachable.ask!=null);   // PB4: the pressure column only when data is present
-  const head='<thead><tr>'+headers.map((h,i)=>'<th'+(i===0?' class="left"':'')+'>'+h+'</th>').join('')+
-    (hasP?'<th class="pcol" title="Pressure-driven reachable band (deep bid → bold ask) — a TRIAL, un-calibrated demand read (n≈0), NOT the ranked/graded decision. The neutral Optimistic column is the conservative reference.">Pressure <span class="ptrial">(trial)</span></th>':'')+'</tr></thead>';
+  const head='<thead><tr>'+headers.map((h,i)=>'<th'+(i===0?' class="left"':'')+'>'+h+'</th>').join('')+'</tr></thead>';
   const body='<tbody>'+rows.map(r=>{ const cells=r.cells||[];
     const tds=cells.map((c,i)=>{
       const ttl=scTitle(c), t=ttl?' title="'+attr(ttl)+'"':'';
@@ -342,7 +330,7 @@ function scanTableHtml(headers, rows){
       if(headers[i]==='Grade'){ const g=scText(c); return '<td'+t+'><span class="grade '+gradeCls(g)+'"'+(ttl?' title="'+attr(ttl)+'"':'')+'>'+g+'</span>'+(ttl?'<span class="thinflag" title="'+attr(ttl)+'">thin</span>':'')+'</td>'; }
       return '<td class="'+scCls(c)+'"'+t+'>'+scText(c)+'</td>';
     }).join('');
-    return '<tr>'+tds+(hasP?scanPressureCell(r.reachable):'')+'</tr>'; }).join('')+'</tbody>';
+    return '<tr>'+tds+'</tr>'; }).join('')+'</tbody>';
   return '<div class="tablewrap"><table class="scantable">'+head+body+'</table></div>';
 }
 // per-niche display metadata — one table per niche, each already sorted by Grade (screen-flip-niches.mjs sorts
@@ -417,12 +405,6 @@ export async function renderScan(force){
   // raw key via the NICHE_META fallback below).
   const present=[...NICHE_ORDER.filter(n=>Array.isArray(niches[n])),
                  ...Object.keys(niches).filter(n=>!NICHE_ORDER.includes(n) && Array.isArray(niches[n]))];
-  // PB4: a legend when any niche carries the pressure (trial) band — rule 4, so the column never reads
-  // as the validated/ranked decision. Absent on an older screen.json without `reachable` (no column).
-  const anyPressure=Object.values(niches).some(a=>Array.isArray(a)&&a.some(r=>r&&r.reachable&&r.reachable.ask!=null));
-  const pLegend=anyPressure
-    ? '<div class="scanplegend">⚗ <b>Pressure (trial)</b> = the demand-balance reachable band (deep bid → bold ask), shown by default. It is <b>un-calibrated</b> (n≈0, retro still scoring) and does <b>not</b> drive the Grade, rank, or sort — those stay on the neutral estimator. The Optimistic column is the conservative reference.</div>'
-    : '';
   // Niches start COLLAPSED (Ben, 2026-07-16) — a <details>/<summary> per niche so the page opens
   // compact; clicking a niche's header expands just that table. Watchlist (below) stays a plain
   // always-open section — it's the small always-shown exception, not one of the collapsible niches.
@@ -433,7 +415,7 @@ export async function renderScan(force){
   const nicheHtml=scan.html||{};
   const tableFor=(hdrs, rows, key)=> (typeof nicheHtml[key]==='string') ? nicheHtml[key] : scanTableHtml(hdrs, rows);
   let html = present.length
-    ? pLegend+present.map(n=>{ const m=NICHE_META[n]||{label:n,hint:''};
+    ? present.map(n=>{ const m=NICHE_META[n]||{label:n,hint:''};
         return '<details class="scansection"><summary class="scantier">'+m.label+(m.hint?' <span class="scanhint">— '+m.hint+'</span>':'')+'</summary>'+tableFor(headers, niches[n], n)+'</details>'; }).join('')
     : '<div class="scannone">— no niches in this scan —</div>';
   // S3: the always-scanned Watchlist section (its own headers carry the extra Note column). Falling

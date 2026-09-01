@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.64
+version: 1.65
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -179,13 +179,12 @@ Quiet (no `--verbose`) — read `pipeline/.cache/last-report/quote.json` per the
 above. Do not pass `--verbose`; this skill builds its reply from the JSON dump's `table` section
 + its own prose, never from raw stdout.
 
-**`--pressure-exit` is OPT-IN, not default (Ben 2026-07-16 — reverted off the 2026-07-15 early-adopt).**
-_(judgment: owner call; mechanic in `js/estimators.mjs` `estimatePair({ pressureExit })`, PB4)_ Run the
-NEUTRAL read (no flag) by default. The trial surfaced real divergence this session — on Water orb the
-pressure list-at (1,672) sat ~9% above the neutral number (1,531) while the item was chopping through a
-false CUT alert — un-calibrated (n≈0) is not just a disclaimer, it moved a real recommendation. Only add
-`--pressure-exit` when Ben explicitly asks to compare or price off it; the retro keeps shadow-logging the
-neutral estimate either way, so nothing about the head-to-head depends on running the flag by default.
+**The PB4 pressure-exit trial is RETIRED (2026-08-30, join-exit-ev.mjs's pre-registered criterion).**
+_(encoded: the trial flag errors loudly; the pressure sell model is deleted from `SELL_TOP_MODELS`)_ Run
+the NEUTRAL read — it is the only sell model. Do not offer the retired trial as a comparison; its ask
+measured a deficit against the incumbents with a CI clear of zero at every sensitivity (the Water-orb
+1,672-vs-1,531 session divergence pointed the same way). The join commands keep scoring its logged
+history; the bid/band pressure reads survive.
 
 That command IS the market read (reads `positions.json` open lots, quotes each held item,
 prints the standard table + Held@/Break-even/Verdict). Never hand-write a fetch. The gates

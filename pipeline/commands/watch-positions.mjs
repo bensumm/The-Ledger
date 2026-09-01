@@ -68,12 +68,12 @@ import { estimatePair, asymEstimate, estConfLean, dayHighFrom5m, SELL_TOP_MODELS
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // RC-S1: the neutral band thesis for the held-lot est/asym shadow (same convention as quote-items --positions)
 import { blindWarningLine } from '../lib/reconstruct/logblind.mjs'; // LH2 restart-blindness header line
 import { reachRelief, askReachFactor } from '../lib/signal/estimators.mjs'; // PLAN-LIQUIDITY-REACH: size/liquidity-conditioned ask-reach relief on a held lot
-import { resolve, loadPipelineConfig } from '../lib/market/compose.mjs';   // PC1 — the flag>config>default precedence resolver (routes --pressure-exit here)
+import { resolve, loadPipelineConfig } from '../lib/market/compose.mjs';   // PC1 — the flag>config>default precedence resolver (routes --est-sell here)
 import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS, marginBudgetNote } from '../lib/thesis/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating; PB-COPILOT-1 margin-reduction budget
 import { cycleTick, cycleNoteLines } from '../lib/timing/cyclewatch.mjs'; // PLAN-OSCILLATION-CYCLE Chunk 4 — the opt-in (--cycle) adaptive cycle-expectation loop (INFORM-ONLY, ALERTS-never-places)
 import { driftExitFrom } from '../../js/forecast.mjs'; // Chunk 1/2 — the drift-adjusted trough/peak prior the cycle loop tracks (REUSED, not forked)
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from '../lib/signal/levels.mjs';   // V2 support/cut-trigger
-import { heldNoteBlock, heldListAt, depthReachClause, formatReachMargin } from '../lib/render/emit.mjs';   // V5 standardized per-held emit contract; DE3 depth/pressure clause
+import { heldNoteBlock, heldListAt, formatReachMargin } from '../lib/render/emit.mjs';   // V5 standardized per-held emit contract
 import { askReachDecay } from '../lib/market/hourly-lmh.mjs';
 import { recoveryRead, recoveryLine, recoveryTrigger } from '../lib/signal/recovery.mjs';   // V6 advisory recover-vs-drop forecast
 import { freedCapital } from '../lib/capital/freed-capital.mjs';   // V6 companion — freed-capital redeploy prompt
@@ -203,21 +203,15 @@ function classify(row) {
 // touched/reached ≠ filled, ~7 days is a small sample — context, never a verdict input.
 const WINDOW_HOURS = 8;
 const WINDOW_DAYS = 7;
-function windowLine(ts1h, { bid = null, ask = null, compact = false, heldQty = null, volDay = null, depth = null, reachable = null } = {}) {
+function windowLine(ts1h, { bid = null, ask = null, compact = false, heldQty = null, volDay = null } = {}) {
   if (!ts1h || !ts1h.length) return null;
   const h = new Date().getHours();
   const wStart = h, wEnd = (h + WINDOW_HOURS) % 24;
   const stats = windowStats(ts1h, { nights: WINDOW_DAYS, wStart, wEnd });
   if (!stats) return null;
   const { lows, his } = stats;
-  // DE3 (PLAN-DEPTH-EXIT): the held-lot depth floor + pressure-reachable clause (whole-day reads the
-  // caller computed off this same ts1h). When the depth read is NON-NULL it SUPERSEDES the Task-2
-  // reliefSuffix (the depth read measures directly what relief only proxied); a COLLAPSED read prints
-  // its reason and keeps the relief fallback. The two-lens framing lives in emit.depthReachClause.
-  const depthOk = depth && depth.price != null;
-  const depthClause = (heldQty != null && (depth || reachable))
-    ? depthReachClause({ ca: depth, rb: reachable, qty: heldQty }) : null;
-  const depthSuffix = depthClause ? ` · ${depthClause}` : '';
+  // (The DE3 depth-floor/pressure-reachable clause is gone — it was gated on the
+  // retired --pressure-exit trial and died with it; the depthExit co-log is untouched.)
   // recency-split guard: a ⚠ marker when the full touched/reached count is concentrated in an
   // older price regime (recent nights don't dip to the bid / reach the ask) — see windowread.mjs
   const stale = (side, level) => recencySplit(stats.days, side, level, RECENT_NIGHTS).staleOptimistic ? ' ⚠stale' : '';
@@ -247,19 +241,18 @@ function windowLine(ts1h, { bid = null, ask = null, compact = false, heldQty = n
   };
   if (compact) { // one short clause for the notes list (same numbers, no label/caveat prose)
     if (bid != null && lows.length) return `bid ${fmtP(bid)} touched ${touchedDays(lows, bid)}/${lows.length}d${stale('bid', bid)}`;
-    if (ask != null && his.length) return `ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d${stale('ask', ask)}${depthOk ? '' : reliefSuffix(ask)}${depthSuffix}`;
-    if (his.length) return `${WINDOW_HOURS}h highs ~75% ${fmtP(quantHigh(his, 0.75))} / ~50% ${fmtP(quantHigh(his, 0.5))}${depthSuffix}`;
-    return depthClause;   // an unlisted lot with no window read still surfaces its depth/pressure read
+    if (ask != null && his.length) return `ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d${stale('ask', ask)}${reliefSuffix(ask)}`;
+    if (his.length) return `${WINDOW_HOURS}h highs ~75% ${fmtP(quantHigh(his, 0.75))} / ~50% ${fmtP(quantHigh(his, 0.5))}`;
+    return null;
   }
   const label = `next ${WINDOW_HOURS}h window (${String(wStart).padStart(2, '0')}–${String(wEnd).padStart(2, '0')}h × last ${stats.days.length}d)`;
   const bits = [];
   if (bid != null && lows.length)
     bits.push(`bid ${fmtP(bid)} touched ${touchedDays(lows, bid)}/${lows.length}d${stale('bid', bid)} · lows ~50% ${fmtP(quantLow(lows, 0.5))} / ~75% ${fmtP(quantLow(lows, 0.75))}`);
   if (ask != null && his.length)
-    bits.push(`ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d${stale('ask', ask)}${depthOk ? '' : reliefSuffix(ask)}`);
+    bits.push(`ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d${stale('ask', ask)}${reliefSuffix(ask)}`);
   if (his.length)
     bits.push(`highs reached ~75% ${fmtP(quantHigh(his, 0.75))} / ~50% ${fmtP(quantHigh(his, 0.5))}`);
-  if (depthClause) bits.push(depthClause);
   if (!bits.length) return null;
   return `${label}: ${bits.join(' · ')}  (touched ≠ filled; small sample)`;
 }
@@ -520,14 +513,14 @@ function heldAlert(it) {
 // display state); the table goes through mdTable via render.mjs (was a hand-built string at :1018);
 // the local quoteCells cell format is UNCHANGED (VZ2b adopts the canonical composite cells).
 export function buildWatchReport({
-  generatedAt, headline, alerts = [], pressureExitWarning = null,
+  generatedAt, headline, alerts = [],
   freedLine = null, blindLine = null,
   brief = false, briefLines = [],
   tableHeaders = null, tableRows = [], notes = [],
   summaryLines = [],
 } = {}) {
   const sections = [{ type: 'headline', text: headline }];
-  const pre = pressureExitWarning ? [pressureExitWarning] : [];
+  const pre = [];
   const post = [];
   if (freedLine) post.push(freedLine);
   if (blindLine) post.push(blindLine);
@@ -554,23 +547,18 @@ async function main() {
   // changes the table, verdict, alert, or any price). INFORM-ONLY; ALERTS-never-places. Without the
   // flag the output is byte-identical to today for every item (no cycle-watch load/save happens).
   const CYCLE = args.includes('--cycle');
-  // PB4 (PLAN-DEPTH-EXIT / PLAN-REACHABILITY-CONSOLIDATION) — the pressure-exit TRIAL flag (opt-in, owner
-  // early-adopt). When set, a held lot's list-at is the pressure-driven reachableBand ask (HONEST, not
-  // BE-floored post PLAN-ESTIMATOR-HONEST-SELL — a sub-BE ask is the cut price, shown beside break-even;
-  // declared exit still wins); the depth floor + reachable clause still renders beside it. The
-  // retro co-log stays on the NEUTRAL estimate (unbiased). Console-only; no screen.json/app path here.
-  // PC3: routed through the shared flag>config>default resolver as a NAMED sell-top model
-  // (--est-sell=reach-fold|pressure, the `=value` form since targets are bare positionals); `--pressure-exit`
-  // stays the legacy sugar for `--est-sell=pressure` (explicit --est-sell wins). Absent flag+config ⇒
-  // 'reach-fold'. PRESSURE_EXIT stays the boolean this script branches on, DERIVED from the active model.
-  if (args.includes('--est-sell')) { console.error(`! --est-sell takes the =value form (--est-sell=pressure); a space-separated value is swallowed as an item target.`); process.exit(1); }
+  // PC3 — the SELL-TOP MODEL selection, routed through the shared flag>config>default resolver
+  // (--est-sell=<name>, the `=value` form since targets are bare positionals). The PB4 pressure trial
+  // (`--pressure-exit`, `--est-sell=pressure`) is RETIRED — join-exit-ev.mjs's
+  // pre-registered criterion; a retired name fails registry validation below.
+  if (args.some(a => a === '--pressure-exit' || a.startsWith('--pressure-exit='))) { console.error(`! --pressure-exit was RETIRED 2026-08-30 (join-exit-ev.mjs's pre-registered criterion: the pressure exit ask lost to the incumbents). The neutral reach-fold prices the sell leg.`); process.exit(1); }
+  if (args.includes('--est-sell')) { console.error(`! --est-sell takes the =value form (--est-sell=reach-fold); a space-separated value is swallowed as an item target.`); process.exit(1); }
   const estSellArg = args.find(a => a.startsWith('--est-sell='));
   const SELL_MODEL = resolve('sellModel', {
-    flag: estSellArg ? estSellArg.slice('--est-sell='.length).toLowerCase() : (args.includes('--pressure-exit') ? 'pressure' : undefined),
+    flag: estSellArg ? estSellArg.slice('--est-sell='.length).toLowerCase() : undefined,
     config: loadPipelineConfig().sellModel, fallback: 'reach-fold',
   }).active;
-  if (!SELL_TOP_MODELS[SELL_MODEL]) { console.error(`! unknown --est-sell. Use one of: ${Object.keys(SELL_TOP_MODELS).join(', ')}.`); process.exit(1); }
-  const PRESSURE_EXIT = SELL_MODEL === 'pressure';
+  if (!SELL_TOP_MODELS[SELL_MODEL]) { console.error(`! unknown --est-sell. Use one of: ${Object.keys(SELL_TOP_MODELS).join(', ')}. ('pressure' was retired from exit pricing 2026-08-30 — join-exit-ev.mjs.)`); process.exit(1); }
   // AO1 (default flipped post-review — see quote-items.mjs header for why): --verbose opts INTO the
   // markdown stdout; the report object is ALWAYS written to the last-report dump either way, and quiet
   // (the default) is what forces the JSON dump to be the actual read rather than an optional extra.
@@ -730,12 +718,12 @@ async function main() {
   for (const it of held) {
     it.gate = { escalate: false, armed: false, reason: null };
     it._deltas = null; it._support = null; it._cutTrigger = null; it._thesis = null; it._pathCtx = null; it._display = null;
-    it._depthExit = null; it._reachable = null; it._estShadow = null; it._asymShadow = null; it._estPressure = null; it._windowExit = null; it._reachRead = null;
+    it._depthExit = null; it._reachable = null; it._estShadow = null; it._asymShadow = null; it._windowExit = null; it._reachRead = null;
     it._cycle = null;   // Chunk 4 (--cycle): the per-item cycle-expectation tick result (null unless --cycle)
     // DE3 (PLAN-DEPTH-EXIT): the held lot's WHOLE-DAY depth floor (clearableAsk — what this qty can
     // book at, the plan's v1 whole-day decision) + pressure-driven reachable band (reachableBand),
-    // both off the ALREADY-fetched ts1h (zero new fetch). Inform-only: they feed the window-line
-    // clause + the suggestions.jsonl shadow fields, never a verdict/alert/price. Guarded separately
+    // both off the ALREADY-fetched ts1h (zero new fetch). Inform-only: they feed the
+    // suggestions.jsonl shadow fields, never a verdict/alert/price. Guarded separately
     // from the gating try so a depth failure can't cost the conviction read (and vice versa).
     // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION): the same block ALSO computes the two OLDER reachability
     // estimators — the reachRelief-family estSell (estimatePair) and the fixed-quantile asym pair —
@@ -762,14 +750,10 @@ async function main() {
           bidReach, askReach,
           diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
           asym: ap, dayHigh: dayHighFrom5m(it.ts5m),
-          intendedUnits: it.qty, reachable: it._reachable,   // reachable ignored unless pressureExit is on
+          intendedUnits: it.qty,
         };
         // NEUTRAL shadow (declaredExit:null → the model's intrinsic ask) — the retro co-log scores this.
         it._estShadow = estimatePair(FLIP_NICHES.band, it.row, { ...estBase, declaredExit: null });
-        // PB4: the DISPLAY pressure est (only when the trial flag is on) — declared exit still wins the
-        // sell leg (operator plan), so it passes the REAL declared exit; drives the held list-at below.
-        if (PRESSURE_EXIT)
-          it._estPressure = estimatePair(FLIP_NICHES.band, it.row, { ...estBase, declaredExit: thesisFor(holdThesisStore, it.id)?.exitPrice ?? null }, { sellModel: 'pressure' });
         it._asymShadow = ap ? asymEstimate(FLIP_NICHES.band, it.row, ap) : null;
         // WC1 (PLAN-WINDOW-CLEAR-OUTCOMES): the window-clear ask-RUNG forward record for a BIG-TICKET held
         // lot (lotValue ≥ BIG_TICKET_GP or a watchlist member — the same force-include the incidental filter
@@ -933,11 +917,11 @@ async function main() {
   // pattern: present only when a read was computed; normal rows byte-identical). depthExit ALWAYS
   // carries either the booked ask or the collapse REASON + the liquidity class — that pair is exactly
   // what F1 needs to measure whether the flat ×4 competition bar systematically nulls a class we'd
-  // want to price (the predicted liquidity bias). reachable carries the PB pressure-priced band so
-  // the retro can score it against realized fills beside the depth floor and the reach/relief lines.
-  // RC-S1 — all five competing exit estimators co-log on ONE held row via the SHARED reshapers
+  // want to price (the predicted liquidity bias). reachable carries the pressure band's bid/band record
+  // (its ASK leg no longer logs — the pressure exit retirement).
+  // RC-S1 — the exit-estimator co-log lands on ONE held row via the SHARED reshapers
   // (lib/suggestlog.mjs — one home, no drift across watch/screen/quote): depthExit (depth) · reachable
-  // (pressure) · estSell (reachRelief) · asym (fixed-quantile); reach rides estConfidence.
+  // (bid/band) · estSell (reachRelief) · asym (fixed-quantile); reach rides estConfidence.
   logSuggestions('watch', { mode: null, params: { targetsOnly: TARGETS_ONLY } }, [
     ...held.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: heldVerdict(it), posture: wPosture,
       depthExit: depthExitShadow(it._depthExit, { qty: it.qty, volDay: it.row.volDay }), reachable: reachableShadow(it._reachable),
@@ -986,7 +970,6 @@ async function main() {
   // ONCE via renderReport at pass end — byte-identical to the prior console.log sequence. Each piece
   // below is COLLECTED into a local instead of printed inline; the report is assembled + rendered last.
   const headlineText = `# watch ${stamp} — ${alerts.length ? `⚠ ${alerts.length} ALERT${alerts.length > 1 ? 'S' : ''}` : 'all quiet'} · ${counts.join(' · ') || 'empty board'}`;
-  const pressureExitWarning = PRESSURE_EXIT ? '⚠ --pressure-exit: held list-at uses the UN-CALIBRATED pressure model (TRIAL; retro still scoring — not validated). The depth floor renders beside as the conservative reference.' : null;
   let freedLine = null, blindLine = null;
   // V6 COMPANION — capital awareness: a SELL that FREED ≥ threshold since last pass (a held lot's
   // qty dropped, detected via V1's prior-pass state) surfaces a redeploy prompt. Surface-ONLY — it
@@ -1058,8 +1041,7 @@ async function main() {
     // guaranteed pieces (verdict, list-at, break-even, fill-progress) are computed OUTSIDE the
     // try so a context-field failure never drops the load-bearing sell line; the optional context
     // fields (V1 delta / V2 tripwire / V4 conviction) are computed inside, defaulting to null.
-    const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true, heldQty: it.qty, volDay: it.row.volDay,
-      depth: PRESSURE_EXIT ? it._depthExit : null, reachable: PRESSURE_EXIT ? it._reachable : null });   // DE3: the whole two-lens clause is flag-gated, matching both quote-items sites — the depth floor must never render alone (emit.mjs)
+    const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true, heldQty: it.qty, volDay: it.row.volDay });
     const mvHeld = momVerdict(row, be, lotValue, ts5m, undefined, lotCtxOf(it));
     const verdictText = firstSentence(heldAction(row, be, lotValue, ts5m, mvHeld, it._display));
     let conviction = null, delta = null, tripwire = null, recovery = null;
@@ -1093,18 +1075,13 @@ async function main() {
       else if (it.gate && it.gate.armed && it.gate.reason === 'structural-armed')
         conviction = `approaching cut-trigger — armed: live sell ${fmtP(row.quickSell)} below support ${fmtP(it._support)}; headline if it breaks the cut-trigger ${fmtP(Math.round(it._cutTrigger))} or holds below support ~${persistMin}m.`;
     } catch { /* state/levels are observability only — never block a watch pass */ }
-    // PB4: under the pressure-exit trial, the list-at is the pressure-driven est-sell (declared-exit-
-    // respecting — all in _estPressure); else the shared momVerdict list-at (unchanged). The depth floor
-    // still renders in the window clause beside it (depthReachClause — the reference).
     // PLAN-ESTIMATOR-HONEST-SELL E1: estSell is no longer BE-clamped in the shell — it stays the HONEST,
     // possibly-sub-BE number, and we show it AS-IS here (no BE floor). A sub-BE list-at is NOT a bug: it's
     // the damage-control / cut price (the same doctrine momVerdict's own CUT/CUT-CANDIDATE uses — listAt =
     // instabuy, deliberately below break-even to free stuck capital; heldListAt passes it through
     // unfloored). The note block renders `list @ X · break-even Y` (line below), so a sub-BE X is
     // self-labeling — the operator sees the cut price beside its break-even, never a hidden loss.
-    const heldLa = (PRESSURE_EXIT && it._estPressure && it._estPressure.confidence.pressureExit)
-      ? it._estPressure.estSell
-      : heldListAt(row, be, mvHeld);
+    const heldLa = heldListAt(row, be, mvHeld);
     // V2-P4b: the persistence-gated dominant-path line (shared renderPathLine) — decision support
     // rendered ALONGSIDE the verdict in the note block; a CONFIRMED migration surfaces prominently
     // here as `path MIGRATED <enteredUnder> → <current>` (never a new alert class).
@@ -1283,7 +1260,7 @@ async function main() {
   // VZ1: assemble the report object + render it ONCE — the ONE emission point (byte-identical to the
   // prior console.log sequence, pinned by pipeline/test/render.test.mjs).
   const report = buildWatchReport({
-    generatedAt: stamp, headline: headlineText, alerts, pressureExitWarning, freedLine, blindLine,
+    generatedAt: stamp, headline: headlineText, alerts, freedLine, blindLine,
     brief: BRIEF, briefLines,
     tableHeaders: ['Verdict', 'Item', 'Position', 'Quick', 'Optimistic', 'Vol/d', 'Mom', 'Regime', 'Break-even'],
     tableRows, notes, summaryLines,

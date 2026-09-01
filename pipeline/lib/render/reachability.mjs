@@ -19,7 +19,10 @@ const fin = v => Number.isFinite(v) ? v : null;
 
 /* The contenders plus two reference lines, one registry — which logged field is which estimator lives
  * only here. quickSell is the live market print (the true null); optSell is the tool's OWN band edge, so
- * beating it beats a sibling, not an outside check. */
+ * beating it beats a sibling, not an outside check.
+ * `pressure` is a HISTORICAL READER: retired from exit pricing 2026-08-30 (join-exit-ev.mjs's
+ * pre-registered criterion), its `reachable.ask` co-log stopped that day — the key stays so every
+ * pre-retirement suggestions.jsonl row still parses and scores; new rows read null here. */
 export const REACH_ESTIMATORS = Object.freeze([
   { key: 'pressure',    baseline: false, ask: s => fin(s && s.reachable ? s.reachable.ask : null) },
   { key: 'reachFold',   baseline: false, ask: s => fin(s && !reliefFired(s) ? s.estSell : null) },

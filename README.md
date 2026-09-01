@@ -139,9 +139,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   pairs, so the specified isotonic pass was deleted rather than shipped inert); the H axis DOES invert
   because its origin set shrinks with H (155 violations over 250 items, max 12.1pp) and keeps a running
   max. **REACH IS NOT FILL** — queue position is invisible in bucketed aggregates, so p bounds P(fill)
-  from ABOVE, and every consumer must say so. What chunk 1 MEASURED — including that
+  from ABOVE **as a working bound, not a theorem**: the folded plan's §6.1 RETRACTED the theorem
+  reading — the 1h-average instrument pushes p the other way on liquid items, so the net error's
+  direction is item-dependent there (read it off `grainBias`, never assume it) — and every consumer
+  must say so. What chunk 1 MEASURED — including that
   PLAN-REACH-SURFACE §1.5's taxonomy premise did not survive and its ordering inverted — is §1b of
-  that plan, the ONE home; don't restate it here),
+  the folded plan (`git show bdea911:plans/PLAN-REACH-SURFACE.md`, folded into PLAN.md 2026-08-30);
+  don't restate it here),
   `exit-ev.mjs` (PLAN-REACH-SURFACE chunk 2 — the inversions that turn a reach surface into a PRICE.
   `evCurve(surface,H,{bailNet,delayCost})` scores every level of one horizon at
   `EV = p·net(ask) + (1−p)·(net(bail) − delayCost)` (tax from `money-math.js`, the ONE definition);
@@ -168,7 +172,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   a PLATEAU, not a point** — adjacent cells sit within a few basis points of refHigh of each other,
   decided off a p known to a few pp, so a consumer must present a band and never a false point;
   `read-exit-surface.mjs` owns that. The chunk-2 stop-or-go gate and what it measured live in
-  `plans/PLAN-REACH-SURFACE.md` §1c, the ONE home (don't restate its numbers here — they were, once).
+  the folded plan's §1c — PLAN-REACH-SURFACE folded into PLAN.md 2026-08-30; full text
+  `git show bdea911:plans/PLAN-REACH-SURFACE.md` (don't restate its numbers here — they were, once).
   The one rule to carry out of it: **`pTarget` must never pick a price.** It answers "how long",
   never "how much". ⚠ **And chunk 4 has now measured what `askStar` is worth**: scored against realized
   net gp over the archive it LOSES to a deployed incumbent, decisively enough to fire the plan's
@@ -277,7 +282,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   sets each side's headroom `base ± band·φ(±s)·reliability` off the recent central daily level (RC1 reused)
   + the daily-high/low IQR; a thin-VOLUME book collapses to the smoothed center via the sample-reliability
   guard (no peak-cap); the `PRESSURE_*` constants are exported n≈0 placeholders and the Soul-rune/sell-heavy
-  reasonableness pins live in the test; it is the `--est-sell pressure` sell-model's price source. **The
+  reasonableness pins live in the test; its surviving consumers are the co-log shadow (bid/band), the
+  `read-window-range.mjs --pressure` inspector and reverse-flip's `reverseListBand` — the pressure SELL
+  model it once priced was RETIRED 2026-08-30 (join-exit-ev.mjs's criterion; CHANGELOG 0.76.0). **The
   Extension-B `hourlyPressure`/`demandRegime` per-hour demand-cycle classifier was REMOVED 2026-07-22,
   PLAN-REMOVE-DEPTH-PRESSURE-READS — git-revivable**) + **`trajectoryRead`** (2026-07-21, the fang under-read fix — the shared multi-day SHAPE read
   over a `windowStats().days` series: classifies rising/falling/oscillating/based/elevated + the window
@@ -837,7 +844,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `pipeline/lib/market/compose.mjs` `resolve()` precedence chain (**CLI flag > this file > hardcoded fallback**).
   Its ABSENCE is the default state and produces byte-identical behavior to the pre-PC1 inline defaults;
   do not commit one just to have it. Read (once, cached) by `loadPipelineConfig()`. Minimal shape:
-  `{ "mode": "band", "volSource": "rolling", "pressureExit": false, "asym": false, "phaseRescue": false }`
+  `{ "mode": "band", "volSource": "rolling", "sellModel": "reach-fold", "asym": false, "phaseRescue": false }`
   (any subset — an unset key falls through to the hardcoded fallback). Consumer: `compose.mjs`, via
   `screen-flip-niches.mjs`/`quote-items.mjs`/`watch-positions.mjs`.
 - `suggestions.jsonl` — tracked, append-only suggestions ledger (O1): every emitted
@@ -857,9 +864,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   audit-only, joined to fills by `analyze.mjs` §5 (`askHeadroomAudit`) for F1. A `watch` held row may
   carry the lean **`depthExit`**/**`reachable`** pair (PLAN-DEPTH-EXIT DE3, 2026-07-15): the depth-floor
   read incl. its collapse REASON + liquidity class, and the pressure-driven reachable band. RC-S1/RC-S2
-  (PLAN-REACHABILITY-CONSOLIDATION) co-log all five competing exit estimators — reach (`estConfidence`) ·
-  reachRelief (**`estBuy`/`estSell`/`estConfidence`**) · **`asym`** · depth (**`depthExit`**) · pressure
-  (**`reachable`**) — for the F1 head-to-head against the realized `sellEach`. The head-to-head spans HELD
+  (PLAN-REACHABILITY-CONSOLIDATION) co-log the competing exit estimators — reach (`estConfidence`) ·
+  reachRelief (**`estBuy`/`estSell`/`estConfidence`**) · **`asym`** · depth (**`depthExit`**) — for the F1
+  head-to-head against the realized `sellEach`; pressure's **`reachable`** rode beside them until its ASK
+  leg stopped logging with the 2026-08-30 retirement (the bid/band record continues, historical rows still
+  score). The head-to-head spans HELD
   (watch, quote `--positions`) AND DISCOVERY (screen survivors, quote per-item): `reachable` rides every row
   with an in-hand 1h series; `depthExit` rides only held rows (real qty in hand — the DE7 fetch-budget rule
   keeps depth off the screen). All three shadow shapes come from ONE reshaper home
@@ -970,13 +979,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   only and are not backed up by the repo — only the active month (`suggestions.jsonl`) is published.
 - `screen.json` — the published opportunity screen the app's Scan tab renders (written by
   `screen-flip-niches.mjs --publish` to the REPO ROOT — the R3-rename REPO_ROOT regression that briefly
-  wrote it to `pipeline/` is fixed). Each flip-niche row is `{ id, cells }` PLUS (PB4 app-display, 2026-07-15)
-  an ADDITIVE `reachable` band `{ ask, bid, pressure, reliability, bandLow, bandHigh }` (`reachableShadow`).
-  The `cells`/Grade/rank/sort are the NEUTRAL F1-gated decision surface (unchanged); `reachable` is
-  display-only data the app's Scan tab renders as a `Pressure (trial)` column by default (`js/ui.js`
-  `scanPressureCell`/`scanTableHtml` + the `.scanplegend` legend; labeled un-calibrated, never a
-  rank/grade input). The console `--pressure-exit` rerank/reprice TRIAL is a SEPARATE mechanism (refused
-  under `--publish`, so it never reaches `screen.json`). Also carries a top-level `html` field
+  wrote it to `pipeline/` is fixed). Each flip-niche row is `{ id, cells }` — the NEUTRAL F1-gated
+  decision surface. (The PB4 per-row `reachable` band and the app's default trial pressure column it
+  fed were RETIRED 2026-08-30 with the pressure exit estimator — join-exit-ev.mjs's criterion, CHANGELOG
+  0.76.0; a pre-retirement screen.json still renders, minus that column.) Also carries a top-level `html` field
   (2026-07-16, PLAN-VIZ-LAYER Stage-2) — one pre-rendered HTML string per flip-niche + watchlist
   (`pipeline/lib/render/render.mjs` `renderHtmlTable`, the server-side twin of `js/ui.js`'s client-side
   `scanTableHtml`), ADDITIVE beside `cells` (never a replacement); the app prefers `html[key]` when
@@ -1184,9 +1190,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `Paths` block — so it can't disagree with watch-positions.mjs; Proposal C (2026-07-12) adds the INFORM-ONLY
     stale declared-exit flag per held lot (`lib/staleexit.mjs` over a targeted TTL-cached 1h fetch —
     declared-exit lots only); behavior detail in CLAUDE.md "Script facts".
-    **`--pressure-exit`** (PB4 opt-in TRIAL, 2026-07-15) makes Est. buy/sell the pressure-driven
-    `reachableBand` legs (per-item cells + a `--positions` inform line, with the depth floor beside);
-    LOUD banner, retro co-log stays neutral, console-only — no screen.json. RF4 (2026-07-25) appends an
+    (The PB4 pressure-exit trial was RETIRED 2026-08-30 — join-exit-ev.mjs's pre-registered
+    criterion; the retired trial flag now errors loudly instead of silently running the neutral model —
+    every spelling incl. `=value`, pinned across all three CLIs by `pipeline/test/retired-flag.test.mjs`.) RF4 (2026-07-25) appends an
     INFORM-ONLY "Reverse-flip pending" block after the held-lots table — the PURE `reverseFlipPositionLines`
     reads `reverse-flip-state.json` directly, reusing `fmt`/`fmtP` + the in-hand held rows (no new fetch);
     `[]` on an empty store → no section → byte-identical positions report), `screen-flip-niches.mjs`
@@ -1194,9 +1200,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `Probes` column per flip-niche; P6c re-runs an empty flip-niche beneath the floor (`subFloorFallback` in
     `lib/gatecandidates.mjs`, honestly labeled + grade-capped + stdout-only, never in `screen.json`; the
     two-sided gate and thesis edge are never relaxed).
-    **`--pressure-exit`** (PB4 opt-in TRIAL) drives the console Est. buy/sell + a pressure-net RERANK off
-    `reachableBand`; **REFUSED under `--publish`** so the deployed app / `screen.json` stays F1-gated on the
-    neutral estimator; LOUD banner, retro co-log neutral, console-only).
+    (The PB4 pressure-exit trial + its pressure-net console rerank were RETIRED 2026-08-30 —
+    join-exit-ev.mjs's criterion; the retired trial flag errors loudly, and `--publish` still refuses any
+    non-neutral `--est-sell` model.)
     **`--archive-regime`** (AF5b, PLAN-ARCHIVE-FIRST-FUNNEL — opt-in, OFF by default) sources the 6h REGIME
     series (`regimeDrift`'s falling/rising gate + `phase()`'s trajectory shape) from the LOCAL SQLite
     archive via `lib/market/archive-series.mjs`'s `sixHourReader`/`archive6h` instead of a per-item
@@ -1221,18 +1227,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     Δ/structural-support lines (`lib/watchstate.mjs`/`levels.mjs`, persisting `.cache/watch-state.json`),
     the V5 EMIT-CONTRACT note block (`lib/emit.mjs`), and the shared held-verdict + dominant-path lines
     (`renderHeldVerdict`/`pathsStage`, `lib/item-context.mjs`). DE3 (PLAN-DEPTH-EXIT, 2026-07-15): each
-    held lot's window clause now carries the whole-day depth FLOOR (`clearableAsk` — supersedes the
-    relief note when non-null; a collapsed read prints its REASON) beside the pressure-reachable band
-    (`reachableBand`), formatted by `lib/emit.mjs depthReachClause` and shadow-logged as the lean
-    `depthExit`/`reachable` ledger fields (inform-only — no verdict/price/grade input). PB4
-    **`--pressure-exit`** (opt-in TRIAL, 2026-07-15): under the flag the held list-at becomes the
-    pressure-driven est-sell (HONEST post PLAN-ESTIMATOR-HONEST-SELL — a sub-BE ask is the cut/damage-control
-    price, shown beside break-even, not floored; declared exit still wins), depth floor still beside; LOUD banner,
-    the retro co-log stays NEUTRAL (logs the intrinsic estimate, not the pressure display), console-only. RC-S1
+    held lot still computes the whole-day depth FLOOR (`clearableAsk`) + the pressure band
+    (`reachableBand`) and shadow-logs them as the lean `depthExit`/`reachable` ledger fields
+    (inform-only; `reachable` is bid/band-only since the retirement). The DE3 two-lens render clause
+    (`depthReachClause`) and the PB4 pressure-exit held list-at trial were RETIRED 2026-08-30 with
+    the pressure exit estimator — join-exit-ev.mjs's criterion; the retired trial flag errors loudly. RC-S1
     (PLAN-REACHABILITY-CONSOLIDATION, 2026-07-15): held rows ALSO co-log the two OLDER exit estimators —
     the reachRelief-family `estBuy`/`estSell`/`estConfidence` (`estimatePair`, `declaredExit` nulled so the
-    scored number is the model's intrinsic ask) + the fixed-quantile `asym` pair — so all FIVE competing
-    exit-price estimators ride ONE row for the F1 head-to-head against the realized sell; zero new fetch,
+    scored number is the model's intrinsic ask) + the fixed-quantile `asym` pair — so the competing
+    exit-price estimators ride ONE row for the F1 head-to-head against the realized sell (pressure's
+    retired ask no longer among them); zero new fetch,
     inform-only. The ONE WRITER of the watch-state path fields
     and of `.guide-history.jsonl`; each pass appends the passive Tier-1 archive snapshot. Full output
     contract: `pipeline/MONITORING.md`),
@@ -1634,7 +1638,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `surface.coveredDays` — that field is pinned to `nights`, so a floor against it is a tautology
     that fires zero times at the default and refuses every item below it. `--json` emits the report
     objects and nothing else. **The guards are reached, not decorative, but the RATE is not a fixed
-    number** — see `plans/PLAN-REACH-SURFACE.md` §5 chunk 3, the ONE home; don't restate it here. **INFORM-ONLY: gates nothing, prices no offer, writes only
+    number** — two independent sweeps disagreed by roughly 2x on every rate because the archive moves
+    under the measurement, so the durable claim is the SHAPE (a material minority), never digits
+    (full story: the folded plan, `git show bdea911:plans/PLAN-REACH-SURFACE.md` §5 chunk 3). **INFORM-ONLY: gates nothing, prices no offer, writes only
     `pipeline/.cache/last-report/exit-surface.json`.** `MIN_COVERED_DAYS`/`PLATEAU_TOL_FRAC`/
     `P_STAR_FLOOR`/`delayCost`/`pTarget` are all PLACEHOLDER and printed beside the numbers they moved.
     Chunk 4's `join-exit-ev.mjs` HAS now scored it, and the answer was NO — read that entry before
@@ -1689,9 +1695,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     deployed depth read.
     **The pre-registered RETIREMENT criterion is applied, not argued** — deficit CI clear of zero at
     the decisive spec plus the same sign in ≥2 of 3 sensitivity horizons, reference lines excluded,
-    unbounded reconstructions blocked, an era sign flip blocking. It NOMINATES; **chunk 8 executes, and
-    a nomination is not a retirement.** Bid-side consumers survive either way — this scores the ASK leg
-    only. Run the command for the current nomination list rather than quoting one from here.
+    unbounded reconstructions blocked, an era sign flip blocking. It NOMINATES; executing one is a
+    separate reviewed change — and **`pressure`'s ASK-leg nomination has been carried out (2026-08-30,
+    CHANGELOG 0.76.0)**: sell model deleted, trial flags erroring, app column removed, `reachable.ask`
+    no longer co-logged, while the bid/band reads and every logged historical row stay scoreable. A
+    re-run still re-applies the criterion and annotates that row "already EXECUTED 2026-08-30"
+    (`EXECUTED_RETIREMENTS`) so a fresh NOMINATED line never reads as an open action item. Bid-side
+    consumers survive either way — this scores the ASK leg only. Run the command for the current
+    nomination list rather than quoting one from here.
     **THE CRITERION TRIED TO NOMINATE THE SHIPPED DEFAULT, AND A GUARD STOPPED IT — that exchange is
     the most useful thing this chunk produced.** As pre-registered, `reachFold` qualified: a deficit
     against the leader whose sign repeated across horizons. But that deficit is SMALLER than the
@@ -1699,8 +1710,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     earlier — so it is not a measurement, and a nomination under the floor is now BLOCKED in code
     rather than hedged in prose. Nothing may be retired on a gap narrower than the noise in the
     instrument that measured it. The same guard, plus a row floor on what counts as a bounded
-    reconstruction, leaves exactly one live nomination; run the command for it rather than quoting
-    one from here.
+    reconstruction, left exactly one live nomination — the `pressure` retirement executed above;
+    `reachFold` and `depth` stay BLOCKED.
     **Three sensitivities are load-bearing and two of them moved something.** (1) The `delayCost` sweep
     turns out to be an ALGEBRAIC IDENTITY, not a robustness check: a miss scores an edge of exactly
     zero, so a contender whose ask does not move with the cost has mean edge `edge(0) + cost × reach`
@@ -1721,7 +1732,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `refHigh` is a median of PRINTED daily highs, so an ask at the reference collects exact-equality
     matches — over 12pp of the z=0 reach rate, vanishing a half-basis-point higher. It inflates whatever
     prices at z≈0, which is where `askStar+fold`'s median sits, so the null branch is if anything
-    understated. `plans/PLAN-REACH-SURFACE.md` chunk 4 is the ONE home for it.
+    understated. `join-exit-ev.mjs`'s header is the ONE home for it (re-homed at the plan fold).
     NO LOOK-AHEAD is the load-bearing invariant, it is mutation-verified, and it is an hour finer than
     it looks: an archive bucket is stamped with the START of its period, so the bucket AT an origin is
     future data. (The store-lag does NOT establish that — the fetcher only ever requests the last
@@ -2124,10 +2135,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `shadowModelsOf(registry)` (pools a registry's `defaultShadow:true` model names for the pool) + `loadPipelineConfig()`
     (the OPTIONAL config, read once + cached, absent ⇒ `{}` ⇒ every default stands byte-identically) + the ONE
     shared `refusePublishIfNonNeutral({publish, publishExplicit, checks})` guard (replaces the per-flag inline
-    `--asym`/`--pressure-exit` publish-refusal copies in `screen-flip-niches.mjs`). No fetch/clock; pure of side
+    publish-refusal copies in `screen-flip-niches.mjs`). No fetch/clock; pure of side
     effects on import (config read is lazy). Consumers: `screen-flip-niches.mjs` (mode/vol-source/asym/phase-rescue/
     `sellModel` via `--est-sell` + the `modes` config array driving `--mode all`'s flip-niche set), `quote-items.mjs` +
-    `watch-positions.mjs` (`sellModel` via `--est-sell=…`, `--pressure-exit` = legacy sugar). Pinned by `compose.test.mjs`),
+    `watch-positions.mjs` (`sellModel` via `--est-sell=…`; the retired pressure-exit sugar now errors). Pinned by `compose.test.mjs`),
     `render.mjs` (PLAN-VIZ-LAYER — the ONE render layer between the pipeline's DATA and the
     reader: a script builds a plain JSON-serializable **report object** `{kind, generatedAt, sections:[…]}`
     beside its compute, and `renderReport()` turns it into markdown/console text, DELEGATING to the existing
@@ -2152,7 +2163,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     rank's pFill (G4 dropped `momFactor`'s duplicate branch). The four grade caps (thin→phase-basing→
     sub-floor→reach) live in ONE `applyGradeCaps` chain inside `rateItem` (G1), which also returns the R7
     `cappedBy` binder. A `(thin)` CONFIDENCE MARKER (`CONF_THIN_N_FLOOR`, G6/O5) annotates the letter when
-    the pFill reach sample `n` is thin — marker only, never moves score/grade/order), `estimators.mjs` (**PC2, 2026-07-17 — now the BARREL: a pure `export *` re-export of the four split files under `js/estimators/`, so the app (`js/market.js`) + pipeline-shim (`pipeline/lib/signal/estimators.mjs`) import paths are unchanged. The split: `js/estimators/families.mjs` = the P(fill)/TTF family estimators (`pFillIntraday`/`pFillValue`/`pFillRising`, `ttfIntraday`/`ttfValue`/`ttfRising`, `churnLapUnits`) + the `ESTIMATORS` registry/`estimatorFor`, `quotedPair`, `rankScore`, `estimateRank`, `fmtTtf`, the priors block + the module's founding header; `js/estimators/reach.mjs` = the reach-conditioning helpers `reachRelief` (+ its `REACH_RELIEF_*`/`REACH_DEBIAS_MAX_FRAC` constants), `dayHighFrom5m`, `reachFraction`, `askReachFactor`, `asymEstimate`. **RB-3 (PLAN-RECENCY-BASIS, 2026-08-04) added `reachFraction(askReach, { prefer })` — the ONE recency-basis rule**: `prefer:'full'` (the default) returns `reachedDays/nDays`; `prefer:'recent'` returns `recentHit/recentDays` and degrades to the full window when no recent counts exist. It replaced three independent copies of that conditional (`estimatePair`'s `reachRead`, the screen's `digestReachFrac` — RB-5, and an inline fraction inside `askReachFactor`). `askReachFactor(askReach, relief, { prefer })` takes the basis as an explicit OPT-IN defaulting to `'full'`, so every pre-existing call stays byte-identical; **BASIS FLIP 2026-08-09**: `estimatePair`'s `pFill` AND the fold price it sits beside moved back to `'full'` (recent-3 is four-valued at n=3 — the resolution argument, which stands on its own; the forward-scoring result once quoted here is the UNREPRODUCIBLE prior this same file flags in the `join-reach-basis.mjs` entry, so its digits are not repeated), so display and RANK now agree and RB-3's deliberate display/rank split is retired. Still on `'recent'`, and now the only two: the `--digest` reach column and `watch-positions`' size-relief note — **no longer a flagged split: MEASURED 2026-08-13 by `join-reach-basis.mjs`, which found recent-3 the cheaper basis for the digest column (M(1)=+2.3pp, CI [0.8,3.8]) and left it in place; the same run found the `sell unreliable` TAG loses to not gating at all below r≈1.29, which is the finding that matters** (see this file's `join-reach-basis.mjs` entry); `js/estimators/pair.mjs` = the reconciliation price estimator `entryDoctrine` + `estimatePair` (PC3: now the ordering SHELL/spine ONLY — it preps shared inputs, delegates the buy+sell PROPOSAL to a named `SELL_TOP_MODELS` entry, then applies the non-skippable floors: declared-exit anchor → nudge → ordering clamps → BE floor. **PLAN-ESTIMATOR-HONEST-SELL E1 (2026-07-22): the BE floor is NO LONGER an overwrite** — `estSell` keeps the model's honest (possibly-sub-BE) number, `estSellFloorBind` carries the break-even as a display fact (killing the false `+1 (BE X)`), and the shell adds `pFill` (reuses `askReachFactor` — the same function the rank calls, never forked; on the FULL-WINDOW basis since 2026-08-09 so it matches the full-window fold price beside it — and, unlike under RB-3, the rank's own P too) + `estSellForward`/`forwardPeak`/`forwardTrough`/`forwardConfidence`/`holdHorizonDays` (the `driftExitFrom` "list at X" forward projection off `extra.forward`, degrade-safe/zero-fetch — hence pair.mjs now imports `js/forecast.mjs`; **its `fwdCtx` passes `liveLo: quickBuy` (the instasell) / `liveHi: quickSell` (the instabuy), matching every other call site and `forecast.mjs`’s own `@param` — it was SWAPPED here until 0.74.9. The two trend-only branches are MUTUALLY EXCLUSIVE (`trendPerHour > 0` vs `< 0`), so exactly ONE side moved per item — a faller's exit peak one spread low, a riser's entry trough one spread high — never both, and `forwardTrough` is shadow-log-only, so only the peak half ever reached an operator**); PP2 adds the DISPLAY-ONLY `patient` field (`{bidTxt, askTxt, net}`, built from the new `extra.asymEst`/`extra.asymFill` inputs and null without both) — it is NOT a rev3 reversal: rev3 bars the deep bid from `estBuy` because that is an expected-price number, and a render field is not one, so `estBuy`/`estSell`/`estNet` are untouched; re-exports the `EST_REACH_SAT_FRAC`/`EST_BLEND_EQUAL_WEIGHTS`/`PRESSURE_EXIT_REL_FULL` constants + `SELL_TOP_MODELS` for the barrel); `js/estimators/sell-models/` = the PC3 sell-top model registry — `index.mjs` (`SELL_TOP_MODELS` keyed by name, `Object.freeze`d), `reach-fold.mjs` (the neutral fold — DEFAULT + always-on shadow, `defaultShadow:true`; owns the SELL-MODEL CONTRACT header + `EST_REACH_SAT_FRAC`/`EST_BLEND_EQUAL_WEIGHTS`), `pressure.mjs` (the PB4 pressure-exit trial, `defaultShadow:false`; owns `PRESSURE_EXIT_REL_FULL`; degrades to reach-fold when no reachable band). A new sell-top variant (later `safe-quantile`, PLAN-REACH-CALIBRATION AC3) is a file + one registry line, NOT a boolean threading through `estimatePair`; `js/estimators/cells.mjs` = the render/shadow projections `EST_HEADERS`, `estPairCells`, `estConfLean`. **PP2 (PLAN-PATIENT-PAIR, 2026-08-22): the `beFloored` branch of `estPairCells` also names the PATIENT alternative** — `est.patient` is appended to the sell cell when its net is positive, so a "nothing to price above break-even" cell no longer contradicts the `◆ asym fill` footer two lines below it (the anchor: a row read −114.7k/u in the cell and +427k/u in the note, and the cell was taken as the verdict). The clause TEXT is `formatAsymFill`'s, rendered by the CALLER: that function lives in `pipeline/lib/render/emit.mjs` and `js/` never imports `pipeline/` (the browser would 404 — the `smoke` job's failure class), so the guard-aware price-vs-level wording arrives as text and is never reimplemented here. Every non-`beFloored` branch is byte-identical, proved by an 86,400-row corpus diff over 22 branch combinations rather than by inspection. **`pipeline/test/estimator-orientation.test.mjs` (0.74.9, 8 cases) pins the LIVE-PAIR ORIENTATION for every caller that hand-builds a row**: it reads the definition out of `computeQuote` by CALLING it, asserts the DIRECTION of the damage a swap does (estBuy up, break-even up, a manufactured `beFloored`), and pins the two sites that had it backwards separately — `read-window-range.mjs`’s synthetic row by source scan (its block does live fetches and is not unit-callable) and pair.mjs’s own `fwdCtx` by delegation against a correctly-oriented `driftExitFrom`. **Cases 1/5/6/8 are mutation-verified RED against the mutant they name; cases 2/3/4/7 are NOT and each says so on its own line** — a blanket "every case verified" claim was made here and was false. Deleting both ordering clamps outright leaves seven of the eight green (only case 5 holds them), and case 4 is unrepairable: reach-fold's top reference is `max(optSell, quickSell)`, so its proposal already clears `qs` and the sell floor never binds under this model. `pipeline/test/patient-cell.test.mjs` pins the branch — eight cases, each mutation-verified RED against a named mutant (the `beFloored` guard, the `net > 0` leg, the honesty tail, an invent-the-wording mutant, and a rev3-reversal mutant that folds the deep bid into `estBuy`). families↔reach is a runtime function-reference cycle (ESM-safe). The description below is the full doctrine, unchanged.**) P6b — the PURE per-thesis P(fill)+TTF estimators +
+    the pFill reach sample `n` is thin — marker only, never moves score/grade/order), `estimators.mjs` (**PC2, 2026-07-17 — now the BARREL: a pure `export *` re-export of the four split files under `js/estimators/`, so the app (`js/market.js`) + pipeline-shim (`pipeline/lib/signal/estimators.mjs`) import paths are unchanged. The split: `js/estimators/families.mjs` = the P(fill)/TTF family estimators (`pFillIntraday`/`pFillValue`/`pFillRising`, `ttfIntraday`/`ttfValue`/`ttfRising`, `churnLapUnits`) + the `ESTIMATORS` registry/`estimatorFor`, `quotedPair`, `rankScore`, `estimateRank`, `fmtTtf`, the priors block + the module's founding header; `js/estimators/reach.mjs` = the reach-conditioning helpers `reachRelief` (+ its `REACH_RELIEF_*`/`REACH_DEBIAS_MAX_FRAC` constants), `dayHighFrom5m`, `reachFraction`, `askReachFactor`, `asymEstimate`. **RB-3 (PLAN-RECENCY-BASIS, 2026-08-04) added `reachFraction(askReach, { prefer })` — the ONE recency-basis rule**: `prefer:'full'` (the default) returns `reachedDays/nDays`; `prefer:'recent'` returns `recentHit/recentDays` and degrades to the full window when no recent counts exist. It replaced three independent copies of that conditional (`estimatePair`'s `reachRead`, the screen's `digestReachFrac` — RB-5, and an inline fraction inside `askReachFactor`). `askReachFactor(askReach, relief, { prefer })` takes the basis as an explicit OPT-IN defaulting to `'full'`, so every pre-existing call stays byte-identical; **BASIS FLIP 2026-08-09**: `estimatePair`'s `pFill` AND the fold price it sits beside moved back to `'full'` (recent-3 is four-valued at n=3 — the resolution argument, which stands on its own; the forward-scoring result once quoted here is the UNREPRODUCIBLE prior this same file flags in the `join-reach-basis.mjs` entry, so its digits are not repeated), so display and RANK now agree and RB-3's deliberate display/rank split is retired. Still on `'recent'`, and now the only two: the `--digest` reach column and `watch-positions`' size-relief note — **no longer a flagged split: MEASURED 2026-08-13 by `join-reach-basis.mjs`, which found recent-3 the cheaper basis for the digest column (M(1)=+2.3pp, CI [0.8,3.8]) and left it in place; the same run found the `sell unreliable` TAG loses to not gating at all below r≈1.29, which is the finding that matters** (see this file's `join-reach-basis.mjs` entry); `js/estimators/pair.mjs` = the reconciliation price estimator `entryDoctrine` + `estimatePair` (PC3: now the ordering SHELL/spine ONLY — it preps shared inputs, delegates the buy+sell PROPOSAL to a named `SELL_TOP_MODELS` entry, then applies the non-skippable floors: declared-exit anchor → nudge → ordering clamps → BE floor. **PLAN-ESTIMATOR-HONEST-SELL E1 (2026-07-22): the BE floor is NO LONGER an overwrite** — `estSell` keeps the model's honest (possibly-sub-BE) number, `estSellFloorBind` carries the break-even as a display fact (killing the false `+1 (BE X)`), and the shell adds `pFill` (reuses `askReachFactor` — the same function the rank calls, never forked; on the FULL-WINDOW basis since 2026-08-09 so it matches the full-window fold price beside it — and, unlike under RB-3, the rank's own P too) + `estSellForward`/`forwardPeak`/`forwardTrough`/`forwardConfidence`/`holdHorizonDays` (the `driftExitFrom` "list at X" forward projection off `extra.forward`, degrade-safe/zero-fetch — hence pair.mjs now imports `js/forecast.mjs`; **its `fwdCtx` passes `liveLo: quickBuy` (the instasell) / `liveHi: quickSell` (the instabuy), matching every other call site and `forecast.mjs`’s own `@param` — it was SWAPPED here until 0.74.9. The two trend-only branches are MUTUALLY EXCLUSIVE (`trendPerHour > 0` vs `< 0`), so exactly ONE side moved per item — a faller's exit peak one spread low, a riser's entry trough one spread high — never both, and `forwardTrough` is shadow-log-only, so only the peak half ever reached an operator**); PP2 adds the DISPLAY-ONLY `patient` field (`{bidTxt, askTxt, net}`, built from the new `extra.asymEst`/`extra.asymFill` inputs and null without both) — it is NOT a rev3 reversal: rev3 bars the deep bid from `estBuy` because that is an expected-price number, and a render field is not one, so `estBuy`/`estSell`/`estNet` are untouched; re-exports the `EST_REACH_SAT_FRAC`/`EST_BLEND_EQUAL_WEIGHTS` constants + `SELL_TOP_MODELS` for the barrel); `js/estimators/sell-models/` = the PC3 sell-top model registry — `index.mjs` (`SELL_TOP_MODELS` keyed by name, `Object.freeze`d), `reach-fold.mjs` (the neutral fold — DEFAULT + always-on shadow, `defaultShadow:true`; owns the SELL-MODEL CONTRACT header + `EST_REACH_SAT_FRAC`/`EST_BLEND_EQUAL_WEIGHTS`). The PB4 `pressure.mjs` trial model was RETIRED + deleted 2026-08-30 (join-exit-ev.mjs's pre-registered criterion; git-revivable — a retired/unknown `sellModel` name degrades to reach-fold, never throws). A new sell-top variant (later `safe-quantile`, PLAN-REACH-CALIBRATION AC3) is a file + one registry line, NOT a boolean threading through `estimatePair`; `js/estimators/cells.mjs` = the render/shadow projections `EST_HEADERS`, `estPairCells`, `estConfLean`. **PP2 (PLAN-PATIENT-PAIR, 2026-08-22): the `beFloored` branch of `estPairCells` also names the PATIENT alternative** — `est.patient` is appended to the sell cell when its net is positive, so a "nothing to price above break-even" cell no longer contradicts the `◆ asym fill` footer two lines below it (the anchor: a row read −114.7k/u in the cell and +427k/u in the note, and the cell was taken as the verdict). The clause TEXT is `formatAsymFill`'s, rendered by the CALLER: that function lives in `pipeline/lib/render/emit.mjs` and `js/` never imports `pipeline/` (the browser would 404 — the `smoke` job's failure class), so the guard-aware price-vs-level wording arrives as text and is never reimplemented here. Every non-`beFloored` branch is byte-identical, proved by an 86,400-row corpus diff over 22 branch combinations rather than by inspection. **`pipeline/test/estimator-orientation.test.mjs` (0.74.9, 8 cases) pins the LIVE-PAIR ORIENTATION for every caller that hand-builds a row**: it reads the definition out of `computeQuote` by CALLING it, asserts the DIRECTION of the damage a swap does (estBuy up, break-even up, a manufactured `beFloored`), and pins the two sites that had it backwards separately — `read-window-range.mjs`’s synthetic row by source scan (its block does live fetches and is not unit-callable) and pair.mjs’s own `fwdCtx` by delegation against a correctly-oriented `driftExitFrom`. **Cases 1/5/6/8 are mutation-verified RED against the mutant they name; cases 2/3/4/7 are NOT and each says so on its own line** — a blanket "every case verified" claim was made here and was false. Deleting both ordering clamps outright leaves seven of the eight green (only case 5 holds them), and case 4 is unrepairable: reach-fold's top reference is `max(optSell, quickSell)`, so its proposal already clears `qs` and the sell floor never binds under this model. `pipeline/test/patient-cell.test.mjs` pins the branch — eight cases, each mutation-verified RED against a named mutant (the `beFloored` guard, the `net > 0` leg, the honesty tail, an invent-the-wording mutant, and a rev3-reversal mutant that folds the deep bid into `estBuy`). families↔reach is a runtime function-reference cycle (ESM-safe). The description below is the full doctrine, unchanged.**) P6b — the PURE per-thesis P(fill)+TTF estimators +
     the `rankScore` composite that REPLACED expGpDay as the displayed/graded metric (Ben 2026-07-09:
     "gp/d is out"). **G5 (PLAN-GRADE-REWORK): `rankScore`'s TTF term SATURATES — `net×P / (days + TTF_SAT_DAYS)`,
     monotone-decreasing in TTF but BOUNDED as TTF→0, so a near-zero TTF can't unboundedly inflate the rank;

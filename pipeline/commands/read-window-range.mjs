@@ -802,10 +802,10 @@ for (const want of positionals) {
         log(`    (too few scored days to form a band — need ≥5)`);
       }
       // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2: there is no DC2 per-hour demand-CYCLE block
-      // (demandRegime — per-hour pressure track + buy/sell windows + the price-shape cross-check); those
-      // Extension-B DC1/DC3 reads had no live decision consumer. The base demand-BALANCE ratio + the
-      // reachableBand (Extension A) above stay — they power the pressure sell-model. Revive demandRegime
-      // from git if the per-hour cycle read is wanted again.
+      // (demandRegime — per-hour pressure track + windows + price-shape cross-check; no live decision
+      // consumer). demandPressure + reachableBand (Extension A) above stay — LIVE consumers:
+      // reverseListBand's Sold-ref/Peak band, the bid/band co-log shadow, this --pressure inspector
+      // (their retired SELL model priced off them once). Revive demandRegime from git if wanted again.
       log(`    (pressure = medVolHi/medVolLo; φ slope + PRESSURE_* are PLACEHOLDERS, n≈0 — the reachable price is where price TRADED, not a verified fill · inform-only)`);
     }
   }

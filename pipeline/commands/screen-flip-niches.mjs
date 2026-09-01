@@ -100,7 +100,7 @@ import { amplitudeShadow } from '../lib/render/suggestlog.mjs';   // A5 — the 
 import { FLIP_NICHES, MODE_KEYS, ALL_MODE_KEYS, driftInformNote, belowAdmitNet } from '../../js/flip-niches.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 6 — driftInformNote = the per-thesis drift-adjusted-exit INFORM note (registry-driven, NO if(mode===) branch; off the shared driftExitFrom, NO fetch)
 import { enumeratePaths, weighPaths } from '../../js/held-item-strategy.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
 import { rateItem, GRADE_CUTOFFS, CONF_THIN_N_FLOOR } from '../lib/signal/rating.mjs';   // G1: the four grade caps live INSIDE rateItem (applyGradeCaps) — the render site passes cap values/flags and never calls capGrade itself. CONF_THIN_N_FLOOR (G6) = the (thin) confidence-marker tooltip.
-import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow, timedLapShadow, excludedShadow } from '../lib/render/suggestlog.mjs';   // RC-S2: pressure co-log on survivors (five-way head-to-head off the in-hand 1h series); shared asym reshaper; PLAN-DIURNAL-TIMING DT4: timedLap shadow reshaper
+import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow, timedLapShadow, excludedShadow } from '../lib/render/suggestlog.mjs';   // RC-S2: exit-estimator co-log on survivors (off the in-hand 1h series); shared asym reshaper; PLAN-DIURNAL-TIMING DT4: timedLap shadow reshaper
 import { buildWatchlistReport, estFields, round2 } from '../lib/signal/watchlist-report.mjs';   // SEP16b: the ONE watchlist row builder, shared with read-watchlist.mjs
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
 import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (derive-cash.mjs anchor + log flow)
@@ -366,24 +366,19 @@ function captureReport(fn) {
 }
 const PUBLISH_EXPLICIT = A.publish === true;
 let PUBLISH = A['no-publish'] === true ? false : true;
-// PC3 — the SELL-TOP MODEL selection (--est-sell reach-fold|pressure). Replaces the bespoke --pressure-exit
-// boolean with a NAMED model routed through the resolver; `--pressure-exit` is kept as LEGACY SUGAR for
-// `--est-sell pressure` (an explicit --est-sell wins). shadowPool = the default-shadow models
-// (reach-fold), so when pressure is ACTIVE the neutral reach-fold rides `SELL_MODEL.shadow` and still
-// logs the unbiased retro co-log (estBuy/estSell/estConfidence). The PB4 pressure model is a TRIAL: its
-// number drives the CONSOLE display + rerank only; THE HARD GUARD (refusePublishIfNonNeutral below,
-// mirrors --asym) keeps a non-neutral model out of screen.json / the deployed app. Absent flag+config ⇒
-// 'reach-fold' (byte-identical to the pre-PC3 default). PRESSURE_EXIT stays the boolean the rest of this
-// script branches on (banner/rerank/publish-guard) — now DERIVED from the active model.
+// PC3 — the SELL-TOP MODEL selection, routed through the resolver. shadowPool = the default-shadow
+// models (reach-fold), so a non-neutral active model still logs the unbiased retro co-log
+// (estBuy/estSell/estConfidence) via `SELL_MODEL.shadow`. The PB4 pressure trial (`--pressure-exit`,
+// `--est-sell pressure`) is RETIRED — join-exit-ev.mjs's pre-registered criterion; a
+// retired name fails registry validation below and the legacy flag errors loudly.
+if (A['pressure-exit'] !== undefined) { console.error(`! --pressure-exit was RETIRED 2026-08-30 (join-exit-ev.mjs's pre-registered criterion: the pressure exit ask lost to the incumbents). The neutral reach-fold prices the sell leg.`); process.exit(1); }
 const SELL_MODEL = resolve('sellModel', {
-  flag: A['est-sell'] != null && A['est-sell'] !== true ? String(A['est-sell']).toLowerCase()
-      : (A['pressure-exit'] === true ? 'pressure' : undefined),
+  flag: A['est-sell'] != null && A['est-sell'] !== true ? String(A['est-sell']).toLowerCase() : undefined,
   config: CONFIG.sellModel,
   fallback: 'reach-fold',
   shadowPool: shadowModelsOf(SELL_TOP_MODELS),
 });
-if (!SELL_TOP_MODELS[SELL_MODEL.active]) { console.error(`! unknown --est-sell "${A['est-sell']}". Use one of: ${Object.keys(SELL_TOP_MODELS).join(', ')}.`); process.exit(1); }
-const PRESSURE_EXIT = SELL_MODEL.active === 'pressure';
+if (!SELL_TOP_MODELS[SELL_MODEL.active]) { console.error(`! unknown --est-sell "${A['est-sell']}". Use one of: ${Object.keys(SELL_TOP_MODELS).join(', ')}. ('pressure' was retired from exit pricing 2026-08-30 — join-exit-ev.mjs.)`); process.exit(1); }
 // --- Part B (opt-in): basing-rescue. OFF by default → default output is byte-identical (the only
 // default change is Part A's display annotation, which only APPENDS phase text to an existing Regime
 // cell — it never changes which rows are selected/excluded). When ON, an item the falling-exclusion
@@ -416,17 +411,15 @@ const ASYM = resolve('asym', { flag: A.asym === true ? true : undefined, config:
 // 20-day appetite).
 const ARCHIVE_REGIME = A['archive-regime'] === true;
 // PC1: the ONE shared publish-refusal guard (replaces the two inline per-flag copies that used to sit
-// beside the PUBLISH declaration). An UN-CALIBRATED / F1-ungraduated estimator (--asym, --pressure-exit,
-// or a config that enables either) must never reach screen.json / the deployed app: an EXPLICIT
+// beside the PUBLISH declaration). An UN-CALIBRATED / F1-ungraduated estimator (--asym, or a config
+// that enables one) must never reach screen.json / the deployed app: an EXPLICIT
 // --publish under one is a hard user error (loud stderr + exit); a default-on publish is quietly
-// downgraded to off (so an exploration run needs no --no-publish). Order = asym then pressure (matches
-// the removed inline order, so an explicit-publish conflict prints the same first message). Byte-identical
-// to the two removed blocks when no config is present.
+// downgraded to off (so an exploration run needs no --no-publish).
 PUBLISH = refusePublishIfNonNeutral({
   publish: PUBLISH, publishExplicit: PUBLISH_EXPLICIT,
   checks: [
     { on: ASYM, message: '! --asym is experimental (F1-ungraduated) — refusing --publish under it.' },
-    { on: PRESSURE_EXIT, message: '! --pressure-exit is an UN-CALIBRATED trial (F1-ungraduated) — refusing --publish under it (the deployed app + screen.json stay on the neutral estimator per PLAN-REACHABILITY-CONSOLIDATION).' },
+    { on: SELL_MODEL.active !== 'reach-fold', message: '! a non-neutral --est-sell model is F1-ungraduated — refusing --publish under it (the deployed app + screen.json stay on the neutral estimator).' },
     { on: ARCHIVE_REGIME, message: '! --archive-regime is an UNPROMOTED data-source swap (AF5b) — refusing --publish under it (screen.json + the deployed app stay on the live 6h series until AF6 promotes it).' },
   ],
 });
@@ -1225,8 +1218,9 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       liveLo: row.quickBuy ?? null, liveHi: row.quickSell ?? null,
     }), volDay: row.volDay ?? null, buyLimit: row.limit ?? null };
     // RC-S2 (PLAN-REACHABILITY-CONSOLIDATION): the pressure-driven reachable band off the SAME in-hand
-    // 1h series (zero new fetch) — extends the five-way exit-estimator head-to-head from held lots to the
-    // discovery surface (reachRelief=estSell + asym already log here; reach rides estConfidence). DEPTH
+    // 1h series (zero new fetch) — the exit-estimator co-log on the discovery surface (reachRelief=estSell
+    // + asym already log here; reach rides estConfidence). The reachable ASK leg stopped logging
+    // (pressure exit retirement); the bid/band shadow continues. DEPTH
     // stays OFF the screen — a per-row clearableAsk read is the DE7 fetch-budget decision, out of scope.
     // Inform-only: the `reachable` shadow field only (never a gate/drop/grade/screen.json input).
     const rbStats = (series1h && series1h.get(s.id)) ? windowStats(series1h.get(s.id), { nights: 14, wStart: 0, wEnd: 0 }) : null;
@@ -1285,17 +1279,15 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       asym: asymRead,
       asymEst: asymEr, asymFill: af,   // PP2: the guarded pair + its pre-rendered clause — the BE-floored cell names them inline (js/ can't import emit.mjs)
       dayHigh: dayHighFrom5m(series5m && series5m.get(s.id)),
-      reachable,   // PB4: the pressure-exit price source (ignored unless the flag is on)
       askMargin,   // R5: the ask cushion trend — a fading top tightens the sell fold (mirage fix)
       askPlacement: digestAskPlacement,   // EF1(b): bounds the churn fold exemption (the stale-guarded digest placement — same number the rank/digest use)
     };
-    // PC3: the ACTIVE sell-model drives the DISPLAY/rerank (estShown); every DEFAULT-SHADOW model
+    // PC3: the ACTIVE sell-model drives the DISPLAY (estShown); every DEFAULT-SHADOW model
     // (SELL_MODEL.shadow — reach-fold today) runs each pass and rides suggestions.jsonl as the unbiased
     // retro co-log. `est` is the neutral reach-fold in BOTH the ledger slot (estBuy/estSell/estConfidence)
-    // and the degrade case, whether it is active OR a shadow beside the pressure trial — byte-identical to
-    // the pre-PC3 "neutral always logged, pressure only displayed". A future registered shadow (safe-
-    // quantile, AC3) loops here off SELL_MODEL.shadow into its own ledger field, no shell change. No
-    // declaredExit on the discovery screen (a bare candidate is a buy read).
+    // and the degrade case, whether it is active OR a shadow beside a non-neutral active model. A future
+    // registered shadow (safe-quantile, AC3) loops here off SELL_MODEL.shadow into its own ledger field,
+    // no shell change. No declaredExit on the discovery screen (a bare candidate is a buy read).
     const estFor = name => estimatePair(FLIP_NICHES[mode], row, estExtra, { nudge: anchorNudge, sellModel: name });
     const estShown = estFor(SELL_MODEL.active);
     const est = SELL_MODEL.active === 'reach-fold' ? estShown : estFor('reach-fold');
@@ -1306,8 +1298,8 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // now qualifies — placement is a distribution position, not the invalidated reach signal; churn's reach
     // token is suppressed by foldExempt but the percentile stays). scalp/value never reach it. Attached to
     // the est confidence so estPairCells renders `(4/14 · p36)` and estConfLean shadows it for the F1 join.
-    // estShown (a pressure trial under --est-sell) renders 'pressure' in the cell regardless, so its
-    // placement is a harmless shadow.
+    // A non-neutral estShown (--est-sell) renders its own cell regardless, so its placement is a
+    // harmless shadow.
     if (est && est.confidence.doctrine === 'band-low' && rbStats && rbStats.lows && rbStats.lows.length) {
       est.confidence.buyPlacement = placement(rbStats.lows, est.estBuy);
       if (estShown && estShown !== est && estShown.estBuy != null)
@@ -1556,15 +1548,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // (POSTURE never enters the published screen.json cells). CAUTION: this INTENTIONALLY reorders overnight.
   if (POSTURE === 'overnight') rows.sort((a, b) => ((b.row.optNet || 0) * (b.ovWeight ?? 1)) - ((a.row.optNet || 0) * (a.ovWeight ?? 1)) || b.score - a.score);
   else rows.sort((a, b) => b.score - a.score);
-  // PB4: under the pressure-exit trial, RERANK the CONSOLE by the pressure NET (Est. sell − Est. buy of
-  // the reachableBand legs) so pressure-attractive picks surface — the reliability guard already keeps a
-  // thin book from getting a bold number. Rows WITHOUT a pressure read fall to the bottom (keep the base
-  // order among them). SAFE re screen.json: --publish is refused under --pressure-exit (the hard guard),
-  // so screen.json is never written on a pressure run — this reorder is console-only by construction.
-  if (PRESSURE_EXIT) {
-    const pNet = r => (r.estShown && r.estShown.confidence.pressureExit && r.estShown.estNet != null) ? r.estShown.estNet : -Infinity;
-    rows.sort((a, b) => pNet(b) - pNet(a));
-  }
+  // (The PB4 pressure-exit console rerank lived here — retired with the pressure model.)
 
   // PLAN-LANE-ADMISSION Chunk D — Path-A is the CONSOLE / last-report PRIMARY sort key,
   // with rateItem's grade (already the Grade cell) shown ALONGSIDE as the BACKUP + live A/B column (owner
@@ -1603,12 +1587,12 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // post-rank SURFACING partition (NOT a new gate — nothing is dropped): rows whose Path-A gp/day clears the
   // floor sort to the TOP by Path-A; rows below the floor OR with no Path-A number sink beneath them, keeping
   // their prior score (grade) order among themselves so a null/sub-floor row still surfaces via its grade.
-  // TWO deliberate SPECIALIZED console reranks keep their own order (Path-A is still COMPUTED, SHOWN in the
-  // A/B column, and LOGGED on every row — only the SORT defers): --pressure-exit (an F1-ungraduated trial;
-  // screen.json refused there anyway) and --posture overnight (its net-over-velocity board feeds the
-  // downstream "take lines until capital runs out" accumulation table, a distinct objective). Path-A is the
-  // PRIMARY sort for the STANDARD scan surface (active/auto posture) — the read Ben runs by default.
-  if (!PRESSURE_EXIT && POSTURE !== 'overnight') rows.sort((a, b) => comparePathARows(a, b, MIN_GPD));
+  // ONE deliberate SPECIALIZED console rerank keeps its own order (Path-A is still COMPUTED, SHOWN in the
+  // A/B column, and LOGGED on every row — only the SORT defers): --posture overnight (its net-over-velocity
+  // board feeds the downstream "take lines until capital runs out" accumulation table, a distinct
+  // objective). Path-A is the PRIMARY sort for the STANDARD scan surface (active/auto posture) — the read
+  // Ben runs by default.
+  if (POSTURE !== 'overnight') rows.sort((a, b) => comparePathARows(a, b, MIN_GPD));
 
   // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST (Workstream C): feed this niche's SORTED, surfaced rows into the
   // cross-niche decision digest (printed ONCE after every niche in main() under --digest). collectDigestRow
@@ -1646,7 +1630,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       capEff: (er => er != null ? round2(er) : undefined)(capEfficiency(FLIP_NICHES[mode], r.er)), weakDeploy: weakDeploy(FLIP_NICHES[mode], r.row, r.er) || undefined,
       // PLAN-WINDOW-CLEAR B2 shadow: the within-window clear read (churn/scalp; null elsewhere)
       winClear: r.winClear,
-      // RC-S2 shadow: the pressure-driven reachable band (five-way head-to-head on the discovery surface)
+      // RC-S2 shadow: the pressure-driven reachable band (bid/band record — the retired ask leg logs nothing)
       reachable: reachableShadow(r.reachable),
       // PLAN-DIURNAL-TIMING DT4 shadow: r.timedLap is ALREADY computed for every survivor (DT2, off the
       // same in-hand 1h series) — threaded through as-is, never recomputed, so every row this path logs
@@ -1712,8 +1696,6 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // (the removability guarantee). It is deliberately NOT added to the published cells (screen.json /
   // the app render) — an app Probes column is a separate, APP_VERSION-bumping step (out of PM1 scope).
   const anyProbe = rows.some(r => r.probeStr);
-  // PB4 loud trial banner (rule 4 — the prices/rank must never read as the calibrated default).
-  if (PRESSURE_EXIT) headerLines.push('⚠ --pressure-exit: Est. buy/sell + the RANK use the UN-CALIBRATED pressure model (TRIAL; retro still scoring — NOT validated, NOT published). Reranked by pressure net. --raw / drop the flag to restore the neutral estimate + sort.');
   // PLAN-OUTPUT-TABLE: the DEFAULT print is the reconciliation-estimate view (Est. buy/sell replace
   // Quick+Optimistic; Grade moves after Regime); --raw (and --asym, which implies it) prints the
   // model-free view exactly as before. STDOUT-ONLY: r.cells (the raw layout) is what --publish ships
@@ -1733,7 +1715,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // EF1(c): the Rank cell prints via consoleRankCell (leg-labeled when the two-leg P collapsed).
     printCells = rows.map(r => {
       const c = r.cells;
-      const base = [c[0], c[2], ...estPairCells(r.estShown), c[5], c[6], c[7], c[1], consoleRankCell(r)];   // PB4: estShown = pressure legs under the flag, else the neutral est
+      const base = [c[0], c[2], ...estPairCells(r.estShown), c[5], c[6], c[7], c[1], consoleRankCell(r)];   // estShown = the active --est-sell model's legs (the neutral est by default)
       return [...base, pathABCell(r, MIN_GPD), ...(anyProbe ? [{ t: r.probeStr, c: 'mini' }] : [])];
     });
     if (rows.length) estExplainer = `(Est. buy/sell are ESTIMATES — strategy-aware entry (scalp near-live · value trough · band prices the band low + reach/percentile annotation · churn reach-folded to fill-now), reach-folded exit, PLACEHOLDER model n≈3–14. Confidence rides in the cell: the buy carries its RECENT-3 touch-reach and, on band rows, the placement percentile of the band-low bid within the 14-day daily-LOW distribution (e.g. 4/14 · p36 = a deep/patient entry); the sell token shows RECENT-3 · FULL when they diverge (0/3 · 12/14 = stale) — the fold PRICE and its P are on the FULL-WINDOW basis (2026-08-09), the recent count is shown, not applied; '–' = no read. This is a DISCOVERY screen — no held-lot declared-exit anchoring here. Est. sell is the HONEST reach-fold price with its ASK-LEG P beside the net (labeled P(ask)~ — the Rank cell's P~ is the TWO-LEG entry×ask product, and a collapsed leg is named, e.g. "P~0.00 (bid leg)" — EF1(c)); a sub-break-even fold is ANNOTATED ("reach-fold floored to BE X") with its real (possibly-negative) net shown, never substituted with a "+1". --raw restores the model-free Quick/Optimistic columns.)`;
@@ -1949,16 +1931,12 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // P6c: sub-floor rows are STDOUT-ONLY — publish [] so screen.json/the app see exactly what a
   // pre-P6c empty niche published (byte-identical app contract, no APP_VERSION bump).
   if (subFloor) return [];
-  // PB4 app-display: each published row ALSO carries the pressure-driven `reachable` band
-  // (reachableShadow — { ask, bid, pressure, reliability, bandLow, bandHigh }, already computed for the
-  // RC-S2 co-log on every survivor). This is ADDITIVE DISPLAY DATA ONLY — the `cells`, the Grade, the
-  // rank, and the NEUTRAL sort order are byte-unchanged, so screen.json's DECISION surface stays exactly
-  // F1-gated. The app renders this band as a `pressure (trial)` column; the console rerank/reprice TRIAL
-  // (--pressure-exit) stays a SEPARATE mechanism (still refused under --publish). No reachable read → omit.
+  // (The PB4 per-row `reachable` band + the app's "Pressure (trial)" column were RETIRED with
+  // the pressure exit estimator — published rows carry `cells` only again.)
   // PLAN-LANE-ADMISSION Chunk D scope lock: publish the FROZEN pre-Path-A (score-sorted) `publishRows`, NOT
   // the Path-A-re-sorted `rows` — so screen.json's grade/rank cells + their order stay byte-identical (the
   // Path-A primary sort is console/last-report only until a later post-validation chunk promotes it to the app).
-  return publishRows.map(r => { const rb = reachableShadow(r.reachable); return rb ? { id: r.id, cells: r.cells, reachable: rb } : { id: r.id, cells: r.cells }; });
+  return publishRows.map(r => ({ id: r.id, cells: r.cells }));
 }
 
 // --- P5 VALUE niche render (PLAN-VALUE §D) -----------------------------------------------------

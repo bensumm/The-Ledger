@@ -27,7 +27,6 @@ function reachTok(info) {
 // PLACEMENT PERCENTILE of estBuy within the 14-day daily-LOW distribution, e.g. `4/14 · p36`. A low pXX =
 // "below most daily lows" = a deep/patient entry (js/windowread.mjs placement doctrine). '–' when neither.
 function buyTok(c) {
-  if (c.pressureExit) return 'pressure';
   const toks = [];
   const rt = reachTok(c.bid);
   // AC6: a churn fold-exempt row drops the bid-reach caution token (the day-level touch-reach mismeasures a
@@ -48,9 +47,6 @@ function buyTok(c) {
 export function estPairCells(est) {
   if (!est) return [{ t: '—' }, { t: '—' }, { t: '—' }, { t: '—' }];
   const c = est.confidence;
-  // PB4: the pressure-exit TRIAL marker rides IN the cell (rule 4 — the price never reads as calibrated).
-  const pTag = c.pressureExit && c.pressureExit.pressure != null
-    ? ` pressure ${c.pressureExit.pressure.toFixed(1)}×${c.pressureExit.reliability != null && c.pressureExit.reliability < 1 ? ` rel ${c.pressureExit.reliability.toFixed(2)}` : ''}` : '';
   // AC5: a churn fold-exempt row drops the ask reach caution token — the day-level reach signal is declared
   // invalid for a symmetric lap, so it must not ride the cell as an implied caution (the reach counts still
   // reach the F1 shadow via estConfLean). Every non-exempt branch keeps today's EXACT rendering, so band
@@ -59,8 +55,7 @@ export function estPairCells(est) {
   // beFloored is a CAUTION on that secondary/phase-blind fold ("nothing to price above break-even"), NEVER a
   // number substitution (the old ` (BE-floored)` hid the real sub-BE number behind a break-even price + a "+1").
   let sellSuffix;
-  if (c.beFloored) sellSuffix = ` (reach-fold floored to BE ${fmtP(est.estSellFloorBind != null ? est.estSellFloorBind : est.be)} — nothing to price above break-even${c.pressureExit ? ',' + pTag : (!c.foldExempt && c.ask) ? `, ${reachTok(c.ask)}` : ''})`;
-  else if (c.pressureExit) sellSuffix = ` (${pTag.trim()})`;
+  if (c.beFloored) sellSuffix = ` (reach-fold floored to BE ${fmtP(est.estSellFloorBind != null ? est.estSellFloorBind : est.be)} — nothing to price above break-even${(!c.foldExempt && c.ask) ? `, ${reachTok(c.ask)}` : ''})`;
   else if (c.declaredAnchored) sellSuffix = ' (declared)';
   // R5: a `fading` ask cushion tightened the sell fold even on a clean reach — surface it as a caution beside
   // the reach token so the number never reads as an un-caveated band top (the mirage the fade guards against).
@@ -100,7 +95,7 @@ export function estPairCells(est) {
     : `${est.estNet > 0 ? '+' : ''}${fmtP(est.estNet)} (${est.estRoi != null ? (est.estRoi >= 0 ? '+' : '') + est.estRoi.toFixed(1) + '%' : '—'})${pTok}`;
   return [
     { t: `${fmtP(est.estBuy)} (${buyTok(c)})` },
-    { t: `${fmtP(est.estSell)}${sellSuffix}${fwdSeg}${patSeg}`, c: c.beFloored ? 'amber' : (c.pressureExit ? 'gain' : (c.declaredAnchored ? 'gain' : undefined)) },
+    { t: `${fmtP(est.estSell)}${sellSuffix}${fwdSeg}${patSeg}`, c: c.beFloored ? 'amber' : (c.declaredAnchored ? 'gain' : undefined) },
     { t: netTxt, c: est.estNet == null ? undefined : (est.estNet >= 0 ? 'gain' : 'loss') },
     { t: fmtP(est.be), c: 'mini' },
   ];

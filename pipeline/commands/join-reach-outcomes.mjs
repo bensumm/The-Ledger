@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 /* join-reach-outcomes.mjs — the reachability head-to-head, FORWARD-SCORED (RC, PLAN-REACHABILITY-CONSOLIDATION).
  *
- * The tool carries five overlapping ways to price an exit (reach-fold · reachRelief · asym · depth ·
- * pressure). RC-S1/RC-S2 co-log all of them on every read; this scores them head-to-head so a
+ * The tool carried five overlapping ways to price an exit (reach-fold · reachRelief · asym · depth ·
+ * pressure); `pressure` was RETIRED from exit pricing 2026-08-30 (join-exit-ev.mjs's pre-registered
+ * criterion) and its `reachable.ask` co-log stopped that day — this command keeps scoring its logged
+ * HISTORY (it is the record, not a pricing path), and new rows carry no pressure ask.
+ * RC-S1/RC-S2 co-log the rest on every read; this scores them head-to-head so a
  * retirement is measured rather than argued. For each co-logged row it walks the 1h archive FORWARD
  * from the read and asks, per estimator: was that ask REACHED within the horizon, and how much higher
  * did the market go (headroom). Two logged market prints — quickSell/optSell, marked * — ride along as
@@ -34,7 +37,8 @@ const ROBUST_N = 30;              // MIN_N_F1, reused — a retirement wants a c
 
 /* Every co-logged read in the ledger → a scorable row, admitted on `reachable` — which is the PRESSURE
  * band, so admission is an INCLUSION CRITERION, not a coverage measurement: the pool is conditioned on
- * the pressure read succeeding. A missing `reachable` is a pre-RC-S1 row OR a degraded band. */
+ * the pressure read succeeding. A missing `reachable` is a pre-RC-S1 row OR a degraded band. (Rows
+ * after 2026-08-30 carry a bid-only `reachable` — they still admit; only the pressure ASK is gone.) */
 export function readRows() {
   const rows = []; const drop = { noColog: 0, badClass: 0, badTs: 0 };
   for (const line of readSuggestionLines()) {
@@ -111,8 +115,10 @@ async function main() {
   console.log('| estimator | rows | of ' + scored.length + ' |');
   console.log('| --- | --- | --- |');
   for (const c of res.coverage) console.log(`| ${c.key} | ${c.n} | ${scored.length ? Math.round(c.n / scored.length * 100) : 0}%${c.key === 'pressure' ? ' (inclusion criterion, not a measurement)' : ''} |`);
-  console.log(`  A row is admitted only if the pressure band read, so pressure cannot print below 100% and every`);
-  console.log(`  comparison is conditioned on it. depth needs a HELD qty, so it only ever logs on watch/held-quote reads. reachFold and`);
+  console.log(`  A row is admitted only if the pressure band read, so every comparison is conditioned on it —`);
+  console.log(`  through 2026-08-30 that made pressure's 100% an inclusion criterion; rows after the retirement`);
+  console.log(`  admit on a bid-only band, so its coverage drifts below 100% as they age into scoring range.`);
+  console.log(`  depth needs a HELD qty, so it only ever logs on watch/held-quote reads. reachFold and`);
   console.log(`  reachRelief are the same estimator with and without the softening and NEVER co-occur, so`);
   console.log(`  this cannot answer "does relief help?" — that needs the relief=0 counterfactual logged too.`);
 
@@ -120,14 +126,22 @@ async function main() {
   console.log(HEAD); console.log(SEP);
   for (const e of res.pooled.estimators) console.log(line(e));
 
+  // Every matched set requires `pressure`, whose ask no longer logs (retired) — so these pools are a
+  // frozen RECORD that stops accruing; the printed data range makes that visible instead of implied.
+  const dstr = ts => { const d = new Date(ts * 1000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   for (const m of matched) {
+    let minTs = Infinity, maxTs = -Infinity;
+    for (const s of scored) if (m.keys.every(k => s.out[k])) { if (s.row.ts < minTs) minTs = s.row.ts; if (s.row.ts > maxTs) maxTs = s.row.ts; }
+    const range = Number.isFinite(maxTs) ? ` · rows ${dstr(minTs)} → ${dstr(maxTs)}` : '';
     console.log(`
-## MATCHED head-to-head — the ${m.n} read(s) over ${m.items} item(s) that ALL of these priced`);
+## MATCHED head-to-head — the ${m.n} read(s) over ${m.items} item(s) that ALL of these priced${range}`);
     console.log(HEAD); console.log(SEP);
     for (const e of m.estimators) console.log(line(e));
   }
   console.log(`  The pooled table above computes each estimator over a DIFFERENT row set; only these`);
   console.log(`  matched rows are the same trade priced N ways, so read a comparison here, not there.`);
+  console.log(`  Every matched set requires pressure's retired ask, so these pools stopped accruing at the`);
+  console.log(`  retirement — the data range above is where each one ends, permanently.`);
 
   console.log(`\n## Per cell (side × class × regime) — a retirement needs a cell at n≥${ROBUST_N}, sustained`);
   for (const c of res.cells) {

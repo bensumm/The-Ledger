@@ -50,6 +50,25 @@
  *                   any retirement, however tight the pooled interval looks.
  */
 
+/* EXECUTED 2026-08-30 (PLAN-REACH-SURFACE chunk 8, folded into PLAN.md): a fresh default run nominated
+ * exactly `pressure` (deficit vs asym clear of zero, same sign in 3/3 horizons and both era halves) and
+ * that retirement was carried out — the pressure sell model, its trial flags, the app's trial column and
+ * the `reachable.ask` co-log are gone; the BID/band reads and the logged history survive. `reachFold`
+ * qualified on sign agreement but its deficit sits UNDER the resolution floor, and `depth`'s
+ * reconstruction is UNBOUNDED — both stay BLOCKED, which is the load-bearing lesson the guards encode:
+ * NOTHING may be retired on a gap narrower than the noise in the instrument that measured it, and an
+ * unbounded reconstruction can never retire a deployed estimator. This command still recomputes
+ * `pressure` per origin — it is the RECORD, not a pricing path, and the result must stay re-runnable.
+ *
+ * ONE MEASUREMENT ARTIFACT is known and it FLATTERS the loser (re-homed from the folded plan):
+ * `reached` is `top >= ask` while `refHigh` is a median of PRINTED daily highs, so an ask exactly at the
+ * reference collects exact-equality matches — over 12pp of the z=0 reach rate when measured, vanishing a
+ * half-basis-point higher. On a sticky-priced item the same `avgHighPrice` recurs, and a real queue does
+ * not fill an ask sitting at a level already crowded with resting offers — another face of "reached is
+ * not filled", concentrated at the reference. It inflates whatever prices at z≈0, which is where
+ * `askStar+fold`'s median z sits, so the null branch is if anything UNDERSTATED. The fix is not simply
+ * `>`: a print AT your ask is weak evidence either way. */
+
 /* HONEST LIMITS, and they bind harder than the row count suggests.
  * REACHED IS NOT FILLED — queue position is invisible in a bucketed aggregate, so every reach rate
  * bounds a real offer from above, and it flatters the HIGH asks most. One 92-day era, one update
@@ -123,6 +142,9 @@ export const INCUMBENT_KEYS = ['pressure', 'asym', 'reachFold', 'depth'];
 // The policies under test. They are judged by `verdict`, and nothing here can "retire" a policy that
 // was never deployed — a nomination against one is a category error, not a finding.
 export const ARM_KEYS = ['askStar', 'askStar+fold'];
+// Nominations that were EXECUTED (the retirement shipped). A re-run still re-applies the criterion —
+// the annotation keeps a fresh NOMINATED row from reading as an open action item.
+export const EXECUTED_RETIREMENTS = Object.freeze({ pressure: '2026-08-30' });
 export const BASELINE_KEYS = CONTENDERS.filter(c => c.baseline).map(c => c.key);
 
 /* The live pair as of an origin, from the last printing bucket at or before it. `quickSell` is the
@@ -508,7 +530,8 @@ export function armVerdict(key, decisive, sensitivities, eraHalves) {
  * repeats in at least 2 of the 3 sensitivity horizons. Reference lines are excluded (they are rulers, not
  * estimators), and so is any contender whose reconstruction the acceptance check could not bound — an
  * unbounded reconstruction cannot retire a deployed estimator, whatever its deficit looks like. This
- * NOMINATES; chunk 8 executes, and a nomination is not a retirement. */
+ * NOMINATES; executing one is a separate, human-reviewed change (pressure's was, 2026-08-30 — see the
+ * EXECUTED block in the header), and a nomination is not a retirement. */
 export function retirementTable(decisive, sensitivities, eraHalves, unbounded = new Set(), { invalidated = false, resolutionFloor = null } = {}) {
   const best = decisive.best;
   return decisive.stats
@@ -535,7 +558,8 @@ export function retirementTable(decisive, sensitivities, eraHalves, unbounded = 
         : (eraSigns[0] && eraSigns[1] && eraSigns[0] !== eraSigns[1]) ? 'the sign flips between era halves'
         : null;
       return { key: x.key, best, ci, clear, sign, horizonSigns, eraSigns, agreeing, underFloor, blockedBy,
-        nominated: !blockedBy && clear && sign < 0 && agreeing >= 2 };
+        nominated: !blockedBy && clear && sign < 0 && agreeing >= 2,
+        executed: EXECUTED_RETIREMENTS[x.key] ?? null };
     });
 }
 
@@ -823,7 +847,10 @@ async function main() {
   for (const r of retirement) {
     const ciTxt = r.ci ? `${pctf(r.ci.point, 3)} [${pctf(r.ci.lo, 3)}, ${pctf(r.ci.hi, 3)}]` : 'no interval';
     console.log(`  ${r.key.padEnd(13)} vs ${r.best}: ${ciTxt} · clear ${r.clear} · same sign in ${r.agreeing}/${r.horizonSigns.length} horizon(s) · era ${JSON.stringify(r.eraSigns)}`);
-    console.log(`                ${r.blockedBy ? 'BLOCKED — ' + r.blockedBy : (r.nominated ? 'NOMINATED for exit-pricing retirement (chunk 8 executes; the BID side survives)' : 'not nominated')}`);
+    console.log(`                ${r.blockedBy ? 'BLOCKED — ' + r.blockedBy
+      : r.nominated && r.executed ? `NOMINATED — already EXECUTED ${r.executed} (the retirement shipped; this run re-confirms the criterion)`
+      : r.nominated ? 'NOMINATED for exit-pricing retirement (executing one is a separate reviewed change; the BID side survives)'
+      : 'not nominated'}`);
   }
 
   console.log(`\n## VERDICT — against the criterion pre-registered in this file header`);

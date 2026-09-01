@@ -84,9 +84,9 @@
  *              names the null-read reason ('insufficient-depth'|'thin-history'|'no-prints'). liqClass rides
  *              EVERY row so F1 can test whether the flat ×4 competition bar nulls one liquidity class.
  *              watch-positions held rows only.
- *   reachable?  pressure-driven band { ask, bid, pressure, reliability, bandLow, bandHigh } off windowread.mjs
- *              reachableBand; absent when the pressure read degrades. Rides EVERY row with an in-hand 1h
- *              series, so reachable/depthExit/estBuy/estSell/asym are co-logged on the SAME row. Scoring target: reachability.mjs.
+ *   reachable?  pressure-driven band { bid, pressure, reliability, bandLow, bandHigh } off windowread.mjs
+ *              reachableBand; absent when the read degrades. Rides EVERY co-log row. `ask` stopped with
+ *              the pressure exit retirement; older rows carry it (reachability.mjs, a HISTORICAL key).
  *   windowExit?  big-ticket window-clear ask rung off askExitRead — { list, live, peakWindow:[startH,endH],
  *              hiReach:{reached,n,recentHit,recentDays,placement}, fiveReach:{reached,n,placement}|null,
  *              reachMargin:{trend,cushionNow,cushionFrom,cushionTo,reachedRecent,nRecent,
@@ -314,12 +314,13 @@ export function classAndSource(row, id, warmBulk) {
 
 // --- reachability head-to-head ledger-shadow reshapers (RC-S1/RC-S2, PLAN-REACHABILITY-CONSOLIDATION) --
 // ONE home for the `reachable`/`depthExit` shadow-field SHAPE so the watch/screen/quote co-logs can't
-// drift (the five-way exit-estimator head-to-head reads these). Each takes a
+// drift (the exit-estimator head-to-head reads these). Each takes a
 // RAW js/windowread result and returns the lean ledger object, or null when there is nothing to log.
 export function reachableShadow(rb) {
-  if (!rb || rb.ask == null) return null;
+  // `ask` no longer logs (pressure exit retirement); historical rows carry it (reachability.mjs).
+  if (!rb || rb.bid == null) return null;
   const r2 = x => x == null ? null : Math.round(x * 100) / 100;
-  return { ask: rb.ask, bid: rb.bid, pressure: r2(rb.pressure), reliability: r2(rb.reliability), bandLow: rb.bandLow, bandHigh: rb.bandHigh };
+  return { bid: rb.bid, pressure: r2(rb.pressure), reliability: r2(rb.reliability), bandLow: rb.bandLow, bandHigh: rb.bandHigh };
 }
 // depthExit ALWAYS carries the booked ask OR the collapse REASON + the liquidity class (so F1 can
 // measure whether the flat ×4 competition bar systematically nulls a class we'd want to price).
@@ -625,10 +626,10 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // DISTINCT from winClear, which keys the within-window lap-clear on optSell.
   if (windowExit != null)    e.windowExit = windowExit;
   // PLAN-DEPTH-EXIT DE3 / RC-S1 / RC-S2 (PLAN-REACHABILITY-CONSOLIDATION) — depthExit + reachable ride
-  // BESIDE estBuy/estSell/estConfidence and asym so all five exit-pricing estimators are co-logged on the
-  // SAME row, including whether the ×4 competition bar nulls a liquidity class we would want to
-  // price (collapse + liqClass). The head-to-head spans HELD (watch, quote --positions) AND DISCOVERY
-  // (screen survivors, quote per-item): `reachable` (pressure) rides every row with an in-hand 1h series,
+  // BESIDE estBuy/estSell/estConfidence and asym so the exit-estimator co-log lands on the SAME row
+  // (pressure's retired ASK leg no longer logs; its bid/band record continues), including
+  // whether the ×4 competition bar nulls a liquidity class we would want to price (collapse + liqClass). The head-to-head spans HELD (watch, quote --positions) AND DISCOVERY
+  // (screen survivors, quote per-item): `reachable` rides every row with an in-hand 1h series,
   // while `depthExit` (depth) rides only HELD rows with a real qty — a bare discovery row omits it, the DE7
   // fetch-budget rule. On watch the shadow est uses declaredExit:null, so the model's intrinsic ask is the
   // scored quantity. All shaped by the reachableShadow/depthExitShadow/asymShadow reshapers above (ONE home,

@@ -32,8 +32,8 @@ window, no recency split.
 | `windowReliability` | does this item's intraday SHAPE reproduce? parity split-half Pearson r on `hourProfile`'s de-trended devLow/devHi; gate = `min(rLow,rHi) ≥ 0.6` | 1h, own PINNED 14d window (never the caller's `nights` — at 7d it is uncomputable for ~100% of items) | GATES DISPLAY of the diurnal hours on the CONSOLE surfaces; on a PASSING row it also moves the displayed levels (DT4b — those rows refit over the gate's window, and hours/levels are one fit) | ⚠️ PLACEHOLDER threshold, n≈0 for gp; measures within-day HOUR RANKING, not fill probability. The 7d-vs-14d render-fit gap was CLOSED by DT4b — but note the gate correlates SHAPE VECTORS and never compares hours: the two parity halves agree on the dip hour only 25.8% of the time, so the marker deliberately says "hours MAY repeat most days" (Ben, 2026-08-10) rather than asserting a repetition nothing checked. NOT gated in the deployed app's Trends tab (`js/trends.js`), which still renders hours ungated | `diurnalTimedLap`, `formatTimedLap`, `softBuyRead`, digest, `read-schedule`, `read-window-range --profile` |
 | `diurnalPhase` | in-peak / pre-peak / post-peak vs the peak window | derived from `hourProfile.peak` | stdout-only timing token (⏲) | n/a (clock vs window) | quote notes, digest `phase`/verdict rule 4 |
 | ~~`demandRegime`/`hourlyPressure`~~ (REMOVED 2026-07-22) | per-hour buy/sell PRESSURE cycle — DELETED (PLAN-REMOVE-DEPTH-PRESSURE-READS, git-revivable); powered only `--pressure`'s DC2 block + scan DC3 note | — | — | — |
-| `reachableBand` (PB1) | pressure-driven two-sided reachable bid/ask (base = recent-3 median, band = recent-7 IQR) | 1h, recent-3/7 | `--est-sell=pressure` (flag-gated) AND the reverse-flip `Sold-ref/Peak` band (NOT gated) | ✅ (base+band both recency-windowed) | pressure sell-model, `read-window-range --pressure`, `reverseListBand`, ledger shadow |
-| `demandPressure` | buy/sell volume ratio + reliability | 1h aggregate | feeds `reachableBand` (survives) | ❌ | `reachableBand` / the pressure sell-model |
+| `reachableBand` (PB1) | pressure-driven two-sided reachable bid/ask (base = recent-3 median, band = recent-7 IQR) | 1h, recent-3/7 | the reverse-flip `Sold-ref/Peak` band + the bid/band ledger shadow (its SELL-model consumer was retired 2026-08-30) | ✅ (base+band both recency-windowed) | `read-window-range --pressure`, `reverseListBand`, ledger shadow |
+| `demandPressure` | buy/sell volume ratio + reliability | 1h aggregate | feeds `reachableBand` (survives) | ❌ | `reachableBand` |
 | `clearableAsk` (DE1; `depthDays`/`clearableBid` REMOVED 2026-07-22) | the highest ask that clears `competition×qty` on ≥75% of days | 1h buckets, ~14d | `--depth` "BOOK AT ≤X" + the LIVE DE3 `depthExit` shadow (watch/quote held lots) | ❌ whole-window clear fraction | `read-window-range --depth`, `watch-positions`/`quote-items` depthExit shadow |
 | `weekdayProfile` | per-weekday median amplitude % | 1h, ~28d | amplitude niche notes | ❌ | amplitude scan display |
 | `computeQuote` (row) | Quick (live) + Optimistic (robust 2h-band p10/p90 clamped to live) pair, momentum tell, pressure ratio, ask-headroom, bond math | live `/latest` + last 24×5m | every quote row | n/a (this IS the live basis) | everything |
@@ -58,7 +58,7 @@ window, no recency split.
 | `whenBuyable`/`whenSellable` | first horizon hour whose projected low/high clears a target | `diurnalForecast` | quote-items forecast line | inherits forecast | quote-items notes |
 | `estimatePair`/`reachFoldModel` (R5 trend-aware) | reconciliation Est.buy/Est.sell: buy = band-low/live/trough per doctrine; **sell = live + (bandTop−live)×reach-FOLD FACTOR × R5 fade**; plus the `pFill` printed beside the net | reach-fold factor = `min(1, askFrac/0.75)` (askFrac = the shared `reachFraction`, **full-window** since 2026-08-09 — this clause said `recent-3` while the same cell's own next sentence recorded the flip, a self-contradiction caught 2026-08-13), **× `EST_FADE_DISCOUNT` when the ask-side `reachMargin.trend` is `fading`** (R5 — via `extra.askMargin`, screen-wired); **`pFill` = `askReachFactor` on the SAME basis as the fold price** (RB-3's surviving finding: a price and a probability on different bases make one row contradict itself). **Both flipped recent-3 → FULL WINDOW on 2026-08-09** — recent-3 is four-valued at n=3 (the resolution argument; the forward-scoring prior once quoted here is recorded as unreproducible, so its digits are not repeated) | default table column on quote + screen | ✅ fold AND its P share one basis, and that basis now MATCHES the rank — the RB-3-era display/rank split is retired. Freshness is still shown (`0/3 · 12/14` token, recent-3 printed beside the fold on divergence), just not applied | quote-items (no fade yet), screen niche tables + digest |
 | `reachRelief`/`reachRelief`-softened topRef | liquidity/size-conditioned softening of the reach-fold, + Part-B de-biased top toward the observed 24h high | `dayHighFrom5m` (24h max of 5m) + reach fraction | large-liquid-book sells only | n/a (softens the fold, doesn't add a trend read) | `estimatePair` |
-| `pressureModel` (PB4) | swaps Est.buy/sell for `reachableBand`'s pressure-driven pair | `reachableBand` | `--est-sell=pressure` (trial, never published) | ✅ (recency-windowed base+band) | quote-items, screen (console only) |
+| ~~`pressureModel`~~ (PB4, RETIRED 2026-08-30) | swapped Est.buy/sell for `reachableBand`'s pair — retired by `join-exit-ev.mjs`'s pre-registered criterion (deficit vs the incumbents clear of zero); the trial flag now errors | `reachableBand` | — | — | — (history scored by `join-reach-outcomes.mjs`) |
 | `estimateRank`/`rankScore` | net × P(fill) ÷ TTF, per estimator family | family-specific (mostly 2h band / live) | every candidate's grade/rank | varies by family (see families table) | `rateItem`, screen ranking, digest `rank` |
 | `pFillIntraday`/`pFillValue`/`pFillRising` | P(fill) priors per family | reach (when fetched) / band-depth heuristic / regime label | rank composite | reach-based ones inherit RC1; band-depth/regime ones are ❌ point-in-time | `estimateRank` |
 | `pFillAmplitude` (DT1b) | the only WALK-FORWARD-measured P(fill) in the stack — not a prior | `ampWalkForward` over the local 1h archive: levels fitted strictly pre-origin, entry→completion at hour grain | amplitude rank/grade | ✅ out-of-sample by construction; degrades to the 0.5 prior below `AMP_WF_MIN_JUDGED` | `ESTIMATORS.amplitude.pFill` (called direct by the amplitude branch, NOT via `estimateRank`) |
@@ -222,9 +222,11 @@ classification landed (R2). Detail:
   to tighten the top even on a clean 3/3 reach, closing the point-in-time-only gap (a 3/3-today reach
   that was 1/3 last week and heading for 0/3). The screen wires it; quote-items degrades byte-identical
   (no askMargin passed) until wired. Absent the trend the fold is byte-identical to pre-R5.
-- **`pressureModel`** is a genuinely distinct idea (demand-BALANCE, not reach-count) and is
-  correctly gated as a trial (never published, always shadow-logged against the neutral model). No
-  action — keep as-is, it is the cleanest-scoped experimental surface in the estimator stack.
+- **`pressureModel`** was a genuinely distinct idea (demand-BALANCE, not reach-count) and stayed
+  correctly gated as a trial (never published, always shadow-logged against the neutral model) until
+  it was RETIRED 2026-08-30 — `join-exit-ev.mjs`'s pre-registered criterion measured its ask behind
+  the incumbents with a CI clear of zero (see the inventory row above). The clean gating is what made
+  the measured retirement possible.
 
 ### Placement vs reach vs cushion
 
@@ -265,8 +267,9 @@ some of the five).
 - **`demandRegime`/`hourlyPressure`** (Extension B DC1/DC3) — **REMOVED 2026-07-22** (same removal;
   git-revivable). They powered only the `--pressure` per-hour demand-cycle inspector block + the scan's
   DC3 inform note/shadow, never a gate/rank. **`demandPressure` + `reachableBand` (Extension A) SURVIVE** —
-  they are the price source for the `--est-sell pressure` sell-model + the RC co-log marker, retired
-  later (if ever) via `PLAN-REACHABILITY-CONSOLIDATION` RC1's flag, not this cleanup.
+  bid/band consumers (the co-log marker, `--pressure` inspector, reverse-flip band). The pressure
+  SELL model they once priced was retired 2026-08-30 by `join-exit-ev.mjs`'s measured criterion —
+  the gated retirement path this entry anticipated, executed on evidence rather than cleanup.
 
 ---
 

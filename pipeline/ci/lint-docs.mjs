@@ -193,6 +193,24 @@ export const DENYLIST = [
     reason: '`--mode rising` is a DELETED command (Steps 3+4) — the live modes are band|churn|scalp|value|all',
   },
   {
+    id: 'pressure-exit-flag-live',
+    // SELECTOR literals only — bare "pressure" stays free (flow proxy, --pressure inspector, bid/band).
+    pattern: /--pressure-exit|--est-sell[= ]pressure\b|["']?sellModel["']?\s*:\s*["']pressure["']/,
+    files: ['CLAUDE.md', 'README.md', 'index.html',
+            'docs/MARKET-ANALYSIS.md', 'docs/GLOSSARY.md', 'docs/ARCHITECTURE.md', 'docs/FLOW.md',
+            'docs/SIGNAL-AUDIT.md', 'pipeline/MONITORING.md',
+            '.claude/skills/scan/SKILL.md', '.claude/skills/positions/SKILL.md',
+            '.claude/skills/overnight/SKILL.md', '.claude/skills/morning/SKILL.md'],
+    reason: 'the pressure exit model was RETIRED (join-exit-ev.mjs criterion; CHANGELOG 0.76.0) — do not present its flag/selector as runnable; the bid/band pressure reads survive and may be named freely',
+  },
+  {
+    id: 'pressure-trial-column-live',
+    pattern: /Pressure \(trial\)/,
+    files: ['CLAUDE.md', 'README.md', 'index.html', 'docs/MARKET-ANALYSIS.md', 'docs/GLOSSARY.md',
+            '.claude/skills/scan/SKILL.md', '.claude/skills/positions/SKILL.md'],
+    reason: 'the app\'s "Pressure (trial)" Scan column was RETIRED with the pressure exit model (CHANGELOG 0.76.0) — do not describe it as rendered',
+  },
+  {
     id: 'value-absgp-rank',
     // The abs-gp value-rank constant (`VALUE_ABSGP_*`) was SUPERSEDED the same day (Ben 2026-07-09) by the
     // deployable-capital multiplier folded into `valueScore` (js/valuescreen.mjs). abs-gp just rewarded

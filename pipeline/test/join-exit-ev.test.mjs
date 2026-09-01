@@ -61,7 +61,7 @@
 import assert from 'node:assert/strict';
 import {
   CONTENDERS, CONTENDER_KEYS, ESTIMATOR_POOL_KEYS, DEPLOYABLE_POOL_KEYS, INCUMBENT_KEYS, BASELINE_KEYS,
-  BAIL_MODES, LADDER_Z_STEP, DEFAULT_NIGHTS, ARM_KEYS, ACCEPTANCE_MIN_ROWS,
+  BAIL_MODES, LADDER_Z_STEP, DEFAULT_NIGHTS, ARM_KEYS, ACCEPTANCE_MIN_ROWS, EXECUTED_RETIREMENTS,
   liveAt, foldAskAt, incumbentAsksAt, buildOriginRecord, readableCut, askOf, scoreAsk, scoreLadder,
   matchedRows, summarize, topIsBaseline, pairedClusterCI, thinIndependent, headToHead, armVerdict, verdict, retirementTable,
   acceptanceRow, acceptanceSummary, unboundedKeys, ACCEPTANCE_FIELDS, CELL_OF, crossoverClosed,
@@ -390,6 +390,16 @@ ok('retirement: a reference line is never nominated — a ruler is not an estima
   const rows = retirementTable(h, [h], [h, h]);
   for (const r of rows) assert.ok(!BASELINE_KEYS.includes(r.key), r.key + ' is a reference line');
   assert.ok(!rows.some(r => r.key === h.best), 'the winner cannot retire against itself');
+});
+
+ok('retirement: an EXECUTED nomination carries its date, so a re-run never reads as an open action item', () => {
+  const h = headToHead(spread(12), 24, 0, DEPLOYABLE_POOL_KEYS);
+  const rows = retirementTable(h, [h], [h, h]);
+  const p = rows.find(r => r.key === 'pressure');
+  assert.ok(p, 'pressure stays in the table (the record is re-runnable)');
+  assert.equal(p.executed, EXECUTED_RETIREMENTS.pressure, "pressure's row carries the executed date");
+  assert.equal(EXECUTED_RETIREMENTS.pressure, '2026-08-30');
+  for (const r of rows) if (r.key !== 'pressure') assert.equal(r.executed, null, r.key + ' has no executed date');
 });
 
 ok('retirement: an UNBOUNDED reconstruction is BLOCKED however large its deficit', () => {

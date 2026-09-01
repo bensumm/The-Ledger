@@ -40,9 +40,9 @@
  * `depthExit` IS logged on held rows, but joining the full ledger (active file + `suggestions-archive/`
  * via the canonical `readSuggestionLines`) to these sells covers only ~60 of 392 lots. Recomputing
  * from the archive scores all of them. NOTE the sparseness is NOT purely "few held lots": the
- * `quote-items.mjs --positions` path computes the depth read and never passes `depthExit` to
- * `suggestionEntry` (0 of 81 held-lot rows carry it), and on a default run it is not even computed
- * (it sits inside the `--pressure-exit` branch). That is a separate instrumentation bug.
+ * `quote-items.mjs --positions` path computed the depth read only inside the `--pressure-exit`
+ * branch (0 of 81 held-lot rows carried `depthExit`); that branch died with the pressure exit
+ * retirement, so the surface now computes no depth read at all — a gap separate from the retirement.
  *
  * NO LOOK-AHEAD: the series is truncated to `ts < sellTs` AND `now` is pinned to the sell moment.
  * BOTH matter — dropping the `now` pin alone changes the prediction on 42% of lots. `joindepth.test.mjs`
