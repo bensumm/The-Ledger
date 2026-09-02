@@ -127,7 +127,7 @@ hold-thesis.json          │        │
 ## Flow D — the fill loop (the closed loop between suggestion and reality)
 
 ```
-RuneLite Exchange Logger  ~/.runelite/exchange-logger/*.log ─┐
+RuneLite Exchange Logger  ~/.runelite/exchange-logger/* ─────┐
 coffer-manual.log (add-manual-fill.mjs inject/tombstone)     ├─►  sync-fills.mjs
 mobile-fills.log (phone, contents API)                       ┘        │
                                                                       ▼
@@ -143,6 +143,12 @@ mobile-fills.log (phone, contents API)                       ┘        │
               --publish (once a day, /overnight): fetch/ff (fold phone) + commit + push to main ──► deployed app fetches same-origin
 ```
 
+- The logger's sources are `exchange_*.log` **and, since the 2026-08-26 plugin format switch,
+  `exchange_*.json` + the live `exchange.json`** — and the extension carries money semantics: a
+  `.json` sell terminal's `worth` is **NET of GE tax** (flagged `worthNet` at ingest, interpreted
+  net-primary in `matchTrades`), while `.log`/`.txt` sources — `coffer-manual.log` and
+  `mobile-fills.log` included — stay GROSS. The per-source convention table is
+  `pipeline/FILLS-PIPELINE.md` §5.1 (SLT).
 - `sync-fills.mjs` is **on-demand only** (the scheduler was eliminated — `pipeline/FILLS-PIPELINE.md`
   §12), and the **DEFAULT is LOCAL / zero-git** (Ben 2026-07-15): a bare run rebuilds the artifacts in
   the working tree with no fetch/commit/push — the cheap in-session read run at the top of every

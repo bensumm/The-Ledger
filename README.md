@@ -1009,18 +1009,6 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `quote-items.mjs` default stdout view with `--raw` as the model-free escape hatch; console-only, no
   `screen.json`/app change). Folds into `PLAN.md` and is deleted when its last chunk ships (the
   plan-file rule).
-- `plans/PLAN-SALE-LOG-TAX.md` — in-flight per-topic plan (raised + planned 2026-09-01): RuneLite's
-  Exchange Logger format switch (2026-08-26, `.log`→`.json`) silently changed the sell-terminal
-  `worth` field from GROSS to NET-of-tax, so `matchTrades` taxes it a second time and profitable
-  sales book as losses (lifetime realised understated 3,580,466 across 5 rows + 1 unmatched;
-  `deriveCash`'s sellIn double-taxes the same way). §1–§8 are the problem statement (symptom,
-  evidence split, blast radius, 8 triage-proven traps); §9–§12 the decided design: extension-based
-  `isNetWorthSource` discriminator stamped as `worthNet:true` on sell events at both readers
-  (`regenerate()` + `readOfferRows`), interpreted in `matchTrades`/`deriveCash` (net is the money
-  path, gross recovered via a new `grossFromNet` beside `tax()` in `js/quotecore.js` for display),
-  a per-file convention cross-check guard, and a real-book acceptance list. Ingest normalisation
-  was REJECTED because rewriting `spent` breaks the `eventId` content-hash merge/tombstone
-  contract. Folds into `PLAN.md` and is deleted when its last chunk ships (the plan-file rule).
 - `plans/PLAN-DIGEST-SIGNAL-AND-SCAN-PERF.md` — in-flight per-topic plan (2026-08-07, **PARTLY SHIPPED —
   SP1 landed**; corrected 2026-08-09, this entry said PLANNING ONLY / no code changed): two workstreams that share one file (`pipeline/commands/screen-flip-niches.mjs`)
   and therefore one parallel-safety contract. **A — digest SIGNAL:** as of that plan's writing
