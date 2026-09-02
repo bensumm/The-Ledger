@@ -90,7 +90,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   no longer on the write path — all consumed ONLY by `pipeline/commands/screen-flip-niches.mjs`, no app import);
   also the ONE type-7 quantile/median home (SF-1):
   `quantileSorted` (pre-sorted input) + `quantileOf`/`median` (sort a copy) — `termstructure.mjs`
-  re-exports it as `quantile`, `retrojoin.mjs` aliases `quantileOf`),
+  re-exports it as `quantile`, `retrojoin.mjs` aliases `quantileOf`; and home to `grossFromNet`
+  (PLAN-SALE-LOG-TAX — the EXACT sell-side inverse of `tax()`: the smallest integer `g` with
+  `g − tax(g) === round(net)`, found by a ±2 scan around `round(net/0.98)` then `net + TAXCAP` (the
+  cap region falls out of tax saturation). NOT `breakEven` (that answers ≥ and lands 1gp high where
+  two consecutive `g` share one net — the per-item floor makes ~every-50th pair collide, so an ask at
+  an exact-2% point recovers 1gp low: display-only, realised never routes through it; fractional net
+  inverts the rounded value). Consumed by the reconstruction + the raw-row display sites to recover
+  gross from `.json`-era net `worth`; bond-blind like `tax()` — the quarantined-bond caveat applies),
   `forward-reach.mjs` (the shared FORWARD-SCORING primitives over the 1h archive — `touchedAt` (bid
   side, `avgLowPrice`), `reachedWithin` / `maxHighWithin` (ask side, `avgHighPrice`), `covers`,
   `firstIndexAfter`, and the END-OF-WINDOW bail pair `endLowWithin` / `endHighWithin` off one
@@ -1987,7 +1994,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `reconstruct.mjs` (shared
     FIFO reconstruction + `dedupeSnapshots`; ARCH-1 adds `buildTombstonedEvents` — the live-log →
     tombstone-filtered event list monitor-offers.mjs reconstructs from, mirroring sync's inline REMOVE-tombstone
-    filter),
+    filter. PLAN-SALE-LOG-TAX adds the WORTH-CONVENTION layer: `isNetWorthSource(filename)` (`.json`
+    sources log a sell's `worth` NET of tax since the 2026-08-26 plugin format switch; `.log`/`.txt`
+    — incl. manual/mobile — stay GROSS; source-derived, never timestamp), a `worthNet: true` flag
+    stamped on SELL events by `parseJsonLine`'s per-file option or a stamped raw field (never hashed
+    into `eventId`, so the fills.json merge auto-migrates flags id-for-id), `collapseOffers`
+    propagation to the offer, `sellNetEach(offer)` — the ONE net-proceeds formula `matchTrades`'
+    realised and `deriveCash`'s sellIn share — with gross/tax recovered for display via
+    `js/quotecore.js` `grossFromNet`, and `auditWorthConvention(rows, assignedNet, filename)` — the
+    per-file recurrence guard `regenerate()` runs every sync (warn-only, never abort/auto-flip;
+    limits in `pipeline/FILLS-PIPELINE.md` §5.1)),
     `campaigns.mjs` (WC2 — the shared CAMPAIGN reconstruction primitive: `reconstructCampaigns(events)` =
     the exact `dedupeSnapshots→collapseOffers→stampFirstFill→matchTrades→groupCampaigns` sequence
     `join-outcomes.mjs` used to run inline, lifted here VERBATIM so the forward-join siblings
@@ -2007,7 +2023,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `offers.mjs` (exchange-log discovery + open-offer
     semantics; P0 also adds `readOffersSnapshot`/`askFromSnapshot`/`bidFromSnapshot` — the OTHER-machine-safe
     reader of the flat root `offers.json`, normalized to the `{price,filled,total}` shape the context
-    position stage wants, so quote-items.mjs can see the live book without the `~/.runelite` log dir),
+    position stage wants, so quote-items.mjs can see the live book without the `~/.runelite` log dir;
+    `readOfferRows` stamps rows from a `.json` (net-worth) source `worthNet: true` — PLAN-SALE-LOG-TAX —
+    so the convention survives `readExchangeLog`'s stringify round-trip into `parseJsonLine` and the
+    raw-row px displays (monitor-offers / trigger-alerts) can recover gross on a net sell row),
     `paths.mjs` (chunk 6 — the tiny shared `REPO_DIR` anchor, honoring `--repo-dir`, so `derive-cash-tiers.mjs`
     and `cash-anchor.mjs` no longer import it from the `sync-fills.mjs` COMMAND (a lib→command layering
     inversion that ran sync's module top-level as a side effect); `sync-fills.mjs` re-exports it so
@@ -2400,8 +2419,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `.capital-state.json`; now the ANCHOR store rather than the answer — kept out of pure
     `capital-utilization.mjs`),
     `derive-cash-tiers.mjs` (PLAN-CASH-TRACKING — PURE `deriveCash(events, anchor, liveOffers)` +
-    `restingBuyEscrow` deriving idle cash from the fills-log flow (Σ sells-after-tax − Σ buys since the
-    anchor) minus LIVE-offers.json resting-bid escrow, so the balance is computed not re-stated; the
+    `restingBuyEscrow` deriving idle cash from the fills-log flow (Σ sell net proceeds − Σ buys since the
+    anchor; sell proceeds via `reconstruct.mjs`'s worthNet-aware `sellNetEach`, PLAN-SALE-LOG-TAX — a
+    `.json`-era sell's `spent` is already net and is no longer taxed a second time) minus
+    LIVE-offers.json resting-bid escrow, so the balance is computed not re-stated; the
     INJECTION DETECTOR raises the anchor when resting bids exceed the tracked balance; `loadDerivedCash`
     is the impure loader (fills.json + offers.json + `cashstate` anchor). Pinned by `derive-cash-tiers.test.mjs`),
     `book-model.mjs` (PLAN-DASHBOARD — PURE aggregation layer for `/book`'s `read-book.mjs`: `buildBook({

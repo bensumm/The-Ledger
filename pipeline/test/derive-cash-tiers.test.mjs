@@ -51,6 +51,15 @@ ok('realized flow nets sells after tax and subtracts buys', () => {
   assert.equal(r.inferredInjection, 0);
 });
 
+/* --- 1b. SLT (PLAN-SALE-LOG-TAX): a net-flagged sell's spent IS the proceeds — no second tax ---------- */
+ok('a worthNet sell (json-era log) adds its spent as-is to sellIn (no double tax)', () => {
+  const each = 1_000_000, netEach = each - GE_TAX(each);         // 980,000
+  const events = [{ ...ev(T0 + 60, 0, 'sell', 'complete', each, 10, 10, netEach * 10), worthNet: true }];
+  const r = deriveCash(events, anchor, []);
+  assert.equal(r.sellIn, netEach * 10, 'spent is already net — subtracting tax again understates cash');
+  assert.equal(r.liquidCapital, 100_000_000 + netEach * 10);
+});
+
 /* --- 2. flow BEFORE the anchor is excluded ----------------------------------------------------------- */
 ok('a fill settled before the anchor does not move the balance', () => {
   const events = [ev(T0 - 300, 0, 'sell', 'complete', 1_000_000, 10, 10, 10_000_000)];

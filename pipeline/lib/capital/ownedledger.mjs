@@ -156,7 +156,7 @@ export function foldPendingBuys(fillsEvents, ownedStore, { qtyMax = PENDING_QTY_
   for (const o of collapseOffers(buys)) {
     if (!o || !(o.filled > 0)) continue;
     if (known.has(o.itemId) || alreadyPending.has(o.itemId) || seen.has(o.itemId)) continue;
-    const each = o.spent / o.filled;   // actual executed gross price per item
+    const each = o.spent / o.filled;   // executed price per item (buys/banked only — no sell tax, so gross == net)
     if (each >= valueFloor && o.filled <= qtyMax) {
       out.push({ id: o.itemId, qty: o.filled, buyEach: Math.round(each), buyTs: o.tsClose, firstSeenTs: o.tsOpen });
       seen.add(o.itemId);

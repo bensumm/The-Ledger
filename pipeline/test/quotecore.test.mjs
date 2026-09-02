@@ -25,6 +25,7 @@ import { phase, regimeDrift } from '../../js/quotecore.js';   // trajectory-phas
 import { pressureText } from '../../js/quotecore.js';   // 24h buy/sell flow-imbalance display formatter
 import { askHeadroomText } from '../../js/quotecore.js';   // Bar E ask-headroom inform-only signal formatter
 import { quantileSorted, quantileOf, median } from '../../js/quotecore.js';   // SF-1 shared type-7 quantile/median home
+import { tax, grossFromNet } from '../../js/quotecore.js';   // PLAN-SALE-LOG-TAX: the exact sell-side net inverse
 
 const NOW_SEC = 1_720_000_000;          // arbitrary fixed "now" (unix seconds)
 const NOW_MS  = NOW_SEC * 1000;
@@ -856,6 +857,37 @@ ok('Bar E ask-headroom — breakup (the incident): Class-1 gap is null; the Mome
   assert.equal(row.mom, 'breakup', 'live instabuy above the raw band max fires breakup (the existing tell)');
   assert.equal(row.optSell, row.quickSell, 'optSell == quickSell (live print is the top; no in-band evidence above)');
   assert.equal(row.askHeadroom, null, 'no Class-1 number in a breakup — ladder guidance rides the momentum verdict');
+});
+
+// --- PLAN-SALE-LOG-TAX: grossFromNet — the exact sell-side net inverse -----------------------
+console.log('\ngrossFromNet (PLAN-SALE-LOG-TAX) acceptance:');
+ok('round-trip g → g−tax(g) → smallest preimage, across all tax regions incl. the 5m-cap boundary', () => {
+  // tax's per-item floor makes ~every-50th pair of consecutive g share one net, so the exact
+  // invariant is NET preservation with the preimage in {g−1, g} — never an exact g everywhere.
+  const gs = [49, 50, 51, 137, 5_000, 343_567, 9_999_999, 22_944_000, 37_099_995,
+    244_999_999, 249_999_998, 249_999_999, 250_000_000, 250_000_001,
+    407_999_999, 408_000_000, 408_000_001];
+  for (const g of gs) {
+    const net = g - tax(g);
+    const g2 = grossFromNet(net);
+    assert.equal(g2 - tax(g2), net, `net not preserved for g=${g} (got ${g2})`);
+    assert.ok(g2 <= g && g - g2 <= 1, `not the smallest preimage for g=${g} (got ${g2})`);
+  }
+});
+ok('hand-checked inverses: real §4 rows, the exact-2% collision, sub-50 exemption, cap saturation', () => {
+  assert.equal(grossFromNet(36_357_996), 37_099_995);          // Armadyl crossbow (tax 741,999) — exact
+  assert.equal(grossFromNet(403_000_000), 408_000_000);        // cap region: g − 5m is injective → exact
+  assert.equal(grossFromNet(48), 48);                          // sub-50gp sells are tax-exempt
+  // The collision class: an ask at an exact-2% point (g a multiple of 50) shares its net with g−1,
+  // and the smallest-preimage convention picks g−1 — a ≤1gp/item DISPLAY understatement (realised
+  // never goes through this inverse). The real 9244 row sold at 350 (tax 7/ea) but recovers as 349:
+  assert.equal(grossFromNet(343), 349);                        // 349 − floor(6.98) = 343 too
+  assert.equal(grossFromNet(22_485_120), 22_943_999);          // Magus ring: true ask 22,944,000 (exact 2%)
+});
+ok('fractional net (multi-price cumulative partial) inverts the rounded value — display-only ≤1gp', () => {
+  assert.equal(grossFromNet(343.4), grossFromNet(343));
+  assert.equal(grossFromNet(342.6), grossFromNet(343));
+  assert.equal(grossFromNet(NaN), null);
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

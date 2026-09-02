@@ -72,7 +72,7 @@
  * like the cashstate figure it derives from. Node-only consumer → no APP_VERSION concern. */
 import fs from 'node:fs';
 import path from 'node:path';
-import { collapseOffers, dedupeSnapshots, GE_TAX } from '../reconstruct/reconstruct.mjs';
+import { collapseOffers, dedupeSnapshots, sellNetEach } from '../reconstruct/reconstruct.mjs';
 import { readCash } from './cash-anchor.mjs';
 import { readOffersSnapshot } from '../reconstruct/offers.mjs';
 import { REPO_DIR } from '../paths.mjs';   // chunk 6: was '../commands/sync-fills.mjs' (a lib importing a command inverted the layering + ran its top-level)
@@ -146,13 +146,12 @@ export function deriveCash(events, anchor, liveOffers = null, { marketRef = null
 
   let buyOut = 0, sellIn = 0, buyN = 0, sellN = 0;
   for (const o of offers) {
-    const each = o.filled > 0 ? o.spent / o.filled : 0;
     // settled = the fill closed after the anchor (cash moved since we last knew the balance). A currently-
     // resting partial buy still counts its FILLED spend here (those units are bought); its UNFILLED
     // remainder is the escrow leg below — summed once each, never the whole qty×price twice.
     if (o.filled > 0 && o.tsClose > anchorSec) {
       if (o.type === 'buy') { buyOut += o.spent; buyN++; }
-      else if (o.type === 'sell') { sellIn += o.spent - GE_TAX(each) * o.filled; sellN++; }
+      else if (o.type === 'sell') { sellIn += sellNetEach(o) * o.filled; sellN++; }   // the ONE worthNet-aware net formula (PLAN-SALE-LOG-TAX)
       // banked / withdraw → no cash flow (pre-owned stock / personal-use withdrawal)
     }
   }

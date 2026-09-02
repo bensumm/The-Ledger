@@ -128,6 +128,9 @@ Claude is **not** in the runtime loop. The pipeline is plugin → file → git �
       "qty": 5000,                 // total offer quantity
       "filled": 5000,              // CUMULATIVE quantity filled as of this event
       "spent": 1400000             // CUMULATIVE gp moved as of this event
+      // + "worthNet": true        // OPTIONAL, sell events from a `.json` source only
+      //                           // (PLAN-SALE-LOG-TAX): spent is NET of tax. Absent = gross.
+      //                           // Not part of the id hash, so re-parses migrate it in place.
     }
   ]
 }
@@ -141,15 +144,17 @@ Design decisions, deliberate — don't undo casually:
 - **Idempotent sync**: every run re-reads all logs and dedupes by content-hash id. No
   incremental watermark state to corrupt. Personal volume is small; this is fine.
 - Retention: 180 days / 20k events (config constants).
-- **`spent` is GROSS, confirmed empirically** (2026-07-01): sold 33 dragon arrowtips
-  (item 11237), offer listed at 3900/ea but filled at avg 3945/ea (GE matched a
+- **`spent` on a sell is GROSS in `.log`-era sources — but NET OF TAX in `.json`-era ones
+  (PLAN-SALE-LOG-TAX, 2026-09-01).** The gross reading was confirmed empirically 2026-07-01: sold 33
+  dragon arrowtips (item 11237), offer listed at 3900/ea but filled at avg 3945/ea (GE matched a
   better buyer than the listed price — sell offers are a floor, not the execution
-  price). Logged `worth: 130185` = exactly `33 × 3945`, no tax subtracted. Real
-  after-tax proceeds would be `130185 − floor(3945×0.02)×33 = 127611`. **The Coffer
-  must apply its own `tax()` function to `spent`/`worth` when computing realized
-  margins from fills.json** — same as it already does for live quotes. No change
-  needed in `sync-fills.mjs`; leaving `spent` raw/gross is correct and consistent
-  with how buy-side `spent` already behaves (buys have no tax to begin with).
+  price). Logged `worth: 130185` = exactly `33 × 3945`, no tax subtracted. **That reading stopped
+  being universally true when the plugin switched formats on 2026-08-26** (see §10): in
+  `exchange_*.json` / `exchange.json` a sell terminal's `worth` is `offer×qty − floor(offer×0.02)×qty`
+  — already net. The reconstruction therefore reads the convention PER SOURCE FILE
+  (`isNetWorthSource`, §5.1 table) and events from net sources carry `worthNet: true`; a flagged
+  sell's `spent` is used as net proceeds directly, an unflagged one is taxed by `tax()` exactly as
+  before. Buy-side `spent` is unaffected either way (buys have no tax to begin with).
 - Corollary: **quoted/offer price ≠ execution price**, even for filled orders — GE
   matches favorably when possible. Any slippage calibration (§6.5) should compare
   realized avg price (`spent/filled`) against the quote, not assume they're equal
@@ -219,17 +224,39 @@ answer "what do I hold?" the same way and a purged lot never reappears as a phan
   derived `positions.json` is correct even before that archive is re-cleaned.
 - **`collapseOffers()`** reduces the per-transition stream to one row per *offer*
   (contiguous `slot+item+type` run), taking the final cumulative `filled`/`spent`.
-  Executed price-each = `spent/filled` (gross), never the listed `price` (see §5).
+  Executed price-each = `spent/filled`, never the listed `price` (see §5). Whether that value is
+  gross or net follows the offer's `worthNet` flag (propagated from any flagged event in the run):
+
+  **Per-source `worth` convention (PLAN-SALE-LOG-TAX — decided by `isNetWorthSource(filename)`,
+  the source EXTENSION, never a timestamp):**
+
+  | Source | Sell `worth` | `worthNet` stamped |
+  | --- | --- | --- |
+  | `exchange_*.log` / `*.txt` (plugin, pre-2026-08-26) | GROSS | no |
+  | `exchange_*.json` + live `exchange.json` (plugin, 2026-08-26 →) | **NET of tax** | yes (sell events only) |
+  | `coffer-manual.log` (`add-manual-fill.mjs` / the app) | GROSS (`--net` converts before writing) | no |
+  | `mobile-fills.log` (phone) | GROSS | no |
+
+  Every sync cross-checks each file's sell terminals against BOTH formulas
+  (`auditWorthConvention`, warn-only — never abort, never auto-flip): ≥1 exact opposite-convention
+  match with 0 assigned-convention matches ⇒ a LOUD warning + a count in the sync summary.
+  **Stated limit:** rows where the formulas coincide (sub-50gp, tax 0) and above-ask fills are
+  skipped, so a future semantics change on a file whose rows are ALL ambiguous is invisible to this
+  guard — nothing row-level can see it; that residual risk is accepted.
 - **`matchTrades()`** FIFO-matches buy fills against sell fills per item → `closed`
-  (with 2% tax applied to the sell exec price, `realised` = after-tax profit) and
+  (`realised` = net proceeds − cost: on a gross sell the 2% tax is applied to the exec price, on a
+  `worthNet` sell `spent` already IS the net — `sellNetEach` is the one shared formula; the
+  `sellEach`/`tax` display fields are then recovered via `grossFromNet`, exact except ≤1gp low on an
+  ask at an exact-2% point) and
   `open` (unsold inventory at real avg cost; same item+price lots merged).
   It is **SYMMETRIC** since SM1 (PLAN-SYMMETRIC-MATCHING): it also matches **sell → buy**, so
   selling an item you OWN and later rebuying it closes a **keep round trip** rather than
   leaking the sell into `unmatched` and the rebuy into a phantom open lot.
 - **`awaitingRebuy`** (SM1) = a **keep** sold with no open buy lot — the open leg of a round trip,
-  held until a rebuy closes it. Carries `beRebuy = sellEach − tax(sellEach)`: the **break-even on the
-  capital reallocation** (rebuy below it and freeing that capital cost nothing; above it, the gap is
-  what it cost). Gated on `owned-items.json` `classification:'keep'` — see §5.1a. It is an **open
+  held until a rebuy closes it. Carries `beRebuy` = the sale's NET proceeds per item (on a gross-era
+  row that is `sellEach − tax(sellEach)`; on a `worthNet` row it is the logged net directly): the
+  **break-even on the capital reallocation** (rebuy below it and freeing that capital cost nothing;
+  above it, the gap is what it cost). Gated on `owned-items.json` `classification:'keep'` — see §5.1a. It is an **open
   measurement, not a to-do with a deadline**: never auto-retire or staleness-sweep it.
 - **`unmatched`** = sells with no logged buy lot **and not a keep** (the log started mid-stream, so
   the buy predates it). Cost basis is unknowable ⇒ **no realized profit is invented** for
@@ -382,7 +409,9 @@ Original roadmap — planned as the next tool feature, roughly in order:
       later excised (chunk X2, 2026-07-05); `fills.json`/`positions.json` now update only when a
       session or Ben runs the sync.)*
 - [x] Sell-tax gross-vs-net question answered empirically and recorded here (§5) —
-      `spent`/`worth` is gross, not post-tax. Also surfaced that execution price can
+      `spent`/`worth` was gross in the `.log` era. **RE-ANSWERED 2026-09-01 (PLAN-SALE-LOG-TAX):
+      the 2026-08-26 `.json` format logs a sell's `worth` NET of tax — see the §5.1 per-source
+      table.** Also surfaced that execution price can
       differ from the quoted offer price even on a full fill.
 - [x] Tool-side fetch+merge (§6.1) — **shipped 0.18.0** (`syncFills()` merges
       `positions.json` into the Ledger/Coffer; the `generatedAt` staleness banner + M1's
@@ -398,11 +427,17 @@ detail is authoritative there; the operational rules below are the single home.
 - **RuneLite config lives under `~/.runelite/profiles2/*.properties`.** Changes made
   in-game only flush to disk on client close/restart — if a just-changed setting still
   reads the old value, ask Ben to restart the client before re-checking.
-- **Exchange Logger plugin log:** `~/.runelite/exchange-logger/exchange.log`, JSON mode.
+- **Exchange Logger plugin log:** `~/.runelite/exchange-logger/`, JSON lines.
+  **Format switch 2026-08-26 (between 2026-08-21 and 2026-08-26; PLAN-SALE-LOG-TAX):** the plugin
+  stopped writing `exchange_YYYY-MM-DD.log` and now writes `exchange_YYYY-MM-DD.json` (+ the live
+  `exchange.json`), and in the new format a sell terminal's `worth` is **NET of the 2% tax** (the
+  `.log` era was gross — verified empirically both times, §5). The reconstruction discriminates per
+  source file (`isNetWorthSource`) and a per-file convention audit warns on every sync if a source's
+  rows stop matching their assigned formula — six days ran green-but-wrong before that guard existed.
   Real field names differ from the plugin's own naming conventions — see the ADAPTER
-  comment block at the top of `sync-fills.mjs` for the verified mapping (`item`→itemId,
-  `offer`→price, `max`→qty, `qty`→filled, `worth`→spent). Don't re-guess field names; that
-  mapping was verified against real log output (§9).
+  comment block at the top of `reconstruct.mjs` for the verified mapping (`item`→itemId,
+  `offer`→price, `max`→qty, `qty`→filled, `worth`→spent) and its WORTH CONVENTION block. Don't
+  re-guess field names; that mapping was verified against real log output (§9).
 - **Cancel semantics:** the log emits explicit `CANCELLED_BUY`/`CANCELLED_SELL` states
   (confirmed live 2026-07-02) — `normalizeStateStr` maps any `CANCEL*` to `'cancelled'`.
   That explicit line is the ONLY source of a cancel. The old cancel-to-EMPTY inference

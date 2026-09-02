@@ -24,6 +24,7 @@
 import assert from 'node:assert/strict';
 import {
   parseJsonLine, buildEvents, reconstruct, eventId, dedupeSnapshots, collapseOffers,
+  isNetWorthSource, auditWorthConvention, sellNetEach, GE_TAX,
 } from '../lib/reconstruct/reconstruct.mjs';
 
 let pass = 0;
@@ -47,12 +48,12 @@ const raw = ({ state, slot, item, time, date = '2026-07-01',
   ({ date, time, state, slot, item, qty: filledQty, worth: grossWorth, max: offerSize, offer: priceEach });
 const removeLine = target => JSON.stringify({ state: 'REMOVE', target });
 
-function runPipeline(rawObjs) {
+function runPipeline(rawObjs, parseOpts) {
   const rawParsed = [];
   const removeTargets = new Set();
   for (const o of rawObjs) {
     const line = typeof o === 'string' ? o : JSON.stringify(o);
-    const r = parseJsonLine(line);
+    const r = parseJsonLine(line, parseOpts);
     if (r && r.remove !== undefined) { if (r.remove) removeTargets.add(r.remove); continue; }
     if (r) rawParsed.push(r);
   }
@@ -261,6 +262,111 @@ ok('collapseOffers folds a rising partial-fill sequence into ONE lot at final to
   assert.equal(offers[0].spent, 1000, 'final cumulative worth');
   const { open } = reconstruct(events);
   assert.deepEqual(open.map(o => [o.itemId, o.qty, o.buyEach]), [[700, 10, 100]], 'one open lot of 10 @ 100');
+});
+
+// ============================================================================================
+console.log('\nSLT (PLAN-SALE-LOG-TAX) worth-convention acceptance:');
+
+// RuneLite's Exchange Logger switched formats 2026-08-26: in `.json` sources a sell's `worth` is
+// NET of tax (the `.log` era, coffer-manual.log, and mobile-fills.log stay GROSS). Fixture numbers
+// are the real Magus ring row (§4 of the plan): listed/filled gross 22,944,000, logged net
+// 22,485,120 (tax 458,880), bought at 22,401,000 → true realised +84,120 (booked −365,582 pre-fix).
+
+// --- SLT-1. the discriminator is the source EXTENSION, never a timestamp --------------------
+ok('isNetWorthSource: .json → net; .log/.txt (incl. manual/mobile) → gross', () => {
+  assert.equal(isNetWorthSource('exchange_2026-08-26.json'), true);
+  assert.equal(isNetWorthSource('C:\\logs\\exchange.json'), true);
+  assert.equal(isNetWorthSource('exchange_2026-08-21.log'), false);
+  assert.equal(isNetWorthSource('coffer-manual.log'), false);
+  assert.equal(isNetWorthSource('mobile-fills.log'), false);
+  assert.equal(isNetWorthSource('exchange.txt'), false);
+});
+
+// --- SLT-2. the flag arrives via BOTH entry routes, on sell events only ---------------------
+ok('parseJsonLine option route: flags a SELL, never a BUY; absent without the option', () => {
+  const sold = raw({ state: 'SOLD', slot: 0, item: 28313, time: '11:00:00', filledQty: 1, grossWorth: 22_485_120, offerSize: 1, priceEach: 22_944_000 });
+  const bought = raw({ state: 'BOUGHT', slot: 1, item: 28313, time: '10:00:00', filledQty: 1, grossWorth: 22_401_000, offerSize: 1, priceEach: 22_401_000 });
+  assert.equal(parseJsonLine(JSON.stringify(sold), { worthNet: true }).worthNet, true);
+  assert.equal(parseJsonLine(JSON.stringify(bought), { worthNet: true }).worthNet, undefined, 'buys carry no tax — never flagged');
+  assert.equal(parseJsonLine(JSON.stringify(sold)).worthNet, undefined, 'no option, no field → gross as always');
+});
+ok('parseJsonLine stamped-field route: a worthNet:true raw field (the readExchangeLog round-trip) is honoured', () => {
+  const sold = { ...raw({ state: 'SOLD', slot: 0, item: 28313, time: '11:00:00', filledQty: 1, grossWorth: 22_485_120, offerSize: 1, priceEach: 22_944_000 }), worthNet: true };
+  assert.equal(parseJsonLine(JSON.stringify(sold)).worthNet, true);
+});
+
+// --- SLT-3. the flag rides event → offer, and eventId never sees it -------------------------
+ok('collapseOffers propagates worthNet to the offer; eventId is unchanged by the flag', () => {
+  const lines = [
+    raw({ state: 'SELLING', slot: 0, item: 28313, time: '10:59:00', offerSize: 1, priceEach: 22_944_000 }),
+    raw({ state: 'SOLD', slot: 0, item: 28313, time: '11:00:00', filledQty: 1, grossWorth: 22_485_120, offerSize: 1, priceEach: 22_944_000 }),
+  ];
+  const { events: flagged } = runPipeline(lines, { worthNet: true });
+  const { events: plain } = runPipeline(lines);
+  assert.equal(collapseOffers(flagged)[0].worthNet, true, 'offer carries the convention bit');
+  assert.equal(collapseOffers(plain)[0].worthNet, undefined);
+  assert.deepEqual(flagged.map(e => e.id), plain.map(e => e.id),
+    'eventId hashes [ts,slot,itemId,type,state,filled,spent] only — the flag must not change ids (the §9b merge/auto-migration contract)');
+});
+
+// --- SLT-4. the money: a net-convention sell books realised = net − buy ---------------------
+// MUTATION-VERIFIED: fails on pre-fix matchTrades (which re-taxed the already-net each and booked
+// the Magus ring at −365,582).
+ok('net-convention sell through the ordinary flip path: realised = net − buy, gross recovered for display', () => {
+  const { events } = runPipeline([
+    raw({ state: 'BOUGHT', slot: 0, item: 28313, time: '10:00:00', filledQty: 1, grossWorth: 22_401_000, offerSize: 1, priceEach: 22_401_000 }),
+    raw({ state: 'SOLD', slot: 1, item: 28313, time: '11:00:00', filledQty: 1, grossWorth: 22_485_120, offerSize: 1, priceEach: 22_944_000 }),
+  ], { worthNet: true });
+  const { closed } = reconstruct(events);
+  assert.equal(closed.length, 1);
+  // realised = net(22,485,120) − buy(22,401,000) — EXACT. sellEach/tax are display fields recovered
+  // via grossFromNet; the true ask 22,944,000 sits at an exact-2% point, so the smallest preimage
+  // reads 1gp low (22,943,999 / tax 458,879) — the accepted ≤1gp display-only class.
+  assert.deepEqual([closed[0].buyEach, closed[0].sellEach, closed[0].tax, closed[0].realised],
+    [22_401_000, 22_943_999, 458_879, 84_120]);
+});
+
+// --- SLT-5. a net-convention unmatched sell (no logged buy) --------------------------------
+// The real 9244 row: 3,046 sold at ask 350, logged net 343/ea. 350 is an exact-2% point, so the
+// smallest preimage recovers 349 / tax 6 (≤1gp display class; the true ask was 350 / tax 7). The
+// load-bearing change vs pre-fix is sellEach: it now reads a recovered GROSS, not the net-in-disguise 343.
+ok('net-convention unmatched sell: sellEach is a recovered gross, no longer the net in disguise', () => {
+  const { events } = runPipeline([
+    raw({ state: 'SOLD', slot: 0, item: 9244, time: '09:00:00', filledQty: 3046, grossWorth: 343 * 3046, offerSize: 3046, priceEach: 350 }),
+  ], { worthNet: true });
+  const { unmatched } = reconstruct(events);
+  assert.equal(unmatched.length, 1);
+  assert.deepEqual([unmatched[0].sellEach, unmatched[0].tax], [349, 6 * 3046]);
+});
+
+// --- SLT-6. sellNetEach — the ONE net-proceeds formula (shared with deriveCash) -------------
+ok('sellNetEach: flagged → spent/filled as-is; unflagged → minus the per-item tax', () => {
+  assert.equal(sellNetEach({ spent: 22_485_120, filled: 1, worthNet: true }), 22_485_120);
+  assert.equal(sellNetEach({ spent: 22_944_000, filled: 1 }), 22_944_000 - GE_TAX(22_944_000));
+  assert.equal(sellNetEach({ spent: 0, filled: 0 }), 0, 'total on an unfilled offer');
+});
+
+// --- SLT-7. the recurrence guard: auditWorthConvention ---------------------------------------
+const sellLine = (price, qty, worth) =>
+  parseJsonLine(JSON.stringify(raw({ state: 'SOLD', slot: 0, item: 9, time: '09:00:00', filledQty: qty, grossWorth: worth, offerSize: qty, priceEach: price })));
+ok('guard: a .json-assigned file full of GROSS rows warns (mismatch), and vice versa', () => {
+  const grossRows = [sellLine(1000, 5, 5000), sellLine(2000, 1, 2000)];
+  const netRows = [sellLine(1000, 5, (1000 - 20) * 5), sellLine(2000, 1, 2000 - 40)];
+  assert.equal(auditWorthConvention(grossRows, true, 'x.json').mismatch, true, 'assigned net, matches gross → semantics changed again');
+  assert.equal(auditWorthConvention(netRows, false, 'x.log').mismatch, true, 'assigned gross, matches net');
+});
+ok('guard: clean files are silent; ambiguous (tax=0) and above-ask rows are skipped, not failed', () => {
+  assert.equal(auditWorthConvention([sellLine(1000, 5, 5000)], false, 'x.log').mismatch, false, 'gross file read as gross');
+  assert.equal(auditWorthConvention([sellLine(1000, 5, (1000 - 20) * 5)], true, 'x.json').mismatch, false, 'net file read as net');
+  const amb = auditWorthConvention([sellLine(40, 100, 4000)], true, 'x.json');   // sub-50gp: gross == net
+  assert.deepEqual([amb.checked, amb.mismatch], [0, false], 'tax-0 rows are invisible to the guard, never a failure');
+  const above = auditWorthConvention([sellLine(1000, 5, 5100)], true, 'x.json'); // filled above the ask — matches neither
+  assert.deepEqual([above.checked, above.mismatch], [0, false]);
+});
+ok('guard: one opposite match amid assigned matches does NOT flag (needs 0 assigned-convention matches)', () => {
+  const mixed = [sellLine(1000, 5, 5000), sellLine(2000, 1, 2000 - 40)];        // one gross + one net
+  assert.equal(auditWorthConvention(mixed, false, 'x.log').mismatch, false);
+  assert.equal(auditWorthConvention(mixed, true, 'x.json').mismatch, false);
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

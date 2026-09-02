@@ -28,7 +28,7 @@
  */
 import { collapseOffers, matchTrades, dedupeSnapshots } from '../reconstruct/reconstruct.mjs';
 import { median } from './cli.mjs';
-import { tax, quantileOf } from '../../../js/quotecore.js';   // quantileOf = the ONE sorting type-7 quantile (SF-1)
+import { tax, grossFromNet, quantileOf } from '../../../js/quotecore.js';   // quantileOf = the ONE sorting type-7 quantile (SF-1)
 
 // --- named placeholder horizons (s): how long after a suggestion a BUY fill still counts as "acting
 // on it". Keyed by the strategy niche the row was surfaced under; a row with no/unknown mode (a
@@ -171,7 +171,9 @@ export function retroJoin(suggestions, fillsEvents, { horizonByMode = HORIZON_BY
         partial: false, realisedNet: null, realisedPerUnit: null, sellEach: null, holdSec: null };
     }
     const first = claimed[0];
-    const fillEach = first.filled > 0 ? first.spent / first.filled : null;
+    const rawEach = first.filled > 0 ? first.spent / first.filled : null;
+    // worthNet → recover gross (latent: only never-flagged BUY offers are claimed today — PLAN-SALE-LOG-TAX)
+    const fillEach = rawEach != null && first.worthNet ? grossFromNet(rawEach) : rawEach;
     const priceKnown = refBuy != null && fillEach != null;
     const outcome = !priceKnown ? 'filled' : (fillEach <= refBuy ? 'filled' : 'filled-worse');
     const rt = rtByBuyTs.get(first.tsOpen) || null;

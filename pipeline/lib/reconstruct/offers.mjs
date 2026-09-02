@@ -16,6 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { offerQuarantined } from '../ignored.mjs';   // MERCH-book quarantine for resting farm/loot offers
+import { isNetWorthSource } from './reconstruct.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)); // pipeline/lib/
 export const LOG_DIR = path.join(os.homedir(), '.runelite', 'exchange-logger');
@@ -23,14 +24,18 @@ export const LOG_DIR = path.join(os.homedir(), '.runelite', 'exchange-logger');
 /** Read every log file in `dir` (mtime order, so rotated logs are captured) and return the
  *  raw JSON rows (one per parseable line). The lowest-level shared reader — readExchangeLog()
  *  and the offers.json emitter both go through this so log discovery can't drift. A `dir`
- *  override (defaults to LOG_DIR) lets the offers snapshot / fixture tests point at a temp dir. */
+ *  override (defaults to LOG_DIR) lets the offers snapshot / fixture tests point at a temp dir.
+ *  Rows from a `.json` (net-worth) source are stamped `worthNet: true` — PLAN-SALE-LOG-TAX. */
 export function readOfferRows(dir = LOG_DIR) {
   const logFiles = fs.readdirSync(dir).filter(f => /\.(log|txt|json)$/i.test(f))
     .map(f => path.join(dir, f)).sort((a, b) => fs.statSync(a).mtimeMs - fs.statSync(b).mtimeMs);
   const rows = [];
-  for (const f of logFiles) for (const raw of fs.readFileSync(f, 'utf8').split('\n')) {
-    if (!raw) continue;
-    try { rows.push(JSON.parse(raw)); } catch {}
+  for (const f of logFiles) {
+    const worthNet = isNetWorthSource(f);
+    for (const raw of fs.readFileSync(f, 'utf8').split('\n')) {
+      if (!raw) continue;
+      try { const r = JSON.parse(raw); if (worthNet) r.worthNet = true; rows.push(r); } catch {}
+    }
   }
   return rows;
 }

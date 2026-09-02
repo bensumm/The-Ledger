@@ -9,7 +9,7 @@
  * Pipeline: readLog -> parseJsonLine per line -> buildEvents -> reconstruct.
  */
 import { createHash } from 'node:crypto';
-import { tax } from '../../../js/quotecore.js'; // the ONE tax impl (chunk 4.1)
+import { tax, grossFromNet } from '../../../js/quotecore.js'; // the ONE tax impl (chunk 4.1) + its exact inverse (PLAN-SALE-LOG-TAX)
 
 /* ---------------------------------------------------------------------
  * ADAPTER — Exchange Logger (JSON mode) writes one line per slot-state
@@ -20,6 +20,12 @@ import { tax } from '../../../js/quotecore.js'; // the ONE tax impl (chunk 4.1)
  *   item -> itemId, offer -> price, max -> qty (total offer size),
  *   qty -> filled (cumulative filled so far), worth -> spent (cumulative).
  * date+time are separate local-time strings, combined below.
+ *
+ * WORTH CONVENTION (PLAN-SALE-LOG-TAX): a sell's `worth` is GROSS in `.log`/`.txt` sources but
+ * NET OF TAX in `.json` ones (the plugin's format switch — FILLS-PIPELINE.md §5.1/§10 own the
+ * record). Decided per SOURCE FILE via isNetWorthSource(), never per timestamp (manual/mobile
+ * logs are `.log` → gross); rides SELL events as `worthNet: true` (absent = gross, so all
+ * history means what it always meant); never hashed into eventId().
  *
  * The plugin emits explicit "CANCELLED_BUY"/"CANCELLED_SELL" states
  * (confirmed against a live log 2026-07-02) — normalizeStateStr() maps
@@ -34,6 +40,11 @@ import { tax } from '../../../js/quotecore.js'; // the ONE tax impl (chunk 4.1)
  *   state:'placed'|'partial'|'complete'|'cancelled', itemId, slot,
  *   price, qty, filled, spent }
  * ------------------------------------------------------------------- */
+// Worth convention of a source FILE: `.json` → NET, anything else → GROSS (see WORTH CONVENTION above).
+export function isNetWorthSource(filename) {
+  return /\.json$/i.test(String(filename ?? ''));
+}
+
 export function pick(o, ...names) {
   for (const n of names) {
     if (o[n] !== undefined && o[n] !== null) return o[n];
@@ -74,7 +85,8 @@ export function parseTs(o) {
 // by the sequencer to detect cancellations), or a full trade-event
 // candidate { empty: false, ts, slot, type, state, itemId, price, qty,
 // filled, spent } otherwise.
-export function parseJsonLine(line) {
+// `worthNet` option (per source file) or a stamped `worthNet:true` raw field marks a SELL's spent net-of-tax.
+export function parseJsonLine(line, { worthNet = false } = {}) {
   line = line.trim();
   if (!line || line[0] !== '{') return null; // JSON mode expected; skip non-JSON (e.g. legacy TEXT lines)
   let o;
@@ -111,7 +123,7 @@ export function parseJsonLine(line) {
   let state = normalizeStateStr(rawState);
   if (state === 'partial' && filled === 0) state = 'placed'; // just placed, nothing filled yet
 
-  return {
+  const ev = {
     empty: false,
     ts,
     slot,
@@ -123,6 +135,8 @@ export function parseJsonLine(line) {
     filled,                                                                       // cumulative filled
     spent:  Number(pick(o, 'worth', 'spent', 'totalSpent', 'total_price', 'value')) || 0 // cumulative gp
   };
+  if (type === 'sell' && (worthNet || o.worthNet === true)) ev.worthNet = true;
+  return ev;
 }
 
 // Sequences raw per-line parses into final trade events. EMPTY lines are consumed as
@@ -208,6 +222,7 @@ export const GE_TAX = tax; // 2% floored/item, capped 5m — re-export the share
 // harmless ONLY because the bond is in `ignored-items.json`, and `quarantineEvents` drops it BEFORE
 // reconstruction — 42 filled bond events in fills.json produce zero positions.json rows. If the bond is
 // ever un-quarantined, its closed rows will be over-taxed. Route the sell through the bond branch then.
+// The grossFromNet inverse (matchTrades below) shares this fate — tax()-based, nothing unconditional ships.
 
 // P1 (2026-07-05): snapshot-re-emission dedupe. RuneLite re-broadcasts every GE slot's current
 // state on login / world-hop / GE-open (visible as a burst of simultaneous EMPTY lines for the
@@ -255,10 +270,43 @@ export function collapseOffers(events) {
     o.tsClose = e.ts; o.state = e.state;
     o.filled = Math.max(o.filled, e.filled || 0); o.spent = Math.max(o.spent, e.spent || 0); // cumulative -> final
     if (e.price) o.price = e.price; if (e.qty) o.qty = e.qty;
+    if (e.worthNet) o.worthNet = true;
     if (e.state === 'complete' || e.state === 'cancelled') o.done = true;
   }
   for (const o of cur.values()) offers.push(o);
   return offers.sort((a, b) => a.tsOpen - b.tsOpen);
+}
+
+// sellNetEach(offer) — per-item net proceeds of a filled SELL, exact under both worth conventions.
+// The ONE net formula: matchTrades' realised and deriveCash's sellIn both go through it.
+export function sellNetEach(o) {
+  const each = o.filled > 0 ? o.spent / o.filled : 0;
+  return o.worthNet ? each : each - GE_TAX(each);
+}
+
+// auditWorthConvention(rows, assignedNet, filename) — recurrence guard (PLAN-SALE-LOG-TAX §9d):
+// tallies exact gross/net formula matches over a file's sell terminals (tax>0 only — sub-50gp rows
+// are ambiguous and skipped; above-ask fills match neither and are skipped). mismatch = ≥1 opposite-
+// convention match with 0 assigned. PURE — the caller warns; NEVER abort, NEVER auto-flip. Limits
+// (incl. the all-ambiguous-file blind spot): FILLS-PIPELINE.md §5.1.
+export function auditWorthConvention(rows, assignedNet, filename) {
+  let checked = 0, grossMatches = 0, netMatches = 0;
+  for (const r of rows || []) {
+    if (!r || r.empty || r.remove !== undefined) continue;
+    if (r.type !== 'sell' || r.state !== 'complete') continue;
+    if (!(r.filled > 0) || !(r.price > 0) || !(r.spent > 0)) continue;
+    const taxItem = GE_TAX(r.price);
+    if (taxItem <= 0) continue;                                  // gross == net — ambiguous, skip
+    const gross = r.price * r.filled;
+    if (r.spent === gross) grossMatches++;
+    else if (r.spent === gross - taxItem * r.filled) netMatches++;
+    else continue;                                               // filled above ask / mid-cumulative — skip
+    checked++;
+  }
+  const assigned = assignedNet ? netMatches : grossMatches;
+  const opposite = assignedNet ? grossMatches : netMatches;
+  return { file: filename, checked, grossMatches, netMatches, assignedNet: !!assignedNet,
+    mismatch: opposite >= 1 && assigned === 0 };
 }
 
 /* matchTrades — FIFO reconstruction. SYMMETRIC since SM1 (PLAN-SYMMETRIC-MATCHING):
@@ -286,7 +334,7 @@ export function matchTrades(offers, { keeps } = {}) {
   const shorts = new Map(); // itemId -> [{qty, each, taxEach, ts}] FIFO queue of open KEEP SELL legs
   const closed = [], unmatched = [];
   for (const o of filled) {
-    const each = o.spent / o.filled; // actual executed gross price per item
+    const each = o.spent / o.filled; // executed price per item — GROSS, except NET on a worthNet sell (see WORTH CONVENTION)
     if (o.type === 'buy' || o.type === 'banked') {
       // BANKED = pre-owned stock committed to flipping at a declared basis (each). It enters
       // the FIFO queue exactly like a bought lot but carries banked:true so its eventual
@@ -318,23 +366,29 @@ export function matchTrades(offers, { keeps } = {}) {
         lot.qty -= take; remain -= take; if (lot.qty <= 0) q.shift();
       }
     } else { // sell — consume buy lots FIFO
+      // Net is primary (realised), gross recovered for display (sellEach/tax) — PLAN-SALE-LOG-TAX §9c.
+      // A gross-convention offer reduces byte-identically to the pre-flag formulas.
+      const netEach = sellNetEach(o);
+      const grossEach = o.worthNet ? grossFromNet(each) : each;
+      const taxEach = o.worthNet ? grossEach - netEach : GE_TAX(each);
       let remain = o.filled; const q = lots.get(o.itemId) || [];
       while (remain > 0 && q.length) {
-        const lot = q[0], take = Math.min(remain, lot.qty), taxEach = GE_TAX(each);
-        closed.push({ itemId: o.itemId, qty: take, buyEach: Math.round(lot.each), sellEach: Math.round(each),
-          tax: taxEach * take, realised: Math.round(((each - taxEach) - lot.each) * take), banked: !!lot.banked, buyTs: lot.ts, sellTs: o.tsOpen });
+        const lot = q[0], take = Math.min(remain, lot.qty);
+        closed.push({ itemId: o.itemId, qty: take, buyEach: Math.round(lot.each), sellEach: Math.round(grossEach),
+          tax: taxEach * take, realised: Math.round((netEach - lot.each) * take), banked: !!lot.banked, buyTs: lot.ts, sellTs: o.tsOpen });
         lot.qty -= take; remain -= take; if (lot.qty <= 0) q.shift();
       }
       // SM1: a leftover sell on a KEEP opens a short (an open round-trip leg awaiting its rebuy);
       // anything else stays `unmatched` — "basis unknown", which is what that bucket is for. The gate
       // is deliberately narrow: 13 of 14 historical unmatched rows were non-keep pre-log commodity
       // sells, and matching those against later flip buys would invent round trips that never
-      // happened while orphaning the flips that did (PLAN-SYMMETRIC-MATCHING §5).
+      // happened while orphaning the flips that did (PLAN-SYMMETRIC-MATCHING §5). The short stores
+      // gross + taxEach, so the close (s.each − s.taxEach = net) and beRebuy are convention-blind.
       if (remain > 0) {
         if (keepSet.has(o.itemId)) {
-          (shorts.get(o.itemId) || shorts.set(o.itemId, []).get(o.itemId)).push({ qty: remain, each, taxEach: GE_TAX(each), ts: o.tsOpen });
+          (shorts.get(o.itemId) || shorts.set(o.itemId, []).get(o.itemId)).push({ qty: remain, each: grossEach, taxEach, ts: o.tsOpen });
         } else {
-          unmatched.push({ itemId: o.itemId, qty: remain, sellEach: Math.round(each), tax: GE_TAX(each) * remain, sellTs: o.tsOpen });
+          unmatched.push({ itemId: o.itemId, qty: remain, sellEach: Math.round(grossEach), tax: taxEach * remain, sellTs: o.tsOpen });
         }
       }
     }

@@ -38,7 +38,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { computeQuote, momVerdict, breakEven, isOvernightNow, MOM_STRONG_PCT } from '../../js/quotecore.js';
+import { computeQuote, momVerdict, breakEven, grossFromNet, isOvernightNow, MOM_STRONG_PCT } from '../../js/quotecore.js';
 import { fmtP } from '../../js/money-format.js';
 import { loadMapping, loadGuide, fetchLatest, fetchItemInputs, sleep } from '../lib/market/marketfetch.mjs';
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
@@ -180,7 +180,9 @@ function runFills(st, names) {
     if (st.fills[key]) continue;                       // already alerted this exact terminal line
     st.fills[key] = now;                               // remember it (transition = a new key)
     const side = /BOUGHT/.test(r.state) ? 'BUY' : 'SELL';
-    const px = r.qty > 0 ? Math.round(r.worth / r.qty) : r.offer;
+    const px = r.qty > 0
+      ? (r.worthNet && side === 'SELL' ? grossFromNet(r.worth / r.qty) : Math.round(r.worth / r.qty))   // json-era sell worth is net — recover gross
+      : r.offer;
     const nm = names[r.item] || ('#' + r.item);
     emit(
       { class: 'fill', itemId: r.item, item: nm, side, qty: r.qty, price: px, slot: r.slot },

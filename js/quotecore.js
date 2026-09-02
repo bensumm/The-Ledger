@@ -90,6 +90,21 @@ export const maxBuyForExit = (sell, margin = 0, opts) => {
   if (target > TAXCAP/0.02) return Math.floor(target - TAXCAP);    // tax-capped region (target > 250m)
   return Math.floor(target * 0.98);                               // uncapped: inverse of ceil(buy/0.98)
 };
+// grossFromNet(net) — exact sell-side inverse of tax(): the SMALLEST integer g with g − tax(g) ===
+// round(net) (PLAN-SALE-LOG-TAX — `.json`-era sale logs record `worth` net of tax; the ONE-tax-home
+// rule pins this beside breakEven, which answers ≥ and overshoots where two g share one net). A
+// preimage sits within ±2 of round(net/0.98) or net+TAXCAP (cap region); lower center scanned first.
+// Fractional net inverts the rounded value (≤1gp, display-only — realised never routes through this).
+// Bond caveat: tax()-based, so the tax-exempt bond shares matchTrades' latent bond gap (reconstruct.mjs).
+export const grossFromNet = (net) => {
+  if (net == null || !Number.isFinite(net)) return null;
+  const n = Math.round(net);
+  if (n <= 0) return n;
+  for (const c of [Math.round(n / 0.98), n + TAXCAP]) {
+    for (let g = c - 2; g <= c + 2; g++) if (g - tax(g) === n) return g;
+  }
+  return null;   // unreachable for integer net ≥ 0 (pinned by the round-trip sweep in quotecore.test.mjs)
+};
 // Total lot value (qty × avgCost, i.e. capital at risk — NOT per-unit) at/above which a 2h
 // breakdown against a rising regime is CLEARED rather than held (chunk 6 cut-trigger). Named +
 // tunable; lives here (the shared node+browser module) so reviewPositions and quote-items.mjs --positions

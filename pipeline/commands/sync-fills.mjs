@@ -61,7 +61,8 @@ import { REPO_DIR } from '../lib/paths.mjs';   // chunk 6: REPO_DIR now lives in
 // The ONE reconstruction chain (chunk 8): parse/sequence/collapse/FIFO-match + the content-hash
 // event id all live in reconstruct.mjs so this pipeline AND monitor-offers.mjs reconstruct positions
 // identically (no more stale parallel copy). GE_TAX is imported transitively there — not needed here.
-import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct, eventId } from '../lib/reconstruct/reconstruct.mjs';
+import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct, eventId,
+  isNetWorthSource, auditWorthConvention } from '../lib/reconstruct/reconstruct.mjs';
 import { loadIgnored, quarantineEvents } from '../lib/ignored.mjs';   // MERCH-book quarantine (farming/loot); fills.json stays full
 import { loadOwned, keepIds, keepMisclassificationRisks } from '../lib/capital/ownedledger.mjs';  // SM1: the keep gate for sell->buy round-trip matching + its hygiene guard
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into positions.json so the app can display the pipeline version
@@ -196,17 +197,29 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR,
   const mobilePresent = existsSync(mobilePath);
   const sources = mobilePresent ? [...files, mobilePath] : files;
 
-  // parse everything
+  // parse everything — per-file: the worth convention is a property of the SOURCE FILE
+  // (isNetWorthSource), and each file is cross-checked against both formulas (auditWorthConvention,
+  // warn-only — never abort, never auto-flip) so a future semantics flip cannot run silent again.
   let rawLines = 0, parsedLines = 0;
   const rawParsed = [];
   const removeTargets = new Set(); // event ids tombstoned by REMOVE lines (chunk 1.4)
+  const worthMismatches = [];
   for (const f of sources) {
+    const worthNet = isNetWorthSource(f);
+    const fileRows = [];
     for (const line of readFileSync(f, 'utf8').split(/\r?\n/)) {
       if (!line.trim()) continue;
       rawLines++;
-      const r = parseJsonLine(line);
+      const r = parseJsonLine(line, { worthNet });
       if (r && r.remove !== undefined) { if (r.remove) removeTargets.add(r.remove); continue; }
-      if (r) { rawParsed.push(r); parsedLines++; }
+      if (r) { rawParsed.push(r); fileRows.push(r); parsedLines++; }
+    }
+    const audit = auditWorthConvention(fileRows, worthNet, f);
+    if (audit.mismatch) {
+      worthMismatches.push(audit);
+      console.warn(`⚠ WORTH-CONVENTION MISMATCH: ${f} is read as ${worthNet ? 'NET' : 'GROSS'} but its sell terminals ` +
+        `exactly match the ${worthNet ? 'GROSS' : 'NET'} formula (${worthNet ? audit.grossMatches : audit.netMatches} opposite-convention match(es), 0 assigned). ` +
+        `The source semantics may have changed again (the 2026-08-26 class) — NOT auto-flipped; verify isNetWorthSource() before trusting realised P/L.`);
     }
   }
   // LH1: validate the per-slot state machine BEFORE the fills.json merge, so a suspected re-emit
@@ -297,7 +310,7 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR,
 
   return { sources, mobilePath, mobilePresent, rawLines, parsedLines, parsed, merged, pos,
     offersSnap, eventsChanged, positionsChanged, offersChanged, changed, realisedTotal, removeTargetCount, removedCount,
-    reEmitDropped: reEmitDropped.length };
+    reEmitDropped: reEmitDropped.length, worthMismatches: worthMismatches.length };
 }
 
 function main() {
@@ -326,6 +339,7 @@ function main() {
   if (!PUBLISH && !DRY) {
     const r = regenerate({ write: true, warn: false }); // desk-side freshness — drop phantoms, but stay quiet (no per-event spam)
     if (r.reEmitDropped) console.log(`(${r.reEmitDropped} suspected re-emit(s) dropped — run --publish for the per-event detail)`);
+    if (r.worthMismatches) console.log(`⚠ ${r.worthMismatches} source file(s) FAILED the worth-convention audit — see warnings above; realised P/L may be mis-taxed until resolved`);
     console.log(`${r.sources.length} log source(s)${r.mobilePresent ? ' (incl. ' + MOBILE_REL + ')' : ''}, ${r.rawLines} lines (${r.parsedLines} valid trade line(s)), ${r.parsed} events, ${r.merged.length} after merge${r.eventsChanged ? '' : ' (no change)'}`);
     console.log(`positions: ${r.pos.closed.length} closed, ${r.pos.open.length} open, ${r.pos.unmatched.length} unmatched · offers: ${r.offersSnap.offers.length} open${r.offersChanged ? '' : ' (no change)'}`);
     console.log(`local rebuild — NO git (desk-side freshness). Publish to the deployed app nightly with --publish (/overnight).`);
@@ -340,6 +354,7 @@ function main() {
   const r = regenerate({ write: !DRY });
   const { merged, pos, eventsChanged, positionsChanged, changed, realisedTotal, mobilePath, removeTargetCount, removedCount, reEmitDropped } = r;
   if (reEmitDropped) console.log(`⚠ ${reEmitDropped} suspected re-emit(s) dropped (impossible same-slot double-terminal) — see warnings above`);
+  if (r.worthMismatches) console.log(`⚠ ${r.worthMismatches} source file(s) FAILED the worth-convention audit — see warnings above; realised P/L may be mis-taxed until resolved`);
   if (removeTargetCount) console.log(`${removeTargetCount} tombstone target(s); ${removedCount} event(s) removed`);
 
   console.log(`${r.sources.length} log source(s)${existsSync(mobilePath) ? ' (incl. ' + MOBILE_REL + ')' : ''}, ${r.rawLines} lines (${r.parsedLines} valid trade line(s)), ${r.parsed} events after sequencing, ${merged.length} after merge${eventsChanged ? '' : ' (no change)'}`);

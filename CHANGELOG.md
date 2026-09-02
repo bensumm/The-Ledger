@@ -8,6 +8,51 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## pipeline 1.1.0 — 2026-09-01 — the sale log went net-of-tax and the book was double-taxing every new sell (PLAN-SALE-LOG-TAX C1–C4; pipeline-only, no APP_VERSION bump)
+
+RuneLite's Exchange Logger switched output formats between 2026-08-21 and 2026-08-26
+(`exchange_*.log` → `exchange_*.json`), and in the new format a sell terminal's `worth` is **NET of
+the 2% tax**. The reconstruction — whose gross reading was verified empirically on 2026-07-01 and
+was right for the whole `.log` era — kept applying `GE_TAX` to the already-net value, so every
+post-switch sale was taxed twice: three consecutive profitable big-ticket sales booked as losses,
+five closed rows + one unmatched sell were wrong, and lifetime realised was understated by
+3,580,466 (36,883,575 → 40,464,041, verified on the real book as
+`baseline + Σ per-row tax corrections == fixed`, exact). Every §4 row now books its true value
+(+84,120 ×2, +206,996, +634,220, +209,994), all 419 pre-switch sell-leg closed rows are
+byte-identical, and the 2026-09-02T03:55 manual Toxic blowpipe row still reads +244,800 (the trap-1
+guard: manual rows are gross and live in the same date range).
+
+- **The bit (C1):** `isNetWorthSource(filename)` in `reconstruct.mjs` — `.json` sources are NET,
+  everything else GROSS; SOURCE-derived, never timestamp-derived, so `coffer-manual.log` /
+  `mobile-fills.log` stay untouched. Stamped as `worthNet: true` on SELL events only, via
+  `parseJsonLine`'s per-file option (`regenerate()`) or a raw-row stamp (`readOfferRows`, riding the
+  `readExchangeLog` stringify round-trip); `collapseOffers` propagates it to the offer. The flag is
+  NOT part of the `eventId` hash, so the fills.json merge auto-migrated all 59 surviving post-switch
+  sell events id-for-id on the first bare sync — no migration script (ingest normalisation was
+  rejected in the plan precisely because rewriting `spent` changes every id).
+- **The money (C2):** net is primary, gross is display. `matchTrades` computes
+  `netEach`/`grossEach`/`taxEach` once per sell and threads all four paths (ordinary flip close,
+  keep-short open — so the round-trip close and `beRebuy` formulas needed no change — `unmatched`,
+  and `deriveCash` via the new shared `sellNetEach()`, which was double-taxing sellIn the same way).
+  `grossFromNet(net)` ships in `js/quotecore.js` beside `tax()`/`breakEven()` (the ONE tax home):
+  the smallest integer `g` with `g − tax(g) === round(net)`. Display sites off raw rows
+  (`monitor-offers`/`trigger-alerts` px) and `retrojoin.fillEach` (latent — buys only today) recover
+  gross the same way. **Known ≤1gp display class:** an ask at an exact-2% point (a multiple of 50)
+  shares its net with `g−1`, so the smallest preimage reads 1gp low (Magus ring 22,943,999 vs true
+  22,944,000) — realised never routes through the inverse and is exact everywhere. Consequence: the
+  post-switch unmatched sell's `tax` lands at 18,276 again by a different derivation (349−343 ×3,046;
+  true ask 350/tax 21,322) — the field that actually changed is `sellEach`, 343 (net in disguise) → 349.
+- **The guard (C3):** `auditWorthConvention` cross-checks every source file's sell terminals against
+  BOTH formulas on every sync — ≥1 exact opposite-convention match with 0 assigned ⇒ loud warning +
+  a summary count. Warn-only, never abort, never auto-flip. Blind spot (accepted): a file whose rows
+  are all ambiguous (sub-50gp / above-ask).
+- Mutation-verified: the ordinary-flip, keep-short, and deriveCash fixtures were written first and
+  failed on unfixed code with exactly the §4 wrong numbers (−365,582; net-in-disguise 36,357,996;
+  9,604,000). `add-manual-fill.mjs --net` finding: its `breakEven`-based conversion is +1gp above
+  `grossFromNet` at collision points and can book a gross whose net is 1gp above what was received —
+  recorded, not changed. Docs reconciled: FILLS-PIPELINE §5/§5.1 (per-source table + guard limit) /
+  §9 / §10 (the format switch), reconstruct ADAPTER header, README entries. `PIPELINE_VERSION` 1.1.0.
+
 ## 0.76.0 — 2026-08-30 — the pressure exit ask is retired (PLAN-REACH-SURFACE chunk 8, executed)
 
 `join-exit-ev.mjs`'s pre-registered retirement criterion was run FRESH and nominated exactly one

@@ -20,7 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { reconstruct, buildTombstonedEvents } from '../lib/reconstruct/reconstruct.mjs';
 import { readExchangeLog, activeOffers, restartBlindSuspects } from '../lib/reconstruct/offers.mjs'; // shared log discovery + open-offer semantics; LH2.4 restart-blindness suspects
-import { breakEven } from '../../js/quotecore.js'; // shared tax-capped break-even (chunk 4.1 / BE1)
+import { breakEven, grossFromNet } from '../../js/quotecore.js'; // shared tax-capped break-even (chunk 4.1 / BE1) + net inverse (PLAN-SALE-LOG-TAX)
 import { loadMapping } from '../lib/market/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — tolerates the flat cache shape
 import { blindWarningLine } from '../lib/reconstruct/logblind.mjs'; // LH2 restart-blindness header line
 import { loadIgnored, quarantineEvents, offerQuarantined } from '../lib/ignored.mjs'; // MERCH-book quarantine (shared with positions.json/watch)
@@ -116,7 +116,8 @@ for (const r of suspects) {
 console.log('\n=== FILLS / CANCELS (last '+WIN_MIN+'m) ===');
 if (!terminal.length) console.log('(none)');
 for (const r of terminal) {
-  const px = r.qty>0 ? Math.round(r.worth/r.qty) : r.offer;
+  const netSell = r.worthNet && /SELL|SOLD/.test(r.state);   // json-era sell worth is net — recover gross
+  const px = r.qty>0 ? (netSell ? grossFromNet(r.worth/r.qty) : Math.round(r.worth/r.qty)) : r.offer;
   console.log(`${r.time} ${r.state} ${nm(r.item)} (#${r.item})  qty ${r.qty} @ ~${gp(px)}  (${ago(r)})`);
 }
 

@@ -9,7 +9,7 @@
  * Run: `node pipeline/test/symmetric-matching.test.mjs`.
  */
 import assert from 'node:assert/strict';
-import { matchTrades } from '../lib/reconstruct/reconstruct.mjs';
+import { matchTrades, GE_TAX } from '../lib/reconstruct/reconstruct.mjs';
 import { keepIds, keepMisclassificationRisks } from '../lib/capital/ownedledger.mjs';
 
 let pass = 0;
@@ -114,6 +114,38 @@ ok('hygiene guard ignores round-trip and withdrawn rows, and non-keeps', () => {
     ...Array.from({ length: 20 }, () => ({ itemId: COMMODITY })),                  // not a keep
   ];
   assert.deepEqual(keepMisclassificationRisks(store, closed, { threshold: 10 }), []);
+});
+
+/* --- SLT (PLAN-SALE-LOG-TAX): net-convention sells through the SHORTS path ----------------------- */
+// The `.json`-era log records a sell's `spent` NET of tax (worthNet:true on the collapsed offer).
+// Fixture numbers are the real Armadyl crossbow row (§4): listed gross 37,099,995, logged net
+// 36,357,996 (tax 741,999), rebought at 36,151,000 → true realised +206,996 (booked −520,163 pre-fix).
+const GROSS = 37_099_995, NET = 36_357_996, REBUY = 36_151_000;
+const netSell = (itemId, qty, netEach) => ({ type: 'sell', itemId, filled: qty, spent: qty * netEach, worthNet: true, tsOpen: ts += 100 });
+
+ok('net-convention KEEP sell opens a short at the recovered gross; beRebuy = the net proceeds', () => {
+  const r = matchTrades([netSell(KEEP, 1, NET)], { keeps });
+  assert.equal(r.awaitingRebuy.length, 1);
+  const s = r.awaitingRebuy[0];
+  assert.equal(s.sellEach, GROSS, 'sellEach is the true sale price, recovered by inversion');
+  assert.equal(s.tax, GROSS - NET, 'tax is the true per-item floor of the gross, not a re-tax of the net');
+  assert.equal(s.beRebuy, NET, 'break-even on the reallocation = exactly what the sale banked');
+});
+
+ok('net-convention keep sell -> rebuy closes the round trip at realised = net − rebuy', () => {
+  const r = matchTrades([netSell(KEEP, 1, NET), offer('buy', KEEP, 1, REBUY)], { keeps });
+  assert.equal(r.closed.length, 1);
+  const c = r.closed[0];
+  assert.equal(c.keepRoundTrip, true);
+  assert.deepEqual([c.sellEach, c.buyEach, c.tax, c.realised], [GROSS, REBUY, GROSS - NET, NET - REBUY],
+    'the crossbow: +206,996 true, not the double-taxed −520,163');
+  assert.equal(c.realised, 206_996);
+});
+
+ok('a GROSS keep sell (log/manual era) is byte-identical to pre-fix behavior', () => {
+  const r = matchTrades([offer('sell', KEEP, 1, 78_140_000)], { keeps });
+  const s = r.awaitingRebuy[0];
+  assert.deepEqual([s.sellEach, s.tax, s.beRebuy], [78_140_000, GE_TAX(78_140_000), 76_577_200]);
 });
 
 console.log(`\nAll ${pass} checks passed.`);
