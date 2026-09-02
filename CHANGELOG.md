@@ -8,6 +8,37 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## pipeline 1.2.0 — 2026-09-02 — the recorded tax field: gross becomes a read, not an inversion (SLT C5; pipeline-only, no APP_VERSION bump)
+
+The plan's own §3a amendment (written by a parallel session after §9–§12, so 1.1.0's executor —
+branched from the committed plan — never saw it) measured that the `.json` format didn't only
+change `worth`'s meaning: it **records the tax explicitly** — a cumulative, per-item-floored `tax`
+field running in lockstep with `worth`. Re-verified at build time over every `.json`-era sell row:
+`tax = floor(offer×0.02)×qty` and `worth + tax = offer×qty` on all of them (multi-unit partial
+sequences included), and no `.log`/manual/mobile row carries the key.
+
+So C5 makes the recorded value primary and the 1.1.0 inversion the fallback:
+
+- **`parseJsonLine` carries the field as `taxAmt`** on any sell row that logs a `tax` key — either
+  convention, so the audit can read it on gross-assigned files too. Outside the `eventId` hash
+  (same §9b contract as `worthNet`): the fills.json merge auto-migrates it id-for-id on the first
+  bare sync. `collapseOffers` folds it cumulative → final, like `spent`.
+- **Gross is now a READ**: on a flagged sell with `taxAmt`, `grossEach = (spent + taxAmt)/filled` —
+  exact everywhere, including the exact-2% collision points where `grossFromNet`'s smallest
+  preimage sits 1gp low (the Magus `sellEach` 22,943,999 → 22,944,000 class from the 1.1.0 honest
+  record). `grossFromNet` stays as the fallback for flagged events persisted without the field.
+  `realised` never routed through the inverse and is unchanged everywhere. The raw-row display
+  sites (`monitor-offers`, `trigger-alerts`) prefer `worth + tax` the same way.
+- **`auditWorthConvention` reads the field too**: presence on a GROSS-assigned file warns
+  (json-format content under a non-.json name — this also closes the all-ambiguous blind spot for
+  files that carry it), and on a NET-assigned file `worth + taxAmt` short of
+  proceeds-at-the-executed-price warns (one-sided: above-ask fills — the 2026-07-01 arrowtips
+  evidence — only exceed it). Still warn-only, never abort, never auto-flip.
+
+Tests: +6 (failing-first — the taxAmt carry, cumulative fold + id stability, the exact collision
+recovery on both the flip and unmatched paths, the keep-short path, the two new guard directions).
+The §3a census itself: `pipeline/FILLS-PIPELINE.md` §5.1.
+
 ## pipeline 1.1.0 — 2026-09-01 — the sale log went net-of-tax and the book was double-taxing every new sell (PLAN-SALE-LOG-TAX C1–C4; pipeline-only, no APP_VERSION bump)
 
 RuneLite's Exchange Logger switched output formats between 2026-08-21 and 2026-08-26

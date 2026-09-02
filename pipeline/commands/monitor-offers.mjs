@@ -117,7 +117,9 @@ console.log('\n=== FILLS / CANCELS (last '+WIN_MIN+'m) ===');
 if (!terminal.length) console.log('(none)');
 for (const r of terminal) {
   const netSell = r.worthNet && /SELL|SOLD/.test(r.state);   // json-era sell worth is net — recover gross
-  const px = r.qty>0 ? (netSell ? grossFromNet(r.worth/r.qty) : Math.round(r.worth/r.qty)) : r.offer;
+  const px = r.qty>0
+    ? (netSell ? (Number.isFinite(r.tax) ? Math.round((r.worth + r.tax)/r.qty) : grossFromNet(r.worth/r.qty)) : Math.round(r.worth/r.qty))
+    : r.offer;
   console.log(`${r.time} ${r.state} ${nm(r.item)} (#${r.item})  qty ${r.qty} @ ~${gp(px)}  (${ago(r)})`);
 }
 

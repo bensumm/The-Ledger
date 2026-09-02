@@ -369,4 +369,64 @@ ok('guard: one opposite match amid assigned matches does NOT flag (needs 0 assig
   assert.equal(auditWorthConvention(mixed, true, 'x.json').mismatch, false);
 });
 
+// --- SLT-8. the recorded tax field (plan §3a): gross becomes a READ, not an inversion --------
+// The `.json` format also logs a cumulative per-item-floored `tax` field, running in lockstep with
+// `worth` (census: every `.json` sell row carries it, `worth + tax === offer × qty` on all, incl.
+// multi-unit partial sequences; no `.log`/manual/mobile row has the key). When present on a flagged
+// sell, gross = (spent + taxAmt) / filled — exact at the collision points where grossFromNet reads
+// 1gp low. grossFromNet stays the fallback for flagged events without the field.
+const sellLineTax = (price, qty, worth, tax) =>
+  parseJsonLine(JSON.stringify({ ...raw({ state: 'SOLD', slot: 0, item: 9, time: '09:00:00', filledQty: qty, grossWorth: worth, offerSize: qty, priceEach: price }), tax }));
+ok('parseJsonLine carries the recorded tax as taxAmt on sell rows (either convention), never on buys', () => {
+  const sold = { ...raw({ state: 'SOLD', slot: 0, item: 28313, time: '11:00:00', filledQty: 1, grossWorth: 22_485_120, offerSize: 1, priceEach: 22_944_000 }), tax: 458_880 };
+  const bought = { ...raw({ state: 'BOUGHT', slot: 1, item: 28313, time: '10:00:00', filledQty: 1, grossWorth: 22_401_000, offerSize: 1, priceEach: 22_401_000 }), tax: 0 };
+  assert.equal(parseJsonLine(JSON.stringify(sold), { worthNet: true }).taxAmt, 458_880);
+  assert.equal(parseJsonLine(JSON.stringify(sold)).taxAmt, 458_880, 'carried on a gross-assigned row too — the guard reads it');
+  assert.equal(parseJsonLine(JSON.stringify(bought), { worthNet: true }).taxAmt, undefined, 'buy rows never carry it');
+});
+ok('taxAmt rides event → offer at the final cumulative value, and eventId never sees it', () => {
+  const lines = [
+    { ...raw({ state: 'SELLING', slot: 0, item: 28313, time: '10:59:00', offerSize: 1, priceEach: 22_944_000 }), tax: 0 },
+    { ...raw({ state: 'SOLD', slot: 0, item: 28313, time: '11:00:00', filledQty: 1, grossWorth: 22_485_120, offerSize: 1, priceEach: 22_944_000 }), tax: 458_880 },
+  ];
+  const { events: withTax } = runPipeline(lines, { worthNet: true });
+  const { events: without } = runPipeline(lines.map(({ tax, ...rest }) => rest), { worthNet: true });
+  assert.equal(collapseOffers(withTax)[0].taxAmt, 458_880, 'cumulative → final, like spent');
+  assert.deepEqual(withTax.map(e => e.id), without.map(e => e.id),
+    'the field must not change ids (the same §9b merge/auto-migration contract as worthNet)');
+});
+ok('flagged sell WITH taxAmt: display gross is EXACT at a collision point (the inversion reads 1gp low there)', () => {
+  const { events } = runPipeline([
+    raw({ state: 'BOUGHT', slot: 0, item: 28313, time: '10:00:00', filledQty: 1, grossWorth: 22_401_000, offerSize: 1, priceEach: 22_401_000 }),
+    { ...raw({ state: 'SOLD', slot: 1, item: 28313, time: '11:00:00', filledQty: 1, grossWorth: 22_485_120, offerSize: 1, priceEach: 22_944_000 }), tax: 458_880 },
+  ], { worthNet: true });
+  const { closed } = reconstruct(events);
+  assert.deepEqual([closed[0].sellEach, closed[0].tax, closed[0].realised], [22_944_000, 458_880, 84_120],
+    'sellEach/tax read back the true ask exactly; realised identical to the inversion path (SLT-4)');
+});
+ok('flagged unmatched sell WITH taxAmt: the real 9244 shape recovers the true ask 350 / tax 21,322', () => {
+  const { events } = runPipeline([
+    { ...raw({ state: 'SOLD', slot: 0, item: 9244, time: '09:00:00', filledQty: 3046, grossWorth: 343 * 3046, offerSize: 3046, priceEach: 350 }), tax: 7 * 3046 },
+  ], { worthNet: true });
+  const { unmatched } = reconstruct(events);
+  assert.deepEqual([unmatched[0].sellEach, unmatched[0].tax], [350, 21_322], 'SLT-5 recovers 349/6·3046 without the field');
+});
+ok('keep-short WITH taxAmt: sellEach exact, beRebuy still the logged net (close formula convention-blind)', () => {
+  const { events } = runPipeline([
+    { ...raw({ state: 'SOLD', slot: 0, item: 9, time: '09:00:00', filledQty: 5, grossWorth: (1000 - 20) * 5, offerSize: 5, priceEach: 1000 }), tax: 100 },
+  ], { worthNet: true });
+  const { awaitingRebuy } = reconstruct(events, { keeps: new Set([9]) });
+  assert.deepEqual([awaitingRebuy[0].sellEach, awaitingRebuy[0].tax, awaitingRebuy[0].beRebuy], [1000, 100, 980]);
+});
+ok('guard reads the field: presence on a GROSS-assigned file warns; a short worth+tax sum warns on a NET file; above-ask does not', () => {
+  const ambiguousWithTax = sellLineTax(40, 100, 4000, 0);          // formula-ambiguous (tax 0) but json-format
+  assert.equal(auditWorthConvention([ambiguousWithTax], false, 'x.log2').mismatch, true,
+    'json-format content under a non-.json name — closes the all-ambiguous blind spot');
+  assert.equal(auditWorthConvention([ambiguousWithTax], true, 'x.json').mismatch, false, 'net-assigned: presence is expected');
+  const shortSum = sellLineTax(1000, 5, 3000, 100);                // 3000 + 100 < 1000×5 — worth semantics changed again
+  assert.equal(auditWorthConvention([shortSum], true, 'x.json').mismatch, true);
+  const aboveAsk = sellLineTax(1000, 5, (1010 - 20) * 5, 100);     // filled above the ask: sum exceeds price×qty — legitimate
+  assert.equal(auditWorthConvention([aboveAsk], true, 'x.json').mismatch, false);
+});
+
 console.log(`\nAll ${pass} acceptance checks passed.`);

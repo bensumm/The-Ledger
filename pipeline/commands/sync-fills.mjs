@@ -217,8 +217,13 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR,
     const audit = auditWorthConvention(fileRows, worthNet, f);
     if (audit.mismatch) {
       worthMismatches.push(audit);
-      console.warn(`⚠ WORTH-CONVENTION MISMATCH: ${f} is read as ${worthNet ? 'NET' : 'GROSS'} but its sell terminals ` +
-        `exactly match the ${worthNet ? 'GROSS' : 'NET'} formula (${worthNet ? audit.grossMatches : audit.netMatches} opposite-convention match(es), 0 assigned). ` +
+      const why = [];
+      if (audit.oppositeExact) why.push(`its sell terminals exactly match the ${worthNet ? 'GROSS' : 'NET'} formula ` +
+        `(${worthNet ? audit.grossMatches : audit.netMatches} opposite-convention match(es), 0 assigned)`);
+      if (!worthNet && audit.taxFieldRows) why.push(`${audit.taxFieldRows} sell row(s) carry the plugin's recorded ` +
+        `tax field (json-format content under a non-.json name)`);
+      if (audit.sumViolations) why.push(`${audit.sumViolations} sell row(s) violate worth + tax = proceeds at the executed price`);
+      console.warn(`⚠ WORTH-CONVENTION MISMATCH: ${f} is read as ${worthNet ? 'NET' : 'GROSS'} but ${why.join('; ')}. ` +
         `The source semantics may have changed again (the 2026-08-26 class) — NOT auto-flipped; verify isNetWorthSource() before trusting realised P/L.`);
     }
   }

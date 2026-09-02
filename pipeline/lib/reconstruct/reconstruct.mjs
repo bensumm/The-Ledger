@@ -25,7 +25,9 @@ import { tax, grossFromNet } from '../../../js/quotecore.js'; // the ONE tax imp
  * NET OF TAX in `.json` ones (the plugin's format switch — FILLS-PIPELINE.md §5.1/§10 own the
  * record). Decided per SOURCE FILE via isNetWorthSource(), never per timestamp (manual/mobile
  * logs are `.log` → gross); rides SELL events as `worthNet: true` (absent = gross, so all
- * history means what it always meant); never hashed into eventId().
+ * history means what it always meant); never hashed into eventId(). §3a: `.json` also RECORDS the
+ * cumulative tax — carried as `taxAmt` (either convention, unhashed): gross = spent + taxAmt,
+ * a read not an inversion; grossFromNet is the fallback without it.
  *
  * The plugin emits explicit "CANCELLED_BUY"/"CANCELLED_SELL" states
  * (confirmed against a live log 2026-07-02) — normalizeStateStr() maps
@@ -135,7 +137,11 @@ export function parseJsonLine(line, { worthNet = false } = {}) {
     filled,                                                                       // cumulative filled
     spent:  Number(pick(o, 'worth', 'spent', 'totalSpent', 'total_price', 'value')) || 0 // cumulative gp
   };
-  if (type === 'sell' && (worthNet || o.worthNet === true)) ev.worthNet = true;
+  if (type === 'sell') {
+    if (worthNet || o.worthNet === true) ev.worthNet = true;
+    const t = Number(pick(o, 'tax')); // §3a recorded cumulative tax — either convention (the audit reads it)
+    if (Number.isFinite(t)) ev.taxAmt = t;
+  }
   return ev;
 }
 
@@ -216,27 +222,22 @@ export function validateSlotTransitions(events, { warn = true } = {}) {
 }
 
 export const GE_TAX = tax; // 2% floored/item, capped 5m — re-export the shared impl (chunk 4.1)
-// LATENT, recorded 2026-08-09 (not fixed — no live impact today, and fixing it would change historical
-// realised P/L): matchTrades applies GE_TAX to EVERY sell, but the Old School Bond (13190) is TAX-EXEMPT
-// (`js/money-math.js` — its cost model is buy + 10%-of-guide retrade fee, NO sell tax). This is currently
-// harmless ONLY because the bond is in `ignored-items.json`, and `quarantineEvents` drops it BEFORE
-// reconstruction — 42 filled bond events in fills.json produce zero positions.json rows. If the bond is
-// ever un-quarantined, its closed rows will be over-taxed. Route the sell through the bond branch then.
+// LATENT, recorded 2026-08-09 (not fixed — no live impact, and fixing changes historical realised):
+// matchTrades taxes EVERY sell, but the Old School Bond (13190) is TAX-EXEMPT (`js/money-math.js`).
+// Harmless ONLY because the bond is quarantined (`ignored-items.json`) and dropped BEFORE
+// reconstruction; if ever un-quarantined its closed rows over-tax — route through a bond branch then.
 // The grossFromNet inverse (matchTrades below) shares this fate — tax()-based, nothing unconditional ships.
 
-// P1 (2026-07-05): snapshot-re-emission dedupe. RuneLite re-broadcasts every GE slot's current
-// state on login / world-hop / GE-open (visible as a burst of simultaneous EMPTY lines for the
-// idle slots), so a completed-but-uncollected offer re-logs its terminal (BOUGHT/SOLD) line and
-// collapseOffers would read the second terminal as a SECOND trade — a phantom open lot on a
-// duplicate BUY, a phantom orphan on a duplicate SELL (the 2026-07-04 soul/blowpipe/bludgeon
-// incident, FILLS-PIPELINE.md §10). Discriminator: a GENUINE repeat trade always has a fresh
-// BUYING/SELLING placement line between two terminals on the same slot; a re-emission never does.
-// So, walking each slot's event subsequence in ts order, drop a terminal whose immediately-
-// preceding same-slot event is an IDENTICAL terminal (same itemId/type + offer-size/price/
-// cumulative-filled/cumulative-spent). A placement (or a differing terminal) between them makes
-// the preceding slot-event a non-match, so the second terminal is kept. EMPTY lines for the OTHER
-// slots in a login burst are already consumed by buildEvents() and belong to different slots, so
-// they never count as an intervening placement for the traded slot. Runs at the DERIVATION layer
+// P1 (2026-07-05): snapshot-re-emission dedupe. RuneLite re-broadcasts every GE slot's state on
+// login / world-hop / GE-open, so a completed-but-uncollected offer re-logs its terminal line and
+// collapseOffers would read it as a SECOND trade — a phantom open lot on a duplicate BUY, a
+// phantom orphan on a duplicate SELL (the 2026-07-04 soul/blowpipe/bludgeon incident,
+// FILLS-PIPELINE.md §10). Discriminator: a GENUINE repeat trade always has a fresh BUYING/SELLING
+// placement line between two same-slot terminals; a re-emission never does. Walking each slot's
+// events in ts order, drop a terminal whose immediately-preceding same-slot event is an IDENTICAL
+// terminal; a placement (or differing terminal) between them keeps the second. EMPTY lines for
+// OTHER slots in a login burst belong to different slots (consumed by buildEvents()), so they
+// never count as an intervening placement for the traded slot. Runs at the DERIVATION layer
 // (reconstruct below): with LH1 (2026-07-05) this is now the SILENT BACKSTOP — validateSlotTransitions()
 // catches the same class LOUDLY at ingest (next to buildEvents, before the fills.json merge), so a
 // FRESH re-emit no longer reaches fills.json at all. dedupeSnapshots() still runs here so a phantom
@@ -271,6 +272,7 @@ export function collapseOffers(events) {
     o.filled = Math.max(o.filled, e.filled || 0); o.spent = Math.max(o.spent, e.spent || 0); // cumulative -> final
     if (e.price) o.price = e.price; if (e.qty) o.qty = e.qty;
     if (e.worthNet) o.worthNet = true;
+    if (e.taxAmt != null) o.taxAmt = Math.max(o.taxAmt ?? 0, e.taxAmt); // cumulative → final, like spent
     if (e.state === 'complete' || e.state === 'cancelled') o.done = true;
   }
   for (const o of cur.values()) offers.push(o);
@@ -284,17 +286,21 @@ export function sellNetEach(o) {
   return o.worthNet ? each : each - GE_TAX(each);
 }
 
-// auditWorthConvention(rows, assignedNet, filename) — recurrence guard (PLAN-SALE-LOG-TAX §9d):
-// tallies exact gross/net formula matches over a file's sell terminals (tax>0 only — sub-50gp rows
-// are ambiguous and skipped; above-ask fills match neither and are skipped). mismatch = ≥1 opposite-
-// convention match with 0 assigned. PURE — the caller warns; NEVER abort, NEVER auto-flip. Limits
-// (incl. the all-ambiguous-file blind spot): FILLS-PIPELINE.md §5.1.
+// auditWorthConvention(rows, assignedNet, filename) — recurrence guard (PLAN-SALE-LOG-TAX §9d + §3a):
+// (a) exact gross/net formula matches over sell terminals (tax-0 and above-ask rows skipped);
+// ≥1 opposite match with 0 assigned ⇒ oppositeExact. (b) the recorded tax field: presence on a
+// GROSS-assigned file, or NET-assigned spent + taxAmt < price × filled (above-ask only exceeds) ⇒
+// warn. mismatch = any. PURE — the caller warns; NEVER abort/auto-flip. Limits: FILLS-PIPELINE §5.1.
 export function auditWorthConvention(rows, assignedNet, filename) {
-  let checked = 0, grossMatches = 0, netMatches = 0;
+  let checked = 0, grossMatches = 0, netMatches = 0, taxFieldRows = 0, sumViolations = 0;
   for (const r of rows || []) {
     if (!r || r.empty || r.remove !== undefined) continue;
     if (r.type !== 'sell' || r.state !== 'complete') continue;
     if (!(r.filled > 0) || !(r.price > 0) || !(r.spent > 0)) continue;
+    if (Number.isFinite(r.taxAmt)) {
+      taxFieldRows++;
+      if (assignedNet && r.spent + r.taxAmt < r.price * r.filled) sumViolations++;
+    }
     const taxItem = GE_TAX(r.price);
     if (taxItem <= 0) continue;                                  // gross == net — ambiguous, skip
     const gross = r.price * r.filled;
@@ -305,8 +311,10 @@ export function auditWorthConvention(rows, assignedNet, filename) {
   }
   const assigned = assignedNet ? netMatches : grossMatches;
   const opposite = assignedNet ? grossMatches : netMatches;
-  return { file: filename, checked, grossMatches, netMatches, assignedNet: !!assignedNet,
-    mismatch: opposite >= 1 && assigned === 0 };
+  const oppositeExact = opposite >= 1 && assigned === 0;
+  return { file: filename, checked, grossMatches, netMatches, taxFieldRows, sumViolations,
+    assignedNet: !!assignedNet, oppositeExact,
+    mismatch: oppositeExact || (taxFieldRows >= 1 && !assignedNet) || sumViolations >= 1 };
 }
 
 /* matchTrades — FIFO reconstruction. SYMMETRIC since SM1 (PLAN-SYMMETRIC-MATCHING):
@@ -369,7 +377,8 @@ export function matchTrades(offers, { keeps } = {}) {
       // Net is primary (realised), gross recovered for display (sellEach/tax) — PLAN-SALE-LOG-TAX §9c.
       // A gross-convention offer reduces byte-identically to the pre-flag formulas.
       const netEach = sellNetEach(o);
-      const grossEach = o.worthNet ? grossFromNet(each) : each;
+      // Gross is a READ when the tax was recorded (exact, §3a); grossFromNet = fallback without it.
+      const grossEach = o.worthNet ? (o.taxAmt != null ? (o.spent + o.taxAmt) / o.filled : grossFromNet(each)) : each;
       const taxEach = o.worthNet ? grossEach - netEach : GE_TAX(each);
       let remain = o.filled; const q = lots.get(o.itemId) || [];
       while (remain > 0 && q.length) {

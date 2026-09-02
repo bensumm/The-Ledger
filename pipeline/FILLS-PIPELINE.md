@@ -131,6 +131,10 @@ Claude is **not** in the runtime loop. The pipeline is plugin → file → git �
       // + "worthNet": true        // OPTIONAL, sell events from a `.json` source only
       //                           // (PLAN-SALE-LOG-TAX): spent is NET of tax. Absent = gross.
       //                           // Not part of the id hash, so re-parses migrate it in place.
+      // + "taxAmt": 458880        // OPTIONAL (§3a): the plugin's own recorded CUMULATIVE tax,
+      //                           // carried off any sell row that logs a `tax` key (only `.json`-era
+      //                           // rows do). Also outside the id hash. When present on a worthNet
+      //                           // sell, gross = spent + taxAmt — a read, not an inversion.
     }
   ]
 }
@@ -237,17 +241,29 @@ answer "what do I hold?" the same way and a purged lot never reappears as a phan
   | `coffer-manual.log` (`add-manual-fill.mjs` / the app) | GROSS (`--net` converts before writing) | no |
   | `mobile-fills.log` (phone) | GROSS | no |
 
+  **The `.json` format also RECORDS the tax (§3a, measured 2026-09-01 over every `.json`-era sell
+  row incl. multi-unit partial sequences):** a cumulative, per-item-floored `tax` field running in
+  lockstep with `worth` — `tax = floor(offer×0.02)×qty` and `worth + tax = offer×qty` held on every
+  row, and no `.log`/manual/mobile row carries the key. It is carried as `taxAmt` on sell events
+  (either convention) and is honest-limits evidence, not proof a future format keeps it.
+
   Every sync cross-checks each file's sell terminals against BOTH formulas
-  (`auditWorthConvention`, warn-only — never abort, never auto-flip): ≥1 exact opposite-convention
-  match with 0 assigned-convention matches ⇒ a LOUD warning + a count in the sync summary.
-  **Stated limit:** rows where the formulas coincide (sub-50gp, tax 0) and above-ask fills are
-  skipped, so a future semantics change on a file whose rows are ALL ambiguous is invisible to this
-  guard — nothing row-level can see it; that residual risk is accepted.
+  (`auditWorthConvention`, warn-only — never abort, never auto-flip), and warns on any of:
+  ≥1 exact opposite-convention match with 0 assigned-convention matches; a recorded tax field
+  present on a GROSS-assigned file (json-format content under a non-.json name); or, on a
+  NET-assigned file, `worth + tax` below proceeds-at-the-executed-price (one-sided — above-ask
+  fills only exceed it, per the 2026-07-01 arrowtips evidence above).
+  **Stated limit:** for rows WITHOUT the recorded tax field, formula-coinciding (sub-50gp, tax 0)
+  and above-ask rows are skipped, so a semantics change on a file that is all-ambiguous AND
+  drops the field is invisible — that residual risk is accepted. A mid-file convention revert
+  inside one day's file can also sit under the ≥1-with-0-assigned rule until the next day's file
+  warns.
 - **`matchTrades()`** FIFO-matches buy fills against sell fills per item → `closed`
   (`realised` = net proceeds − cost: on a gross sell the 2% tax is applied to the exec price, on a
   `worthNet` sell `spent` already IS the net — `sellNetEach` is the one shared formula; the
-  `sellEach`/`tax` display fields are then recovered via `grossFromNet`, exact except ≤1gp low on an
-  ask at an exact-2% point) and
+  `sellEach`/`tax` display fields are read back EXACTLY as `spent + taxAmt` when the event carries
+  the recorded tax (§3a), falling back to `grossFromNet` — exact except ≤1gp low on an ask at an
+  exact-2% point — when it doesn't) and
   `open` (unsold inventory at real avg cost; same item+price lots merged).
   It is **SYMMETRIC** since SM1 (PLAN-SYMMETRIC-MATCHING): it also matches **sell → buy**, so
   selling an item you OWN and later rebuying it closes a **keep round trip** rather than

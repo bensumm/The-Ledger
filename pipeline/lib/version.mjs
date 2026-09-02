@@ -10,4 +10,4 @@
 // change, a verdict-vocabulary change). Pure stdout formatting tweaks may ship without a bump
 // (CLAUDE.md process rule 5). Launched at 1.0.0 alongside the app's 1.0.0 parity milestone — the
 // first formally-versioned, app-coupled pipeline.
-export const PIPELINE_VERSION = '1.1.0';
+export const PIPELINE_VERSION = '1.2.0';

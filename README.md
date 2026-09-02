@@ -96,8 +96,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   cap region falls out of tax saturation). NOT `breakEven` (that answers ≥ and lands 1gp high where
   two consecutive `g` share one net — the per-item floor makes ~every-50th pair collide, so an ask at
   an exact-2% point recovers 1gp low: display-only, realised never routes through it; fractional net
-  inverts the rounded value). Consumed by the reconstruction + the raw-row display sites to recover
-  gross from `.json`-era net `worth`; bond-blind like `tax()` — the quarantined-bond caveat applies),
+  inverts the rounded value). The FALLBACK gross-recovery for `.json`-era net `worth` in the
+  reconstruction + the raw-row display sites — since SLT C5 those prefer the plugin's own recorded
+  tax (`worth + tax`, exact) when the row carries it; bond-blind like `tax()` — the quarantined-bond
+  caveat applies),
   `forward-reach.mjs` (the shared FORWARD-SCORING primitives over the 1h archive — `touchedAt` (bid
   side, `avgLowPrice`), `reachedWithin` / `maxHighWithin` (ask side, `avgHighPrice`), `covers`,
   `firstIndexAfter`, and the END-OF-WINDOW bail pair `endLowWithin` / `endHighWithin` off one
@@ -1988,10 +1990,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     stamped on SELL events by `parseJsonLine`'s per-file option or a stamped raw field (never hashed
     into `eventId`, so the fills.json merge auto-migrates flags id-for-id), `collapseOffers`
     propagation to the offer, `sellNetEach(offer)` — the ONE net-proceeds formula `matchTrades`'
-    realised and `deriveCash`'s sellIn share — with gross/tax recovered for display via
-    `js/quotecore.js` `grossFromNet`, and `auditWorthConvention(rows, assignedNet, filename)` — the
-    per-file recurrence guard `regenerate()` runs every sync (warn-only, never abort/auto-flip;
-    limits in `pipeline/FILLS-PIPELINE.md` §5.1)),
+    realised and `deriveCash`'s sellIn share — with gross/tax read back EXACTLY as `spent + taxAmt`
+    when the event carries the plugin's recorded cumulative tax (`taxAmt`, §3a — picked off any sell
+    row logging a `tax` key, either convention, also outside the `eventId` hash) and recovered via
+    `js/quotecore.js` `grossFromNet` as the fallback, and `auditWorthConvention(rows, assignedNet,
+    filename)` — the per-file recurrence guard `regenerate()` runs every sync (warn-only, never
+    abort/auto-flip; also reads the recorded tax field: presence on a GROSS-assigned file, or a
+    NET-assigned `worth + tax` short of proceeds-at-the-executed-price, each warn; limits in
+    `pipeline/FILLS-PIPELINE.md` §5.1)),
     `campaigns.mjs` (WC2 — the shared CAMPAIGN reconstruction primitive: `reconstructCampaigns(events)` =
     the exact `dedupeSnapshots→collapseOffers→stampFirstFill→matchTrades→groupCampaigns` sequence
     `join-outcomes.mjs` used to run inline, lifted here VERBATIM so the forward-join siblings

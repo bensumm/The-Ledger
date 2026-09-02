@@ -181,7 +181,9 @@ function runFills(st, names) {
     st.fills[key] = now;                               // remember it (transition = a new key)
     const side = /BOUGHT/.test(r.state) ? 'BUY' : 'SELL';
     const px = r.qty > 0
-      ? (r.worthNet && side === 'SELL' ? grossFromNet(r.worth / r.qty) : Math.round(r.worth / r.qty))   // json-era sell worth is net — recover gross
+      ? (r.worthNet && side === 'SELL'
+        ? (Number.isFinite(r.tax) ? Math.round((r.worth + r.tax) / r.qty) : grossFromNet(r.worth / r.qty))   // json-era sell worth is net — recover gross (recorded tax when present)
+        : Math.round(r.worth / r.qty))
       : r.offer;
     const nm = names[r.item] || ('#' + r.item);
     emit(
