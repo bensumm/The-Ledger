@@ -415,6 +415,14 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 
 ## Other unscheduled notes
 
+- **Flow diet — winners-only surfaces, stale-bid flagging, reclaimable capital (FD1–FD6,
+  ACTIVE)** (`plans/PLAN-FLOW-DIET.md`, Ben 2026-09-03). FD1 (positive-net winners-only
+  `--verbose` render + prose kill, `--full` debug restore, cache stays complete) + FD2 (skill
+  reconciliation to winners-only; judgment reads `last-report/screen.json`) dispatched
+  2026-09-03; FD3–FD6 (offer `placedTs` → declared-deep bids + inform-only stale-bid flag →
+  bids on the positions surface → shown reclaimable-stale capital line) staged behind them.
+  Ruling: NO grade term in any filter predicate (grade tuning is later, F1-tagged work).
+
 - **Hybrid-review experiment — wave 1 RUN (2026-08-30), accrual open** (`plans/PLAN-HYBRID-REVIEW.md`,
   Ben 2026-08-29). Both arms ran blind on the forward-record honesty wave's diff; results + scored
   predictions live under the plan's dated Results heading. Headline: the blind-spot branch fired
