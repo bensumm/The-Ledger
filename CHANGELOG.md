@@ -8,6 +8,47 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## 0.76.1 — 2026-09-02 — the bond is costed as a bond on every screen lane (PLAN-BOOK-SELF-HEAL H2)
+
+**The bug.** `js/money-math.js` has owned the correct Old School Bond model since 2026-07-09: a bond is
+EXEMPT from the 2% GE sell tax, but a GP-bought bond is untradeable and costs 10% of its GUIDE value to
+make re-tradeable. It is an OPT-IN model — `netMargin` cannot see an itemId, so every caller passes
+`{bond:true, guide}` itself, exactly as `computeQuote` does off `row.bond`. The screen lanes never opted
+in. `js/amplitudescreen.mjs` carried a private `afterTax = p − tax(p)` and `js/flip-niches.mjs`'s edge
+functions carried a private `(high − tax(high)) − low`, so a bond row was costed as a taxed ordinary item
+and its retrade fee — on an 11.4m guide, ~1.14m, five times the 2% tax — was skipped entirely.
+
+**What it printed.** On the 2026-09-02 board the amplitude lane surfaced Old school bond at
+`11.11m → 11.81m`, **+457.8k/cycle (4.1%), grade A-, 4 units** — a ~1.76m trap if taken. Under the bond
+model the same trough/peak is `11.81m − 11.11m − 10%×11.41m = −441,000 per unit`. The row now fails the
+`amp-below-floor` gate and does not surface at all.
+
+**The fix.** Both lanes cost through `netMargin` and take `{bond, guide}` from the caller.
+`screen-flip-niches.mjs` derives it once from `isBond(id)` plus the already-loaded guide map and threads it
+into `amplitudeRanges` + `amplitudeDriftMargin`; the guide map now also rides the gate `ctx`, so
+`gatecandidates.mjs` can fill `bond`/`guide` on the edge input for band/churn/scalp/value/amplitude/reverse.
+A bond with NO known guide is REFUSED (null net → the row drops), never costed fee-free — fee-free would
+read `+700k`, i.e. MORE profitable than the bug being fixed. Every non-bond caller is byte-identical
+(`isBond` false ⇒ the opts are inert), so the P1 replay goldens are untouched.
+
+**Sweep.** Every private after-tax site under `js/*.mjs` + `pipeline/lib/**` was classified. Fixed: the two
+screen lanes above. Left alone with reasons: `driftInformNote` (inform-only, no id in its signature),
+`js/exit-ev.mjs` / `js/windowread.mjs` / `pipeline/lib/signal/patha.mjs` (per-item inform surfaces with no id
+in the money path), the retro/analyze joins (they score LOGGED history, where re-costing would rewrite the
+record), and the book/ledger surfaces — the bond is in `ignored-items.json` and `quarantineEvents` drops it
+BEFORE reconstruction, so `js/ui.js` `realised()` stays the documented LATENT gap it already was.
+
+**Also in this commit (pipeline-side, PLAN-BOOK-SELF-HEAL H3):** `activeOffers`
+(`pipeline/lib/reconstruct/offers.mjs`) now picks each slot's current state by WALL-CLOCK
+(`Date.parse(date+'T'+time)`) instead of read order. `readOfferRows` concatenates the log files in
+FILE-MTIME order, so read order says which FILE was appended to last, not when a line happened — a manual
+`CANCELLED_BUY` in `coffer-manual.log` beat the live log's stale `BUYING` row only until RuneLite appended
+anything, then the mtime flipped and the cancelled slot resurrected as a phantom offer (diagnosed live on
+the slot-2 crossbow bid: the cancel was injected twice and the phantom returned twice). Ties and rows with
+no parseable timestamp fall back to read order (later wins), so re-emits and REMOVE-shaped lines still
+resolve; an unstamped row never displaces a stamped one. The pipeline version bump for H1+H3 belongs to the
+H1 lane.
+
 ## pipeline 1.2.0 — 2026-09-02 — the recorded tax field: gross becomes a read, not an inversion (SLT C5; pipeline-only, no APP_VERSION bump)
 
 The plan's own §3a amendment (written by a parallel session after §9–§12, so 1.1.0's executor —

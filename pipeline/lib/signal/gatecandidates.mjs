@@ -55,6 +55,7 @@ import { reverseFlipGate } from '../../../js/reverseflip.mjs';
 // (the P1 replay goldens pin it), but a new niche (P5 scalp/value) registers a spec instead of editing
 // this file. `tax` moved with the edge functions into flip-niches.mjs.
 import { FLIP_NICHES } from '../../../js/flip-niches.mjs';
+import { isBond } from '../../../js/money-math.js';
 // PLAN-LANE-ADMISSION Chunk B — the STRUCTURAL admission gate (value ∧ thin ∧ notional + gear/churn
 // volLane), an alternate iterator with the SAME callback shape as eachLiquidCandidate. Routed via
 // `t.GATE === 'structural'` (default undefined → legacy → byte-identical). Additive behind the flag;
@@ -303,7 +304,7 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
   if (spec.gate === 'value') return gateValueCandidates(ctx, t);                         // P5 — the term-structure value gate
   if (spec.gate === 'amplitude') return gateAmplitudeCandidates(ctx, t, watchedIds);     // A2 — the daily-amplitude Stage-1 proxy gate (F-B: watchedIds bypass the proxy floor)
   if (spec.gate === 'reverse') return gateReverseFlipCandidates(ctx.reversePool || [], ctx.reverseCtxById || {}, t);   // RF2 — the OWNED-item reverse-flip gate (pool + per-id ctx come off `ctx`, not v24)
-  const { map, bands } = ctx;
+  const { map, bands, guide } = ctx;
   // The per-mode step-3 edge callback — IDENTICAL for both gates; only the ADMISSION iterator differs.
   // Extracted to a const (was inline) so the structural gate can feed the SAME fn to
   // eachStructuralCandidate without touching spec.edge. When `t.GATE` is not 'structural' (the default —
@@ -315,7 +316,7 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
     // --- step 3: the DECLARATIVE spec's edge — P4c re-expressed the old inline per-mode branch as
     // flip-niches.mjs edge functions (byte-identical: a `continue` is now a `return null`). Returns the
     // after-tax { modeNet, modeRoi, activeWin } or null when the item fails this niche's edge/gate. ---
-    const edge = spec.edge({ avgHigh, avgLow, band: bands ? bands[id] : undefined, limitVol, limit, thin }, t);
+    const edge = spec.edge({ avgHigh, avgLow, band: bands ? bands[id] : undefined, limitVol, limit, thin, bond: isBond(id), guide: (guide && guide[id] != null) ? guide[id] : null }, t);
     if (!edge) return null;
     const { modeNet, activeWin } = edge;
     if (modeNet <= 0) return null;

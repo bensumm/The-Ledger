@@ -2,7 +2,7 @@
    VOCAB (see docs/GLOSSARY.md): band/churn/scalp/value are FLIP-NICHES — screen-level find-&-flip
    styles. "strategy" now names the HELD-ITEM level (held-item-strategy.mjs). The registry object is
    `FLIP_NICHES` (keyed by `--mode` value) and the ordered list is `FLIP_NICHE_LIST`.
-   DOM-free, near-dependency-free ESM (imports only the pure `tax` from money-math.js + the path
+   DOM-free, near-dependency-free ESM (imports only the pure `netMargin`/`tax` from money-math.js + the path
    vocabulary from held-item-strategy.mjs — no fetch/fs, no window/document), importable by BOTH the browser app
    AND the node pipeline exactly like js/quotecore.js / js/held-item-strategy.mjs. Keep it that way.
 
@@ -18,17 +18,15 @@
    NICHE SET (Steps 3+4, Ben 2026-07-09): the `spread` and `rising` specs are DELETED (git history is the
    reference). Why: spread's 24h-average edge is structurally narrower than the intraday band, and once the
    render net>0 gate landed it surfaced ≈0 clean flips (its thin big-ticket lane is already caught by
-   band's thin path, MIN_TRADED_THIN:2 + the gp-flow reserve); rising ⊆ band (a rising item clears band's
-   gates too), and its ONE real mechanism — proxy-first fetch-pool ordering so risers aren't buried — is
-   ABSORBED into rankAndSlice's small "rising reserve". Remaining flip-niches: band / churn (both in --mode all)
-   + the provisional off-by-default scalp / value.
+   band's thin path, MIN_TRADED_THIN:2 + the gp-flow reserve); rising ⊆ band, and its ONE real mechanism
+   — proxy-first fetch-pool ordering so risers aren't buried — is ABSORBED into rankAndSlice's "rising
+   reserve". Remaining flip-niches: band / churn (both in --mode all) + off-by-default scalp / value.
 
    BYTE-IDENTITY (the refactor-proof). The edge functions below are a MECHANICAL re-expression of the
-   exact inline blocks gatecandidates.mjs used to run — same tax math, same gate order, same `continue`
-   points (a `continue` is now a `return null`). The P1 replay goldens (pipeline/fixtures/replay/
-   golden.json) must pass UNCHANGED after this refactor; any behavior delta is a defect. The pre-P5
-   falling-exclusion still lives in gatecandidates.mjs's surviveMode (unchanged here) — the amended
-   per-spec falling doctrine is P5, and this registry is the seam it slots into.
+   inline blocks gatecandidates.mjs used to run — same money math, same gate order. The P1 replay goldens
+   (pipeline/fixtures/replay/golden.json) must pass UNCHANGED; any behavior delta is a defect. The
+   falling-exclusion lives in gatecandidates.mjs's surviveMode — the amended per-spec falling doctrine is
+   P5, and this registry is the seam it slots into.
 
    ⚠ The DEFAULT ENTRY PATH per flip-niche (band/churn → scalp) is a JUDGMENT proposal (Ben-vetoable) — it
    encodes how /scan describes each flip-niche's INTENT (band/churn are flip-first "buy the low, sell the top"
@@ -37,7 +35,15 @@
    when no explicit `declare-thesis.mjs set --path` was declared (the P4b fallback: explicit > inferred > null).
    It is NOT a gate and does not affect which rows surface. */
 
-import { tax } from './money-math.js';
+import { netMargin, tax } from './money-math.js';
+
+// The ONE after-cost margin. The BOND exception is opted in by the caller (`bond`/`guide` on the edge
+// input, supplied by gatecandidates.mjs); a bond with no known guide is refused, never costed fee-free.
+const netOf = (low, high, bond, guide) => {
+  if (!bond) return netMargin(low, high);
+  if (!(guide > 0)) return null;
+  return netMargin(low, high, { bond: true, guide });
+};
 import { PATH_KEYS } from './held-item-strategy.mjs';
 
 // The entry (unheld) thesis vocabulary — the ONLY path keys enumeratePaths() offers a fresh candidate.
@@ -97,9 +103,9 @@ function scalpEdge(inp, t) {
 // its selection is the term-structure `valueGate` (js/valuescreen.mjs), routed by `gate: 'value'` in
 // pipeline/lib/gatecandidates.mjs. This function is the "cheap cycle-amplitude proxy" kept only so the
 // registry contract (every spec has a callable edge) holds uniformly. Never gates.
-function valueEdge({ avgHigh, avgLow }, t) {
-  const modeNet = (avgHigh - tax(avgHigh)) - avgLow;
-  const modeRoi = avgLow ? modeNet / avgLow * 100 : 0;
+function valueEdge({ avgHigh, avgLow, bond = false, guide = null }, t) {
+  const modeNet = netOf(avgLow, avgHigh, bond, guide);
+  const modeRoi = (avgLow && modeNet != null) ? modeNet / avgLow * 100 : 0;
   return { modeNet, modeRoi, activeWin: null };
 }
 
@@ -108,9 +114,9 @@ function valueEdge({ avgHigh, avgLow }, t) {
 // pre-fetch) + amplitudeGate off windowStats (Stage 2, post-fetch) in js/amplitudescreen.mjs, routed by
 // `gate: 'amplitude'` (gatecandidates.mjs → gateAmplitudeCandidates; renderAmplitudeMode confirms). Kept
 // only so the registry contract (every spec has a callable edge) holds uniformly. Never gates.
-function amplitudeEdge({ avgHigh, avgLow }, t) {
-  const modeNet = (avgHigh - tax(avgHigh)) - avgLow;
-  const modeRoi = avgLow ? modeNet / avgLow * 100 : 0;
+function amplitudeEdge({ avgHigh, avgLow, bond = false, guide = null }, t) {
+  const modeNet = netOf(avgLow, avgHigh, bond, guide);
+  const modeRoi = (avgLow && modeNet != null) ? modeNet / avgLow * 100 : 0;
   return { modeNet, modeRoi, activeWin: null };
 }
 
@@ -121,9 +127,9 @@ function amplitudeEdge({ avgHigh, avgLow }, t) {
 // reverse pool is ownership-gated (owned-items.json classification:'keep' ∪ hold-thesis reverseFlip:true), NOT
 // the v24 fetch universe every other niche's edge scores — so this edge never actually runs in production; it
 // exists only so the registry contract (every spec has a callable, deterministic edge) holds uniformly. Never gates.
-function reverseEdge({ avgHigh, avgLow }, t) {
-  const modeNet = (avgHigh - tax(avgHigh)) - avgLow;
-  const modeRoi = avgLow ? modeNet / avgLow * 100 : 0;
+function reverseEdge({ avgHigh, avgLow, bond = false, guide = null }, t) {
+  const modeNet = netOf(avgLow, avgHigh, bond, guide);
+  const modeRoi = (avgLow && modeNet != null) ? modeNet / avgLow * 100 : 0;
   return { modeNet, modeRoi, activeWin: null };
 }
 
@@ -133,8 +139,9 @@ function reverseEdge({ avgHigh, avgLow }, t) {
    or null when the item fails this flip-niche's edge/gate (the old `continue`). `band` is the aggregated
    2h band record { bandLo, bandHi, active5m, tradedWin, sawLow, sawHigh (+ rawBandLo/rawBandHi) } or
    undefined. bandLo/bandHi are already Bar-E robustified upstream (marketfetch.mjs robustBand — a lone
-   flier can't set the edge on a dense band); bandCore just consumes them. ALL numeric math is the
-   shared `tax()` so the numbers stay byte-identical to screen-flip-niches.mjs / the app. */
+   flier can't set the edge on a dense band); bandCore just consumes them. `bond`/`guide` are the
+   money-math BOND opt-in the caller supplies (netMargin cannot see an itemId). ALL numeric math is the
+   shared `netMargin()` so the numbers stay byte-identical to screen-flip-niches.mjs / the app. */
 
 // the traded-band common core (band / churn / scalp all price the edge off the intraday band).
 // Returns the band edge + activeWin, or null when the band is missing/untraded. The per-spec gate
@@ -142,9 +149,8 @@ function reverseEdge({ avgHigh, avgLow }, t) {
 //
 // BAR D (Ben 2026-07-09) — DECOUPLE density from two-sidedness. The old gate (band.active5m < minActive)
 // counted only 5m windows that were two-sided WITHIN THE SAME 5 minutes. A big ticket prints a handful
-// of times an hour (a low at :05, a high at :35) and almost never has both sides inside one 5m bucket,
-// so active5m collapses to ~0 and the gate culled exactly the thin big-ticket class MIN_ACTIVE_THIN:1
-// was meant to admit ("zero traded 5m windows = artifact" bit us on every genuinely-liquid big item).
+// of times an hour and almost never has both sides inside one 5m bucket, so active5m collapses to ~0 and
+// the gate culled exactly the thin big-ticket class it was meant to admit.
 // Liquidity proper is already the two-sided 24h gate's job (upstream, non-negotiable); this bar's ONLY
 // job is rejecting a single-spike / one-sided-ghost band. Split it into the two questions it conflated:
 //   DENSITY       — band.tradedWin (windows with ANY trade, one-sided OK). A lone spike is tradedWin 1,
@@ -154,13 +160,14 @@ function reverseEdge({ avgHigh, avgLow }, t) {
 // Legacy/synthetic band records without tradedWin fall back to active5m (and active5m>0 ⇒ a two-sided
 // window existed ⇒ the sawLow/sawHigh check, being undefined, is a no-op). activeWin now reports the
 // density (tradedWin) so rating.mjs's confidenceFactor stops penalising big tickets for low active5m.
-function bandCore({ band, thin }, t) {
+function bandCore({ band, thin, bond = false, guide = null }, t) {
   if (!band || band.bandLo == null || band.bandHi == null) return null;
   const minTraded = thin ? t.MIN_TRADED_THIN : t.MIN_TRADED;
   const density = band.tradedWin ?? band.active5m;                  // one-sided-inclusive; legacy → active5m
   if (density < minTraded) return null;                             // band must be TRADED, not one spike
   if (band.sawLow === false || band.sawHigh === false) return null; // both sides printed ≥1× (undefined ⇒ legacy no-op)
-  const modeNet = (band.bandHi - tax(band.bandHi)) - band.bandLo;   // band low → band top, after tax
+  const modeNet = netOf(band.bandLo, band.bandHi, bond, guide);     // band low → band top, after cost
+  if (modeNet == null) return null;
   const modeRoi = modeNet / band.bandLo * 100;
   return { modeNet, modeRoi, activeWin: density };
 }

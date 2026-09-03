@@ -438,10 +438,19 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   estimator family reads — floored HONESTLY to an integer, 0 when unaffordable: amplitude is a
   CONCENTRATION lane so `capGp` is TOTAL REALIZABLE `liquidCapital` used UNDIVIDED, NOT value's
   `deployablePool ÷ slots`; the caller drops a `lapUnits < 1` pick as `unaffordable`) / `amplitudeDriftMargin`
-  (PLAN-OSCILLATION-CYCLE Chunk 2 — the drift-adjusted margin `afterTax(driftAdjustedPeak) − entry −
-  requiredMargin` off a `js/forecast.mjs` `driftAdjustedExit` result, through the SAME afterTax path
+  (PLAN-OSCILLATION-CYCLE Chunk 2 — the drift-adjusted margin `netOf(entry, driftAdjustedPeak) −
+  requiredMargin` off a `js/forecast.mjs` `driftAdjustedExit` result, through the SAME after-cost path
   `netPerCycle` uses; direction-agnostic, no sign branch; `AMP_DRIFT_REQ_MARGIN=0` PLACEHOLDER Chunk 3's gate
-  reuses; INFORM-ONLY, shadow-logged only). Imports only `tax` + the `windowread.mjs` reach helpers; consumed by
+  reuses; INFORM-ONLY, shadow-logged only).
+  **BOND OPT-IN (PLAN-BOOK-SELF-HEAL H2, 2026-09-02):** all costing runs through money-math's `netMargin`
+  and the CALLER passes `{ bond, guide }` — the same opt-in `computeQuote` uses, because `netMargin`
+  cannot see an itemId. `screen-flip-niches.mjs` derives it from `isBond(id)` + the loaded guide map and
+  threads it into BOTH `amplitudeRanges` and `amplitudeDriftMargin`. Before this the lane's private
+  `afterTax = p − tax(p)` costed a bond as a taxed ordinary item and skipped the 10%-of-guide retrade fee
+  entirely, so the live board printed Old school bond at **+457.8k/cycle (4.1%) grade A-, 4 units** where
+  the bond model gives **−441,000/unit** — the row now fails `amp-below-floor` instead. A bond with no
+  known guide is REFUSED (null net), never costed fee-free, since fee-free reads MORE profitable than the
+  bug being fixed. Imports `netMargin` + the `windowread.mjs` reach helpers; consumed by
   `screen-flip-niches.mjs`/`gatecandidates.mjs`/`js/estimators/families.mjs`. All thresholds NAMED
   PLACEHOLDERS (n≈0); full spec in the module header. NOT app-rendered (console-only lane) but the shared
   `FLIP_NICHES`/estimators ARE app-imported → the registry addition is app-safe (a null 'daily' pair, never
@@ -535,6 +544,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `falling:'accept'`/`estimator:'amplitude'`/`priceBasis:'daily'`/`defaultPath:'value-hold'` — a HARVEST-AN-
   OWNED-ITEM flip-niche (sell a keep item into the peak, rebuy the dip); `'reverse'` is in `VALID_GATE` so the
   conformance suite passes with it registered.
+  **BOND OPT-IN on the edge input (PLAN-BOOK-SELF-HEAL H2, 2026-09-02):** every edge costs through
+  money-math's `netMargin` and the edge input carries `bond`/`guide`, which `gatecandidates.mjs` fills from
+  `isBond(id)` + `ctx.guide` (threaded onto the ctx by `screen-flip-niches.mjs`). Without it a bond row is
+  over-taxed AND its 10%-of-guide retrade fee — the larger of the two by ~5× — is skipped entirely, so a
+  losing bond band reads profitable; with it the bond's negative net drops the row. A bond with no known
+  guide is REFUSED, never costed fee-free. **Byte-identical for every non-bond item** (`isBond` is false, the
+  opts are inert), so the P1 replay goldens are untouched. `driftInformNote`'s inform-only margin is
+  deliberately NOT threaded — it has no id in its signature and gates nothing.
   `pipeline/lib/signal/gatecandidates.mjs` looks up
   `FLIP_NICHES[mode]` and calls `spec.edge(...)` / reads `spec.pool.risingFloor` / `spec.rank` / `spec.falling`
   / `spec.gate` instead of branching on the flip-niche name — so a flip-niche can be added or REMOVED by editing the
@@ -2030,7 +2047,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     position stage wants, so quote-items.mjs can see the live book without the `~/.runelite` log dir;
     `readOfferRows` stamps rows from a `.json` (net-worth) source `worthNet: true` — PLAN-SALE-LOG-TAX —
     so the convention survives `readExchangeLog`'s stringify round-trip into `parseJsonLine` and the
-    raw-row px displays (monitor-offers / trigger-alerts) can recover gross on a net sell row),
+    raw-row px displays (monitor-offers / trigger-alerts) can recover gross on a net sell row.
+    **`activeOffers` picks each slot's current state by WALL-CLOCK (`Date.parse(date+'T'+time)`), not by
+    read order** — PLAN-BOOK-SELF-HEAL H3, 2026-09-02. `readOfferRows` concatenates the log files in
+    FILE-MTIME order, so read order says which FILE was appended to last, not when a line happened: a
+    manual `CANCELLED_BUY` in `coffer-manual.log` beat the live log's stale `BUYING` row only until
+    RuneLite appended anything at all, then the mtime flipped and the cancelled slot came back as a
+    PHANTOM offer (diagnosed live on the slot-2 crossbow bid — the cancel was injected twice and the
+    phantom returned twice). Exact ties and rows with no parseable timestamp fall back to read order
+    (later wins), so re-emits and REMOVE-shaped lines still resolve; an unstamped row never displaces a
+    stamped one. Pinned by `pipeline/test/offers.test.mjs`, including an end-to-end fixture log DIR whose
+    cancel sits in the OLDER-mtime file),
     `paths.mjs` (chunk 6 — the tiny shared `REPO_DIR` anchor, honoring `--repo-dir`, so `derive-cash-tiers.mjs`
     and `cash-anchor.mjs` no longer import it from the `sync-fills.mjs` COMMAND (a lib→command layering
     inversion that ran sync's module top-level as a side effect); `sync-fills.mjs` re-exports it so

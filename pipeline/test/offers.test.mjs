@@ -8,8 +8,10 @@
  * Run: `node pipeline/lib/offers.test.mjs`  (exits non-zero on any failure).
  *
  * BUSINESS REQUIREMENTS pinned here (diff a change against these):
- *   - The LATEST log line for a slot is that slot's current state — a re-placed / partially-filled
- *     slot reflects its most recent line, never an earlier one for the same slot.
+ *   - The latest log line for a slot BY WALL-CLOCK (`date`+`time`) is that slot's current state — NOT the
+ *     latest in READ order, which tracks file mtime and let a stale BUYING row resurrect a cancelled slot
+ *     (the slot-2 crossbow phantom, 2026-09-02). Exact ties and rows with no parseable timestamp fall back
+ *     to read order (later wins); an unstamped row never displaces a stamped one.
  *   - Only BUYING / SELLING slots surface as active offers (Ben's committed-capital definition,
  *     2026-07-04); terminal / cancelled / EMPTY states never do.
  *   - offersSnapshot() (LW1, the offers.json emitter) maps each active offer to the flat schema
@@ -18,7 +20,10 @@
  *     EMPTY/terminal slots are excluded; item name comes from a best-effort lookup ('#<id>' fallback).
  */
 import assert from 'node:assert/strict';
-import { activeOffers, offersSnapshot, restartBlindSuspects, suspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { activeOffers, offersSnapshot, readOfferRows, restartBlindSuspects, suspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -45,6 +50,49 @@ ok('a slot that moved to a terminal state drops out (latest line is no longer BU
     row(0, 'BOUGHT', 'Rune scimitar', 5),   // slot 0 completed → not active anymore
   ];
   assert.equal(activeOffers(rows).length, 0);
+});
+
+// --- 1b. WALL-CLOCK decides the per-slot winner, not read order (H3) --------------------------
+// THE LIVE SHAPE (slot-2 crossbow, 2026-09-02): readOfferRows concatenates log files in FILE-MTIME order.
+// The manual CANCELLED_BUY (22:50) sat in coffer-manual.log, whose mtime was OLDER than exchange.json — so
+// the stale 19:31 BUYING row was read LAST and won, resurrecting a slot Ben had cancelled. Twice.
+ok('a NEWER-wall-clock cancel read EARLIER beats a stale BUYING row read later (the mtime-race phantom)', () => {
+  const rows = [
+    // read first (older-mtime file) but the LATER wall-clock — the real current state
+    row(2, 'CANCELLED_BUY', 'Armadyl crossbow', 0, { date: '2026-09-02', time: '22:50:00' }),
+    // read last (newest-mtime file) but a STALE wall-clock — must NOT win
+    row(2, 'BUYING', 'Armadyl crossbow', 0, { date: '2026-09-02', time: '19:31:00' }),
+    row(6, 'BUYING', 'Dragon bones', 10, { date: '2026-09-02', time: '20:00:00' }),
+    row(7, 'SELLING', 'Magic logs', 5, { date: '2026-09-02', time: '20:00:00' }),
+  ];
+  const active = activeOffers(rows);
+  assert.deepEqual(active.map(o => o.slot).sort(), [6, 7], 'slot 2 is cancelled and stays gone; live slots survive');
+});
+
+ok('an exact wall-clock tie keeps the later-read row (re-emit semantics unchanged)', () => {
+  const rows = [
+    row(0, 'BUYING', 'Rune scimitar', 1, { time: '12:00:00' }),
+    row(0, 'BUYING', 'Rune scimitar', 4, { time: '12:00:00' }),   // same stamp → later-read wins
+  ];
+  const active = activeOffers(rows);
+  assert.equal(active.length, 1);
+  assert.equal(active[0].qty, 4, 'tie falls back to read order');
+});
+
+ok('a row with no parseable timestamp never displaces a stamped incumbent', () => {
+  const stamped = [
+    row(0, 'CANCELLED_BUY', 'Coal', 0, { date: '2026-09-02', time: '10:00:00' }),
+    { slot: 0, state: 'BUYING', item: 'Coal', qty: 3 },           // no date/time — a REMOVE-shaped line
+  ];
+  assert.equal(activeOffers(stamped).length, 0, 'the unstamped BUYING row cannot revive the cancelled slot');
+  // …but two unstamped rows still resolve by read order, so a stampless log degrades, never throws.
+  const bare = [
+    { slot: 1, state: 'BUYING', item: 'Coal', qty: 1 },
+    { slot: 1, state: 'BUYING', item: 'Coal', qty: 9 },
+  ];
+  const act = activeOffers(bare);
+  assert.equal(act.length, 1);
+  assert.equal(act[0].qty, 9, 'no stamps at all → read order (later wins)');
 });
 
 // --- 2. only BUYING / SELLING surface as active -----------------------------------------------
@@ -107,6 +155,29 @@ ok('EMPTY and terminal (BOUGHT/CANCELLED) slots never appear in the snapshot', (
   const snap = offersSnapshot(rows);
   assert.equal(snap.offers.length, 1, 'only the resting BUY survives');
   assert.equal(snap.offers[0].slot, 0);
+});
+
+// --- 5b. end-to-end mtime race: two fixture log FILES, the cancel in the older-mtime one (H3) ---
+// This is the root cause, not just its shape: readOfferRows sorts files by mtime, so the newest-touched
+// file's rows come last. The cancel lives in the OLDER file and must still win on wall-clock.
+ok('a snapshot built from a fixture log dir drops the phantom slot even when the stale row is read last', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coffer-offers-'));
+  try {
+    const line = o => JSON.stringify(o) + '\n';
+    fs.writeFileSync(path.join(dir, 'coffer-manual.log'),
+      line({ slot: 2, state: 'CANCELLED_BUY', item: 11785, max: 1, qty: 0, offer: 8_000_000, date: '2026-09-02', time: '22:50:00' }));
+    fs.writeFileSync(path.join(dir, 'exchange.log'),
+      line({ slot: 2, state: 'BUYING', item: 11785, max: 1, qty: 0, offer: 8_000_000, date: '2026-09-02', time: '19:31:00' })
+      + line({ slot: 6, state: 'BUYING', item: 561, max: 100, qty: 0, offer: 200, date: '2026-09-02', time: '20:00:00' })
+      + line({ slot: 7, state: 'SELLING', item: 1515, max: 50, qty: 0, offer: 300, date: '2026-09-02', time: '20:00:00' }));
+    // make the manual log the OLDER file — exactly the live race (RuneLite appended after the injection)
+    const old = new Date(Date.now() - 3_600_000);
+    fs.utimesSync(path.join(dir, 'coffer-manual.log'), old, old);
+    const rows = readOfferRows(dir);
+    assert.equal(rows[0].state, 'CANCELLED_BUY', 'the cancel really is read FIRST (mtime order) — the race is reproduced');
+    const snap = offersSnapshot(rows);
+    assert.deepEqual(snap.offers.map(o => o.slot).sort(), [6, 7], 'slot 2 excluded; live slots 6/7 survive');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 // --- 6. no active offers → empty array, stable envelope ---------------------------------------

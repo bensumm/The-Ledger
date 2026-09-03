@@ -119,11 +119,28 @@ export function bidFromSnapshot(offers, itemId) {
   return normalizeSnapshotOffer((offers || []).find(o => o && o.itemId === itemId && o.side === 'buy') || null);
 }
 
-/** Latest line per slot = that slot's current state; BUYING/SELLING = an open offer.
- *  Returns [{ slot, state, item, qty, max, offer, ts }] (qty = filled so far). */
+/** Latest line per slot BY WALL-CLOCK = that slot's current state; BUYING/SELLING = an open offer.
+ *  Returns [{ slot, state, item, qty, max, offer, ts }] (qty = filled so far).
+ *
+ *  WALL-CLOCK, NOT READ ORDER. `readOfferRows` concatenates log files in FILE-MTIME order, so read order
+ *  says which FILE was appended to last, not when a line happened: a manual CANCELLED_BUY beat the live
+ *  log's stale BUYING row only until RuneLite appended anything, then the phantom offer resurrected.
+ *  Ties and unstamped rows fall back to read order (later wins) so re-emits and REMOVE-shaped lines still
+ *  resolve; an unstamped row never displaces a stamped one. */
+const offerEpoch = r => Date.parse(r.date + 'T' + r.time);
+function supersedes(cand, prev) {
+  const a = offerEpoch(cand), b = offerEpoch(prev);
+  if (!Number.isFinite(a) && !Number.isFinite(b)) return true;
+  if (!Number.isFinite(a)) return false;
+  if (!Number.isFinite(b)) return true;
+  return a >= b;
+}
 export function activeOffers(rows, ignoredCfg = null) {
   const bySlot = new Map();
-  for (const r of rows) bySlot.set(r.slot, r);
+  for (const r of rows) {
+    const prev = bySlot.get(r.slot);
+    if (prev === undefined || supersedes(r, prev)) bySlot.set(r.slot, r);
+  }
   const out = [];
   for (const [, r] of bySlot) {
     if (r.state === 'BUYING' || r.state === 'SELLING') {
@@ -131,32 +148,26 @@ export function activeOffers(rows, ignoredCfg = null) {
       // is not a flip — drop it from the merch offer view unless its price matches a live greenlist
       // entry. Keeps farm bids off watch's CANCEL-BID rows. Absent cfg → unchanged (monitor passes none).
       if (ignoredCfg && offerQuarantined(ignoredCfg, r.item, r.offer)) continue;
-      out.push({ ...r, ts: Date.parse(r.date + 'T' + r.time) }); // raw fields kept (date/time/worth) — monitor prints them
+      out.push({ ...r, ts: offerEpoch(r) }); // raw fields kept (date/time/worth) — monitor prints them
     }
   }
   return out;
 }
 
 /** LH2.4 — restart-blindness for slots the WHOLE-log staleness check (logblind.mjs) can't see.
- *  THE GAP (2026-07-16): the Exchange Logger plugin only emits on a slot state change, so after a
- *  client restart/relog it silently reports EMPTY for every slot it hasn't seen touched since — even
- *  though the underlying GE offer is still resting in-game (LH2's original finding). logblind.mjs
- *  catches this when the WHOLE log goes stale, but a live probe/flip touching even ONE slot keeps the
- *  log looking fresh while OTHER slots go dark right alongside it (the 2026-07-16 ladder-probe
- *  incident: 4 bulk sells vanished from monitor-offers.mjs while 2 micro-clip slots kept the log
- *  "fresh").
+ *  THE GAP: the Exchange Logger plugin only emits on a slot state change, so after a client
+ *  restart/relog it silently reports EMPTY for every slot it hasn't seen touched since — even though
+ *  the underlying GE offer is still resting in-game. logblind.mjs catches this when the WHOLE log goes
+ *  stale, but a live probe/flip touching even ONE slot keeps the log looking fresh while OTHER slots go
+ *  dark right alongside it.
  *
- *  THE INVARIANT (simpler than the first cut of this fix, and strictly more general): the GE offer
- *  state machine has exactly one path into EMPTY — through a TERMINAL row (CANCELLED_BUY /
- *  CANCELLED_SELL / BOUGHT / SOLD). A real fill always logs partial -> complete before EMPTY; a real
- *  cancel always logs CANCELLED_* before EMPTY. There is no legitimate transition straight from
- *  BUYING/SELLING to EMPTY. So the check needs no cross-slot corroboration ("did N other slots also go
- *  empty at this instant") at all — just walk each slot backward past any run of trailing EMPTY rows
- *  (a slot can go blind more than once before ever being re-touched) to the last REAL row. If that row
- *  is BUYING/SELLING rather than a terminal state, the EMPTY has no explanation and the offer is
- *  presumed still resting in-game. This is both simpler than (and a superset of) the original
- *  same-timestamp-multi-slot heuristic — it also catches a SINGLE slot going blind on its own, which a
- *  "3+ slots at once" threshold would have missed.
+ *  THE INVARIANT: the GE offer state machine has exactly one path into EMPTY — through a TERMINAL row
+ *  (CANCELLED_BUY / CANCELLED_SELL / BOUGHT / SOLD); there is no legitimate BUYING/SELLING → EMPTY
+ *  transition. So no cross-slot corroboration is needed — walk each slot backward past any run of
+ *  trailing EMPTY rows (a slot can go blind more than once before being re-touched) to the last REAL
+ *  row. If that row is BUYING/SELLING, the EMPTY has no explanation and the offer is presumed still
+ *  resting in-game. This is a superset of the original same-timestamp-multi-slot heuristic — it also
+ *  catches a SINGLE slot going blind on its own.
  *  Returns the SUSPECT slots' pre-wipe offer, `{ ...row, ts, resetTs, suspectRestartBlind:true }` —
  *  ONLY for slots whose wipe is still the LAST thing logged for that slot (a later real placement or
  *  cancel supersedes the suspicion). Never mutates `activeOffers()`'s own semantics — this is an

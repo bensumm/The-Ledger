@@ -281,4 +281,19 @@ ok('Bar D: legacy band record without tradedWin falls back to active5m (back-com
   assert.ok(e && e.activeWin === 10, 'legacy record survives via the active5m fallback');
 });
 
+/* --- the BOND opt-in on the edge input (PLAN-BOOK-SELF-HEAL H2) ------------------------------------
+   Every edge costs through netMargin, which cannot see an itemId — gatecandidates.mjs passes
+   `bond`/`guide`. Without them the band edge over-taxes a bond AND skips its 10%-of-guide retrade fee,
+   which is the larger of the two by ~5×; the fee turns a "profitable" band into a loss. */
+ok('the band edge costs a bond row through the retrade-fee model, not the 2% sell tax', () => {
+  const t = DEFAULT_THRESHOLDS;
+  const band = { bandLo: 11_110_000, bandHi: 11_810_000, tradedWin: 20, sawLow: true, sawHigh: true };
+  const inp = { avgHigh: 11_810_000, avgLow: 11_110_000, band, limitVol: 500, limit: 5, thin: false };
+  const taxed = FLIP_NICHES.band.edge(inp, t);
+  assert.equal(taxed.modeNet, 463_800, 'no opt-in ⇒ the old tax-model number (unchanged for every non-bond item)');
+  const bonded = FLIP_NICHES.band.edge({ ...inp, bond: true, guide: 11_410_000 }, t);
+  assert.equal(bonded, null, 'bond model: 700k spread − 1.141m retrade fee ⇒ negative ROI ⇒ the row is dropped');
+  assert.equal(FLIP_NICHES.band.edge({ ...inp, bond: true, guide: null }, t), null, 'unknown guide ⇒ refused, never fee-free');
+});
+
 console.log(`\nAll ${pass} conformance checks passed.`);

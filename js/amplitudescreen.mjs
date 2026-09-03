@@ -12,17 +12,11 @@
  * sees it: buy the TROUGH, sell the PEAK, cycle. The organizing frame (§1): band/amplitude/invest are
  * ONE operation at three cycle periods (2h / multi-day / multi-week).
  *
- * RE-HORIZONED 2026-08-09 (PLAN-DIURNAL-TRIAGE DT1). The lane shipped as a 24h-CYCLE screen — "hold ~a
- * day" — and that specific premise was measured and REFUTED: over 92 items ≥5m and 4,881 item-days,
- * completion within 24h GIVEN entry is 4.8%. The EDGE is real but the CLOCK was wrong; completion climbs
- * to 22.6% at 96h and 34.6% at 7d, and the survivors are the repeatable multi-DAY oscillator class (Masori
- * chaps 71% at 7d; fang ~6–8d), which is exactly the taxonomy gap the standing multi-week-oscillator note
- * describes. So the default horizon moved 1 → 4 days and the refuted `pFill2leg` product-of-marginals was
- * DELETED. Its intended replacement `cycleCompletion` proved CIRCULAR (in-sample levels) and is neither shown
- * nor ranked on; DT1b replaced it with `ampWalkForward` — levels fitted STRICTLY PRE-ORIGIN, scored at hour
- * grain — which now drives `pFillAmplitude` directly.
- * The study itself REPRODUCES EXACTLY when re-run (Saturated heart 0.0% @96h n=41; Masori chaps 12.9% @24h
- * n=31), so the refutation is solid. Full numbers: AMP_HOLD_DAYS_DEFAULT below.
+ * RE-HORIZONED (PLAN-DIURNAL-TRIAGE DT1). The lane's founding 24h-cycle premise was measured and REFUTED,
+ * so the default horizon is multi-DAY and the refuted `pFill2leg` product-of-marginals is DELETED; its
+ * replacement `cycleCompletion` proved CIRCULAR (in-sample levels) and is neither shown nor ranked on.
+ * `ampWalkForward` — levels fitted STRICTLY PRE-ORIGIN, scored at hour grain — drives `pFillAmplitude`.
+ * Full numbers + the reproduction: AMP_HOLD_DAYS_DEFAULT below.
  *
  * TWO-STAGE GATE (§2.1 — like value's). At gate time the screen has only bulk data (the corrected
  * rolling-24h volumes, the 2h bands, and the daily archive = whole-market /1h at 6h spacing = 4 mid
@@ -51,6 +45,10 @@
  * amplitudeDeployUnits() below is that min(), floored honestly (0 = unaffordable → caller drops the pick);
  * the family reads it. No parallel ranking composite.
  *
+ * BOND OPT-IN (PLAN-BOOK-SELF-HEAL H2). Costing runs through money-math's `netMargin` and the CALLER
+ * passes `{ bond, guide }` — the same opt-in computeQuote uses, because netMargin cannot see an itemId.
+ * A bond pays no 2% sell tax but a 10%-of-guide retrade fee, which the tax model reads as a profit.
+ *
  * HONESTY (rule 4 — n≈0). EVERY threshold below is a NAMED PLACEHOLDER. The lane is a hypothesis
  * surfaced inform-first until it has a record (§4). The make-or-break question — do BOTH legs actually
  * fill within the hold horizon, repeatably? — is now answered HISTORICALLY by `ampWalkForward` (DT1b),
@@ -58,12 +56,18 @@
  * the only ground truth (a printed level ≠ your fill, so every rate here is an upper bound). Do NOT cite
  * any constant here as validated.
  */
-import { tax } from './money-math.js';
+import { netMargin } from './money-math.js';
 import { quantLow, quantHigh, recencySplit, windowStats, RECENT_NIGHTS } from './windowread.mjs';
 import { ACTIONABLE_WINDOWS_PER_DAY } from './desk-cadence.mjs';
 
 const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
-const afterTax = p => p - tax(p);
+// The ONE after-cost margin (money-math.js netMargin). A bond with no known guide is REFUSED (null) —
+// fee-free would read MORE profitable than the over-taxed number this opt-in exists to replace.
+const netOf = (low, high, bond, guide) => {
+  if (!bond) return netMargin(low, high);
+  if (!(guide > 0)) return null;
+  return netMargin(low, high, { bond: true, guide });
+};
 const clamp01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
 // recencySplit() does NOT expose a `scored` flag — recompute it with the SAME rule recencySplit uses
 // internally (a full recent window AND a longer full window behind it), so a thin recent slice honestly
@@ -71,10 +75,10 @@ const clamp01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
 const recencyScored = (rs, recentN) => rs.recentDays >= recentN && rs.fullN >= recentN + 2;
 
 // --- PLACEHOLDER constants (rule 4 — unvalidated; the shadow replay + retro-join would tune them) ---
-// The after-tax DAILY amplitude floor: the recent-5d median of per-day (afterTax(hi) − low)/low must
+// The after-cost DAILY amplitude floor: the recent-5d median of per-day netOf(low, hi)/low must
 // clear this for one taxed round trip to net meaningfully. Measured on the DAILY range (windowStats
 // per-day hi/lo), NOT the 2h band — the edge the band can't see. PLACEHOLDER.
-// The recent-5d median of per-day after-tax amplitude ((afterTax(hi) − low)/low) must clear this. Note
+// The recent-5d median of per-day after-cost amplitude (netOf(low, hi)/low) must clear this. Note
 // this MEDIAN-per-day basis reads LOWER than the raw hi↔lo range the lane's origin cited (Masori body's
 // raw 41.3m↔43.9m ≈ 6% is ~2.1% on the taxed median-per-day basis) — the floor is set to the median
 // basis, so ~2% here IS the ~4-6% raw-range class the lane targets. PLACEHOLDER (n≈0).
@@ -368,18 +372,22 @@ export function ampWalkForward(series1h, {
    Returns the amplitude SHAPE features (incl. the effective askQ/bidQ, so a shadow-log can record
    WHICH quantiles a row was quoted at — an experiment run is then ledger-distinguishable), or
    { hasData:false }. */
-export function amplitudeRanges(stats, live, { holdDays = AMP_HOLD_DAYS_DEFAULT, recentN = AMP_RECENT_N, askQ = AMP_ASK_Q, bidQ = AMP_BID_Q } = {}) {
+export function amplitudeRanges(stats, live, { holdDays = AMP_HOLD_DAYS_DEFAULT, recentN = AMP_RECENT_N, askQ = AMP_ASK_Q, bidQ = AMP_BID_Q, bond = false, guide = null } = {}) {
   if (!stats || !Array.isArray(stats.days) || !Array.isArray(stats.lows) || !Array.isArray(stats.his)
     || !stats.lows.length || !stats.his.length) return { hasData: false };
   const nDays = stats.days.length;
   if (nDays < AMP_MIN_DAYS || stats.lows.length < AMP_MIN_DAYS || stats.his.length < AMP_MIN_DAYS)
     return { hasData: false, cold: true };
 
-  // recent-N median of the per-day after-tax amplitude % ((afterTax(hi) − low) / low). Measured on the
+  // recent-N median of the per-day after-cost amplitude % (netOf(low, hi) / low). Measured on the
   // DAILY range (the edge the 2h band can't see). Uses the newest `recentDaysForAmp` complete days.
   const recentDaysForAmp = Math.max(recentN, 5);
   const dayPcts = stats.days.slice(-recentDaysForAmp)
-    .map(([, n]) => (n.low != null && n.hi != null && n.low > 0) ? (afterTax(n.hi) - n.low) / n.low : null)
+    .map(([, n]) => {
+      if (!(n.low != null && n.hi != null && n.low > 0)) return null;
+      const m = netOf(n.low, n.hi, bond, guide);
+      return m == null ? null : m / n.low;
+    })
     .filter(v => v != null).sort((a, b) => a - b);
   const medAmpPct = dayPcts.length ? dayPcts[Math.floor(dayPcts.length / 2)] : null;
 
@@ -387,7 +395,7 @@ export function amplitudeRanges(stats, live, { holdDays = AMP_HOLD_DAYS_DEFAULT,
   const ampAsk = quantHigh(stats.his, askQ);             // peak-ask   — reached on ~askQ of days (default AMP_ASK_Q)
   const bidTouch = recencySplit(stats.days, 'bid', ampBid, recentN);
   const askReach = recencySplit(stats.days, 'ask', ampAsk, recentN);
-  const netPerCycle = (ampBid != null && ampAsk != null) ? afterTax(ampAsk) - ampBid : null;
+  const netPerCycle = (ampBid != null && ampAsk != null) ? netOf(ampBid, ampAsk, bond, guide) : null;
   const ampPct = (netPerCycle != null && ampBid > 0) ? netPerCycle / ampBid : null;
   // DT1 (2026-08-09): `pFill2leg = bidFrac × askFrac` is DELETED. It was a PRODUCT OF MARGINALS standing
   // in for a joint, and the independence it assumed is measured FALSE — entry is adverse selection, so
@@ -422,7 +430,7 @@ export function amplitudeRanges(stats, live, { holdDays = AMP_HOLD_DAYS_DEFAULT,
    drift-adjusted margin clears the floor. This deliberately LOOSENS the knife guard; it is safe because
    every survivor it lets past must still clear the margin gate below.
 
-   Chunk 3A — `driftMargin` is the amplitudeDriftMargin() result (afterTax(driftAdjustedPeak) − entry −
+   Chunk 3A — `driftMargin` is the amplitudeDriftMargin() result (netOf(entry, driftAdjustedPeak) −
    AMP_DRIFT_REQ_MARGIN; the floor is ALREADY subtracted inside it — one-home threshold). DIRECTION-AGNOSTIC
    by construction: `.margin` is the SIGNED consequence of the drift NUMBER, so the reject is a single
    `margin <= 0` comparison — identical arithmetic whether the drift was + or −; there is NO sign branch.
@@ -460,18 +468,20 @@ export function amplitudeGate(ar, { trendDominates = false, knife = false, oscil
 // the shadow-logged number and the eventual gate read the SAME threshold (one-home).
 export const AMP_DRIFT_REQ_MARGIN = 0;
 
-/* amplitudeDriftMargin(dae, { entry, requiredMargin }) → the drift-adjusted margin off a js/forecast.mjs
-   driftAdjustedExit() result, or null. THE margin (PLAN "corrected mechanism"):
-     margin = afterTax(driftAdjustedPeak) − entry − requiredMargin
-   computed through the SAME `afterTax` path netPerCycle uses (the ONE tax definition, money-math.js), and
+/* amplitudeDriftMargin(dae, { entry, requiredMargin, bond, guide }) → the drift-adjusted margin off a
+   js/forecast.mjs driftAdjustedExit() result, or null. THE margin (PLAN "corrected mechanism"):
+     margin = netOf(entry, driftAdjustedPeak) − requiredMargin
+   computed through the SAME `netOf` path netPerCycle uses (the ONE tax/bond definition, money-math.js), and
    IDENTICALLY regardless of the drift's sign — there is NO branch on ceilingSlope/floorSlope direction (the
    corrected-mechanism ruling: drift is a NUMBER, the margin its consequence, never a direction gate). `entry`
    is the amplitude trough-bid the row already quotes (ar.ampBid). Chunk 2 SHADOW-LOGS this alongside the
    naive ampBid/ampAsk (computed, not acted on); Chunk 3 turns the same number into the gate. Null when the
    exit projection degraded (no driftAdjustedPeak) or no entry — degrade, never a fake margin. */
-export function amplitudeDriftMargin(dae, { entry, requiredMargin = AMP_DRIFT_REQ_MARGIN } = {}) {
+export function amplitudeDriftMargin(dae, { entry, requiredMargin = AMP_DRIFT_REQ_MARGIN, bond = false, guide = null } = {}) {
   if (!dae || dae.driftAdjustedPeak == null || entry == null) return null;
-  const margin = afterTax(dae.driftAdjustedPeak) - entry - requiredMargin;
+  const net = netOf(entry, dae.driftAdjustedPeak, bond, guide);
+  if (net == null) return null;
+  const margin = net - requiredMargin;
   const r = x => x == null ? null : Math.round(x);
   return {
     driftAdjustedPeak: r(dae.driftAdjustedPeak),

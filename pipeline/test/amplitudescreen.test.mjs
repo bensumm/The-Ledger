@@ -16,7 +16,7 @@
  */
 import assert from 'node:assert/strict';
 import {
-  amplitudeProxy, amplitudeRanges, amplitudeGate, amplitudeDeployUnits, cycleCompletion, ampWalkForward,
+  amplitudeProxy, amplitudeRanges, amplitudeGate, amplitudeDeployUnits, amplitudeDriftMargin, cycleCompletion, ampWalkForward,
   AMP_MIN_AMP_PCT, AMP_STAGE1_MIN_PCT, AMP_ASK_Q, AMP_BID_Q, AMP_WINDOWS_PER_DAY, AMP_WF_MIN_JUDGED,
 } from '../../js/amplitudescreen.mjs';
 import { ACTIONABLE_WINDOWS_PER_DAY } from '../../js/desk-cadence.mjs';
@@ -357,6 +357,47 @@ ok('pFillAmplitude falls BACK to the prior when the walk-forward sample is under
   const e = pFillAmplitude({ walkForward: thin });
   assert.equal(e.basis, 'prior', 'a handful of entries is not evidence of a 0% round trip');
   assert.equal(e.n, 0);
+});
+
+// ============================================================================================
+// PLAN-BOOK-SELF-HEAL H2 — the BOND opt-in. Fixture = the live 2026-09-02 board row for Old school
+// bond (guide 11.41m, trough 11.11m, peak 11.81m), which printed +457.8k/cycle and offered 4 units.
+// A bond pays NO 2% sell tax but a 10%-of-guide retrade fee, so the real number is fee-dominated and
+// NEGATIVE. netMargin cannot see an itemId — the caller opts in with { bond, guide }.
+console.log('\nbond opt-in (PLAN-BOOK-SELF-HEAL H2):');
+const BOND_GUIDE = 11_410_000;
+const BOND = makeStats(Array.from({ length: 10 }, () => ({ low: 11_110_000, hi: 11_810_000 })));
+
+ok('WITHOUT the opt-in the bond row still prints the tax-model fake profit (the pre-fix number)', () => {
+  const ar = amplitudeRanges(BOND, 11_260_000, { holdDays: 4 });
+  assert.equal(ar.netPerCycle, 463_800, 'tax model: (11.81m − 2%) − 11.11m — the +457.8k-class fake');
+  assert.equal(amplitudeGate(ar, {}).pass, true, 'and it sails through the amplitude floor');
+});
+
+ok('WITH the opt-in the bond row costs the retrade fee and goes NEGATIVE, so the gate drops it', () => {
+  const ar = amplitudeRanges(BOND, 11_260_000, { holdDays: 4, bond: true, guide: BOND_GUIDE });
+  assert.equal(ar.netPerCycle, -441_000, 'bond model: 11.81m − 11.11m − 10%×11.41m');
+  assert.ok(ar.medAmpPct < 0, 'the daily amplitude is fee-dominated, not a 4.1% swing');
+  assert.equal(amplitudeGate(ar, {}).reason, 'amp-below-floor', 'no longer a surfaced pick');
+});
+
+ok('a bond with no known guide is REFUSED, never costed fee-free', () => {
+  const ar = amplitudeRanges(BOND, 11_260_000, { holdDays: 4, bond: true, guide: null });
+  assert.equal(ar.netPerCycle, null, 'unknown retrade fee ⇒ no net, not the fee-free +700k');
+  assert.equal(ar.medAmpPct, null);
+  assert.equal(amplitudeGate(ar, {}).reason, 'amp-below-floor');
+});
+
+ok('amplitudeDriftMargin honours the same opt-in', () => {
+  const dae = { driftAdjustedPeak: 11_810_000, driftAdjustedTrough: 11_110_000, naivePeak: 11_810_000, ceilingSlope: 0, floorSlope: 0, confidence: 'low' };
+  assert.equal(amplitudeDriftMargin(dae, { entry: 11_110_000 }).margin, 463_800, 'tax model unchanged for every non-bond caller');
+  assert.equal(amplitudeDriftMargin(dae, { entry: 11_110_000, bond: true, guide: BOND_GUIDE }).margin, -441_000);
+  assert.equal(amplitudeDriftMargin(dae, { entry: 11_110_000, bond: true, guide: null }), null, 'uncostable ⇒ null, not a fake margin');
+});
+
+ok('a NON-bond row is byte-identical whether or not the opt-in fields are passed', () => {
+  assert.deepEqual(amplitudeRanges(OSC, 1005, { holdDays: 1, bond: false, guide: 1234 }),
+    amplitudeRanges(OSC, 1005, { holdDays: 1 }), 'guide is inert without bond:true');
 });
 
 console.log(`\namplitudescreen.mjs: ${pass} assertions passed.`);

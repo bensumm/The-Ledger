@@ -60,7 +60,7 @@
  * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only fetches, gates, rates and renders.
  */
 import { computeQuote, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
-import { tax } from '../../js/money-math.js';
+import { tax, isBond } from '../../js/money-math.js';
 import { loadWatchlistEntries, loadWatchlistIds } from '../lib/config/watchlist.mjs';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
 import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, reachedDays, RECENCY_DIVERGE, RECENT_NIGHTS, askReachDecayNote, softBuyRead, softBuyHoursClause, displayFitNights, phaseFromLap, SOFT_BUY_CUE_TEXT, floorCeilingTrack } from '../../js/windowread.mjs';   // diurnal/timed-lap (DT2), window-clear (PLAN-WINDOW-CLEAR B2), asym pair, reachable band (RC-S2), placement (AC1, PLAN-ESTIMATOR-POSTURE), weekdayProfile (A3, PLAN-AMPLITUDE-SCAN), reachedDays (RF6) — all off the in-hand 1h series, no fetch. askReachDecayNote (DT3, PLAN-HOURLY-3DAY-TREND) is the shared compact note renderer for the top-X digest picks; there is NO per-hour drift-slope renderer (measured a non-signal), and no demandRegime read (PLAN-REMOVE-DEPTH-PRESSURE-READS).
@@ -2179,7 +2179,8 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
     const ts1h = series1h && series1h.get(s.id);
     // Stage 2 (§2.1): the EXACT daily amplitude off ONE full-day windowStats call over the in-hand 1h series.
     const stats = ts1h ? windowStats(ts1h, { nights: AMP_NIGHTS, wStart: 0, wEnd: 0 }) : null;
-    const ar = amplitudeRanges(stats, live, { holdDays: AMP_HOLD_DAYS, askQ: AMP_ASK_Q_EFF, bidQ: AMP_BID_Q_EFF });
+    const bondOpt = { bond: isBond(s.id), guide: (guide && guide[s.id] != null) ? guide[s.id] : null };
+    const ar = amplitudeRanges(stats, live, { holdDays: AMP_HOLD_DAYS, askQ: AMP_ASK_Q_EFF, bidQ: AMP_BID_Q_EFF, ...bondOpt });
     if (!ar.hasData) { dropped.noHistory++; continue; }
     // trend / knife guard: hourProfile's trendDominates (the "amplitude is drift" test) + the warm 1h
     // trajectory shape ('knife' = monotone decline). Oscillation around a flat level is the thesis.
@@ -2208,7 +2209,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
     const dae = driftExitFrom(prof, stats.days, {
       liveLo: row.quickBuy, liveHi: row.quickSell, phase: phAmp?.phase ?? null, mom: row.mom, reliable: row.reliable,
     }, { holdHorizonDays: AMP_HOLD_DAYS });
-    const driftShadow = amplitudeDriftMargin(dae, { entry: ar.ampBid });
+    const driftShadow = amplitudeDriftMargin(dae, { entry: ar.ampBid, ...bondOpt });
     const g = amplitudeGate(ar, { trendDominates, knife, oscillating: !!(osc && osc.oscillating), driftMargin: driftShadow });
     if (!g.pass) { dropped[DROP_KEY[g.reason] ?? 'ampFloor']++; continue; }
     // rank via the EXISTING spine: the 'amplitude' estimator family (pFill = the measured walk-forward
@@ -2729,7 +2730,7 @@ async function main() {
   }
   const bands = NEED_BANDS ? await loadBands(BAND_HOURS) : null;
   const { series: daily, coverageWindows } = await loadDaily(DAILY_DAYS, DAILY_STEP_H);  // bulk regime-proxy archive
-  const ctx = { v24, map, bands, daily };   // P5: `daily` rides the ctx so the value gate can read the term structure
+  const ctx = { v24, map, bands, daily, guide };   // P5: `daily` rides the ctx so the value gate can read the term structure; `guide` feeds the edge bond opt-in
 
   // ADMIT: the fetch-pool admission call — dispatches on ADMISSION (default 'unified', PLAN-SCREEN-
   // ARCHITECTURE). `legacy` calls rankAndSlice exactly as before (excluded always [], byte-identical);
