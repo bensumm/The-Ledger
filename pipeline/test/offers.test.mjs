@@ -15,15 +15,19 @@
  *   - Only BUYING / SELLING slots surface as active offers (Ben's committed-capital definition,
  *     2026-07-04); terminal / cancelled / EMPTY states never do.
  *   - offersSnapshot() (LW1, the offers.json emitter) maps each active offer to the flat schema
- *     { slot, side, itemId, item, price, qty, filled, lastUpdateTs }: side BUYING→'buy' /
+ *     { slot, side, itemId, item, price, qty, filled, lastUpdateTs, placedTs }: side BUYING→'buy' /
  *     SELLING→'sell'; qty = TOTAL offer size (max), filled = cumulative filled so far (qty field);
  *     EMPTY/terminal slots are excluded; item name comes from a best-effort lookup ('#<id>' fallback).
+ *   - placedTs (FD3, PLAN-FLOW-DIET) is the slot's current offer EPISODE start: a partial-fill
+ *     re-log (qty moves, state·item·price·max don't) does NOT reset it; a price/item change,
+ *     terminal row, or EMPTY→offer transition starts a new episode; underivable → null, never a
+ *     throw (an old/unstamped log degrades to the pre-FD3 render via restingAge('') === '').
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { activeOffers, offersSnapshot, readOfferRows, restartBlindSuspects, suspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';
+import { activeOffers, offersSnapshot, readOfferRows, restartBlindSuspects, restingAge, suspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -230,6 +234,66 @@ ok('suspectBidNote renders the shared flag with count-aware pluralization', () =
     ' ⚠ 1 restart-suspect bid (~4.00m) may be included — verify in-game');
   assert.equal(suspectBidNote({ n: 3, gp: 12_000_000 }, n => (n / 1e6).toFixed(2) + 'm'),
     ' ⚠ 3 restart-suspect bids (~12.00m) may be included — verify in-game');
+});
+
+// ============================================================================================
+console.log('\nplacedTs episode derivation (PLAN-FLOW-DIET FD3):');
+
+const epAt = time => Date.parse('2026-07-05T' + time);
+
+ok('a partial-fill re-log does NOT reset placedTs (lastUpdateTs moves, placedTs stays)', () => {
+  const rows = [
+    rawRow(0, 'BUYING', 4151, { max: 10, filled: 0, offer: 100, time: '10:00:00' }),
+    rawRow(0, 'BUYING', 4151, { max: 10, filled: 4, offer: 100, time: '11:30:00' }),   // fill moves qty only
+  ];
+  const [a] = activeOffers(rows);
+  assert.equal(a.placedTs, epAt('10:00:00'), 'episode start is the FIRST line of the run');
+  assert.equal(a.ts, epAt('11:30:00'), 'ts (→lastUpdateTs) still tracks the latest line');
+  const snap = offersSnapshot(rows);
+  assert.equal(snap.offers[0].placedTs, epAt('10:00:00'), 'snapshot carries placedTs beside lastUpdateTs');
+  assert.equal(snap.offers[0].lastUpdateTs, epAt('11:30:00'));
+});
+
+ok('a price change starts a NEW episode even with no terminal row logged between', () => {
+  const rows = [
+    rawRow(0, 'BUYING', 4151, { max: 10, filled: 0, offer: 100, time: '10:00:00' }),
+    rawRow(0, 'BUYING', 4151, { max: 10, filled: 0, offer: 110, time: '12:00:00' }),   // repriced
+  ];
+  assert.equal(activeOffers(rows)[0].placedTs, epAt('12:00:00'), 'the reprice is the placement');
+});
+
+ok('cancel-and-relist at the SAME price is a new episode (terminal row breaks the run)', () => {
+  const rows = [
+    rawRow(0, 'BUYING', 4151, { max: 10, filled: 2, offer: 100, time: '10:00:00' }),
+    rawRow(0, 'CANCELLED_BUY', 4151, { max: 10, filled: 2, offer: 100, time: '10:30:00' }),
+    rawRow(0, 'BUYING', 4151, { max: 8, filled: 0, offer: 100, time: '11:00:00' }),    // relisted
+  ];
+  assert.equal(activeOffers(rows)[0].placedTs, epAt('11:00:00'), 'the relist is the placement');
+});
+
+ok('EMPTY→offer transition starts a new episode (restart-blind wipes reset the clock — age is a floor)', () => {
+  const rows = [
+    rawRow(0, 'BUYING', 4151, { max: 10, filled: 0, offer: 100, time: '09:00:00' }),
+    rawRow(0, 'EMPTY', 0, { time: '09:30:00' }),                                       // blind wipe
+    rawRow(0, 'BUYING', 4151, { max: 10, filled: 0, offer: 100, time: '10:00:00' }),   // re-emit
+  ];
+  assert.equal(activeOffers(rows)[0].placedTs, epAt('10:00:00'), 'the post-EMPTY re-emit starts the episode');
+});
+
+ok('an unstamped-only slot yields placedTs null (degrade, never throw), and the snapshot carries the null', () => {
+  const rows = [{ slot: 1, state: 'BUYING', item: 4151, max: 5, qty: 0, offer: 100 }];  // no date/time
+  const [a] = activeOffers(rows);
+  assert.equal(a.placedTs, null);
+  assert.equal(offersSnapshot(rows).offers[0].placedTs, null);
+});
+
+ok('restingAge renders m/h/d and returns \'\' on null so pre-FD3 rows print unchanged', () => {
+  const now = Date.parse('2026-07-05T12:00:00');
+  assert.equal(restingAge(now - 47 * 60000, now), '47m');
+  assert.equal(restingAge(now - 26 * 3600000, now), '26h');
+  assert.equal(restingAge(now - 3.2 * 86400000, now), '3.2d');
+  assert.equal(restingAge(null, now), '');
+  assert.equal(restingAge(undefined, now), '');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

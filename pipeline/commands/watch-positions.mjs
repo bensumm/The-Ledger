@@ -61,7 +61,7 @@ import { loadIgnored } from '../lib/ignored.mjs';   // MERCH-book quarantine (fa
 import { loadWatchlistIds } from '../lib/config/watchlist.mjs';
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs } from '../lib/market/marketfetch.mjs';   // vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
-import { readExchangeLog, activeOffers, restartBlindSuspects } from '../lib/reconstruct/offers.mjs';
+import { readExchangeLog, activeOffers, restartBlindSuspects, restingAge } from '../lib/reconstruct/offers.mjs';
 import { logSuggestions, suggestionEntry, reachableShadow, depthExitShadow, asymShadow, windowExitShadow } from '../lib/render/suggestlog.mjs';   // DE3/RC-S1: shared reachable/depthExit/asym ledger-shadow reshapers (one home, no drift across watch/screen/quote); WC1: windowExitShadow (the window-clear ask-rung forward record)
 import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, diurnalTimedLap, clearableAsk, reachableBand, asymPair, askExitRead, askReachDecayNote } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots; RC-S1: asymPair for the head-to-head co-log; WC1: askExitRead for the window-clear ask-rung shadow; PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the two direct hourProfile+deriveDiurnalRange call sites below (the shadow-log bid/ask + the diurnalAsk fallback) — same bid/ask/peakWindow values, one shared composition
 import { estimatePair, asymEstimate, estConfLean, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/signal/estimators.mjs';   // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION): the reachRelief-family estSell + asym pair, co-logged beside depthExit/reachable for the head-to-head; PC3 — SELL_TOP_MODELS validates --est-sell
@@ -1145,7 +1145,8 @@ async function main() {
       briefRows.push({ verdict: bidVer, name, position: bidPos, listAt: bidListAt, breakEven: bidBe });
       const wl = windowLine(it.ts1h, { bid: off.offer, compact: true });
       const bidPress = pressureText(row.pressure, { compact: true });
-      notes.push(`- ${name} bid @ ${fmtP(off.offer)}: ${firstSentence(bidAction(row, off, it._bidPathCtx))}${wl ? ` · window ${wl}` : ''}${bidPress ? ` · pressure ${bidPress}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
+      const rest = restingAge(off.placedTs, nowMs);
+      notes.push(`- ${name} bid @ ${fmtP(off.offer)}: ${firstSentence(bidAction(row, off, it._bidPathCtx))}${rest ? ` · resting ${rest}` : ''}${wl ? ` · window ${wl}` : ''}${bidPress ? ` · pressure ${bidPress}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
       // V6 recovery-read on a resting bid — surfaced only when the fill hinges on direction
       // (BID-BEHIND: below the band, it fills only if the price drops to it). ADVISORY context:
       // a drop-lean means it's likely to fill, a recover-lean that it drifts away. No verdict input.

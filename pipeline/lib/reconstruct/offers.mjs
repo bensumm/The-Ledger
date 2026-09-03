@@ -47,10 +47,8 @@ export function readExchangeLog() {
   const logLines = rows.map(r => JSON.stringify(r)); // kept for callers that want the raw-line count
   const ep = l => Date.parse(l.date + 'T' + l.time);        // local wall-clock -> epoch
   const now = Date.now();                                    // real wall clock — detects a stalled log
-  // manual REMOVE tombstone lines carry no date/time → ep() is NaN; drop them before the max.
-  // reduce rather than Math.max(...spread), same reason read-buy-limits.mjs does: `rows` spans the
-  // whole retained log history and is unbounded, so a spread crashes past V8's ~65k argument
-  // ceiling; reduce has no ceiling.
+  // REMOVE tombstones carry no date/time → ep() is NaN, dropped before the max. reduce, not
+  // Math.max(...spread): `rows` is unbounded and a spread crashes past V8's ~65k-argument ceiling.
   const validEps = rows.map(ep).filter(Number.isFinite);
   const lastLog = validEps.reduce((m, x) => (x > m ? x : m), -Infinity);
   if (!Number.isFinite(lastLog)) return { logLines, rows, lastLog: now, staleMin: 0 };
@@ -63,9 +61,8 @@ export function readExchangeLog() {
  *  so the offers.json emitter (sync-fills --local, watch-log.mjs) never blocks on the API. */
 export function nameLookupFromCache() {
   try {
-    // pipeline/.cache/ — TWO up from lib/reconstruct/ (PLAN-LIB-SUBDIRS chunk 3 nested this file).
-    // NOTE this read is try/caught into a silent no-op fallback, so a wrong depth degrades name lookup
-    // to undefined rather than throwing — re-count by hand on any future move, tests will NOT catch it.
+    // pipeline/.cache/ — TWO up from lib/reconstruct/. The read is try/caught into a no-op fallback, so
+    // a wrong depth silently degrades name lookup — re-count by hand on any move; tests will NOT catch it.
     const obj = JSON.parse(fs.readFileSync(path.join(HERE, '..', '..', '.cache', 'mapping.cache.json'), 'utf8'));
     return id => { const v = obj[id]; return v && typeof v === 'object' ? v.name : (typeof v === 'string' ? v : undefined); };
   } catch { return () => undefined; }
@@ -75,8 +72,9 @@ export function nameLookupFromCache() {
  *  app's future Watch tab; keep it DUMB and FLAT — presentation lives in the app. Field mapping:
  *  side BUYING→'buy' / SELLING→'sell'; itemId/item from the raw item id + `nameFor` lookup;
  *  price = offer price each; qty = TOTAL offer size (max); filled = cumulative filled so far (qty
- *  field); lastUpdateTs = the offer line's epoch ms. EMPTY / terminal / cancelled slots are already
- *  excluded by activeOffers(). `nameFor(id)` is best-effort (falls back to '#<id>'). */
+ *  field); lastUpdateTs = the offer line's epoch ms; placedTs = the offer-episode start (FD3 —
+ *  additive + NULLABLE, readers must tolerate absence; semantics at episodePlacedTs). EMPTY /
+ *  terminal / cancelled slots are excluded by activeOffers(). `nameFor(id)` is best-effort. */
 export function offersSnapshot(rows, nameFor = () => undefined, ignoredCfg = null) {
   const offers = activeOffers(rows, ignoredCfg).map(r => ({   // same MERCH-book quarantine as watch's live view
     slot: r.slot,
@@ -87,6 +85,7 @@ export function offersSnapshot(rows, nameFor = () => undefined, ignoredCfg = nul
     qty: r.max,
     filled: r.qty,
     lastUpdateTs: r.ts,
+    placedTs: r.placedTs ?? null,
   }));
   return { app: 'the-coffer-offers', version: 1, generatedAt: new Date().toISOString(), offers };
 }
@@ -120,7 +119,7 @@ export function bidFromSnapshot(offers, itemId) {
 }
 
 /** Latest line per slot BY WALL-CLOCK = that slot's current state; BUYING/SELLING = an open offer.
- *  Returns [{ slot, state, item, qty, max, offer, ts }] (qty = filled so far).
+ *  Returns [{ slot, state, item, qty, max, offer, ts, placedTs }] (qty = filled so far; placedTs — FD3, see episodePlacedTs).
  *
  *  WALL-CLOCK, NOT READ ORDER. `readOfferRows` concatenates log files in FILE-MTIME order, so read order
  *  says which FILE was appended to last, not when a line happened: a manual CANCELLED_BUY beat the live
@@ -135,43 +134,70 @@ function supersedes(cand, prev) {
   if (!Number.isFinite(b)) return true;
   return a >= b;
 }
+
+/** FD3 (PLAN-FLOW-DIET) — a slot's current offer-EPISODE start: the contiguous same-
+ *  (state·item·price·max) run of its stamped rows in (wall-clock, read-order) order — the same total
+ *  order supersedes() resolves to, so the anchor is the row activeOffers picked. A partial fill
+ *  CONTINUES the episode; EMPTY / terminal / any identity-field change breaks it (a restart-blind
+ *  wipe resets the clock — age is a floor, never overstated). Unstamped winner → null, not a throw.
+ *  Takes `stamped` = [{ r, ep, idx }] sorted by (ep, idx) and `cur` = the slot's winning row. */
+function episodePlacedTs(stamped, cur) {
+  let i = stamped.length - 1;
+  if (i < 0 || stamped[i].r !== cur) return null;
+  const same = x => x.r.state === cur.state && x.r.item === cur.item && x.r.offer === cur.offer && x.r.max === cur.max;
+  while (i > 0 && same(stamped[i - 1])) i--;
+  return stamped[i].ep;
+}
+
 export function activeOffers(rows, ignoredCfg = null) {
   const bySlot = new Map();
-  for (const r of rows) {
+  const stampedBySlot = new Map();
+  rows.forEach((r, idx) => {
     const prev = bySlot.get(r.slot);
     if (prev === undefined || supersedes(r, prev)) bySlot.set(r.slot, r);
-  }
+    const ep = offerEpoch(r);
+    if (Number.isFinite(ep)) {
+      let a = stampedBySlot.get(r.slot);
+      if (!a) stampedBySlot.set(r.slot, a = []);
+      a.push({ r, ep, idx });
+    }
+  });
   const out = [];
-  for (const [, r] of bySlot) {
+  for (const [slot, r] of bySlot) {
     if (r.state === 'BUYING' || r.state === 'SELLING') {
       // MERCH-book quarantine: a resting offer on an ignored item (farming/loot, ignored-items.json)
       // is not a flip — drop it from the merch offer view unless its price matches a live greenlist
       // entry. Keeps farm bids off watch's CANCEL-BID rows. Absent cfg → unchanged (monitor passes none).
       if (ignoredCfg && offerQuarantined(ignoredCfg, r.item, r.offer)) continue;
-      out.push({ ...r, ts: offerEpoch(r) }); // raw fields kept (date/time/worth) — monitor prints them
+      const stamped = (stampedBySlot.get(slot) || []).sort((a, b) => (a.ep - b.ep) || (a.idx - b.idx));
+      out.push({ ...r, ts: offerEpoch(r), placedTs: episodePlacedTs(stamped, r) }); // raw fields kept (date/time/worth) — monitor prints them
     }
   }
   return out;
 }
 
-/** LH2.4 — restart-blindness for slots the WHOLE-log staleness check (logblind.mjs) can't see.
- *  THE GAP: the Exchange Logger plugin only emits on a slot state change, so after a client
- *  restart/relog it silently reports EMPTY for every slot it hasn't seen touched since — even though
- *  the underlying GE offer is still resting in-game. logblind.mjs catches this when the WHOLE log goes
- *  stale, but a live probe/flip touching even ONE slot keeps the log looking fresh while OTHER slots go
- *  dark right alongside it.
- *
- *  THE INVARIANT: the GE offer state machine has exactly one path into EMPTY — through a TERMINAL row
- *  (CANCELLED_BUY / CANCELLED_SELL / BOUGHT / SOLD); there is no legitimate BUYING/SELLING → EMPTY
- *  transition. So no cross-slot corroboration is needed — walk each slot backward past any run of
- *  trailing EMPTY rows (a slot can go blind more than once before being re-touched) to the last REAL
- *  row. If that row is BUYING/SELLING, the EMPTY has no explanation and the offer is presumed still
- *  resting in-game. This is a superset of the original same-timestamp-multi-slot heuristic — it also
- *  catches a SINGLE slot going blind on its own.
- *  Returns the SUSPECT slots' pre-wipe offer, `{ ...row, ts, resetTs, suspectRestartBlind:true }` —
- *  ONLY for slots whose wipe is still the LAST thing logged for that slot (a later real placement or
- *  cancel supersedes the suspicion). Never mutates `activeOffers()`'s own semantics — this is an
- *  ADDITIONAL, separately-rendered list a caller merges in beside the confirmed-active ones. */
+/** Compact offer-episode age ('47m' / '26h' / '3.2d'); '' on null/absent placedTs so every surface
+ *  degrades to its pre-FD3 render. ONE owner — monitor / watch / the FD4 stale-bid flag share it. */
+export function restingAge(placedTs, nowMs = Date.now()) {
+  if (!Number.isFinite(placedTs)) return '';
+  const m = Math.max(0, Math.round((nowMs - placedTs) / 60000));
+  if (m < 60) return m + 'm';
+  if (m < 48 * 60) return Math.round(m / 60) + 'h';
+  return (m / 1440).toFixed(1) + 'd';
+}
+
+/** LH2.4 — restart-blindness for slots the WHOLE-log staleness check (logblind.mjs) can't see: the
+ *  plugin only emits on a slot state change, so after a client restart/relog it silently reports EMPTY
+ *  for every slot not touched since — while the GE offer still rests in-game; one live slot keeps the
+ *  log looking fresh while others go dark beside it. THE INVARIANT: the only legitimate path into
+ *  EMPTY is through a TERMINAL row (CANCELLED_BUY / CANCELLED_SELL / BOUGHT / SOLD) — so walk each
+ *  slot backward past any run of trailing EMPTY rows to the last REAL row; if that row is
+ *  BUYING/SELLING the EMPTY has no explanation and the offer is presumed still resting (a superset of
+ *  the old same-timestamp-multi-slot heuristic — also catches a single slot going blind alone).
+ *  Returns the suspects' pre-wipe offer `{ ...row, ts, resetTs, suspectRestartBlind:true }`, ONLY
+ *  while the wipe is still the slot's LAST logged line (a later real placement/cancel supersedes the
+ *  suspicion). Never mutates activeOffers() semantics — an ADDITIONAL, separately-rendered list a
+ *  caller merges in beside the confirmed-active ones. */
 export function restartBlindSuspects(rows, ignoredCfg = null) {
   const bySlotRows = new Map();
   for (const r of rows) { if (!bySlotRows.has(r.slot)) bySlotRows.set(r.slot, []); bySlotRows.get(r.slot).push(r); }

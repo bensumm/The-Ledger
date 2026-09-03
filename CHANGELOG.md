@@ -8,6 +8,28 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## pipeline 1.5.0 — 2026-09-03 — `placedTs` on offers: bid age becomes a first-class field (PLAN-FLOW-DIET FD3; pipeline-only, no APP_VERSION bump)
+
+The gap (FD3 diagnosis): `offersSnapshot` emitted only `lastUpdateTs`, which a partial fill
+resets — so "how long has this bid rested" was unrecoverable, `/morning`'s "re-verdict stale
+bids" ran on pure judgment, and the FD4 stale-bid flag had no data to fire on.
+
+- `activeOffers` (`pipeline/lib/reconstruct/offers.mjs`) now derives per-offer **`placedTs`** =
+  the slot's current offer **episode** start: a contiguous same-(state·item·price·max) run of
+  the slot's stamped rows in wall-clock order. A partial-fill re-log (qty moves, identity fields
+  don't) CONTINUES the episode; a price/item change, terminal row, or EMPTY→offer transition
+  starts a new one — so a restart-blind wipe resets the clock and the age is a floor, never an
+  overstatement. Unstamped (REMOVE-shaped) rows can't be ordered → `null`, degrade not throw.
+- `offers.json` gains the field beside `lastUpdateTs` — **additive + nullable** (older
+  snapshots lack it; readers must tolerate absence). Schema home: `FILLS-PIPELINE.md` §14.2.
+- Shared **`restingAge()`** formatter (one owner, so monitor/watch/FD4 can't drift on wording):
+  `47m` / `26h` / `3.2d`, `''` on null so every surface degrades to its pre-FD3 render.
+  Rendered on `monitor-offers.mjs` active-offer lines (`· resting 26h`) and `watch-positions.mjs`
+  bid notes. Verified live against a fixture log via a faked home dir (a 26h-old bid part-filled
+  3h ago renders `last update 180m ago · resting 26h` on both surfaces).
+- Six new fixtures pin the episode semantics in `pipeline/test/offers.test.mjs`. Inform-only —
+  nothing gates on age until FD4 (and that ships inform-only too).
+
 ## pipeline 1.4.0 — 2026-09-03 — the scan goes on a diet: winners-only stdout, the full read moves to the cache (PLAN-FLOW-DIET FD1+FD2; pipeline/skills/docs only, no APP_VERSION bump)
 
 Ben: "I don't care about losers and why they are losers, just tell me about the winners" +

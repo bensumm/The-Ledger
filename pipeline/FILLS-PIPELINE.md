@@ -896,13 +896,20 @@ A flat snapshot of the live GE offer slots, app-fetched same-origin like `positi
 
 ```
 { app:'the-coffer-offers', version:1, generatedAt:<ISO>,
-  offers:[ { slot, side:'buy'|'sell', itemId, item, price, qty, filled, lastUpdateTs } ] }
+  offers:[ { slot, side:'buy'|'sell', itemId, item, price, qty, filled, lastUpdateTs, placedTs } ] }
 ```
 
 Source: `pipeline/lib/reconstruct/offers.mjs` (`readOfferRows()` → `offersSnapshot()`). `side` is
 `BUYING`→`buy` / `SELLING`→`sell`; `price` = offer price each; `qty` = total offer size; `filled` =
-cumulative filled so far; `lastUpdateTs` = the offer line's epoch ms. **EMPTY / terminal / cancelled
-slots are excluded** (only per-slot latest `BUYING`/`SELLING` states survive). Item names resolve
+cumulative filled so far; `lastUpdateTs` = the offer line's epoch ms; `placedTs` (FD3,
+PLAN-FLOW-DIET, 2026-09-03) = the slot's current offer **episode** start epoch ms — a partial fill
+does NOT reset it (that's the whole point: `lastUpdateTs` resets on every fill, so bid age was
+unrecoverable before this field); a price/item change, terminal row, or EMPTY→offer transition
+starts a new episode, so a restart-blind wipe resets the clock and the age is a floor, never an
+overstatement. **Back-compat: the field is additive and nullable** — snapshots written before FD3
+lack it, an unstamped log yields `null`, and every reader must tolerate absence (the shared
+`restingAge()` renders `''` on null so surfaces degrade to their pre-FD3 lines). **EMPTY /
+terminal / cancelled slots are excluded** (only per-slot latest `BUYING`/`SELLING` states survive). Item names resolve
 offline/best-effort from the shared mapping cache (`nameLookupFromCache()`, no network — falls back
 to `#<id>`). The schema is deliberately **dumb and flat**; presentation is the app/future-Watch-tab's
 job. It is read from the exchange-logger dir **only** (booked mobile/manual fills are not live

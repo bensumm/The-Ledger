@@ -19,7 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { reconstruct, buildTombstonedEvents } from '../lib/reconstruct/reconstruct.mjs';
-import { readExchangeLog, activeOffers, restartBlindSuspects } from '../lib/reconstruct/offers.mjs'; // shared log discovery + open-offer semantics; LH2.4 restart-blindness suspects
+import { readExchangeLog, activeOffers, restartBlindSuspects, restingAge } from '../lib/reconstruct/offers.mjs'; // shared log discovery + open-offer semantics; LH2.4 restart-blindness suspects; FD3 resting age
 import { breakEven, grossFromNet } from '../../js/quotecore.js'; // shared tax-capped break-even (chunk 4.1 / BE1) + net inverse (PLAN-SALE-LOG-TAX)
 import { loadMapping } from '../lib/market/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — tolerates the flat cache shape
 import { blindWarningLine } from '../lib/reconstruct/logblind.mjs'; // LH2 restart-blindness header line
@@ -106,7 +106,8 @@ console.log('=== ACTIVE OFFERS (open now) ===');
 if (!active.length && !suspects.length) console.log('(none — no live buy/sell offers)');
 for (const r of active) {
   const side = r.state === 'BUYING' ? 'BUY ' : 'SELL';
-  console.log(`slot${r.slot} ${side} ${nm(r.item)} (#${r.item})  ${r.qty}/${r.max} @ ${gp(r.offer)}  · last update ${ago(r)}`);
+  const rest = restingAge(r.placedTs, now);
+  console.log(`slot${r.slot} ${side} ${nm(r.item)} (#${r.item})  ${r.qty}/${r.max} @ ${gp(r.offer)}  · last update ${ago(r)}${rest ? ` · resting ${rest}` : ''}`);
 }
 for (const r of suspects) {
   const side = r.state === 'BUYING' ? 'BUY ' : 'SELL';

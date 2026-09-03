@@ -643,7 +643,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `sellEach`/`tax`/`beRebuy`/`sellTs` + `reason` and a deterministic `settledTs` = the age edge,
   never the wall clock, so repeated rebuilds are byte-identical — a REVIVE loses nothing)
 - `offers.json` — tracked, flat snapshot of the live GE offer slots (`{slot, side, itemId,
-  item, price, qty, filled, lastUpdateTs}`), written by `sync-fills.mjs`/`watch-log.mjs` in
+  item, price, qty, filled, lastUpdateTs, placedTs}` — `placedTs` is FD3's nullable additive
+  offer-episode start, which a partial fill does NOT reset; semantics + back-compat in
+  `FILLS-PIPELINE.md` §14.2), written by `sync-fills.mjs`/`watch-log.mjs` in
   both attended and `--local` modes (LW1); the localhost app polls it for desk-side offer
   freshness and stashes it on `STATE.offers`, which the **Watch tab** (0.49.0, `js/watch.js`)
   renders as verdict-tagged offer rows (`FILLS-PIPELINE.md` §14). P0: `quote-items.mjs --positions` also
@@ -2079,7 +2081,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `pipeline/test/campaigns.test.mjs`. `join-outcomes.mjs` imports it. Owns
     `REPRICE_GAP`/`REPLACE_OVERLAP_TOL`/`MANUAL_SLOT_MIN`),
     `offers.mjs` (exchange-log discovery + open-offer
-    semantics; P0 also adds `readOffersSnapshot`/`askFromSnapshot`/`bidFromSnapshot` — the OTHER-machine-safe
+    semantics; FD3 (PLAN-FLOW-DIET, 2026-09-03) adds per-offer `placedTs` — the current offer
+    EPISODE's start, derived in `activeOffers` via `episodePlacedTs` (a partial fill continues the
+    episode; a price/item change, terminal, or EMPTY→offer break starts a new one; unstamped →
+    null) — plus the shared `restingAge()` formatter monitor-offers / watch's bid notes render
+    (`''` on null, so pre-FD3 data degrades to the old lines); P0 also adds `readOffersSnapshot`/`askFromSnapshot`/`bidFromSnapshot` — the OTHER-machine-safe
     reader of the flat root `offers.json`, normalized to the `{price,filled,total}` shape the context
     position stage wants, so quote-items.mjs can see the live book without the `~/.runelite` log dir;
     `readOfferRows` stamps rows from a `.json` (net-worth) source `worthNet: true` — PLAN-SALE-LOG-TAX —
