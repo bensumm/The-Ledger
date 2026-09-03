@@ -272,8 +272,21 @@ work, not this plan.
 - FD4's staleness threshold and the 5% deep line are uncalibrated placeholders (n≈0) and ship
   inform-only.
 - The ~40k-token measurement is one run (2026-09-02 `--mode all`); treat as order-of-magnitude.
-- **OPEN QUESTION for Ben (post-FD1):** the winners table itself stays large (~60 band rows —
-  nearly every rated row has positive net, so "winners" ≠ "few"). With grade banned from
-  predicates, the candidate lever is a rank-based row cap (`rank = net × P(fill) ÷ TTF`, the
-  digest's own ordering) with the remainder as one count line. Changes what Ben sees →
-  needs his ruling; not built.
+- **OPEN QUESTION for Ben (post-FD1) — ANALYZED 2026-09-03, awaiting ruling; not built.** The
+  winners table stays large (65 band rows this pass; the FD1 filter removed ZERO — "winners" ≠
+  "few"). The candidate rank-based row cap was measured and the data is AGAINST it:
+  (a) rank concentration flatters the cap (top-10 = 98.0% of Σrank, 88.1% of Σnet/u, a cliff
+  after #9-10) — but that cliff is a multiplicative-score artifact, not tail worthlessness;
+  (b) the revealed-behavior join (124 BUY fills 08-20→09-03 → 26 items → 19 joined to a prior
+  same-pass screen row): **7 of 19 real buys (37%) sat at rank position 16+** on their pre-buy
+  row (Soiled page 18 · Efh salt 27 · Ironwood plank 32 · Fine fish offcuts 39 · Ironwood
+  repair kit 44 · Nature rune 49 · Mist rune 56) — a top-15 cap hides over a third of what Ben
+  actually trades (cheap-commodity tail; caveat: 3 of the 7 joined to rows >180h stale, so
+  screen-attribution is imperfect);
+  (c) rank's inputs are UNMEASURED where it matters: TTF is always the volume-scaled prior
+  (`families.mjs:343` "Flaw 5: in production it's always a prior, never a measured velocity"),
+  the bid-leg P(fill) counterfactual is unbuilt (EF0(c)), and the ask-leg factor's study
+  settled no winner — so a rank visibility gate repeats the grade mistake (gating on an
+  uncalibrated composite) with extra steps. Recommendation on record: NO row cap; residual
+  band table ≈ 15k chars post-FD1 (the stanza diet was the real win); revisit only with
+  F1-grade P/TTF measurement, same stance as the grade-tuning deferral.
