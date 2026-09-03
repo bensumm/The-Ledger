@@ -8,6 +8,53 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## pipeline 1.3.0 — 2026-09-03 — the book heals itself: an aged half-leg stops eating today's flips (PLAN-BOOK-SELF-HEAL H1 + H4; pipeline-only, no APP_VERSION bump)
+
+Ben: "the sell log should self heal so that an inconsistency days ago shouldn't affect a clean book
+today… My ledger shows last 3 days as red even though it's been positive." The mechanism was
+`matchTrades`' intent-blind short consumption (SM1): ANY buy for an item with an open short closed
+the keep round trip, so a weeks-old half-leg ate the rebuy that was meant to open a fresh flip lot,
+and the flip's later sell then found no lot. The profit vanished into a mis-paired round trip and the
+day read red.
+
+- **The gate (Q1).** A buy now closes an open short only if it lands within `SHORT_MAX_AGE_DAYS`
+  (14, ⚖ — one constant beside the short queue, covering the measured ~6–8d multi-week-oscillator
+  class) of the sale AND at or below the short's `beRebuy` (exactly, no tolerance). Refused on price,
+  the buy opens an ordinary flip lot and the short stays open.
+- **The closeout (Q2).** An UNDECLARED short past that age SETTLES at breakeven into a new
+  positions.json `settled` bucket — realised 0 **by construction** (`buyEach = beRebuy`), so a settle
+  shifts no totals — and stops consuming rebuys. The row keeps `sellEach`/`tax`/`beRebuy`/`sellTs`
+  plus `settledTs`/`reason` so revival loses nothing. Recorded tradeoff, told to Ben before encoding:
+  the settled round trip's real economics leave lifetime realised for good.
+- **The exemptions.** A `hold-thesis.json` `reverseFlip:true` declaration means no deadline and no
+  gate (tool holds state, Ben drives). Case-by-case revival is
+  `add-manual-fill.mjs --revive <item|id> [--sell-ts]`, which appends
+  `{"state":"REVIVE","item":…,"target":<sellTs|null>}` to `coffer-manual.log` — an exemption MARKER
+  like REMOVE (no ts/slot, never an event, never hashed), so it is a pure function of the log and
+  survives every full-history rebuild.
+- **Purity kept.** `matchTrades` gained `declared`/`revives`/`now` as PARAMETERS, exactly like
+  `keeps`: `sync-fills.mjs` does the IO. Every caller passing nothing is byte-identical on a book
+  whose shorts are inside the gate (`campaigns.mjs`, `join-outcomes.mjs`, `retrojoin.mjs`,
+  `monitor-offers.mjs`).
+- **Visibility.** Each settle and each refused close prints its own sync-summary line naming the item
+  and the reason — a silent gate would be the same invisible book change this plan exists to end.
+- **H4 (docs/skills):** "personal use" is per-TRADE — tombstone THAT trade with `--type withdraw`,
+  never add the item to `ignored-items.json` unless Ben asks for the ignore list by name
+  (`/positions` §2, FILLS-PIPELINE §10).
+
+**Real-book acceptance (worktree, `--repo-dir` inside it — Ben's live artifacts untouched), measured
+against the pre-change reconstruction over the SAME event set:** four shorts settled (21012, 29580,
+11832 by the end-of-run sweep, plus an unlisted fifth — 11785, settled mid-match when its 36-days-late
+"rebuy" arrived); 11834 was 12.9d old and correctly stayed open. `unmatched` identical (124).
+Lifetime realised did NOT hold identical — it moved −944,020, and every gp of that is item 11785,
+where the old rule had ALREADY booked a fabricated +674,019 round trip against a 36-day-old sale and
+then mis-paired three real flips one lot off (each sell against the buy AFTER it). That is the bug
+being fixed, not a regression: the plan's "lifetime realised unchanged" holds for shorts still open,
+which is why the settle books 0. Two of the last three day-buckets are byte-identical; 2026-09-01
+moves by −270,001 for the same 11785 re-pairing.
+
+**H3 (offers wall-clock) shipped first, with the 0.76.1 entry below** — same wave, hand-serialized landing; its pipeline-side note lives there.
+
 ## 0.76.1 — 2026-09-02 — the bond is costed as a bond on every screen lane (PLAN-BOOK-SELF-HEAL H2)
 
 **The bug.** `js/money-math.js` has owned the correct Old School Bond model since 2026-07-09: a bond is

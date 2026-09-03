@@ -5,13 +5,11 @@
  * Reads Exchange Logger plugin output (.runelite/exchange-logger/*), normalizes GE offer events
  * into fills.json (+ the derived positions.json/offers.json). The Coffer fetches them same-origin.
  *
- * DEFAULT IS LOCAL — ZERO GIT (Ben 2026-07-15). A bare run REBUILDS fills/positions/offers.json in
- * the working tree with NO git of any kind (no fetch/ff/commit/push). This is the cheap, always-fresh
- * in-session read every `/scan`/`/positions`/`/morning` runs at the top — a book read never needs to
- * touch git. **Publishing is ONCE A DAY, at the `/overnight` boundary, via `--publish`** — that's the
- * only path that fetches/ff-pulls (folding phone trades) + commits + pushes fills.json to the repo
- * GitHub Pages serves. So the DEPLOYED app's book updates nightly; the LOCALHOST desk reads the fresh
- * working-tree rebuild all day. (This replaces the old "every sync commits + pushes" default.)
+ * DEFAULT IS LOCAL — ZERO GIT. A bare run REBUILDS fills/positions/offers.json in the working tree
+ * with NO git of any kind: the cheap, always-fresh in-session read every /scan//positions//morning
+ * runs at the top. **Publishing is ONCE A DAY, at the `/overnight` boundary, via `--publish`** — the
+ * only path that fetches/ff-pulls (folding phone trades) + commits + pushes. So the DEPLOYED book
+ * updates nightly; the LOCALHOST desk reads the working-tree rebuild all day.
  *
  * Sync is ON-DEMAND ONLY — no scheduler (the CofferFillsSync job was excised 2026-07-05, chunk X2;
  * FILLS-PIPELINE.md §12). Each `--publish` is a fresh checkpoint commit; git history is the recovery story.
@@ -30,9 +28,8 @@
  *                                  only (never point a test at the real dirs).
  *
  * PHONE-TRADE NOTE: the default/local path does NOT fold un-pulled phone writes — mobile-fills.log is
- * only as fresh as the local checkout (no fetch/ff on the git-free path). Folding a phone-pushed
- * mobile-fills.log is `--publish`'s job (syncMainToRemote ff before regeneration). Desktop RuneLite
- * trades (the common case) are always captured locally; phone trades fold at the nightly publish.
+ * only as fresh as the local checkout. Folding a phone-pushed one is `--publish`'s job (syncMainToRemote
+ * ff before regeneration); desktop trades are always captured locally.
  *
  * Manual-line vocabulary (coffer-manual.log, slot 8 — see PLAN.md chunk 1):
  *   BOUGHT / SOLD                  normal manual fills (add-manual-fill.mjs / the app)
@@ -43,6 +40,9 @@
  *   {"state":"REMOVE","target":"<eventId>"}   tombstone: deletes that event id from the
  *                                  merged set, including events already persisted in
  *                                  fills.json (source-level corrections propagate).
+ *   {"state":"REVIVE","item":<id>,"target":<sellTs|null>}  H1 exemption marker: that open short
+ *                                  never ages out and its next rebuy closes it regardless of the
+ *                                  time/price gate (add-manual-fill.mjs --revive).
  *
  * Design: idempotent. Every run re-reads all log files, normalizes, and
  * dedupes by a content-derived event id. No watermark state to corrupt.
@@ -62,7 +62,8 @@ import { REPO_DIR } from '../lib/paths.mjs';   // chunk 6: REPO_DIR now lives in
 // event id all live in reconstruct.mjs so this pipeline AND monitor-offers.mjs reconstruct positions
 // identically (no more stale parallel copy). GE_TAX is imported transitively there — not needed here.
 import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct, eventId,
-  isNetWorthSource, auditWorthConvention } from '../lib/reconstruct/reconstruct.mjs';
+  isNetWorthSource, auditWorthConvention, SHORT_MAX_AGE_DAYS } from '../lib/reconstruct/reconstruct.mjs';
+import { loadHoldThesis } from '../lib/thesis/holdthesis.mjs';   // H1: reverseFlip:true = the declared short the age/price gate must not touch
 import { loadIgnored, quarantineEvents } from '../lib/ignored.mjs';   // MERCH-book quarantine (farming/loot); fills.json stays full
 import { loadOwned, keepIds, keepMisclassificationRisks } from '../lib/capital/ownedledger.mjs';  // SM1: the keep gate for sell->buy round-trip matching + its hygiene guard
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into positions.json so the app can display the pipeline version
@@ -105,7 +106,21 @@ const PUBLISH = args.has('--publish');   // the ONLY path that touches git (fetc
  * ------------------------------------------------------------------- */
 // ignore generatedAt. awaitingRebuy (SM1) IS part of the signature: a keep sold with no rebuy yet
 // changes only that bucket, and omitting it would read as "no change" and skip the write.
-function positionsSig(p) { return JSON.stringify({ closed: p.closed, open: p.open, unmatched: p.unmatched, awaitingRebuy: p.awaitingRebuy || [] }); }
+// H1: `settled` joins the signature for the same reason awaitingRebuy did — an aged short settling is
+// a real book change. `refusedCloses` does NOT: it is a per-run explanation, printed, never persisted.
+function positionsSig(p) { return JSON.stringify({ closed: p.closed, open: p.open, unmatched: p.unmatched, awaitingRebuy: p.awaitingRebuy || [], settled: p.settled || [] }); }
+
+// H1 decision-movers stay visible: one line per aged settle, one per refused round-trip close. A
+// silent gate would be exactly the invisible book change PLAN-BOOK-SELF-HEAL exists to end.
+function printShortHeuristic(pos) {
+  for (const s of pos.settled || []) console.log(
+    `⚖ short SETTLED at breakeven (undeclared, older than ${SHORT_MAX_AGE_DAYS}d): item ${s.itemId} × ${s.qty} sold @${s.sellEach} ` +
+    `(beRebuy ${s.beRebuy}) — realised 0, no longer consumes rebuys. Revive: add-manual-fill.mjs --revive ${s.itemId} --sell-ts ${s.sellTs}`);
+  for (const f of pos.refusedCloses || []) console.log(
+    `⚖ round-trip close REFUSED (${f.reason}): item ${f.itemId} rebuy @${f.buyEach} ` +
+    (f.reason === 'price' ? `above beRebuy ${f.beRebuy}` : `${Math.round((f.buyTs - f.sellTs) / 86400)}d after the sale`) +
+    ` — it opened a normal flip lot instead`);
+}
 
 function readLogFiles(logDir = LOG_DIR) {
   if (!existsSync(logDir)) {
@@ -122,22 +137,14 @@ function readLogFiles(logDir = LOG_DIR) {
 // the commit/push block share it.
 const git = cmd => execSync(`git ${cmd}`, { cwd: REPO_DIR, stdio: 'pipe' }).toString().trim();
 
-// Multi-writer rebase-or-abort (M1 step 1 — the mobile-parity write path). Two writers now
-// touch origin/main: this PC sync (fills.json / positions.json / screen.json / suggestions.jsonl)
-// and the PHONE (mobile-fills.log, appended via the GitHub contents API). Their file sets are
-// DISJOINT by contract, so a phone push only ever moves origin/main *ahead* of this checkout —
-// never a real content conflict. This guard therefore:
-//   (1) fetches, then FAST-FORWARDS local main onto a moved origin/main BEFORE reading logs, so a
-//       phone-pushed mobile-fills.log is on disk and gets READ during reconstruction below. The
-//       sync then lands a FRESH commit on top of it (never an amend/force-push over the phone's
-//       commit — the scheduler-era --auto amend path was excised in chunk X2, §12).
-//   (2) LOUDLY ABORTS on a genuine divergence (local main has commits origin/main lacks). Under the
-//       single-writer contract that is a STRUCTURAL bug (an unexpected local commit, a
-//       double-writer, or a stale branch), not something to paper over — a plain push would be
-//       rejected and a force-push would clobber the phone's commit, so we stop and make the human
-//       reconcile. This replaces the old best-effort "warn and continue".
-// A fetch/ref failure (offline, no remote) stays best-effort — logged and skipped so an offline
-// sync still writes fills.json locally; only a *confirmed* divergence aborts.
+// Multi-writer rebase-or-abort (M1). Two writers touch origin/main: this PC sync (the derived
+// artifacts) and the PHONE (mobile-fills.log via the GitHub contents API). Their file sets are
+// DISJOINT by contract, so a phone push only moves origin/main AHEAD of this checkout. So:
+//   (1) fetch, then FAST-FORWARD onto a moved origin/main BEFORE reading logs, so a phone-pushed
+//       mobile-fills.log is on disk and read below; the sync's own commit lands fresh on top.
+//   (2) LOUDLY ABORT on a genuine divergence — under the single-writer contract that is a structural
+//       bug, and a force-push would clobber the phone's commit. Never paper over it.
+// A fetch/ref failure (offline) stays best-effort; only a CONFIRMED divergence aborts.
 function syncMainToRemote() {
   try { git('fetch origin'); }
   catch (e) { console.warn('Multi-writer guard: fetch skipped (' + e.message + ') — proceeding with local state (offline?).'); return; }
@@ -203,6 +210,7 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR,
   let rawLines = 0, parsedLines = 0;
   const rawParsed = [];
   const removeTargets = new Set(); // event ids tombstoned by REMOVE lines (chunk 1.4)
+  const revives = [];              // H1: REVIVE markers — {itemId, target(sellTs|null)} exemptions for the short queue
   const worthMismatches = [];
   for (const f of sources) {
     const worthNet = isNetWorthSource(f);
@@ -212,6 +220,7 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR,
       rawLines++;
       const r = parseJsonLine(line, { worthNet });
       if (r && r.remove !== undefined) { if (r.remove) removeTargets.add(r.remove); continue; }
+      if (r && r.revive !== undefined) { if (Number.isFinite(r.revive.itemId)) revives.push(r.revive); continue; }
       if (r) { rawParsed.push(r); fileRows.push(r); parsedLines++; }
     }
     const audit = auditWorthConvention(fileRows, worthNet, f);
@@ -278,7 +287,10 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR,
   // set, which makes the short path unreachable and restores exact pre-SM1 behavior.
   const ownedStore = loadOwned(join(repoDir, 'owned-items.json'));
   const keeps = keepIds(ownedStore);
-  const pos = reconstruct(quarantineEvents(merged, ignoredCfg), { keeps });
+  // H1: the short queue's two exemptions, loaded HERE so matchTrades stays pure.
+  const declared = new Set(loadHoldThesis(join(repoDir, 'hold-thesis.json'))
+    .filter(e => e && e.reverseFlip && e.id != null).map(e => Number(e.id)));
+  const pos = reconstruct(quarantineEvents(merged, ignoredCfg), { keeps, declared, revives });
   // SM1 §5.1 hygiene guard: a 'keep' that keeps appearing in CASH flips is very likely mis-classified,
   // and a mis-classified keep is what makes the round-trip gate unsafe (its sells open shorts that
   // absorb buys belonging to real flipping). INFORM-ONLY — warn, never mutate or gate.
@@ -309,7 +321,10 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR,
     if (eventsChanged) writeFileSync(fillsPath, JSON.stringify({
       app: 'the-coffer-fills', version: 1, generatedAt: new Date().toISOString(), events: merged
     }));
-    if (positionsChanged) writeFileSync(positionsPath, JSON.stringify({ ...pos, pipeline: PIPELINE_VERSION }));   // PV: additive stamp; positionsSig ignores it, so no spurious rewrite
+    if (positionsChanged) {
+      const { refusedCloses, ...posOut } = pos;   // refusals are console-only (H1)
+      writeFileSync(positionsPath, JSON.stringify({ ...posOut, pipeline: PIPELINE_VERSION }));   // PV: additive stamp; positionsSig ignores it, so no spurious rewrite
+    }
     if (offersChanged) writeFileSync(offersPath, JSON.stringify(offersSnap));
   }
 
@@ -346,7 +361,8 @@ function main() {
     if (r.reEmitDropped) console.log(`(${r.reEmitDropped} suspected re-emit(s) dropped — run --publish for the per-event detail)`);
     if (r.worthMismatches) console.log(`⚠ ${r.worthMismatches} source file(s) FAILED the worth-convention audit — see warnings above; realised P/L may be mis-taxed until resolved`);
     console.log(`${r.sources.length} log source(s)${r.mobilePresent ? ' (incl. ' + MOBILE_REL + ')' : ''}, ${r.rawLines} lines (${r.parsedLines} valid trade line(s)), ${r.parsed} events, ${r.merged.length} after merge${r.eventsChanged ? '' : ' (no change)'}`);
-    console.log(`positions: ${r.pos.closed.length} closed, ${r.pos.open.length} open, ${r.pos.unmatched.length} unmatched · offers: ${r.offersSnap.offers.length} open${r.offersChanged ? '' : ' (no change)'}`);
+    printShortHeuristic(r.pos);
+    console.log(`positions: ${r.pos.closed.length} closed, ${r.pos.open.length} open, ${r.pos.unmatched.length} unmatched, ${r.pos.settled.length} settled · offers: ${r.offersSnap.offers.length} open${r.offersChanged ? '' : ' (no change)'}`);
     console.log(`local rebuild — NO git (desk-side freshness). Publish to the deployed app nightly with --publish (/overnight).`);
     return;
   }
@@ -363,7 +379,8 @@ function main() {
   if (removeTargetCount) console.log(`${removeTargetCount} tombstone target(s); ${removedCount} event(s) removed`);
 
   console.log(`${r.sources.length} log source(s)${existsSync(mobilePath) ? ' (incl. ' + MOBILE_REL + ')' : ''}, ${r.rawLines} lines (${r.parsedLines} valid trade line(s)), ${r.parsed} events after sequencing, ${merged.length} after merge${eventsChanged ? '' : ' (no change)'}`);
-  console.log(`positions: ${pos.closed.length} closed lot(s) (realised ${realisedTotal >= 0 ? '+' : ''}${realisedTotal} after tax), ${pos.open.length} open, ${pos.unmatched.length} unmatched sell(s)${positionsChanged ? '' : ' (no change)'}`);
+  printShortHeuristic(pos);
+  console.log(`positions: ${pos.closed.length} closed lot(s) (realised ${realisedTotal >= 0 ? '+' : ''}${realisedTotal} after tax), ${pos.open.length} open, ${pos.unmatched.length} unmatched sell(s), ${pos.settled.length} settled short(s)${positionsChanged ? '' : ' (no change)'}`);
   if (DRY) {
     for (const e of merged) {
       console.log(`  ${new Date(e.ts * 1000).toISOString()} slot${e.slot} ${e.type} ${e.state} item=${e.itemId} price=${e.price} filled=${e.filled}/${e.qty} spent=${e.spent}`);

@@ -638,6 +638,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   Buckets: `closed` · `open` · `unmatched` · **`awaitingRebuy`** (SM1 — a `keep` sold and not yet
   rebought; matching is SYMMETRIC, so sell→buy closes a `keepRoundTrip` row exactly as buy→sell
   closes a flip. `beRebuy` = break-even on the capital reallocation. See `FILLS-PIPELINE.md` §5.1a)
+  · **`settled`** (H1 — a short that aged out: undeclared, un-revived, past `SHORT_MAX_AGE_DAYS`.
+  Closed at breakeven, realised 0 by construction, so lifetime realised does not move; keeps
+  `sellEach`/`tax`/`beRebuy`/`sellTs` + `settledTs`/`reason` so a REVIVE loses nothing)
 - `offers.json` — tracked, flat snapshot of the live GE offer slots (`{slot, side, itemId,
   item, price, qty, filled, lastUpdateTs}`), written by `sync-fills.mjs`/`watch-log.mjs` in
   both attended and `--local` modes (LW1); the localhost app polls it for desk-side offer
@@ -1220,7 +1223,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     if EITHER is down. NOT a supervisor — no retries/polling; `/morning` §0 runs it first so the
     morning pass checks the desk is up instead of assuming it. Consumed by `.claude/skills/morning`),
     `add-manual-fill.mjs` (inject/tombstone
-    manual fills), `quote-items.mjs` (per-item / `--positions` market table; PM1 stdout-only `Probes`
+    manual fills; H1 adds `--revive <item|id> [--sell-ts <epoch|iso>]` — appends the
+    `{"state":"REVIVE","item":…,"target":<sellTs|null>}` exemption marker that keeps one open short
+    out of the age settle and off the rebuy gate. With no `--sell-ts` it targets the item's single
+    open short from `positions.json` `awaitingRebuy`; two or more prints the candidates and exits
+    non-zero, writing nothing), `quote-items.mjs` (per-item / `--positions` market table; PM1 stdout-only `Probes`
     column when a probe fires. `--positions` builds the shared `item-context.mjs` chain per lot — offers.json
     book, read-only watch-state + hold thesis, the shared `renderHeldVerdict`, and a read-only `pathsStage`
     `Paths` block — so it can't disagree with watch-positions.mjs; Proposal C (2026-07-12) adds the INFORM-ONLY
@@ -2009,7 +2016,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     rolling-24h denom, coverage-degrading + future-leak-guarded), `smoothingBias` (the AC2 5m-max vs 1h-avg
     join), and `cdf`/`spearman`/`median`/`quant`; no fs/no fetch, fixture-tested by `fill-placement.test.mjs`),
     `reconstruct.mjs` (shared
-    FIFO reconstruction + `dedupeSnapshots`; ARCH-1 adds `buildTombstonedEvents` — the live-log →
+    FIFO reconstruction + `dedupeSnapshots`; H1 (PLAN-BOOK-SELF-HEAL) adds the SHORT LIFECYCLE:
+    `SHORT_MAX_AGE_DAYS` (14, ⚖) gates a rebuy's consumption of an open short on age AND on
+    `buyEach ≤ beRebuy`, `declared`/`revives`/`now` ride the same pure-parameter contract as `keeps`
+    (the caller loads hold-thesis + the log's REVIVE markers), and an undeclared short past the age
+    SETTLES into the new `settled` bucket at realised 0. `refusedCloses` is a per-run explanation
+    printed by the sync, never persisted; ARCH-1 adds `buildTombstonedEvents` — the live-log →
     tombstone-filtered event list monitor-offers.mjs reconstructs from, mirroring sync's inline REMOVE-tombstone
     filter. PLAN-SALE-LOG-TAX adds the WORTH-CONVENTION layer: `isNetWorthSource(filename)` (`.json`
     sources log a sell's `worth` NET of tax since the 2026-08-26 plugin format switch; `.log`/`.txt`

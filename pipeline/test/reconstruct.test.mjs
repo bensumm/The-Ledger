@@ -415,9 +415,40 @@ ok('keep-short WITH taxAmt: sellEach exact, beRebuy still the logged net (close 
   const { events } = runPipeline([
     { ...raw({ state: 'SOLD', slot: 0, item: 9, time: '09:00:00', filledQty: 5, grossWorth: (1000 - 20) * 5, offerSize: 5, priceEach: 1000 }), tax: 100 },
   ], { worthNet: true });
-  const { awaitingRebuy } = reconstruct(events, { keeps: new Set([9]) });
+  const { awaitingRebuy } = reconstruct(events, { keeps: new Set([9]), now: events[0].ts + 1 }); // H1: state the clock — an aged short settles
   assert.deepEqual([awaitingRebuy[0].sellEach, awaitingRebuy[0].tax, awaitingRebuy[0].beRebuy], [1000, 100, 980]);
 });
+/* --- H1 (PLAN-BOOK-SELF-HEAL): the REVIVE directive through the parse/sequence chain -------------- */
+const reviveLine = (item, target) => JSON.stringify({ state: 'REVIVE', item, target });
+
+ok('REVIVE parses as an exemption MARKER (no ts/slot), like REMOVE', () => {
+  const m = parseJsonLine(reviveLine(21012, 1_700_000_000));
+  assert.deepEqual(m, { revive: { itemId: 21012, target: 1_700_000_000 } });
+  assert.equal(parseJsonLine(reviveLine(21012, null)).revive.target, null, 'a null target means "the item\'s only short"');
+});
+
+ok('a REVIVE line derives NO event and leaves the eventId list untouched', () => {
+  const trade = [
+    raw({ state: 'BOUGHT', slot: 0, item: 100, time: '10:01:00', filledQty: 1, grossWorth: 100, offerSize: 1, priceEach: 100 }),
+    raw({ state: 'SOLD',   slot: 0, item: 100, time: '11:01:00', filledQty: 1, grossWorth: 200, offerSize: 1, priceEach: 200 }),
+  ];
+  const plain = runPipeline(trade);
+  const withRevive = runPipeline([trade[0], reviveLine(100, null), trade[1]]);
+  assert.deepEqual(withRevive.events.map(e => e.id), plain.events.map(e => e.id), 'ids unchanged — markers never hash');
+  assert.equal(withRevive.events.length, 2, 'the marker is not sequenced as an event');
+});
+
+ok('reconstruct surfaces the aged-out `settled` bucket (and leaves it empty on a young book)', () => {
+  const { events } = runPipeline([
+    raw({ state: 'SOLD', slot: 0, item: 9, date: '2026-07-01', time: '09:00:00', filledQty: 1, grossWorth: 1000, offerSize: 1, priceEach: 1000 }),
+  ]);
+  const sellTs = events[0].ts;
+  const aged = reconstruct(events, { keeps: new Set([9]), now: sellTs + 30 * 86400 });
+  assert.equal(aged.settled.length, 1);
+  assert.equal(aged.awaitingRebuy.length, 0);
+  assert.equal(reconstruct(events, { keeps: new Set([9]), now: sellTs + 86400 }).settled.length, 0);
+});
+
 ok('guard reads the field: presence on a GROSS-assigned file warns; a short worth+tax sum warns on a NET file; above-ask does not', () => {
   const ambiguousWithTax = sellLineTax(40, 100, 4000, 0);          // formula-ambiguous (tax 0) but json-format
   assert.equal(auditWorthConvention([ambiguousWithTax], false, 'x.log2').mismatch, true,

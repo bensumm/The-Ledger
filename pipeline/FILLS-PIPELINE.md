@@ -200,7 +200,8 @@ That is why bonds (13190) have 42 filled events in `fills.json` and zero rows an
   "closed":   [{ "itemId":31406, "qty":61, "buyEach":13540, "sellEach":14250, "tax":17385, "realised":25925, "buyTs":..., "sellTs":... }],
   "open":     [{ "itemId":31406, "qty":1528, "buyEach":13540, "buyTs":... }],
   "unmatched":[{ "itemId":11237, "qty":33, "sellEach":3945, "tax":..., "sellTs":... }],
-  "awaitingRebuy":[{ "itemId":..., "qty":..., "sellEach":..., "beRebuy":..., "sellTs":... }],
+  "awaitingRebuy":[{ "itemId":..., "qty":..., "sellEach":..., "tax":..., "beRebuy":..., "sellTs":... }],
+  "settled":  [{ "itemId":..., "qty":..., "sellEach":..., "tax":..., "beRebuy":..., "sellTs":..., "settledTs":..., "reason":"aged-out" }],
   "pipeline":  { ... }
 }
 ```
@@ -272,17 +273,45 @@ answer "what do I hold?" the same way and a purged lot never reappears as a phan
   held until a rebuy closes it. Carries `beRebuy` = the sale's NET proceeds per item (on a gross-era
   row that is `sellEach − tax(sellEach)`; on a `worthNet` row it is the logged net directly): the
   **break-even on the capital reallocation** (rebuy below it and freeing that capital cost nothing;
-  above it, the gap is what it cost). Gated on `owned-items.json` `classification:'keep'` — see §5.1a. It is an **open
-  measurement, not a to-do with a deadline**: never auto-retire or staleness-sweep it.
+  above it, the gap is what it cost). Gated on `owned-items.json` `classification:'keep'` — see §5.1a.
+  **AMENDED 2026-09-02 (Ben, PLAN-BOOK-SELF-HEAL H1 — this bullet used to end "never auto-retire or
+  staleness-sweep it"):** a DECLARED short still has no deadline, but an UNDECLARED one does — see the
+  short lifecycle in §5.1a.
+- **`settled`** (H1) = a short that aged out: undeclared, un-revived, and older than
+  `SHORT_MAX_AGE_DAYS`. It leaves the consuming queue and books **realised 0 by construction**
+  (`buyEach = beRebuy`), so lifetime realised does not move when a settle fires. The row keeps
+  `sellEach`/`tax`/`beRebuy`/`sellTs` (plus `settledTs` and `reason:'aged-out'`) so a REVIVE loses
+  nothing. **Recorded tradeoff:** the settled round trip's real economics leave lifetime realised —
+  a later rebuy below `beRebuy` books only the fresh flip's leg — accepted for a clean daily book.
 - **`unmatched`** = sells with no logged buy lot **and not a keep** (the log started mid-stream, so
   the buy predates it). Cost basis is unknowable ⇒ **no realized profit is invented** for
   these; the app shows them as informational only, never in the Coffer total.
 
 ### 5.1a The keep gate (SM1) — why it is narrow
 
-`matchTrades(offers, { keeps })` takes the keep set as an **optional parameter, never an import**, so
-the function stays pure and every direct caller that passes nothing (`campaigns.mjs`,
-`join-outcomes.mjs`) keeps byte-identical pre-SM1 behavior.
+`matchTrades(offers, { keeps, declared, revives, now })` takes the keep set — and H1's two exemption
+sets — as **optional parameters, never imports**, so the function stays pure and every direct caller
+that passes nothing (`campaigns.mjs`, `join-outcomes.mjs`) keeps byte-identical pre-SM1 behavior.
+`sync-fills.mjs` is the caller that does the IO: it loads `owned-items.json` (keeps),
+`hold-thesis.json` (`reverseFlip:true` → `declared`) and the log's REVIVE markers (`revives`).
+
+**Short lifecycle (H1, PLAN-BOOK-SELF-HEAL — Ben 2026-09-02).** A rebuy is no longer consumed
+intent-blind. A buy closes an open short only if the short is DECLARED (`hold-thesis.json`
+`reverseFlip:true`) or REVIVEd, **or** it passes both legs of the gate: the buy lands within
+`SHORT_MAX_AGE_DAYS` (14) of the sale **and** at or below the short's `beRebuy` (exactly — no
+tolerance). Refused on price, the buy opens an ordinary flip lot and the short stays open; refused on
+age, the short SETTLES (`settled`, above) and the buy opens a lot. A declared or revived short never
+ages out. Why: the intent-blind close ate a fresh flip's buy and pushed its later sell into
+`unmatched`, so a weeks-old half-leg made a clean day read red. Both a settle and a refusal print a
+line in the sync summary — the decision has to be visible.
+
+**`{"state":"REVIVE","item":<id>,"target":<sellTs|null>}`** — the case-by-case escape hatch, appended
+to `coffer-manual.log` by `add-manual-fill.mjs --revive <item|id> [--sell-ts <epoch|iso>]`. Parsed as
+an EXEMPTION MARKER like REMOVE (no ts/slot, never an event, never hashed into `eventId`): the named
+short is exempt from aging AND from the gate on its next rebuy. `target` is the short's `sellTs`;
+`null` covers every short on the item. A pure function of the log, so it is idempotent under a
+full-history rebuild and survives every resync. With no `--sell-ts` the CLI targets the item's single
+open short and refuses (printing the candidates, writing nothing) when there is more than one.
 
 Only `classification:'keep'` items open shorts. This is deliberate: at the time SM1 landed, **13 of 14**
 historical `unmatched` rows were non-keep pre-log commodity sells, and pairing those against later flip
@@ -317,6 +346,9 @@ logs, written by `add-manual-fill.mjs`, the app's linked file handle (`js/fillsl
   `eventId()` in `sync-fills.mjs` and `eventIdFor()` in `js/fillslog.js` MUST stay in
   sync. CLI: `add-manual-fill.mjs --remove <eventId>`; the app appends tombstones
   automatically whenever it edits/deletes a manual line.
+- **`{"state":"REVIVE","item":<id>,"target":<sellTs|null>}`** — H1 exemption marker for one open
+  short (no aging, no gate on its next rebuy). Full contract in §5.1a. CLI:
+  `add-manual-fill.mjs --revive <item|id> [--sell-ts <epoch|iso>]`.
 - Test isolation: `sync-fills.mjs --log-dir <dir> --repo-dir <dir>` points a fixture
   run at temp dirs (use `--dry`, or a fixture repo dir — never the real ones).
 
@@ -467,6 +499,12 @@ detail is authoritative there; the operational rules below are the single home.
   manual leg for a plugin-off gap, check which SIDE actually went unlogged** — on
   2026-07-05 the buy was missed but the sell logged fine, and injecting both sides created
   a duplicate sell (repaired with a tombstone). Don't re-add the inference.
+- **"Personal use" is per-TRADE, never per-ITEM (Ben, 2026-09-02).** A lot bought for personal use
+  (the fang, cannonballs, a Torva platebody) is tombstoned with `add-manual-fill.mjs --type withdraw`
+  on THAT trade, the same turn it is mentioned, and never verdicted. Do NOT add the item to
+  `ignored-items.json` — that list is an item-wide MERCH-view quarantine and a separate deliberate
+  act, so it would also hide every future flip of an item still traded. Add to it only when Ben asks
+  for the ignore list by name.
 - **Manual fills injected into `coffer-manual.log` MUST carry the timestamp of when the
   trade actually happened** (`--time` on `add-manual-fill.mjs`) — a "now" timestamp on a
   backdated trade breaks FIFO matching (the phantom-5-bludgeons incident, 2026-07-03).

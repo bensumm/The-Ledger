@@ -18,6 +18,9 @@ const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
 const KEEP = 27238;      // stands in for a bank keep
 const COMMODITY = 5952;  // stands in for a normal flip item
 let ts = 1_000_000;
+/* H1: matchTrades settles an UNDECLARED short older than SHORT_MAX_AGE_DAYS, so a fixture states its
+   clock — atNow() reads the last-issued fixture ts, keeping every SM1 book below young. */
+const atNow = () => ({ keeps, now: ts + 1 });
 /* offer — a filled GE offer as collapseOffers would emit it. `spent` is gross; each = spent/filled. */
 const offer = (type, itemId, qty, each) => ({ type, itemId, filled: qty, spent: qty * each, tsOpen: ts += 100 });
 const store = { items: [{ id: KEEP, name: 'Keep item', classification: 'keep' },
@@ -31,14 +34,14 @@ ok('keepIds returns only classification:keep', () => {
 });
 
 ok('a NON-keep sell with no open lot stays unmatched (never opens a short)', () => {
-  const r = matchTrades([offer('sell', COMMODITY, 10, 7000)], { keeps });
+  const r = matchTrades([offer('sell', COMMODITY, 10, 7000)], atNow());
   assert.equal(r.unmatched.length, 1, 'lands in unmatched');
   assert.equal(r.awaitingRebuy.length, 0, 'no short opened');
   assert.equal(r.closed.length, 0);
 });
 
 ok('a KEEP sell with no open lot opens a pending short, not unmatched', () => {
-  const r = matchTrades([offer('sell', KEEP, 1, 78_140_000)], { keeps });
+  const r = matchTrades([offer('sell', KEEP, 1, 78_140_000)], atNow());
   assert.equal(r.unmatched.length, 0);
   assert.equal(r.awaitingRebuy.length, 1);
   const s = r.awaitingRebuy[0];
@@ -51,7 +54,7 @@ ok('a KEEP sell with no open lot opens a pending short, not unmatched', () => {
 
 /* --- the round trip ------------------------------------------------------------------------------ */
 ok('sell -> buy closes a keepRoundTrip with the correct realised P/L', () => {
-  const r = matchTrades([offer('sell', KEEP, 1, 78_140_000), offer('buy', KEEP, 1, 75_290_000)], { keeps });
+  const r = matchTrades([offer('sell', KEEP, 1, 78_140_000), offer('buy', KEEP, 1, 75_290_000)], atNow());
   assert.equal(r.awaitingRebuy.length, 0, 'short fully drained');
   assert.equal(r.open.length, 0, 'the rebuy did NOT leak a phantom open lot');
   assert.equal(r.closed.length, 1);
@@ -65,7 +68,7 @@ ok('sell -> buy closes a keepRoundTrip with the correct realised P/L', () => {
 });
 
 ok('a partial rebuy drains only part of the short and leaves the rest pending', () => {
-  const r = matchTrades([offer('sell', KEEP, 3, 1000), offer('buy', KEEP, 1, 900)], { keeps });
+  const r = matchTrades([offer('sell', KEEP, 3, 1000), offer('buy', KEEP, 1, 900)], atNow());
   assert.equal(r.closed.length, 1);
   assert.equal(r.closed[0].qty, 1);
   assert.equal(r.awaitingRebuy.length, 1);
@@ -73,7 +76,7 @@ ok('a partial rebuy drains only part of the short and leaves the rest pending', 
 });
 
 ok('a buy LARGER than the short closes it and opens a lot with the remainder', () => {
-  const r = matchTrades([offer('sell', KEEP, 1, 1000), offer('buy', KEEP, 3, 900)], { keeps });
+  const r = matchTrades([offer('sell', KEEP, 1, 1000), offer('buy', KEEP, 3, 900)], atNow());
   assert.equal(r.closed.length, 1);
   assert.equal(r.closed[0].qty, 1);
   assert.equal(r.awaitingRebuy.length, 0);
@@ -82,7 +85,7 @@ ok('a buy LARGER than the short closes it and opens a lot with the remainder', (
 });
 
 ok('an ordinary buy->sell flip on a keep is UNAFFECTED (lot consumed first, no short)', () => {
-  const r = matchTrades([offer('buy', KEEP, 1, 900), offer('sell', KEEP, 1, 1000)], { keeps });
+  const r = matchTrades([offer('buy', KEEP, 1, 900), offer('sell', KEEP, 1, 1000)], atNow());
   assert.equal(r.closed.length, 1);
   assert.equal(r.closed[0].keepRoundTrip, undefined, 'a normal flip is not a round trip');
   assert.equal(r.awaitingRebuy.length, 0);
@@ -124,7 +127,7 @@ const GROSS = 37_099_995, NET = 36_357_996, REBUY = 36_151_000;
 const netSell = (itemId, qty, netEach) => ({ type: 'sell', itemId, filled: qty, spent: qty * netEach, worthNet: true, tsOpen: ts += 100 });
 
 ok('net-convention KEEP sell opens a short at the recovered gross; beRebuy = the net proceeds', () => {
-  const r = matchTrades([netSell(KEEP, 1, NET)], { keeps });
+  const r = matchTrades([netSell(KEEP, 1, NET)], atNow());
   assert.equal(r.awaitingRebuy.length, 1);
   const s = r.awaitingRebuy[0];
   assert.equal(s.sellEach, GROSS, 'sellEach is the true sale price, recovered by inversion');
@@ -133,7 +136,7 @@ ok('net-convention KEEP sell opens a short at the recovered gross; beRebuy = the
 });
 
 ok('net-convention keep sell -> rebuy closes the round trip at realised = net − rebuy', () => {
-  const r = matchTrades([netSell(KEEP, 1, NET), offer('buy', KEEP, 1, REBUY)], { keeps });
+  const r = matchTrades([netSell(KEEP, 1, NET), offer('buy', KEEP, 1, REBUY)], atNow());
   assert.equal(r.closed.length, 1);
   const c = r.closed[0];
   assert.equal(c.keepRoundTrip, true);
@@ -143,9 +146,110 @@ ok('net-convention keep sell -> rebuy closes the round trip at realised = net �
 });
 
 ok('a GROSS keep sell (log/manual era) is byte-identical to pre-fix behavior', () => {
-  const r = matchTrades([offer('sell', KEEP, 1, 78_140_000)], { keeps });
+  const r = matchTrades([offer('sell', KEEP, 1, 78_140_000)], atNow());
   const s = r.awaitingRebuy[0];
   assert.deepEqual([s.sellEach, s.tax, s.beRebuy], [78_140_000, GE_TAX(78_140_000), 76_577_200]);
+});
+
+/* --- H1 (PLAN-BOOK-SELF-HEAL): the time/price gate, the aged settle, the REVIVE exemption --------
+   A rebuy no longer closes a short unconditionally: it must arrive within SHORT_MAX_AGE_DAYS AND at
+   or below the short's beRebuy, unless the item is DECLARED (hold-thesis reverseFlip:true) or the
+   short was REVIVEd. An undeclared short past the age settles at breakeven into `settled`. */
+const DAY = 86_400;
+const T0 = 2_000_000_000;                     // fixed base ts — these fixtures assert on ages, not order
+const at = (type, itemId, qty, each, tsOpen) => ({ type, itemId, filled: qty, spent: qty * each, tsOpen });
+const SOLD = 1000, BE = SOLD - GE_TAX(SOLD);  // beRebuy for a 1000gp gross keep sale
+
+ok('gate: a rebuy INSIDE the window and at/below beRebuy still closes the round trip', () => {
+  const r = matchTrades([at('sell', KEEP, 1, SOLD, T0), at('buy', KEEP, 1, BE, T0 + 3 * DAY)],
+    { keeps, now: T0 + 3 * DAY });
+  assert.equal(r.closed.length, 1);
+  assert.equal(r.closed[0].keepRoundTrip, true);
+  assert.equal(r.settled.length, 0);
+  assert.equal(r.awaitingRebuy.length, 0);
+});
+
+ok('gate REFUSES on AGE: a rebuy past SHORT_MAX_AGE_DAYS settles the short and opens a normal lot', () => {
+  const r = matchTrades([at('sell', KEEP, 1, SOLD, T0), at('buy', KEEP, 1, BE, T0 + 20 * DAY)],
+    { keeps, now: T0 + 20 * DAY });
+  assert.equal(r.closed.length, 0, 'no round trip stolen from the fresh flip');
+  assert.equal(r.open.length, 1, 'the rebuy opens ordinary flip inventory');
+  assert.equal(r.settled.length, 1, 'the aged short settled instead of consuming');
+  assert.equal(r.awaitingRebuy.length, 0);
+  assert.equal(r.refusedCloses.length, 1);
+  assert.equal(r.refusedCloses[0].reason, 'age');
+});
+
+ok('gate REFUSES on PRICE: a rebuy above beRebuy leaves the short open and opens a lot', () => {
+  const r = matchTrades([at('sell', KEEP, 1, SOLD, T0), at('buy', KEEP, 1, BE + 1, T0 + DAY)],
+    { keeps, now: T0 + DAY });
+  assert.equal(r.closed.length, 0);
+  assert.equal(r.open.length, 1);
+  assert.equal(r.awaitingRebuy.length, 1, 'the short stays open — only the close was refused');
+  assert.equal(r.settled.length, 0);
+  assert.equal(r.refusedCloses.length, 1);
+  assert.equal(r.refusedCloses[0].reason, 'price');
+});
+
+ok('a DECLARED reverse flip overrides both legs of the gate (old + above beRebuy still closes)', () => {
+  const r = matchTrades([at('sell', KEEP, 1, SOLD, T0), at('buy', KEEP, 1, BE + 50, T0 + 40 * DAY)],
+    { keeps, declared: new Set([KEEP]), now: T0 + 40 * DAY });
+  assert.equal(r.closed.length, 1, 'the declaration is the intent the log cannot carry');
+  assert.equal(r.settled.length, 0, 'a declared short never ages out');
+  assert.equal(r.refusedCloses.length, 0);
+});
+
+ok('settle books realised 0 by construction and preserves every revival field', () => {
+  const r = matchTrades([at('sell', KEEP, 2, SOLD, T0)], { keeps, now: T0 + 30 * DAY });
+  assert.equal(r.awaitingRebuy.length, 0, 'awaitingRebuy empties into settled');
+  assert.equal(r.settled.length, 1);
+  const s = r.settled[0];
+  assert.deepEqual([s.itemId, s.qty, s.sellEach, s.tax, s.beRebuy, s.sellTs, s.reason],
+    [KEEP, 2, SOLD, GE_TAX(SOLD) * 2, BE, T0, 'aged-out']);
+  assert.equal(s.settledTs, T0 + 30 * DAY, 'stamped when the settle fired');
+  assert.equal(r.closed.length, 0, 'nothing is booked — lifetime realised does not move (buyEach = beRebuy)');
+});
+
+ok('an UNSETTLED young short is untouched by the settle sweep', () => {
+  const r = matchTrades([at('sell', KEEP, 1, SOLD, T0)], { keeps, now: T0 + 3 * DAY });
+  assert.equal(r.awaitingRebuy.length, 1);
+  assert.equal(r.settled.length, 0);
+});
+
+ok('REVIVE re-arms BOTH exemptions: no aging, and the next rebuy closes regardless of price', () => {
+  const revives = [{ itemId: KEEP, target: T0 }];
+  const held = matchTrades([at('sell', KEEP, 1, SOLD, T0)], { keeps, revives, now: T0 + 30 * DAY });
+  assert.equal(held.settled.length, 0, 'a revived short does not age out');
+  assert.equal(held.awaitingRebuy.length, 1);
+  const r = matchTrades([at('sell', KEEP, 1, SOLD, T0), at('buy', KEEP, 1, BE + 500, T0 + 30 * DAY)],
+    { keeps, revives, now: T0 + 30 * DAY });
+  assert.equal(r.closed.length, 1, 'revived: the rebuy closes it despite age AND price');
+  assert.equal(r.refusedCloses.length, 0);
+});
+
+ok('a REVIVE naming an absent short is INERT (wrong item, wrong sellTs)', () => {
+  const offers = [at('sell', KEEP, 1, SOLD, T0)];
+  const wrongItem = matchTrades(offers, { keeps, revives: [{ itemId: COMMODITY, target: T0 }], now: T0 + 30 * DAY });
+  const wrongTs = matchTrades(offers, { keeps, revives: [{ itemId: KEEP, target: T0 + 7 }], now: T0 + 30 * DAY });
+  const none = matchTrades(offers, { keeps, now: T0 + 30 * DAY });
+  assert.deepEqual(wrongItem.settled, none.settled, 'wrong item: settles exactly as if no REVIVE existed');
+  assert.deepEqual(wrongTs.settled, none.settled, 'wrong sellTs: same');
+});
+
+ok('a null-target REVIVE covers every short on the item (the CLI writes it only when unambiguous)', () => {
+  const r = matchTrades([at('sell', KEEP, 1, SOLD, T0)], { keeps, revives: [{ itemId: KEEP, target: null }], now: T0 + 30 * DAY });
+  assert.equal(r.settled.length, 0);
+  assert.equal(r.awaitingRebuy.length, 1);
+});
+
+ok('existing callers are byte-identical on a book whose shorts are young', () => {
+  const offers = [at('sell', KEEP, 1, SOLD, T0), at('buy', KEEP, 1, BE, T0 + DAY)];
+  const r = matchTrades(offers, { keeps, now: T0 + 2 * DAY });
+  assert.deepEqual([r.closed, r.open, r.unmatched, r.awaitingRebuy],
+    [[{ itemId: KEEP, qty: 1, buyEach: BE, sellEach: SOLD, tax: GE_TAX(SOLD), realised: 0,
+        keepRoundTrip: true, buyTs: T0 + DAY, sellTs: T0 }], [], [], []],
+    'the pre-H1 four buckets, unchanged');
+  assert.deepEqual([r.settled, r.refusedCloses], [[], []], 'the new buckets are empty');
 });
 
 console.log(`\nAll ${pass} checks passed.`);

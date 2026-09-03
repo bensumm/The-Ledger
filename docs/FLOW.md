@@ -158,7 +158,9 @@ mobile-fills.log (phone, contents API)                       ┘        │
   all day.
 - `positions.json` is the FIFO-reconstructed truth: `closed` = after-tax realised P/L, `open` =
   inventory at real average cost, `unmatched` = pre-log sells, **`awaitingRebuy`** = a `keep` sold and
-  not yet rebought (SM1), plus a **`pipeline`** metadata block. (The last two were missing from this list
+  not yet rebought (SM1), **`settled`** = a short that aged out undeclared past `SHORT_MAX_AGE_DAYS`
+  and closed at breakeven, realised 0 (H1 — a rebuy now closes a short only inside the time/price gate
+  or under a `hold-thesis` `reverseFlip:true` / REVIVE exemption), plus a **`pipeline`** metadata block. (The last two were missing from this list
   until 2026-08-09 despite having live rows — a consumer written from an incomplete key list silently
   reads "no change".) Reconstruction runs over `quarantineEvents(...)`, so `ignored-items.json` members
   are dropped BEFORE it — a missing item may be quarantined, not a bug. The reconstruction is shared so

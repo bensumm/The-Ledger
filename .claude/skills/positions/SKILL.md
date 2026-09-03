@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.65
+version: 1.66
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -264,6 +264,13 @@ row, no alert, just a collapsed `incidental inventory, ignored: X, Y` line in th
 by value alone, however small the lot. You should rarely need to apply this test yourself now;
 if you ever see an incidental-looking lot still drawing a verdict, that's a gap in the value
 threshold or the watchlist read, not a missing manual judgment call — flag it as a bug.
+
+**Personal use is per-TRADE, never per-ITEM (Ben, 2026-09-02).** When Ben says a lot was bought for
+personal use (the fang, cannonballs, a Torva platebody), tombstone THAT TRADE the same turn —
+`add-manual-fill.mjs --type withdraw` + a sync — and never verdict the lot. Do **not** add the item to
+`ignored-items.json`: the ignore list is an item-wide MERCH-view quarantine and a separate deliberate
+act, so it also hides every future flip of an item Ben still trades. Add to it only when he asks for
+the ignore list by name.
 
 ## 3. Interpret each verdict
 

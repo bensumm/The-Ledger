@@ -77,7 +77,10 @@ short actually measures is the **round trip on owned gear**:
 
 So a long-pending short is not cruft awaiting cleanup — it is an open measurement, and it resolves
 whenever the item is actually rebought. **Consequences:** (1) no timeout, auto-retire, or staleness
-sweep on the pending bucket — rejected, they would discard a live measurement; (2) the closed-row tag
+sweep on the pending bucket — rejected, they would discard a live measurement. **AMENDED 2026-09-02 by
+PLAN-BOOK-SELF-HEAL H1 (Ben's ruling): consequence (1) now holds only for a DECLARED short
+(`hold-thesis` `reverseFlip:true`) or a REVIVEd one. An UNDECLARED short settles at breakeven after
+`SHORT_MAX_AGE_DAYS`, because leaving it open let a weeks-old half-leg eat a fresh flip's rebuy;** (2) the closed-row tag
 must be intent-neutral (`keepRoundTrip`, not `reverseFlip`); (3) reclassifying a keep to `flip` remains
 available for gear genuinely never coming back, but it is an owner decision, never a prompt or a nag
 (see the SM2 PENDING-ONLY ruling).

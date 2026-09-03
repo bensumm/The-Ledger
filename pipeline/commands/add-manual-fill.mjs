@@ -5,12 +5,11 @@
  * the record whole instead of desyncing it.
  *
  * It does NOT edit RuneLite's own exchange.log (RuneLite writes that live). Instead it
- * appends a schema-correct JSON line to a sibling file `coffer-manual.log` in the same
- * exchange-logger dir. sync-fills.mjs already ingests every *.log there and dedupes by a
- * content hash, so these lines merge into fills.json / positions.json on the next sync
- * and survive every future re-sync (they're a source input, not a hand-edit of the
- * derived view). Hand-authored entries stay isolated in their own file — auditable and
- * removable — separate from plugin-captured ground truth.
+ * appends a schema-correct JSON line to a sibling `coffer-manual.log` in the same
+ * exchange-logger dir. sync-fills.mjs ingests every *.log there and dedupes by content
+ * hash, so these lines merge into fills.json / positions.json on the next sync and survive
+ * every re-sync — a source input, not a hand-edit of the derived view, kept isolated and
+ * auditable apart from plugin-captured ground truth.
  *
  * Usage:
  *   node pipeline/commands/add-manual-fill.mjs --item "Abyssal bludgeon" --type buy  --qty 3 --price 18052000
@@ -41,13 +40,14 @@
  *                    timestamp on a backdated trade mis-pairs lots (the phantom-bludgeons
  *                    incident, 2026-07-03). A sell must timestamp AFTER its buy.
  *   --slot <n>       synthetic GE slot (default 8; must be ≥ 8, live slots 0-7 are reserved).
- *                    Give each window a DISTINCT slot when backfilling repeated identical fills
- *                    (same item/qty/price) — the re-emit guard collapses identical terminals that
- *                    repeat on the SAME slot with no offer between, silently dropping the duplicate
- *                    (the 2026-07-10 soul-rune two-window backfill: both buys on slot 8 merged to one).
+ *                    Give each window a DISTINCT slot when backfilling repeated identical fills —
+ *                    the re-emit guard silently collapses identical same-slot terminals.
  *   --remove <eventId>  append a tombstone {"state":"REMOVE","target":"<id>"} instead of
  *                    a fill — the next sync deletes that event id from the merged set,
  *                    INCLUDING events already persisted in fills.json.
+ *   --revive <item|id> [--sell-ts <epoch|iso>]   append a REVIVE marker: that open short stops aging
+ *                    out and its next rebuy closes the round trip regardless of the H1 gate. Without
+ *                    --sell-ts it targets the item's ONE open short; more prints them and exits 1.
  *   --dry            print the line, don't write it.
  *
  * After writing, run:  node pipeline/commands/sync-fills.mjs --dry   (verify), then without --dry.
@@ -58,19 +58,17 @@ import path from 'node:path';
 import { tax as GE_TAX, breakEven } from '../../js/quotecore.js'; // the ONE tax impl (chunk 4.1) + shared tax-capped inverse — no private copy
 import { parseArgs, parseGp } from '../lib/render/cli.mjs';
 import { loadMapping } from '../lib/market/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — id/name resolve()
+import { REPO_DIR } from '../lib/paths.mjs';                 // --revive reads positions.json's awaitingRebuy to disambiguate
 
 const LOG_DIR = path.join(os.homedir(), '.runelite', 'exchange-logger');
 const OUT = path.join(LOG_DIR, 'coffer-manual.log'); // sibling file; ingested by sync-fills.mjs, never written by RuneLite
 const MANUAL_SLOT = 8; // real GE slots are 0-7; 8 keeps synthetic events clear of live-slot cancel inference
 // Distinct synthetic slots (8, 9, 10, …) let two otherwise-identical manual terminals coexist. The
-// TRAP: reconstruct.mjs's SILENT derivation dedupe (`dedupeSnapshots`) keys purely on slot and — unlike
-// the LOUD ingest `validateSlotTransitions`, which exempts manual slots 8/9 — has NO manual-slot exempt,
-// so two identical `complete` terminals on the SAME slot silently collapse to one (it can't tell a real
-// second window from a snapshot re-emit). A same-item/qty/price multi-window backfill must therefore put
-// each window on a DISTINCT slot (the 2026-07-10 soul-rune two-25k-window backfill lost a window to this).
-// --slot picks one; must stay ≥ 8 to avoid live-slot cancel inference (8 = desktop/CLI, 9 = mobile by
-// convention, both loud-exempt; a single terminal on 10+ is fine since neither guard fires without a
-// same-slot prior terminal).
+// TRAP: reconstruct.mjs's SILENT `dedupeSnapshots` keys purely on slot and — unlike the LOUD ingest
+// `validateSlotTransitions` — has NO manual-slot exempt, so two identical `complete` terminals on the
+// SAME slot silently collapse to one. A same-item/qty/price multi-window backfill must therefore put
+// each window on a DISTINCT slot. --slot picks one; must stay ≥ 8 to avoid live-slot cancel inference
+// (8 = desktop/CLI, 9 = mobile by convention).
 
 // --- args (parseArgs/parseGp shared via cli.mjs, chunk 10.2) ---
 const A = parseArgs(process.argv.slice(2));
@@ -87,6 +85,42 @@ if (A.remove) {
   fs.appendFileSync(OUT, line + '\n');
   console.log(`\nappended to ${OUT}`);
   console.log('next: node pipeline/commands/sync-fills.mjs --dry   (verify the event disappears), then run it without --dry.');
+  process.exit(0);
+}
+
+// --revive: append a REVIVE exemption marker for an open short (positions.json awaitingRebuy) — it
+// then never ages out and its next rebuy closes regardless of the H1 gate. Idempotent across resyncs.
+if (A.revive !== undefined) {
+  if (A.revive === true) die('--revive expects an item name or id');
+  const map = await loadMapping();
+  const hit = map.resolve(String(A.revive));
+  if (!hit) die(`no item named "${A.revive}" in the mapping — check spelling or pass the id`);
+  let target = null;
+  if (A['sell-ts'] !== undefined && A['sell-ts'] !== true) {
+    const v = String(A['sell-ts']);
+    target = /^\d+$/.test(v) ? Number(v) : Math.floor(Date.parse(v) / 1000);
+    if (!Number.isFinite(target)) die('--sell-ts must be epoch seconds or a parseable date/time');
+  } else {
+    const posPath = path.join(REPO_DIR, 'positions.json');
+    let shorts = [];
+    try { shorts = (JSON.parse(fs.readFileSync(posPath, 'utf8')).awaitingRebuy || []).filter(s => s.itemId === hit.id); }
+    catch { die('could not read positions.json — run sync-fills.mjs first, or pass --sell-ts'); }
+    if (!shorts.length) die(`no open short for ${hit.name} (#${hit.id}) in positions.json awaitingRebuy — pass --sell-ts to revive a settled one`);
+    if (shorts.length > 1) {
+      console.error(`error: ${shorts.length} open shorts for ${hit.name} (#${hit.id}) — pass --sell-ts to pick one:`);
+      for (const s of shorts) console.error(`  --sell-ts ${s.sellTs}   qty ${s.qty} sold @${s.sellEach} (beRebuy ${s.beRebuy}, ${new Date(s.sellTs * 1000).toISOString()})`);
+      process.exit(1);
+    }
+    target = shorts[0].sellTs;
+  }
+  const line = JSON.stringify({ state: 'REVIVE', item: hit.id, target });
+  console.log(`\nREVIVE ${hit.name} (#${hit.id}) short sold at ${target == null ? '(any)' : new Date(target * 1000).toISOString()}`);
+  console.log('line:', line);
+  if (A.dry) { console.log('\n[dry] not written.'); process.exit(0); }
+  if (!fs.existsSync(LOG_DIR)) die('log dir not found: ' + LOG_DIR);
+  fs.appendFileSync(OUT, line + '\n');
+  console.log(`\nappended to ${OUT}`);
+  console.log('next: node pipeline/commands/sync-fills.mjs   (the short stops aging and its next rebuy closes the round trip).');
   process.exit(0);
 }
 

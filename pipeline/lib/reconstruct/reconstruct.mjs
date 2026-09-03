@@ -98,8 +98,16 @@ export function parseJsonLine(line, { worthNet = false } = {}) {
   // merge, deletes the matching event from fills.json even if already persisted. Returned as
   // a marker so the runner (sync-fills.mjs main()) can collect it; it carries no ts/slot of
   // its own. Non-runner consumers (monitor-offers.mjs) filter these markers out before buildEvents.
-  if (String(pick(o, 'state', 'status', 'offerState') ?? '').toUpperCase() === 'REMOVE') {
+  const marker = String(pick(o, 'state', 'status', 'offerState') ?? '').toUpperCase();
+  if (marker === 'REMOVE') {
     return { remove: String(pick(o, 'target', 'id', 'event') ?? '') };
+  }
+  // REVIVE directive (PLAN-BOOK-SELF-HEAL H1): exempts one open short from the age settle AND from
+  // the time/price gate on its next rebuy. A marker like REMOVE — no ts/slot, never an event, never
+  // hashed. `target` is the short's sellTs; null = the item's only short. buildEvents drops it.
+  if (marker === 'REVIVE') {
+    const t = Number(pick(o, 'target', 'sellTs'));
+    return { revive: { itemId: Number(pick(o, 'item', 'itemId', 'item_id')), target: Number.isFinite(t) ? t : null } };
   }
 
   const ts = parseTs(o);
@@ -162,36 +170,23 @@ export function buildEvents(rawLinesParsed) {
   const sorted = [...rawLinesParsed].sort((a, b) => a.ts - b.ts);
   const events = [];
   for (const r of sorted) {
-    if (r.empty) continue;
+    if (r.empty || r.remove !== undefined || r.revive !== undefined) continue; // markers are never events
     events.push(r);
   }
   for (const e of events) delete e.empty;
   return events;
 }
 
-// LH1 (2026-07-05): slot-state transition validator — the LOUD, conservative catch for the
-// "impossible transition" artifact class (the 13:25:53/13:29:01 double-BOUGHT of a 17.4m item on
-// slot 7, only one real). A GE slot is a state machine: a terminal event (BOUGHT/SOLD/CANCELLED_*)
-// closes it, so a SECOND terminal on the same slot with NO intervening placement/progress line is
-// IMPOSSIBLE unless the plugin re-emitted a stale slot state after a relog (visible as the
-// simultaneous EMPTY burst on the OTHER slots at that second). Walking each GE slot's event
-// subsequence in ts order, when a terminal follows a terminal on the same slot with nothing
-// re-opening the slot between them:
-//   - STRICTLY identical to the prior terminal (same item+type+qty+price+filled+spent, via
-//     sameTerminal) ⇒ a provable re-emit: DROP it and console.warn LOUDLY (never silent; and,
-//     because this runs at INGEST — next to buildEvents, before the fills.json merge — never
-//     written into fills.json either).
-//   - ANY field differs ⇒ a possible fast re-trade whose placement line we may just have missed:
-//     WARN but KEEP (fail toward preserving data; a REMOVE tombstone stays the manual override for
-//     anything the heuristic can't prove).
-// Manual-log slots 8 (desktop/CLI) and 9 (mobile) are NOT GE-slot state machines — they carry
-// independent one-shot lines (BANKED/WITHDRAWN/manual BOUGHT/SOLD) that legitimately repeat — so
-// they are EXEMPT entirely. This is a SUPERSET of the derivation-layer dedupeSnapshots() (it also
-// covers CANCELLED terminals and is loud); dedupeSnapshots() remains inside reconstruct() as the
-// silent backstop that additionally cleans a phantom ALREADY persisted in an older fills.json (the
-// merged set reconstruct() sees can still carry a pre-LH1 duplicate this ingest pass never re-reads).
-// This does NOT resurrect the deleted cancel-to-EMPTY inference: EMPTY lines are already consumed by
-// buildEvents() and never reach here, so absence is still never evidence — only two REAL terminals.
+// LH1: slot-state transition validator — the LOUD, conservative catch for the "impossible
+// transition" class (a re-emitted stale slot state after a relog). A GE slot is a state machine: a
+// terminal (BOUGHT/SOLD/CANCELLED_*) closes it, so a second terminal on the same slot with nothing
+// re-opening it between is impossible. Strictly identical to the prior terminal (sameTerminal) ⇒ a
+// provable re-emit: DROP + warn LOUDLY, at INGEST, so it never enters fills.json. ANY field differs
+// ⇒ a possible fast re-trade whose placement line was missed: WARN but KEEP (fail toward preserving
+// data; a REMOVE tombstone is the manual override). Manual slots 8/9 are not state machines and are
+// EXEMPT. A SUPERSET of dedupeSnapshots(), which stays the silent derivation-layer backstop for a
+// phantom already persisted in an older fills.json. This is NOT the deleted cancel-to-EMPTY
+// inference: EMPTY lines are consumed by buildEvents and never reach here. Full story: §10.
 function isTerminalState(s) { return s === 'complete' || s === 'cancelled'; }
 // `warn` (default true) controls the LOUD console.warn per suspect. The attended sync passes it
 // true (the visible deliverable + a summary count); the frequently-re-run callers (the watch-log
@@ -237,12 +232,10 @@ export const GE_TAX = tax; // 2% floored/item, capped 5m — re-export the share
 // events in ts order, drop a terminal whose immediately-preceding same-slot event is an IDENTICAL
 // terminal; a placement (or differing terminal) between them keeps the second. EMPTY lines for
 // OTHER slots in a login burst belong to different slots (consumed by buildEvents()), so they
-// never count as an intervening placement for the traded slot. Runs at the DERIVATION layer
-// (reconstruct below): with LH1 (2026-07-05) this is now the SILENT BACKSTOP — validateSlotTransitions()
-// catches the same class LOUDLY at ingest (next to buildEvents, before the fills.json merge), so a
-// FRESH re-emit no longer reaches fills.json at all. dedupeSnapshots() still runs here so a phantom
-// ALREADY persisted in an older (pre-LH1) fills.json — which the ingest pass never re-reads — is
-// still dropped from the derived positions.json. Both layers use the SAME sameTerminal() discriminator.
+// never count as an intervening placement for the traded slot. Runs at the DERIVATION layer as the
+// SILENT BACKSTOP to LH1's loud ingest catch: a phantom ALREADY persisted in an older fills.json —
+// which the ingest pass never re-reads — is still dropped from the derived positions.json. Both
+// layers use the SAME sameTerminal() discriminator.
 function sameTerminal(a, b) {
   return a.itemId === b.itemId && a.type === b.type && a.qty === b.qty &&
          a.price === b.price && a.filled === b.filled && a.spent === b.spent;
@@ -326,17 +319,29 @@ export function auditWorthConvention(rows, assignedNet, filename) {
    the short path unreachable, so the function degrades exactly to its pre-SM1 form.
 
    Why the short queue exists: selling an item you OWN (bank gear) leaves no buy lot to consume, so
-   pre-SM1 the sell fell into `unmatched` and its proceeds contributed ZERO realised P/L — the profit
-   was simply lost (SM0 Result B measured this at 2,636,600 gp across two cycles). A keep sold and
-   later rebought is a real round trip; the short queue holds the open leg until the rebuy closes it.
-   Intent is NOT discriminated and does not need to be — a deliberate reverse flip and a liquidation
-   to free capital are byte-identical in the log, and the round-trip P/L is the meaningful number for
-   both (PLAN-SYMMETRIC-MATCHING §2.1). Hence the neutral `keepRoundTrip` tag, never `reverseFlip`.
+   pre-SM1 the sell fell into `unmatched` and its proceeds contributed ZERO realised P/L (SM0 Result B
+   measured 2,636,600 gp lost across two cycles). Intent is NOT discriminated — a deliberate reverse
+   flip and a liquidation to free capital are byte-identical in the log, and the round-trip P/L is the
+   meaningful number for both. Hence the neutral `keepRoundTrip` tag, never `reverseFlip`.
 
-   A leftover short is NOT cruft awaiting cleanup — it is an OPEN MEASUREMENT (`awaitingRebuy`), and
-   it carries no deadline. Do not add a timeout/staleness sweep: that discards a live measurement. */
-export function matchTrades(offers, { keeps } = {}) {
+   SHORT LIFECYCLE (H1 — supersedes the former "an open short has no deadline, never add a timeout"):
+   a DECLARED short (`declared`, from hold-thesis reverseFlip:true) or a REVIVEd one (`revives`, from a
+   log REVIVE line) has no deadline and no gate. An UNDECLARED short takes a rebuy only within
+   SHORT_MAX_AGE_DAYS AND at or below its `beRebuy`; refused on price the buy opens an ordinary lot,
+   past the age the short SETTLES at breakeven (realised 0 by construction, lifetime realised unmoved).
+   Without it an intent-blind close ate a fresh flip's buy and orphaned its sell — a clean day read red.
+   `declared`/`revives`/`now` are PARAMETERS like `keeps`: omitting them on a book whose shorts are
+   inside the gate reproduces pre-H1 output exactly. */
+export const SHORT_MAX_AGE_DAYS = 14;   // ⚖ judgment: covers the measured multi-week-oscillator class (~6-8d) and ends the 3-5-week tripwires
+export function matchTrades(offers, { keeps, declared, revives, now = Math.floor(Date.now() / 1000) } = {}) {
   const keepSet = keeps instanceof Set ? keeps : new Set(keeps || []);
+  const declaredSet = declared instanceof Set ? declared : new Set(declared || []);
+  const reviveList = revives || [];
+  const maxAge = SHORT_MAX_AGE_DAYS * 86400;
+  const isRevived = s => reviveList.some(r => r && Number(r.itemId) === s.itemId && (r.target == null || Number(r.target) === s.ts));
+  const settled = [], refusedCloses = [];
+  const settle = (s, tsAt) => settled.push({ itemId: s.itemId, qty: s.qty, sellEach: Math.round(s.each),
+    tax: s.taxEach * s.qty, beRebuy: s.beRebuy, sellTs: s.ts, settledTs: tsAt, reason: 'aged-out' });
   const filled = offers.filter(o => o.filled > 0).sort((a, b) => a.tsOpen - b.tsOpen);
   const lots = new Map();   // itemId -> [{qty, each, ts}] FIFO queue of open buy lots
   const shorts = new Map(); // itemId -> [{qty, each, taxEach, ts}] FIFO queue of open KEEP SELL legs
@@ -353,8 +358,21 @@ export function matchTrades(offers, { keeps } = {}) {
       // BANKED declaration *should* close a short rather than open a lot is a live question — see
       // PLAN-SYMMETRIC-MATCHING SM4. Behavior here is what SM0 verified against the real book.)
       const sq = shorts.get(o.itemId) || [];
+      const buyEach = Math.round(each);
       while (remain > 0 && sq.length) {
-        const s = sq[0], take = Math.min(remain, s.qty);
+        const s = sq[0];
+        // H1 gate: an undeclared, un-revived short only takes a rebuy inside the age AND at/below beRebuy.
+        if (!declaredSet.has(o.itemId) && !isRevived(s)) {
+          if (o.tsOpen - s.ts > maxAge) {
+            refusedCloses.push({ itemId: o.itemId, reason: 'age', buyEach, beRebuy: s.beRebuy, sellTs: s.ts, buyTs: o.tsOpen });
+            settle(s, o.tsOpen); sq.shift(); continue;
+          }
+          if (buyEach > s.beRebuy) {
+            refusedCloses.push({ itemId: o.itemId, reason: 'price', buyEach, beRebuy: s.beRebuy, sellTs: s.ts, buyTs: o.tsOpen });
+            break;
+          }
+        }
+        const take = Math.min(remain, s.qty);
         closed.push({ itemId: o.itemId, qty: take, buyEach: Math.round(each), sellEach: Math.round(s.each),
           tax: s.taxEach * take, realised: Math.round(((s.each - s.taxEach) - each) * take),
           keepRoundTrip: true, buyTs: o.tsOpen, sellTs: s.ts });
@@ -395,7 +413,8 @@ export function matchTrades(offers, { keeps } = {}) {
       // gross + taxEach, so the close (s.each − s.taxEach = net) and beRebuy are convention-blind.
       if (remain > 0) {
         if (keepSet.has(o.itemId)) {
-          (shorts.get(o.itemId) || shorts.set(o.itemId, []).get(o.itemId)).push({ qty: remain, each: grossEach, taxEach, ts: o.tsOpen });
+          (shorts.get(o.itemId) || shorts.set(o.itemId, []).get(o.itemId)).push({ itemId: o.itemId, qty: remain,
+            each: grossEach, taxEach, beRebuy: Math.round(grossEach - taxEach), ts: o.tsOpen });
         } else {
           unmatched.push({ itemId: o.itemId, qty: remain, sellEach: Math.round(grossEach), tax: taxEach * remain, sellTs: o.tsOpen });
         }
@@ -415,17 +434,21 @@ export function matchTrades(offers, { keeps } = {}) {
   const open = [...openMap.values()].sort((a, b) => a.buyTs - b.buyTs);
   // SM1: leftover shorts = keeps sold and not yet rebought. beRebuy is the break-even on the capital
   // reallocation (rebuy below it and the reallocation was free; above it, the gap is what it cost).
+  // H1 settle sweep: a short still open at `now`, undeclared and un-revived, past the age settles at
+  // breakeven rather than waiting forever to grab a future buy.
   const awaitingRebuy = [];
   for (const [itemId, sq] of shorts) for (const s of sq) {
     if (s.qty <= 0) continue;
+    if (!declaredSet.has(itemId) && !isRevived(s) && now - s.ts > maxAge) { settle(s, now); continue; }
     awaitingRebuy.push({ itemId, qty: s.qty, sellEach: Math.round(s.each), tax: s.taxEach * s.qty,
-      beRebuy: Math.round(s.each - s.taxEach), sellTs: s.ts });
+      beRebuy: s.beRebuy, sellTs: s.ts });
   }
   awaitingRebuy.sort((a, b) => a.sellTs - b.sellTs);
-  return { closed, open, unmatched, awaitingRebuy };
+  settled.sort((a, b) => a.sellTs - b.sellTs);
+  return { closed, open, unmatched, awaitingRebuy, settled, refusedCloses };
 }
 
-export function reconstruct(events, { keeps } = {}) {
+export function reconstruct(events, { keeps, declared, revives, now } = {}) {
   // dedupeSnapshots first (P1): strip snapshot re-emissions before offers are collapsed, so a
   // phantom duplicate terminal never becomes a second offer. monitor-offers.mjs shares reconstruct(), so
   // its live held count gets the same fix. (The forward-join siblings do NOT go through here — they use
@@ -433,8 +456,12 @@ export function reconstruct(events, { keeps } = {}) {
   // campaign boundaries ARE deduped. The older note here said they were not; corrected 2026-08-09.)
   // `keeps` (SM1) is threaded through to matchTrades; omitting it disables the keep-round-trip path
   // entirely, so callers that don't supply it keep pre-SM1 behavior.
-  const { closed, open, unmatched, awaitingRebuy } = matchTrades(collapseOffers(dedupeSnapshots(events)), { keeps });
-  return { app: 'the-coffer-positions', version: 1, generatedAt: new Date().toISOString(), closed, open, unmatched, awaitingRebuy };
+  // H1: `declared` (hold-thesis reverseFlip ids), `revives` (REVIVE markers) and `now` ride the same
+  // parameter contract — the caller does the IO; omitting them keeps a young book's output unchanged.
+  const { closed, open, unmatched, awaitingRebuy, settled, refusedCloses } =
+    matchTrades(collapseOffers(dedupeSnapshots(events)), { keeps, declared, revives, now });
+  return { app: 'the-coffer-positions', version: 1, generatedAt: new Date().toISOString(),
+    closed, open, unmatched, awaitingRebuy, settled, refusedCloses };
 }
 
 export function eventId(e) {
