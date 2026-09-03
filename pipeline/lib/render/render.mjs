@@ -55,16 +55,15 @@
 import { mdTable } from './cli.mjs';
 import { gradeCls, fmtP } from '../../../js/money-format.js';
 
-/* --- SURFACING-TIER REGISTRY (R10 — TRACKING label, NOT a render/relay gate; VZ5 = the ONE registry) --
+/* --- SURFACING-TIER REGISTRY (a TRACKING label, NOT a render/relay gate; VZ5 = the ONE registry) --
    Every note kind carries a tier so a later iteration pass can see which kinds are actually read vs
-   skipped over sessions. Per Ben's 2026-07-16 ruling, `core` AND `context` both render AND relay by
-   default — there is no default-hidden middle tier. `shadow` data never enters a report object at all
-   (it rides suggestions.jsonl, unrendered). A wrong tier label therefore hides nothing; it only
+   skipped over sessions. `shadow` data never enters a report object at all (it rides
+   suggestions.jsonl, unrendered). A wrong tier label therefore hides nothing; it only
    mis-tracks which section a future evidence-based demote-to-shadow decision would target. A note kind
-   with no entry defaults to 'context' (shown), never silently dropped.
+   with no entry defaults to 'context', never silently dropped.
 
-   THE TIER ASSIGNMENTS (R10 defaults — the encoded half of VZ5; the relay rules are the judgment half,
-   in the four SKILL.md files). Both `core` and `context` render AND relay — the split is TRACKING only:
+   THE TIER ASSIGNMENTS (the encoded half of VZ5; the relay rules are the judgment half,
+   in the four SKILL.md files). The core/context split is TRACKING only:
      core    = the decision surface an operator must always see: a held-lot verdict / list-at, an
                alert (headline + the `alerts` section, watch), the WATCHLIST niche, and the V5
                guaranteed held-note fields (emit.mjs `heldNoteBlock`). Also `regime` + `validator`
@@ -73,7 +72,7 @@ import { gradeCls, fmtP } from '../../../js/money-format.js';
                reach-relief, guide-anchor, stale-exit, reach-placement, window-exit, and screen's footer inform
                families (caution / trajectory-reach / headroom / window-clear / asym — those
                ride as PRE-FORMATTED strings, not typed kinds, so they carry no NOTE_KINDS entry; their
-               tier is context by this doctrine). Rendered + relayed by default, same as core.
+               tier is context by this doctrine).
      shadow  = never entered a report object: suggestions.jsonl analytics fields (estBuy/estSell/
                reachable/depthExit/asym/winClear/…). Unrendered today, unchanged by this plan.
    A note kind only moves toward shadow (log-only) once real sessions evidence it's consistently
@@ -83,9 +82,9 @@ export const TIER = { core: 'core', context: 'context', shadow: 'shadow' };
 /* NOTE_KINDS — the ONE registry of every typed note kind a report object can carry (VZ3 onward). For
    each kind: `prefix` is the leading whitespace+sigil that used to be hand-written at the push site
    (moved here so the kind stops being a string prefix — the note item now carries {kind,text} and the
-   FORMATTER owns the sigil); `tier` is the R10 tracking label (core/context — both render AND relay,
-   the label never gates). A kind with no entry renders with an empty prefix and defaults to 'context'
-   (shown), never dropped. quote-items.mjs (VZ3) is the first consumer; screen (VZ4) extends this. */
+   FORMATTER owns the sigil); `tier` is the tracking label (core/context — the label never gates).
+   A kind with no entry renders with an empty prefix and defaults to 'context', never dropped.
+   quote-items.mjs (VZ3) is the first consumer; screen (VZ4) extends this. */
 export const NOTE_KINDS = {
   regime:       { prefix: '',      tier: TIER.core },     // the per-item regime line (already '- name: …')
   guideAnchor:  { prefix: '  ',    tier: TIER.context },  // YP1 guide-anchor advisory (already indented)

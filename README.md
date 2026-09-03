@@ -1234,6 +1234,40 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `Probes` column per flip-niche; P6c re-runs an empty flip-niche beneath the floor (`subFloorFallback` in
     `lib/gatecandidates.mjs`, honestly labeled + grade-capped + stdout-only, never in `screen.json`; the
     two-sided gate and thesis edge are never relaxed).
+    **FD1 (PLAN-FLOW-DIET) — `--verbose` is the WINNERS view, `--full` the debugging one.** Under
+    `--verbose` a flip-niche table renders only rows whose DISPLAYED net at the shown pair is positive (the
+    same quantity `belowAdmitNet` reads — `estimatePair`'s net at the printed `Est. buy`/`Est. sell`;
+    a null net keeps the row, and there is NO grade term in the predicate, by Ben's ruling that grade is
+    not a profitability check). **HELD and WATCHLIST rows are EXEMPT from this filter**, exactly as they
+    are exempt from `admitMinNet` at its own call site: each holds a reserved fetch slot, so hiding one
+    would silently undo the reserve, and a negative net on a lot you hold or an item you track is a
+    position/watch signal rather than a scan loser (it also keeps that row's own notes, including the
+    `⚠ … you HOLD this item` line). Non-exempt drops collapse to ONE named `Skipped: N rows non-positive
+    net at the shown pair: …` footer line (up to 10 names, then `(+K more)`) — the same
+    filter-you-cannot-see-you-cannot-check doctrine as the existing `skipped N unprofitable…` line, which
+    stays, as do `rejected:` and `crowded out:`. ⚠ On today's gate stack that Skipped line is unreachable
+    for band/churn/scalp — BY CONSTRUCTION, not merely by sampling: all three specs set `admitMinNet: 0`
+    (`js/flip-niches.mjs`), `belowAdmitNet` already drops `estNet <= 0` under the IDENTICAL held/watchlist
+    exemption, and when `estShown` is null the fallback `er.net` is guaranteed positive by the step-2 drop
+    just above it. So a non-positive row is either already gone before rating or is one of the exempt rows
+    that now stay. The line survives as correct defensive behaviour should a spec routed through
+    `renderMode` ever carry a null or negative `admitMinNet`; the measured winners-view saving comes from
+    the prose diet below, NOT from the row filter. The multi-line STANZA families — Diurnal timing, Base
+    position, Entry paths, velocity, the overnight accumulation table — do not print to stdout at all
+    under `--verbose`; they ride the dump and one pointer line stands in their place per flip-niche
+    (`Diurnal timing · Base position · Entry paths…: pipeline/.cache/last-report/screen.json (--full to
+    print)`), with the amplitude branch's own doctrine preamble + Base position folded into its
+    equivalent pointer. What DOES stay on stdout, for surviving rows only, are the compact one-line
+    footers — `⚠ caution`, `ℹ trajectory/reach`, `⤴ ask headroom`, `ℹ window-clear`, `ℹ drift-exit`,
+    `◆ asym fill`, `↻ repriced entry`, `⚠ exemption dropped`, plus amplitude's two honesty banners
+    (`⚠ thin — NO fast exit` and `⚠ make-or-break`, in compact one-line form; the long forms ride the
+    dump): a warning attached to a winner is triage signal, not prose. **`--full` restores the complete
+    render** (every rated row, every
+    prose family) and implies `--verbose`. The filter is RENDER-ONLY and the cache contract is pinned:
+    `pipeline/.cache/last-report/screen.json` carries every row and every note family IDENTICALLY under
+    quiet / `--verbose` / `--full` (verified byte-identical modulo `generatedAt`), so the debugging surface
+    is the dump, not a re-run. Repo-root `screen.json` (the app publish), the `--digest` block and the
+    WATCHLIST section are untouched — read the dump for anything the winners table does not show.
     (The PB4 pressure-exit trial + its pressure-net console rerank were RETIRED 2026-08-30 —
     join-exit-ev.mjs's criterion; the retired trial flag errors loudly, and `--publish` still refuses any
     non-neutral `--est-sell` model.)
@@ -3120,6 +3154,9 @@ report object but `read-exit-surface.mjs`'s own report array) — the compact-JS
     `quote-items.mjs` / `watch-positions.mjs` / `read-watchlist.mjs` (via `writeLastReport`, `pipeline/lib/render/cli.mjs`); consumer:
     agent analysis passes — quiet-and-dump-only is now the DEFAULT (an agent must read this file for
     the data, not a stdout summary line); `--verbose` opts into the markdown table for a human paste.
+    For screen that table is FD1's WINNERS view (positive displayed net only; the multi-line stanza
+    families are cache-only, replaced by a pointer to THIS file); the dump is the FULL set either way —
+    identical under quiet / `--verbose` / `--full`, so it is where a debugging read goes.
     Shape `{kind, generatedAt, reports:[…]}`; screen
     accumulates its per-flip-niche reports into the one file (the VALUE flip-niche is console-only,
     excluded, same as screen.json). Local, disposable — deleting it just loses the last run's dump.

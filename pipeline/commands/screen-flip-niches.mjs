@@ -4,12 +4,12 @@
  *
  *   node pipeline/commands/screen-flip-niches.mjs [--mode band|churn|scalp|value|amplitude|reverse|all]
  *     [--floor 3500] [--min-roi 1.5] [--min-price 0] [--max-price <capital-derived>] [--top 90]
- *     [--band-hours 2] [--min-traded 6] [--stats] [--publish] [--verbose] [--archive-regime]
+ *     [--band-hours 2] [--min-traded 6] [--stats] [--publish] [--verbose] [--full] [--archive-regime]
  *     [--thin-reserve 6] [--gear-reserve 4] [--mid-tier-reserve 2] [--mid-tier-offset 0]
  *
  * OUTPUT (AO1). DEFAULT is quiet: ONE summary line + the last-report path; the per-niche report objects are ALWAYS
  * written to pipeline/.cache/last-report/screen.json (gitignored, per run) — read THAT, never the summary line.
- * --verbose prints the markdown table. --publish ALSO writes repo-root screen.json { app, generatedAt, mode,
+ * --verbose prints the markdown table as FD1's WINNERS view; --full restores every row + all prose (see DIET). --publish ALSO writes repo-root screen.json { app, generatedAt, mode,
  * params, headers, niches:{modes with spec gate==='band' — band+churn, +scalp when run; a PREDICATE, not a fixed pair} } for the app's Scan tab, rows { id (Item→Trends deep link), cells }
  * byte-identical to the printed table (sync-fills.mjs commits it beside fills/positions). ONE table PER niche,
  * sorted by a letter GRADE = per-thesis RANK × a risk-quality multiplier (regime, momentum, liquidity, capital,
@@ -318,51 +318,60 @@ const THRESHOLDS = {
 const POSTURE_ARG = A.posture != null && A.posture !== true ? String(A.posture).toLowerCase() : 'active';
 if (!['overnight', 'active', 'auto'].includes(POSTURE_ARG)) { console.error(`! unknown --posture "${A.posture}". Use overnight, active, or auto.`); process.exit(1); }
 const POSTURE = POSTURE_ARG === 'auto' ? (isOvernightNow() ? 'overnight' : 'active') : POSTURE_ARG;
-// --publish (DEFAULT ON): also write repo-root screen.json so the app's
-// Scan tab renders the SAME per-niche graded scan a Claude session produces (byte-parity via the
-// shared stdCells / rating path). The file is self-describing (its own `headers` travel with the
-// rows) and each row keeps its itemId for the Item→Trends deep link. PUBLISHING (this local file
-// write) is now the default every run — COMMITTING screen.json to git is a wholly separate,
-// deliberate step (nothing here touches git); sync-fills.mjs commits it alongside fills/positions
-// only when its own --publish flag runs (once-a-day /overnight). Opt out with --no-publish (e.g. a
-// throwaway filtered console read you don't want to leave written to disk).
-// AO1 (default flipped post-review — Ben: an agent running the quiet path must read the JSON dump,
-// not the summary line, so quiet has to be the DEFAULT or that habit is optional). --verbose opts
-// INTO the markdown stdout; the per-niche report objects are ALWAYS accumulated into REPORTS and
-// written to the last-report dump either way. Without --verbose main() no-op's console.log;
-// emitReport still captures every niche report (the VALUE niche renders raw, has no report object,
-// so it's excluded from the dump — same as screen.json).
-const VERBOSE = A.verbose === true;
+// --publish (DEFAULT ON): also write repo-root screen.json so the app's Scan tab renders the SAME
+// per-niche graded scan a session produces (byte-parity via the shared stdCells / rating path). It is
+// self-describing (its own `headers` travel with the rows) and each row keeps its itemId for the
+// Item→Trends deep link. This LOCAL write is the default every run; COMMITTING screen.json is a wholly
+// separate step (nothing here touches git) — sync-fills.mjs --publish, once a day at /overnight. Opt
+// out with --no-publish.
+// AO1: quiet is the DEFAULT so an agent reads the JSON dump, not a summary line. --verbose opts INTO
+// the markdown stdout; the per-niche report objects ride the last-report dump either way. Without it
+// main() no-op's console.log; emitReport still captures every niche report (the VALUE niche renders
+// raw, has no report object, so it's excluded from the dump — same as screen.json).
+const VERBOSE = A.verbose === true || A.full === true;   // --full is a debugging render, so it implies --verbose
 // --digest (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST Workstream C): an ADDITIVE, opt-in decision digest —
-// ONE compact cross-niche block (Item | capEff | reach | phase | grade | verdict) printed ONCE after
-// the niche tables, ranked by capital-efficiency. OFF by default (protects the AO1 quiet-default + the
-// --verbose firehose contract, both untouched). It prints REGARDLESS of --verbose (an agent asking for
-// the digest wants stdout) via `realLog` in main(), on its own `if (DIGEST)` gate independent of VERBOSE.
-// Never written to screen.json — no APP_VERSION bump (the app scope lock); it does ride the dump.
+// ONE compact cross-niche block (Item | capEff | reach | phase | grade | verdict) printed ONCE after the
+// niche tables, ranked by capital-efficiency. OFF by default. It prints REGARDLESS of --verbose via
+// `realLog` in main(), on its own `if (DIGEST)` gate. Never in screen.json; it does ride the dump.
 const DIGEST = A.digest === true;
+// FD1 (PLAN-FLOW-DIET) — the WINNERS view: a niche table drops rows whose DISPLAYED net at the shown pair is
+// non-positive (never a grade term — Ben's ruling), names them on one Skipped line, and prints the per-row
+// prose for survivors only. RENDER-ONLY — the dump is identical under quiet/--verbose/--full.
+const FULL = A.full === true;
+const DIET = !FULL;
+const SKIPPED_NAME_MAX = 10;   // names on the Skipped line before it collapses to a `(+K more)` count
 const REPORTS = [];   // per-niche screen-report objects for this pass (renderMode niches only)
-function emitReport(report) { REPORTS.push(report); console.log(renderReport(report)); }   // console.log is a no-op unless --verbose
+function emitReport(report, printReport) { REPORTS.push(report); console.log(renderReport(printReport || report)); }   // REPORTS = the full report; console.log (a no-op unless --verbose) gets the winners view
 // AMPLITUDE / INVEST / WATCHLIST / WATCH CLOSELY / Dip pool render as raw console.log streams rather
-// than report objects, so under the quiet DEFAULT they reached neither stdout nor the dump the /scan
-// skill directs agents to read — a surface present in no output channel at all. Capturing the stream
-// puts it in the dump while leaving stdout byte-identical. Each surface prints its own `##` header, so
+// than report objects; capturing the stream puts them in the dump. Each prints its own `##` header, so
 // the captured lines are self-describing and no title is injected. Handles an async fn: restoring the
 // sink synchronously around an `await` would hand it back mid-flight and drop every later line.
+// `lines` feeds the dump, `printed` feeds stdout — console.log fills both, logDiet fills them apart.
+let CAP = null;
 function captureReport(fn) {
   const sink = console.log;
   const lines = [];
+  const printed = [];
+  const prev = CAP;
+  CAP = { lines, printed };
   const finish = () => {
     console.log = sink;
+    CAP = prev;
     const body = lines.join('\n').split('\n');
     if (body.some(l => l.trim())) REPORTS.push({ kind: 'screen', generatedAt: null, sections: [{ type: 'lines', lines: body, blank: false }] });
-    for (const l of lines) sink(l);   // sink = main()'s no-op under quiet, the real logger under --verbose
+    for (const l of printed) sink(l);   // sink = main()'s no-op under quiet, the real logger under --verbose
   };
-  console.log = (...a) => lines.push(a.map(String).join(' '));
+  console.log = (...a) => { const s = a.map(String).join(' '); lines.push(s); printed.push(s); };
   let out;
   try { out = fn(); } catch (err) { finish(); throw err; }
   if (out && typeof out.then === 'function') return out.then(v => { finish(); return v; }, err => { finish(); throw err; });
   finish();
   return out;
+}
+function logDiet(fullLines, brief) {   // fullLines always reach the dump; stdout gets `brief` unless --full
+  if (!DIET) { for (const l of fullLines) console.log(l); return; }
+  if (CAP) { CAP.lines.push(...fullLines); if (brief != null) CAP.printed.push(brief); }
+  else if (brief != null) console.log(brief);
 }
 const PUBLISH_EXPLICIT = A.publish === true;
 let PUBLISH = A['no-publish'] === true ? false : true;
@@ -1088,7 +1097,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     if (!sv.keep) { disc[sv.discardReason]++; continue; }
     const rescued = sv.rescued;
     const name = map.byId[s.id]?.name || ('#' + s.id);
-    if (sv.heldFallingOverride) informNotes.push(`⚠ ${name}: shown despite falling (${mode} normally excludes fallers) — you HOLD this item; price-to-clear, not a buy signal`);
+    if (sv.heldFallingOverride) informNotes.push({ id: s.id, text: `⚠ ${name}: shown despite falling (${mode} normally excludes fallers) — you HOLD this item; price-to-clear, not a buy signal` });
     // P2/P3 validators. reachValidator (via the spec plan) scores the patient ask (optSell) against the
     // reach window off the Leg-B 1h series; a SECOND inform-only reach call below scores the patient BID
     // (optBuy) reachability — the 2h band min is an artifact-prone floor and an unreachable bid inflates
@@ -1132,7 +1141,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     }
     if (vworst === 'caution') {
       disc.caution++;
-      cautionNotes.push({ text: `${name}: ` + flags(vres).filter(f => f.status === 'caution').map(f => `${f.key} ${f.reason}`).join('; '), name, ranges: (durableFloorRead(vres) || {}).ranges ?? null });
+      cautionNotes.push({ id: s.id, text: `${name}: ` + flags(vres).filter(f => f.status === 'caution').map(f => `${f.key} ${f.reason}`).join('; '), name, ranges: (durableFloorRead(vres) || {}).ranges ?? null });
     }
     // inform-mode findings (the analysis that WOULD have gated under a stricter thesis) — surfaced as a
     // decision-support note, never a drop. This is where the trajectory/reach read lands on a surfaced row.
@@ -1172,11 +1181,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // feeds renderValueMode's estimate (proximity-based), so this bid wiring is renderMode-local.
     const informed = [...informFlags(vres), ...bidReach];
     if (informed.length)
-      informNotes.push(`${name}: ` + informed.map(f => `${f.key} ${f.reason} (would ${f.gatedStatus})`).join('; '));
+      informNotes.push({ id: s.id, text: `${name}: ` + informed.map(f => `${f.key} ${f.reason} (would ${f.gatedStatus})`).join('; ') });
     // Bar E ask-headroom (inform-only, PLAN Bar-E-signal): surfaced as a sibling note so Ben ladders the
     // ask up instead of relisting down. NEVER a gate/drop/grade/screen.json input; the lean askHeadroom
     // field is logged to suggestions.jsonl (off row.askHeadroom, in suggestionEntry) for the analyze/F1 join.
-    { const ah = askHeadroomText(row); if (ah) headroomNotes.push(`${name}: ${ah}`); }
+    { const ah = askHeadroomText(row); if (ah) headroomNotes.push({ id: s.id, text: `${name}: ${ah}` }); }
     // Proposal A (PLAN-GRADE-REACH): the ASK-side reach already scored in `vres` (side:'ask', optSell,
     // line ~379) feeds the rank's TWO-LEG P — the rank's net silently assumed the exit prints; now a
     // mirage exit (a p90 band top reaching 2/14 days) discounts P instead of ranking full. Zero new
@@ -1272,7 +1281,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       liveLo: row.quickBuy, liveHi: row.quickSell, phase: ph?.phase ?? null, mom: row.mom, reliable: row.reliable,
     }, { holdHorizonDays: FLIP_NICHES[mode].driftInform?.holdDays }) : null;
     const driftNote = driftInformNote(FLIP_NICHES[mode], driftExit, { entry: row.optBuy, fmt });
-    if (driftNote) driftNotes.push(`${name}: ${driftNote.text}`);
+    if (driftNote) driftNotes.push({ id: s.id, text: `${name}: ${driftNote.text}` });
     const estExtra = {
       bidReach: reachExtra, askReach: askReachExtra,
       diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
@@ -1321,7 +1330,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       // (PLAN-WINDOW-CLEAR open question). clearRatio/diverges still ride the shadow field for F1 to settle it.
       if (wc && div.windowShort) {
         const dayTxt = dayFrac != null ? ` vs ${askReachExtra.reachedDays}/${askReachExtra.nDays} all-day` : '';
-        windowClearNotes.push(`${name}: ask ${fmt(row.optSell)} prints ${wc.reachedDays}/${wc.nDays} in the ${fmtHour(dr.peakWindow.startH)}–${fmtHour(dr.peakWindow.endH)} peak window${dayTxt}`);
+        windowClearNotes.push({ id: s.id, text: `${name}: ask ${fmt(row.optSell)} prints ${wc.reachedDays}/${wc.nDays} in the ${fmtHour(dr.peakWindow.startH)}–${fmtHour(dr.peakWindow.endH)} peak window${dayTxt}` });
       }
       if (wc) winClear = { windowReach: wc.windowReach, reachedDays: wc.reachedDays, nDays: wc.nDays, pool: wc.pool, clearRatio: wc.clearRatio, wStart: wc.wStart, wEnd: wc.wEnd, diverges: div.diverges };
     }
@@ -1330,7 +1339,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // instead of letting the raw reach caution discourage a viable top ask on a liquid small-size book.
     if (est && est.confidence.relief) {
       const rl = est.confidence.relief;
-      informNotes.push(`${name}: reach-relief — liquid book (${fmt(row.volDay)}/d, buy limit ~${(rl.sizeRatio * 100).toFixed(1)}% of flow) softens the ask-reach fold ${Math.round(rl.relief * 100)}%${rl.debiasedTop != null ? `; top de-biased to ${fmt(rl.debiasedTop)} (≤ observed 24h high)` : ''} (PLACEHOLDER, n=1)`);
+      informNotes.push({ id: s.id, text: `${name}: reach-relief — liquid book (${fmt(row.volDay)}/d, buy limit ~${(rl.sizeRatio * 100).toFixed(1)}% of flow) softens the ask-reach fold ${Math.round(rl.relief * 100)}%${rl.debiasedTop != null ? `; top de-biased to ${fmt(rl.debiasedTop)} (≤ observed 24h high)` : ''} (PLACEHOLDER, n=1)` });
     }
     // --asym (F1-GATED, off by default): the asym pair BECOMES the quoted prices — a repriced CLONE
     // (ordering guards already applied by asymEstimate; qcache and the raw momentum tell untouched).
@@ -1353,7 +1362,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       // (was X)" line is noise (compact-output rule). The exemptionBounded/rankPre SHADOW fields still
       // log on every bounded row so the F1 retro can segment no-op drops too.
       const moved = Math.round(er.rank) !== rankPre || er.pFill.value.toFixed(2) !== erPre.pFill.value.toFixed(2);
-      if (moved) exemptNotes.push(`${name}: churn ask-reach exemption DROPPED — ask ${fmt(row.optSell)} at p${Math.round((digestAskPlacement ?? 0) * 100)} of the 14d daily-high distribution (> p${Math.round(MIRAGE_PLACEMENT * 100)} bound) → standard reach discount applies: rank ${fmtP(Math.round(er.rank))} (was ${fmtP(rankPre)}) · P~${er.pFill.value.toFixed(2)} (was ${erPre.pFill.value.toFixed(2)}) — placement-bounded exemption (EF1(b), PLACEHOLDER bound n≈0)`);
+      if (moved) exemptNotes.push({ id: s.id, text: `${name}: churn ask-reach exemption DROPPED — ask ${fmt(row.optSell)} at p${Math.round((digestAskPlacement ?? 0) * 100)} of the 14d daily-high distribution (> p${Math.round(MIRAGE_PLACEMENT * 100)} bound) → standard reach discount applies: rank ${fmtP(Math.round(er.rank))} (was ${fmtP(rankPre)}) · P~${er.pFill.value.toFixed(2)} (was ${erPre.pFill.value.toFixed(2)}) — placement-bounded exemption (EF1(b), PLACEHOLDER bound n≈0)` });
     }
     // EF1(a) — the DEAD-BID REPRICED-ENTRY alternative (additive: a labeled line, the headline rank/sort
     // untouched per R-1). The reality guard rides inline: the sell leg's cross-day reach evidence prints
@@ -1363,7 +1372,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       const bidTok = reachExtra ? `touched ${reachExtra.reachedDays}/${reachExtra.nDays}d in the validator's coming-8h window` : 'no reach read';
       const askTok = askReachExtra ? `reached ${askReachExtra.reachedDays}/${askReachExtra.nDays}d` : 'unscored';
       const roiR = rp.bid > 0 ? (rp.net / rp.bid * 100).toFixed(1) : null;
-      repriceNotes.push(`${name}: quoted bid ${fmt(er.pair.bid)} is DEAD (entry P~${er.pLegs.entry.toFixed(2)} < ${DEADBID_PFILL_FLOOR} floor — ${bidTok}) → repriced entry at live ${fmt(rp.bid)}: net ${rp.net >= 0 ? '+' : ''}${fmt(rp.net)}/u${roiR != null ? ` (${roiR}%)` : ''} · rank ~${fmtP(Math.round(rp.rank))} P~${rp.pFill.toFixed(2)} (sell ${fmt(rp.ask)} ${askTok}) — alternative only, headline rank/sort unchanged (EF1(a), PLACEHOLDER n≈0)`);
+      repriceNotes.push({ id: s.id, text: `${name}: quoted bid ${fmt(er.pair.bid)} is DEAD (entry P~${er.pLegs.entry.toFixed(2)} < ${DEADBID_PFILL_FLOOR} floor — ${bidTok}) → repriced entry at live ${fmt(rp.bid)}: net ${rp.net >= 0 ? '+' : ''}${fmt(rp.net)}/u${roiR != null ? ` (${roiR}%)` : ''} · rank ~${fmtP(Math.round(rp.rank))} P~${rp.pFill.toFixed(2)} (sell ${fmt(rp.ask)} ${askTok}) — alternative only, headline rank/sort unchanged (EF1(a), PLACEHOLDER n≈0)` });
     }
     // --asym sort flip: rank = net(asym pair) × P_ask ÷ TTF — P_ask is the ONLY fill weight (§II.1; the
     // bid-reach P and the Part-I ask-reach discount both step aside), and r.score/sort follow the rank.
@@ -1373,7 +1382,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // fills), the ask is the near-certain exit. Under --asym these ARE the quoted numbers (say so).
     if (asymEr) {
       const roi = asymEr.bid > 0 ? (asymEr.net / asymEr.bid * 100).toFixed(1) : null;
-      if (af) asymNotes.push(`${name}: ${af.bidTxt} → ${af.askTxt} · net ${fmt(asymEr.net)}/u${roi != null ? ` (${roi}%)` : ''} · asym-rank ${fmtP(Math.round(asymEr.rank))}${ASYM ? ' — QUOTED (--asym)' : ''}`);
+      if (af) asymNotes.push({ id: s.id, text: `${name}: ${af.bidTxt} → ${af.askTxt} · net ${fmt(asymEr.net)}/u${roi != null ? ` (${roi}%)` : ''} · asym-rank ${fmtP(Math.round(asymEr.rank))}${ASYM ? ' — QUOTED (--asym)' : ''}` });
     }
     // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2: no DC3 demand-tilt inform note here — it went with
     // `demandRegime` (an Extension-B demand-cycle read, never a rank/gate input).
@@ -1383,7 +1392,6 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // whose retrade fee eats the spread, a spread niche's 24h-avg pair underwater after tax, a ZGS-style
     // ROI-bind. Drop it silently (counted in --stats). This is a RENDER drop, NOT a gate/survive stage, so
     // the pinned gateCandidates→rankAndSlice→surviveMode funnel + the replay goldens are unaffected.
-    // Held/asked/watchlist rows never reach renderMode (their surfaces never hide), so they're auto-exempt.
     if (er.net <= 0) { disc.negNet++; continue; }
     // Step 2b: the same test against the pair we actually PRINT. Step 2 above reads the thesis's posted
     // pair; this reads estimatePair's net at the rendered Est. buy/Est. sell, which differs whenever the
@@ -1674,10 +1682,22 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // P6c: the sub-floor banner replaces the normal header line — it states up front that ZERO candidates
   // cleared the configured floors, WHICH floor was relaxed and its value, the cap, and that these rows
   // are NOT qualified. The bar was re-run beneath the floor, never silently lowered.
-  // VZ4a (PLAN-VIZ-LAYER): the niche header + table + footer-note block is collected into ONE
-  // screen-report (buildScreenNicheReport) and printed via renderReport — byte-identical to the prior
-  // console.log sequence (every line was its own console.log with no inter-blank line). The
-  // diurnal/accumulation/velocity/entry-paths/stats blocks below stay inline (VZ4b folds them in).
+  // VZ4a/VZ4b (PLAN-VIZ-LAYER): the whole niche — header, table, footer notes and the diurnal /
+  // accumulation / velocity / entry-paths / stats blocks — is ONE screen-report printed via renderReport.
+  // FD1: the SAME quantity belowAdmitNet reads, the thesis pair when nothing was estimated; a null keeps the row.
+  const shownNet = r => (r.estShown && r.estShown.estNet != null) ? r.estShown.estNet : (r.er ? r.er.net : null);
+  // Exempt HERE for the reason belowAdmitNet exempts at its own call site: these rows hold a reserved fetch
+  // slot, hiding one undoes the reserve, and a negative net on one is a position/watch signal, not a loser.
+  const isWinner = r => HELD_IDS.has(r.id) || WATCHLIST_IDS.has(r.id) || (n => n == null || n > 0)(shownNet(r));
+  const dietRows = rows.filter(isWinner);
+  const dietLosers = rows.filter(r => !isWinner(r));
+  const fullReport = buildNicheReport(rows, false);
+  emitReport(fullReport, DIET ? buildNicheReport(dietRows, true) : fullReport);
+
+  // `diet` additionally restricts the per-row note families to `useRows` and appends the Skipped line.
+  function buildNicheReport(useRows, diet) {
+  const keepIds = new Set(useRows.map(r => r.id));
+  const noteTexts = arr => arr.filter(n => !diet || n.id == null || keepIds.has(n.id)).map(n => n.text);
   const headerLines = [];
   // P6c: the sub-floor banner replaces the normal header line — it states up front that ZERO candidates
   // cleared the configured floors, WHICH floor was relaxed and its value, the cap, and that these rows
@@ -1695,7 +1715,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // fired a probe — so with no module present (or none firing) the table is BYTE-IDENTICAL to pre-PM1
   // (the removability guarantee). It is deliberately NOT added to the published cells (screen.json /
   // the app render) — an app Probes column is a separate, APP_VERSION-bumping step (out of PM1 scope).
-  const anyProbe = rows.some(r => r.probeStr);
+  const anyProbe = useRows.some(r => r.probeStr);
   // PLAN-OUTPUT-TABLE: the DEFAULT print is the reconciliation-estimate view (Est. buy/sell replace
   // Quick+Optimistic; Grade moves after Regime); --raw (and --asym, which implies it) prints the
   // model-free view exactly as before. STDOUT-ONLY: r.cells (the raw layout) is what --publish ships
@@ -1707,24 +1727,24 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   if (RAW) {
     printHeaders = [...HEADERS, PATHA_HEADER, ...(anyProbe ? ['Probes'] : [])];
     // EF1(c): the printed Rank cell is the leg-labeled console copy (consoleRankCell) — screen.json's r.cells untouched.
-    printCells = rows.map(r => [...r.cells.slice(0, -1), consoleRankCell(r), pathABCell(r, MIN_GPD), ...(anyProbe ? [{ t: r.probeStr, c: 'mini' }] : [])]);
+    printCells = useRows.map(r => [...r.cells.slice(0, -1), consoleRankCell(r), pathABCell(r, MIN_GPD), ...(anyProbe ? [{ t: r.probeStr, c: 'mini' }] : [])]);
   } else {
     printHeaders = [...HEADERS_EST, PATHA_HEADER, ...(anyProbe ? ['Probes'] : [])];
     // r.cells layout: [item, grade, guide, quick, opt, vol, mom, regime, rank] — reuse the shared
     // structured cells (phase-suffixed regime, sub-floor grade label) and swap in the est pair cells.
     // EF1(c): the Rank cell prints via consoleRankCell (leg-labeled when the two-leg P collapsed).
-    printCells = rows.map(r => {
+    printCells = useRows.map(r => {
       const c = r.cells;
       const base = [c[0], c[2], ...estPairCells(r.estShown), c[5], c[6], c[7], c[1], consoleRankCell(r)];   // estShown = the active --est-sell model's legs (the neutral est by default)
       return [...base, pathABCell(r, MIN_GPD), ...(anyProbe ? [{ t: r.probeStr, c: 'mini' }] : [])];
     });
-    if (rows.length) estExplainer = `(Est. buy/sell are ESTIMATES — strategy-aware entry (scalp near-live · value trough · band prices the band low + reach/percentile annotation · churn reach-folded to fill-now), reach-folded exit, PLACEHOLDER model n≈3–14. Confidence rides in the cell: the buy carries its RECENT-3 touch-reach and, on band rows, the placement percentile of the band-low bid within the 14-day daily-LOW distribution (e.g. 4/14 · p36 = a deep/patient entry); the sell token shows RECENT-3 · FULL when they diverge (0/3 · 12/14 = stale) — the fold PRICE and its P are on the FULL-WINDOW basis (2026-08-09), the recent count is shown, not applied; '–' = no read. This is a DISCOVERY screen — no held-lot declared-exit anchoring here. Est. sell is the HONEST reach-fold price with its ASK-LEG P beside the net (labeled P(ask)~ — the Rank cell's P~ is the TWO-LEG entry×ask product, and a collapsed leg is named, e.g. "P~0.00 (bid leg)" — EF1(c)); a sub-break-even fold is ANNOTATED ("reach-fold floored to BE X") with its real (possibly-negative) net shown, never substituted with a "+1". --raw restores the model-free Quick/Optimistic columns.)`;
+    if (useRows.length) estExplainer = `(Est. buy/sell are ESTIMATES — strategy-aware entry (scalp near-live · value trough · band prices the band low + reach/percentile annotation · churn reach-folded to fill-now), reach-folded exit, PLACEHOLDER model n≈3–14. Confidence rides in the cell: the buy carries its RECENT-3 touch-reach and, on band rows, the placement percentile of the band-low bid within the 14-day daily-LOW distribution (e.g. 4/14 · p36 = a deep/patient entry); the sell token shows RECENT-3 · FULL when they diverge (0/3 · 12/14 = stale) — the fold PRICE and its P are on the FULL-WINDOW basis (2026-08-09), the recent count is shown, not applied; '–' = no read. This is a DISCOVERY screen — no held-lot declared-exit anchoring here. Est. sell is the HONEST reach-fold price with its ASK-LEG P beside the net (labeled P(ask)~ — the Rank cell's P~ is the TWO-LEG entry×ask product, and a collapsed leg is named, e.g. "P~0.00 (bid leg)" — EF1(c)); a sub-break-even fold is ANNOTATED ("reach-fold floored to BE X") with its real (possibly-negative) net shown, never substituted with a "+1". --raw restores the model-free Quick/Optimistic columns.)`;
   }
-  const table = rows.length ? { headers: printHeaders, rows: printCells } : null;   // null → the report renders '_none_'
+  const table = useRows.length ? { headers: printHeaders, rows: printCells } : null;   // null → the report renders '_none_'
   const footerLines = [`Grades: ${gradeDist(dist)}`];
   // PLAN-LANE-ADMISSION Chunk D legend: Path-A is now the PRIMARY console sort; Grade is the shown BACKUP +
   // live A/B column. Loud about the placeholder (rule 4). Console/last-report only — screen.json stays on Grade.
-  if (rows.length) footerLines.push(`Path-A gp/d* = NEW PRIMARY console/last-report sort — after-tax intraday-flip gp/day (captureFrac PLACEHOLDER, n≈0, live A/B vs the Grade backup column) · L#·lane = rank within its gear/churn volume lane · ⚠<floor = below the ${(MIN_GPD / 1e3).toLocaleString()}k attention floor (surfaced, not gated) · no-pathA = no intraday range → grade-ranked. The published screen.json / app stay on Grade + the neutral sort (console-only until validated).`);
+  if (useRows.length) footerLines.push(`Path-A gp/d* = NEW PRIMARY console/last-report sort — after-tax intraday-flip gp/day (captureFrac PLACEHOLDER, n≈0, live A/B vs the Grade backup column) · L#·lane = rank within its gear/churn volume lane · ⚠<floor = below the ${(MIN_GPD / 1e3).toLocaleString()}k attention floor (surfaced, not gated) · no-pathA = no intraday range → grade-ranked. The published screen.json / app stay on Grade + the neutral sort (console-only until validated).`);
   // P2: the coordinator-ruled reject footer — printed whenever any row was validator-REJECTED, naming
   // the count + the top-3 reasons. reachValidator still degrades to pass here (no 1h series fetched);
   // P3's floorValidator CAN reject (a buy parked well above the durable multi-week floor) once the
@@ -1739,6 +1759,12 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   if (skippedNames.length) {
     footerLines.push(`skipped ${skippedNames.length} unprofitable at the shown pair: ${skippedNames.join(' · ')}`);
   }
+  // The winners-view filter, NAMED — a filter you cannot see is a filter you cannot check.
+  if (diet && dietLosers.length) {
+    const named = dietLosers.slice(0, SKIPPED_NAME_MAX).map(r => `${map.byId[r.id]?.name || ('#' + r.id)} (net ${fmt(shownNet(r))})`);
+    const rest = dietLosers.length - named.length;
+    footerLines.push(`Skipped: ${dietLosers.length} rows non-positive net at the shown pair: ${named.join(', ')}${rest > 0 ? ` (+${rest} more)` : ''}`);
+  }
   // C: BUCKET, don't sort. To "would we put severe at the top or the
   // bottom?" the honest answer is that ordering fourteen identically-formatted lines just picks
   // which one you read first. Every floor caution lives in the 1.5×–2.0× band by construction (above
@@ -1751,30 +1777,32 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // rows earn their own footer line and more collapse into the marginal tail. That ripple is intended —
   // the band narrows and the midpoint still bisects it — not a bug.
   const NEAR_REJECT = (FLOOR_CAUTION_RANGES + FLOOR_REJECT_RANGES) / 2;
-  const elevated = cautionNotes.filter(c => c.ranges != null && c.ranges >= NEAR_REJECT);
-  const marginal = cautionNotes.filter(c => !(c.ranges != null && c.ranges >= NEAR_REJECT));
+  const shownCautions = cautionNotes.filter(c => !diet || keepIds.has(c.id));
+  const elevated = shownCautions.filter(c => c.ranges != null && c.ranges >= NEAR_REJECT);
+  const marginal = shownCautions.filter(c => !(c.ranges != null && c.ranges >= NEAR_REJECT));
   for (const c of elevated) footerLines.push(`⚠ caution — ${c.text}`);
   if (marginal.length === 1) footerLines.push(`⚠ caution — ${marginal[0].text}`);
   else if (marginal.length > 1) {
     footerLines.push(`⚠ caution — ${marginal.length} marginally-elevated row(s) (<${NEAR_REJECT}× swing over the durable floor): ${marginal.map(c => c.name).join(', ')}`);
   }
-  for (const n of informNotes) footerLines.push(`ℹ trajectory/reach — ${n}`);
-  for (const n of headroomNotes) footerLines.push(`⤴ ask headroom — ${n}`);
-  for (const n of windowClearNotes) footerLines.push(`ℹ window-clear — ${n} — days-reach ≠ lap-clear (placeholder, n≈0)`);
-  for (const n of driftNotes) footerLines.push(`ℹ drift-exit — ${n}`);
+  for (const n of noteTexts(informNotes)) footerLines.push(`ℹ trajectory/reach — ${n}`);
+  for (const n of noteTexts(headroomNotes)) footerLines.push(`⤴ ask headroom — ${n}`);
+  for (const n of noteTexts(windowClearNotes)) footerLines.push(`ℹ window-clear — ${n} — days-reach ≠ lap-clear (placeholder, n≈0)`);
+  for (const n of noteTexts(driftNotes)) footerLines.push(`ℹ drift-exit — ${n}`);
   // PART II: the asym-fill inform block — decision support only (P_bid = optionality annotation, never a
   // rank input by default; the shadow `asym` ledger field is the F1 A/B data). The class-rate line is
   // emitted ONCE, after the rows, and only when a row actually printed: it is a CLASS rate over the
   // measured pool, so per-row placement would read as this item's fill probability. Wording — and the
   // pool size — are emit.mjs's constants, never restated here.
-  for (const n of asymNotes) footerLines.push(`◆ asym fill — ${n}`);
-  if (asymNotes.length) footerLines.push(`◆ asym fill — ${asymClassRateNote()}`);
+  const asymTexts = noteTexts(asymNotes);
+  for (const n of asymTexts) footerLines.push(`◆ asym fill — ${n}`);
+  if (asymTexts.length) footerLines.push(`◆ asym fill — ${asymClassRateNote()}`);
   // EF1(a): the dead-bid repriced-entry alternative — additive decision support; the row's headline
   // rank/sort are untouched (R-1) and the optimistic number carries its sell-leg reach evidence inline.
-  for (const n of repriceNotes) footerLines.push(`↻ repriced entry — ${n}`);
+  for (const n of noteTexts(repriceNotes)) footerLines.push(`↻ repriced entry — ${n}`);
   // EF1(b): the placement-bounded churn-exemption visible swap — the rank DID change on these rows
   // (decision-moving), so pre AND post print until EF0's report rules on promotion/rollback.
-  for (const n of exemptNotes) footerLines.push(`⚠ exemption dropped — ${n}`);
+  for (const n of noteTexts(exemptNotes)) footerLines.push(`⚠ exemption dropped — ${n}`);
   // DC3 (INFORM HALF): the demand-regime flip-side classifier — decision support only (never a rank/gate/
   // grade/screen.json input; the routing/rank half is F1-gated). One line per clearly-tilted survivor.
   // (PLAN-ESTIMATOR-POSTURE AC3 — the interim patient-band-edge divergence footer — was REMOVED once AC1
@@ -1784,6 +1812,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // are collected as report sections and appended to the SAME niche report, printed ONCE at the end —
   // byte-identical to the prior inline console.log sequence (all flush, no inter-blank line).
   const extraSections = [];
+  const stanza = [];
   // Diurnal timing (DT2) — the timed-lap peak-timing read,
   // computed for EVERY niche survivor (not just top picks) off the SAME diurnalTimedLap result already
   // stored on the row (r.timedLap — zero new fetch, zero recompute). Rendered via the ONE shared
@@ -1795,7 +1824,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // never affects `screen.json`, stdout-only decision support). The item separator (§5) is a bare ''
   // note between items' blocks — formatNote passes it through unchanged as a blank line.
   const diurnalLines = [];
-  for (const r of rows) {
+  for (const r of useRows) {
     const text = formatTimedLap(r.timedLap, { fmt });
     if (!text) continue;
     const nm = map.byId[r.id]?.name || ('#' + r.id);
@@ -1816,7 +1845,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     diurnalLines.push(`${nm} — ${text}${phaseTok}`);
   }
   if (diurnalLines.length) {
-    extraSections.push({ type: 'lines', blank: false, lines: [
+    stanza.push({ type: 'lines', blank: false, lines: [
       `Diurnal timing (timed-lap bid/ask off the in-hand 1h series — support, not a gate):`,
       ...diurnalLines.map(l => l === '' ? '' : `  ↳ ${l}`),
     ] });
@@ -1829,7 +1858,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // the diurnal note above. Inform-only, PLACEHOLDER thresholds, n≈0 (js/termstructure.mjs basePosition
   // header has the full spec + the judgment calls this label mapping makes).
   const baseLines = [];
-  for (const r of rows) {
+  for (const r of useRows) {
     const bp = basePosition(r.ts);
     const text = formatBasePosition(bp);
     if (!text) continue;
@@ -1837,7 +1866,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     baseLines.push(`${nm} — ${text}`);
   }
   if (baseLines.length) {
-    extraSections.push({ type: 'lines', blank: false, lines: [
+    stanza.push({ type: 'lines', blank: false, lines: [
       `Base position (multi-week — where live sits in the ${BASEPOS_LOOKBACK_DAYS}d daily-mid range; MANUAL 90d drill for a big-ticket hold, not this):`,
       ...baseLines.map(l => `  ↳ ${l}`),
     ] });
@@ -1851,11 +1880,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // bid to the assumed SELL price (never leave the sell side implicit) and its after-tax net/u + total.
   // stdout-only (never in screen.json). Up-to units is an UPPER BOUND (assumes fills at your price;
   // prorates daily volume flat across the quiet hours, no fill probability) — labeled "up to" + the note.
-  if (POSTURE === 'overnight' && rows.length) {
+  if (POSTURE === 'overnight' && useRows.length) {
     const accHeaders = ['#', 'Item', 'Bid', 'Ask (sell)', 'Up-to units/8h', 'Capital', 'Cum capital', 'Net/u', 'Total if cycled'];
     const accCells = [];
     let cum = 0;
-    rows.forEach((r, i) => {
+    useRows.forEach((r, i) => {
       const bid = r.row.optBuy, ask = r.row.optSell, netU = r.row.optNet;
       const units = bid != null ? Math.floor(expUnitsOvernight(r.row.limit, r.row.volDay)) : null;
       const capital = (units != null && bid != null) ? units * bid : null;
@@ -1873,37 +1902,39 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
         { t: total != null ? (total >= 0 ? '+' : '') + fmtP(total) : '—' },
       ]);
     });
-    extraSections.push({ type: 'lines', blank: false, lines: [`Overnight accumulation & capital (~${OVERNIGHT_SPAN_H}h span; bid→sell + up-to units + running capital — take lines top-down until your stated capital runs out):`] });
-    extraSections.push({ type: 'table', blank: false, headers: accHeaders, rows: accCells });
-    extraSections.push({ type: 'lines', blank: false, lines: [`(Up-to units = min(buy limit × 2, 8/24 × 10% × Vol/d) — an UPPER BOUND: assumes fills at your bid, prorates daily volume flat across the quiet hours, prices in no fill probability. Pair it with the fill-realism / Diurnal read above. Sell never below break-even.)`] });
+    stanza.push({ type: 'lines', blank: false, lines: [`Overnight accumulation & capital (~${OVERNIGHT_SPAN_H}h span; bid→sell + up-to units + running capital — take lines top-down until your stated capital runs out):`] });
+    stanza.push({ type: 'table', blank: false, headers: accHeaders, rows: accCells });
+    stanza.push({ type: 'lines', blank: false, lines: [`(Up-to units = min(buy limit × 2, 8/24 × 10% × Vol/d) — an UPPER BOUND: assumes fills at your bid, prorates daily volume flat across the quiet hours, prices in no fill probability. Pair it with the fill-realism / Diurnal read above. Sell never below break-even.)`] });
   }
-  // Build 2 — per-row velocity tag: descriptive per-item velocity (fast/slow · median fill · %
-  // unfilled) from the gitignored outcomes.json for rows in THIS niche with enough trade history.
-  // STDOUT-ONLY — deliberately NOT in the published cells, so the canonical table + screen.json/app
-  // contract stay byte-identical (same discipline as the phase fold into the Regime cell). A label,
+  // Build 2 — per-row velocity tag: descriptive per-item velocity (fast/slow · median fill · % unfilled)
+  // from the gitignored outcomes.json for rows in THIS niche with enough trade history. Never in the
+  // published cells, so the canonical table + screen.json/app contract stay byte-identical. A label,
   // never a sort/gate; absent/empty outcomes.json → silent.
-  if (VEL && VEL.byItem.size && rows.length) {
+  if (VEL && VEL.byItem.size && useRows.length) {
     const tags = [];
-    for (const r of rows) {
+    for (const r of useRows) {
       const t = velocityTag(VEL.byItem.get(r.id));
       if (t) tags.push(`${map.byId[r.id]?.name || ('#' + r.id)} ${t}`);
     }
     if (tags.length) {
       const ageH = VEL.generatedAt ? Math.round((Date.now() - new Date(VEL.generatedAt).getTime()) / 3600000) : null;
-      extraSections.push({ type: 'lines', blank: false, lines: [`velocity (outcomes.json${ageH != null ? `, ${ageH}h old` : ''}; descriptive per-item history, not a rate): ${tags.join(' · ')}`] });
+      stanza.push({ type: 'lines', blank: false, lines: [`velocity (outcomes.json${ageH != null ? `, ${ageH}h old` : ''}; descriptive per-item history, not a rate): ${tags.join(' · ')}`] });
     }
   }
-  // P4c: the weighed ENTRY-PATH menu per surfaced row — the surfacing spec's inferred default path
-  // (marked `*`) + the weighed alternatives from js/held-item-strategy.mjs (scalp / value-hold / avoid). Decision
-  // SUPPORT, not a gate: it never hides or reorders a row (the block prints in the SAME sorted order as
-  // the table above). STDOUT-ONLY — deliberately NOT in the published screen.json cells, so the
-  // canonical table + app contract stay byte-identical (same discipline as the phase/velocity folds).
-  if (rows.length) {
-    extraSections.push({ type: 'lines', blank: false, lines: [
+  // P4c: the weighed ENTRY-PATH menu per surfaced row — the surfacing spec's inferred default path (marked
+  // `*`) + the weighed alternatives from js/held-item-strategy.mjs (scalp / value-hold / avoid). Decision
+  // SUPPORT, not a gate: it never hides or reorders a row (same sorted order as the table above). Never in
+  // the published screen.json cells, so the canonical table + app contract stay byte-identical.
+  if (useRows.length) {
+    stanza.push({ type: 'lines', blank: false, lines: [
       `Entry paths (surfacing default \`*\` + weighed menu; support, not a gate — placeholder weights):`,
-      ...rows.map(r => pathLine(map.byId[r.id]?.name || ('#' + r.id), r.pathWeighed, defaultPath)),
+      ...useRows.map(r => pathLine(map.byId[r.id]?.name || ('#' + r.id), r.pathWeighed, defaultPath)),
     ] });
   }
+  // FD1: the stanza families ride the dump on every run; the winners view prints a pointer instead. The
+  // compact caution / trajectory-reach footers above STAY — a warning on a winner is triage, not prose.
+  if (!diet) extraSections.push(...stanza);
+  else if (stanza.length) extraSections.push({ type: 'lines', blank: false, lines: [`Diurnal timing · Base position · Entry paths${VEL && VEL.byItem.size ? ' · velocity' : ''}${POSTURE === 'overnight' ? ' · accumulation' : ''}: pipeline/.cache/last-report/screen.json (--full to print)`] });
   // SC1 (PLAN-SCREEN-ARCHITECTURE) — exclusion visibility. UNCONDITIONAL (not behind
   // --stats): the bludgeon/sanguinesti anchor incident was invisible for months because nothing
   // reported that a real edge lost its fetch slot to a higher-gp-flow big ticket; this line exists
@@ -1926,7 +1957,8 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // The trailing blank line that separated niches (the pre-VZ4 `console.log('')`) rides as a final
   // flush empty line, so the ONE renderReport call reproduces the whole niche's stdout byte-for-byte.
   extraSections.push({ type: 'lines', blank: false, lines: [''] });
-  emitReport(buildScreenNicheReport({ headerLines, table, estExplainer, footerLines, extraSections }));   // AO1: accumulate into REPORTS + render (no-op stdout unless --verbose)
+  return buildScreenNicheReport({ headerLines, table, estExplainer, footerLines, extraSections });
+  }
   // publishable rows (sorted-by-grade, byte-identical cells + itemId for the app's deep link).
   // P6c: sub-floor rows are STDOUT-ONLY — publish [] so screen.json/the app see exactly what a
   // pre-P6c empty niche published (byte-identical app contract, no APP_VERSION bump).
@@ -2326,32 +2358,33 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
 
   const shown = rows.length;
   console.log(`## AMPLITUDE — ${shown} multi-day-cycle candidate(s) (PROVISIONAL, n≈0 — the 24h-swing premise was REFUTED 2026-08-09; re-horizoned)`);
-  console.log('Playbook: buy the TROUGH, sell the PEAK, hold ~a few days, cycle. The edge is a big-ticket that oscillates a few % over a MULTI-DAY period — the swing the band screen\'s 2h grain + net×P÷TTF rank is structurally blind to. PATIENT: these are multi-DAY plays that surface under deploy/accumulate, NEVER as act-now rows.');
-  console.log(`(daily amplitude off the per-item 1h windowStats full-day range; ranked by net × P(fill) ÷ hold-horizon at the amplitude estimator family — P(fill) is the MEASURED walk-forward round-trip rate per item (DT1b), shown as \`round-trip X/Y\` in the reach cell; the other thresholds remain PLACEHOLDERS, n≈0)`);
-  console.log(`(RE-HORIZONED 1d → ${AMP_HOLD_DAYS}d, 2026-08-09: over 92 items / 4,881 item-days the 1-day cycle premise measured 4.8% completion within 24h GIVEN entry — ≤48h 11.4%, ≤96h 22.6%, ≤7d 34.6%, median ~69h, EV per entered cycle −813k. The old pFill2leg two-leg PRODUCT assumed leg independence, measured FALSE (entry is adverse selection), and is DELETED. Its first replacement — an ordered DAY-grain completion rate — was built, measured, and rejected the same day: its levels were fitted IN-SAMPLE (median low/high of the very days it scored), which saturates to ~94% by construction. DT1b replaced it with the study's own design — levels fitted STRICTLY PRE-ORIGIN, entry→completion scored at HOUR grain — which re-runs and reproduces the study's published figures exactly. That number now drives P(fill) directly.)`);
-  console.log(`(\`round-trip X/Y = Z% ≤${AMP_HOLD_DAYS}d\` in the reach cell IS that measurement: of Y past entries where the trough bid actually filled and a full horizon elapsed, the peak ask was reached on X. It is an UPPER BOUND — 1h aggregates, no queue position, no partials, no competition — and rests on ONE 73-day archive era. \`—\` means too little history to measure, never 0%.)`);
-  console.log(`(CONCENTRATION lane — sized against ${fmtP(AMP_CAPITAL)} TOTAL REALIZABLE capital (liquidCapital, "if all lots sold"), used UNDIVIDED; --slots is IGNORED · hold horizon ${AMP_HOLD_DAYS}d — NOTE deploy units scale with the horizon, so the re-horizon raised them ~${AMP_HOLD_DAYS}×; size against the round-trip column, not the units)`);
-  // F-E: an EXPERIMENT run (non-default reach-vs-margin quantiles) is flagged so the operator knows the
-  // board is NOT the standard median-peak/median-trough basis — and so is the ledger (amplitudeShadow logs askQ/bidQ).
-  if (AMP_ASK_Q_EFF !== AMP_ASK_Q || AMP_BID_Q_EFF !== AMP_BID_Q)
-    console.log(`(EXPERIMENT — reach-vs-margin dial: peak-ask quantile ${AMP_ASK_Q_EFF} (default ${AMP_ASK_Q}), trough-bid quantile ${AMP_BID_Q_EFF} (default ${AMP_BID_Q}) — a higher ask quantile = a better-but-less-reachable sell; logged to suggestions.jsonl so F-G can compare which quantile nets more)`);
+  logDiet([   // the doctrine preamble always rides the dump; stdout gets ONE pointer line unless --full
+    'Playbook: buy the TROUGH, sell the PEAK, hold ~a few days, cycle. The edge is a big-ticket that oscillates a few % over a MULTI-DAY period — the swing the band screen\'s 2h grain + net×P÷TTF rank is structurally blind to. PATIENT: these are multi-DAY plays that surface under deploy/accumulate, NEVER as act-now rows.',
+    `(daily amplitude off the per-item 1h windowStats full-day range; ranked by net × P(fill) ÷ hold-horizon at the amplitude estimator family — P(fill) is the MEASURED walk-forward round-trip rate per item (DT1b), shown as \`round-trip X/Y\` in the reach cell; the other thresholds remain PLACEHOLDERS, n≈0)`,
+    `(RE-HORIZONED 1d → ${AMP_HOLD_DAYS}d, 2026-08-09: over 92 items / 4,881 item-days the 1-day cycle premise measured 4.8% completion within 24h GIVEN entry — ≤48h 11.4%, ≤96h 22.6%, ≤7d 34.6%, median ~69h, EV per entered cycle −813k. The old pFill2leg two-leg PRODUCT assumed leg independence, measured FALSE (entry is adverse selection), and is DELETED. Its first replacement — an ordered DAY-grain completion rate — was built, measured, and rejected the same day: its levels were fitted IN-SAMPLE (median low/high of the very days it scored), which saturates to ~94% by construction. DT1b replaced it with the study's own design — levels fitted STRICTLY PRE-ORIGIN, entry→completion scored at HOUR grain — which re-runs and reproduces the study's published figures exactly. That number now drives P(fill) directly.)`,
+    `(\`round-trip X/Y = Z% ≤${AMP_HOLD_DAYS}d\` in the reach cell IS that measurement: of Y past entries where the trough bid actually filled and a full horizon elapsed, the peak ask was reached on X. It is an UPPER BOUND — 1h aggregates, no queue position, no partials, no competition — and rests on ONE 73-day archive era. \`—\` means too little history to measure, never 0%.)`,
+    `(CONCENTRATION lane — sized against ${fmtP(AMP_CAPITAL)} TOTAL REALIZABLE capital (liquidCapital, "if all lots sold"), used UNDIVIDED; --slots is IGNORED · hold horizon ${AMP_HOLD_DAYS}d — NOTE deploy units scale with the horizon, so the re-horizon raised them ~${AMP_HOLD_DAYS}×; size against the round-trip column, not the units)`,
+    (AMP_ASK_Q_EFF !== AMP_ASK_Q || AMP_BID_Q_EFF !== AMP_BID_Q) ? `(EXPERIMENT — reach-vs-margin dial: peak-ask quantile ${AMP_ASK_Q_EFF} (default ${AMP_ASK_Q}), trough-bid quantile ${AMP_BID_Q_EFF} (default ${AMP_BID_Q}) — a higher ask quantile = a better-but-less-reachable sell; logged to suggestions.jsonl so F-G can compare which quantile nets more)` : null,
+  ].filter(Boolean), `(amplitude doctrine + Base position: pipeline/.cache/last-report/screen.json (--full to print))`);
   if (shown) console.log('\n' + mdTable(AMP_HEADERS, rows.map(r => r.cells)));
   else console.log('_none_');
   for (const n of informNotes) console.log(`ℹ weekday seasonality — ${n}`);
   // DT6 — base-position note (§7-style softened contract: printed only when there's a real, non-thin,
   // non-'unknown'-shape read; a cold/new big-ticket item prints nothing here, never a fake percentile).
   if (baseLines.length) {
-    console.log(`\nBase position (multi-week — where live sits in the ${BASEPOS_LOOKBACK_DAYS}d daily-mid range; MANUAL 90d drill for a big-ticket hold, not this):`);
-    for (const l of baseLines) console.log(`  ↳ ${l}`);
+    logDiet([`\nBase position (multi-week — where live sits in the ${BASEPOS_LOOKBACK_DAYS}d daily-mid range; MANUAL 90d drill for a big-ticket hold, not this):`,
+      ...baseLines.map(l => `  ↳ ${l}`)], null);
   }
   // F-B: report the watchlist reserve honestly (0 when nothing on watchlist.json needed it — byte-identical wording otherwise).
   const watchReservedCount = survivors.filter(s => s.watched).length;   // not `watchReserved` — that name is now an exported fn in gatecandidates.mjs
   console.log(`\nadmitted ${cand.length} (Stage-1 proxy) · fetched ${survivors.length} (top ${AMP_TOP_DEFAULT} by amplitude proxy${watchReservedCount ? ` + ${watchReservedCount} watchlist-reserved` : ''}) · shown ${shown} · dropped Stage-2: no-history ${dropped.noHistory}, amp-below-floor ${dropped.ampFloor}, bid-unreachable ${dropped.bidReach}, ask-unreachable ${dropped.askReach}, trend ${dropped.trend}, knife ${dropped.knife}, margin-below-floor ${dropped.marginFloor}, unaffordable ${dropped.unaffordable} (can't afford ≥1 unit at ${fmtP(AMP_CAPITAL)})`);
-  console.log('⚠ thin — NO fast exit: these big-tickets are thin BY CONSTRUCTION (that\'s why the band screen misses them), so a large concentrated position can\'t be unwound quickly if the thesis breaks. INFORM, not a gate — size to your risk tolerance.');
+  logDiet(['⚠ thin — NO fast exit: these big-tickets are thin BY CONSTRUCTION (that\'s why the band screen misses them), so a large concentrated position can\'t be unwound quickly if the thesis breaks. INFORM, not a gate — size to your risk tolerance.'],
+    '⚠ thin — NO fast exit: a large concentrated position in these big-tickets cannot be unwound quickly if the thesis breaks. INFORM, not a gate — size to your risk tolerance.');
   // DT1b: say WHY a row has no measured rate. "No number" and "a number we're not showing" must not look
   // the same, and a silent fallback to the 0.5 prior would read as a confident coin-flip.
   console.log(`ℹ round-trip P(fill): ${wfFallback.measured} row(s) measured walk-forward off the local 1h archive · fell back to the 0.5 prior: ${wfFallback.thinSample} thin-sample (< ${AMP_WF_MIN_JUDGED} judged entries), ${wfFallback.thinHistory} too-little-history, ${wfFallback.noArchive} no-archive. A prior-basis row's grade rests on ZERO round-trip observations.`);
-  console.log('⚠ make-or-break (§4): the gate measures the levels PRINTED; whether both legs actually FILL is now MEASURED per item (DT1b — walk-forward, levels fitted strictly pre-origin, scored at hour grain) and it drives P(fill) directly. It is an UPPER BOUND: 1h avgLow/avgHigh aggregates, no queue position, no partial fills, no competition at the same level — and one 73-day archive era. The `margin-below-floor` drift-adjusted-margin gate (PLAN-OSCILLATION-CYCLE Chunk 3) is still an n≈0 PLACEHOLDER threshold riding the diurnal/drift projection. Realized fills remain the only ground truth (join-amplitude-outcomes.mjs + the retro-join).');
+  logDiet(['⚠ make-or-break (§4): the gate measures the levels PRINTED; whether both legs actually FILL is now MEASURED per item (DT1b — walk-forward, levels fitted strictly pre-origin, scored at hour grain) and it drives P(fill) directly. It is an UPPER BOUND: 1h avgLow/avgHigh aggregates, no queue position, no partial fills, no competition at the same level — and one 73-day archive era. The `margin-below-floor` drift-adjusted-margin gate (PLAN-OSCILLATION-CYCLE Chunk 3) is still an n≈0 PLACEHOLDER threshold riding the diurnal/drift projection. Realized fills remain the only ground truth (join-amplitude-outcomes.mjs + the retro-join).'],
+    '⚠ make-or-break (§4): the gate measures the levels PRINTED. The round-trip column is an UPPER BOUND (1h aggregates, no queue position, no partials, no competition, one archive era) and the margin gate is an n≈0 PLACEHOLDER — realized fills are the only ground truth.');
   console.log('');
   return rows.map(r => ({ id: r.id, cells: r.cells }));
 }
