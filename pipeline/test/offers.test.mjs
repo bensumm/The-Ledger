@@ -279,6 +279,14 @@ ok('a size (max) change alone starts a new episode (pins the MAX identity check)
   assert.equal(activeOffers(rows)[0].placedTs, epAt('11:00:00'), 'the re-place is the placement');
 });
 
+ok('an item change alone starts a new episode (pins the ITEM identity check)', () => {
+  const rows = [
+    rawRow(0, 'BUYING', 4151, { max: 10, filled: 0, offer: 100, time: '10:00:00' }),
+    rawRow(0, 'BUYING', 561, { max: 10, filled: 0, offer: 100, time: '11:00:00' }),    // same slot, new item
+  ];
+  assert.equal(activeOffers(rows)[0].placedTs, epAt('11:00:00'), 'the new item is the placement');
+});
+
 ok('EMPTY→offer transition starts a new episode (restart-blind wipes reset the clock — age is a floor)', () => {
   const rows = [
     rawRow(0, 'BUYING', 4151, { max: 10, filled: 0, offer: 100, time: '09:00:00' }),

@@ -196,7 +196,25 @@ every prose rule touched (PLANNING.md improvement-loop requirement).
 | ONE-LINE-PER-ITEM · `list @ X (BE Y)` per line | KEEP-AS-JUDGMENT | Unchanged, and restated inside the new bullet so the diet can't erode them. |
 | `/morning` R10 "both render AND relay by default" | **RETIRE → reshape** | Now read-both-tiers / relay-actionable-first, matching `/positions`. |
 
-### FD3 — `placedTs` on offers (NOT YET DISPATCHED)
+### FD3 — `placedTs` on offers (SHIPPED 2026-09-03, `b9f993c` + r1 `884854c`)
+
+**Execution record:**
+- Episode identity as shipped is same-(state·item·price·max) over the slot's STAMPED rows —
+  a deliberate tightening of the spec line below ("price/item change or EMPTY→offer"): `state`
+  is what makes a terminal row break the run, `max` makes a re-place-at-new-size a new episode.
+  Both deviations only SHORTEN age — the safe direction for a floor and for FD4 (understated
+  age delays a flag; overstated would false-fire). The age is a floor over stamped rows only
+  (an unstamped terminal between identical stamped runs would be invisible — measured 0 of
+  ~15.3k real log rows; slotless REMOVE tombstones never enter a slot's stamped list).
+- Shared `restingAge()` ('47m'/'26h'/'3.2d', `''` on null) renders on `monitor-offers.mjs`
+  active-offer lines and watch's bid notes; the schema note landed in FILLS-PIPELINE **§14.2**
+  (the offers.json home — the "§5.1 area" gesture below was approximate).
+- Review round 1 (fuzz + mutation): the sorted-last-stamped anchor matched `supersedes()`'s
+  winner in 20k random-order trials; the `state`/`max` identity checks were individually
+  unpinned → fixtures amended in r1, mutations verified KILLED. Round 2 (narrow, over the r1
+  diff): empty — every r1 prose claim verified at code level; its one below-threshold note
+  (`item` still unpinned) was encoded with the bookkeeping commit, so all four identity
+  fields are now individually mutation-killed.
 
 `pipeline/lib/reconstruct/offers.mjs`: derive per-offer placement time (first log line of the
 slot's current offer episode — a price/item change or EMPTY→offer transition starts a new

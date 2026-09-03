@@ -422,9 +422,11 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   held/watchlist exemption and is unreachable by construction on band/churn/scalp — the ~50%
   stdout cut is the stanza diet) + **FD2 ✅ `e41db14`** (skills + doctrine homes reconciled;
   judgment reads `last-report/screen.json`), both through 3 adversarial review rounds
-  (CHANGELOG pipeline 1.4.0). FD3–FD6 (offer `placedTs` → declared-deep bids + inform-only
-  stale-bid flag → bids on the positions surface → shown reclaimable-stale capital line)
-  staged behind them. Ruling: NO grade term in any filter predicate (grade tuning is later,
+  (CHANGELOG pipeline 1.4.0). **FD3 ✅ `b9f993c`+`884854c`** (offer `placedTs` = episode
+  start — a partial fill does NOT reset it; nullable additive `offers.json` field, shared
+  `restingAge()` on monitor + watch bid notes; mutation-pinned fixtures; CHANGELOG pipeline
+  1.5.0). FD4–FD6 (declared-deep bids + inform-only stale-bid flag → bids on the positions
+  surface → shown reclaimable-stale capital line) staged behind it. Ruling: NO grade term in any filter predicate (grade tuning is later,
   F1-tagged work); the still-large winners table (a rank-based cap?) is an OPEN question for
   Ben, recorded in the plan.
 
