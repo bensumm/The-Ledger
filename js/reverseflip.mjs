@@ -10,7 +10,7 @@
  * as the risky mandatory leg (stranding = can't sell). Reverse-flip INVERTS this for an item Ben
  * already owns and wants to keep: sell into the diurnal/multi-day PEAK, then rebuy at the DIP. It is
  * capital-free (monetizes an owned asset, nothing deployed to enter) and its failure mode is bounded
- * ("can't rebuy cheap enough" — no deadline to reacquire your own item; worst case wait for the next dip).
+ * ("can't rebuy cheap enough" — wait for the next dip). No deadline for the STRATEGY; the BOOK settles an UNDECLARED short at SHORT_MAX_AGE_DAYS (H1), so declare the cycle.
  *
  * THE REGIME INVERSION (the load-bearing idea — see the Regime-asymmetry table in PLAN-REVERSE-FLIP).
  * Every OTHER flip-niche reads `classifyTrajectory`'s shape with `rising` = good (upside) and a decline
@@ -275,7 +275,7 @@ export function askSpreadNote(flag, { fmt = String } = {}) {
    are the RISKIEST reverse-flip because the REBUY leg is the unreliable one (a deep rebuy bid can strand
    while you're out of the position and price ranges/rises away — the live hat 54.05m→cancelled case). This
    is inform-only — it NEVER blocks Ben placing the bid (the strategy's own framing is that the rebuy miss
-   is BOUNDED, no deadline). RF2's reverse table wires it; RF4 reuses the same note. */
+   is BOUNDED; the book keeps the leg open only while the cycle is declared — H1). RF2 wires it; RF4 reuses it. */
 export function rebuyStrandNote({ volDay = null, fmt = String } = {}) {
   const v = num(volDay);
   return `⚠ rebuy may strand (thin, ${v != null ? `${fmt(v)}/d` : 'thin book'})`;

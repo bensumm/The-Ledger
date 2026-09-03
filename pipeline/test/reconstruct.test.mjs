@@ -449,6 +449,20 @@ ok('reconstruct surfaces the aged-out `settled` bucket (and leaves it empty on a
   assert.equal(reconstruct(events, { keeps: new Set([9]), now: sellTs + 86400 }).settled.length, 0);
 });
 
+// The sync writes positions.json only when the content changed; a wall-clock settledTs made every
+// rebuild differ, so the skip could never fire and --publish would commit churn every night.
+ok('two consecutive rebuilds over an unchanged log are byte-identical, settled rows included', () => {
+  const { events } = runPipeline([
+    raw({ state: 'SOLD', slot: 0, item: 9, date: '2026-07-01', time: '09:00:00', filledQty: 1, grossWorth: 1000, offerSize: 1, priceEach: 1000 }),
+  ]);
+  const sellTs = events[0].ts;
+  const sig = p => JSON.stringify({ closed: p.closed, open: p.open, unmatched: p.unmatched, awaitingRebuy: p.awaitingRebuy, settled: p.settled });
+  const first = reconstruct(events, { keeps: new Set([9]), now: sellTs + 30 * 86400 });
+  const second = reconstruct(events, { keeps: new Set([9]), now: sellTs + 30 * 86400 + 7200 });   // two hours later
+  assert.equal(first.settled.length, 1, 'the fixture really does settle — otherwise this proves nothing');
+  assert.equal(sig(first), sig(second), 'the write-skip signature is stable across runs');
+});
+
 ok('guard reads the field: presence on a GROSS-assigned file warns; a short worth+tax sum warns on a NET file; above-ask does not', () => {
   const ambiguousWithTax = sellLineTax(40, 100, 4000, 0);          // formula-ambiguous (tax 0) but json-format
   assert.equal(auditWorthConvention([ambiguousWithTax], false, 'x.log2').mismatch, true,

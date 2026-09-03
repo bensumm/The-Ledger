@@ -45,7 +45,7 @@ day read red.
 **Real-book acceptance (worktree, `--repo-dir` inside it — Ben's live artifacts untouched), measured
 against the pre-change reconstruction over the SAME event set:** four shorts settled (21012, 29580,
 11832 by the end-of-run sweep, plus an unlisted fifth — 11785, settled mid-match when its 36-days-late
-"rebuy" arrived); 11834 was 12.9d old and correctly stayed open. `unmatched` identical (124).
+"rebuy" arrived); 11834 was 12.9d old and correctly stayed open. `unmatched` came through identical.
 Lifetime realised did NOT hold identical — it moved −944,020, and every gp of that is item 11785,
 where the old rule had ALREADY booked a fabricated +674,019 round trip against a 36-day-old sale and
 then mis-paired three real flips one lot off (each sell against the buy AFTER it). That is the bug

@@ -639,8 +639,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   rebought; matching is SYMMETRIC, so sell→buy closes a `keepRoundTrip` row exactly as buy→sell
   closes a flip. `beRebuy` = break-even on the capital reallocation. See `FILLS-PIPELINE.md` §5.1a)
   · **`settled`** (H1 — a short that aged out: undeclared, un-revived, past `SHORT_MAX_AGE_DAYS`.
-  Closed at breakeven, realised 0 by construction, so lifetime realised does not move; keeps
-  `sellEach`/`tax`/`beRebuy`/`sellTs` + `settledTs`/`reason` so a REVIVE loses nothing)
+  Closed at breakeven and writes NO `closed` row, so lifetime realised cannot move; keeps
+  `sellEach`/`tax`/`beRebuy`/`sellTs` + `reason` and a deterministic `settledTs` = the age edge,
+  never the wall clock, so repeated rebuilds are byte-identical — a REVIVE loses nothing)
 - `offers.json` — tracked, flat snapshot of the live GE offer slots (`{slot, side, itemId,
   item, price, qty, filled, lastUpdateTs}`), written by `sync-fills.mjs`/`watch-log.mjs` in
   both attended and `--local` modes (LW1); the localhost app polls it for desk-side offer

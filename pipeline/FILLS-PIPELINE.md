@@ -278,8 +278,10 @@ answer "what do I hold?" the same way and a purged lot never reappears as a phan
   staleness-sweep it"):** a DECLARED short still has no deadline, but an UNDECLARED one does — see the
   short lifecycle in §5.1a.
 - **`settled`** (H1) = a short that aged out: undeclared, un-revived, and older than
-  `SHORT_MAX_AGE_DAYS`. It leaves the consuming queue and books **realised 0 by construction**
-  (`buyEach = beRebuy`), so lifetime realised does not move when a settle fires. The row keeps
+  `SHORT_MAX_AGE_DAYS`. It leaves the consuming queue and **books nothing at all** — no `closed` row
+  is written (settling AT `beRebuy` is a realised 0 that is simply not recorded), so lifetime realised
+  cannot move when a settle fires; `settledTs` is the age EDGE (`sellTs + SHORT_MAX_AGE_DAYS`), never
+  the wall clock, so repeated syncs over an unchanged log stay byte-identical. The row keeps
   `sellEach`/`tax`/`beRebuy`/`sellTs` (plus `settledTs` and `reason:'aged-out'`) so a REVIVE loses
   nothing. **Recorded tradeoff:** the settled round trip's real economics leave lifetime realised —
   a later rebuy below `beRebuy` books only the fresh flip's leg — accepted for a clean daily book.

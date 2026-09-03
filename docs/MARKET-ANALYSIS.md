@@ -503,7 +503,9 @@ circular, kept only for continuity with rows logged between DT1 and DT1b). Conso
 HARVEST-AN-OWNED-ITEM flip-niche, the mirror image of every other lane: instead of deploying capital to buy low
 and sell high, it SELLS an item you already own into the diurnal/multi-day PEAK and REBUYS at the DIP —
 capital-free (nothing deployed to enter), with a BOUNDED failure mode (worst case, wait for the next dip to
-reacquire your own item; no deadline). Its pool is OWNERSHIP-gated — `owned-items.json`
+reacquire your own item). The STRATEGY has no deadline, but the BOOK does: an UNDECLARED short settles at
+`SHORT_MAX_AGE_DAYS` (H1, FILLS-PIPELINE §5.1a), so a cycle you mean to keep open must be declared
+(`hold-thesis.json` `reverseFlip:true`) or REVIVEd. Its pool is OWNERSHIP-gated — `owned-items.json`
 `classification:'keep'` items ∪ `hold-thesis.json` `reverseFlip:true` entries (Ruling §8: the keep set IS
 the pool, no per-item opt-in flag) — so it never overlaps the standard fetch universe, and it runs as a
 SEPARATE branch (`runReverseMode`) that short-circuits the whole band/churn/amplitude/value pipeline

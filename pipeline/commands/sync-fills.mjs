@@ -110,16 +110,20 @@ const PUBLISH = args.has('--publish');   // the ONLY path that touches git (fetc
 // a real book change. `refusedCloses` does NOT: it is a per-run explanation, printed, never persisted.
 function positionsSig(p) { return JSON.stringify({ closed: p.closed, open: p.open, unmatched: p.unmatched, awaitingRebuy: p.awaitingRebuy || [], settled: p.settled || [] }); }
 
-// H1 decision-movers stay visible: one line per aged settle, one per refused round-trip close. A
-// silent gate would be exactly the invisible book change PLAN-BOOK-SELF-HEAL exists to end.
-function printShortHeuristic(pos) {
-  for (const s of pos.settled || []) console.log(
+// H1 decision-movers stay visible: one line per NEW aged settle, one per NEW refused round-trip
+// close, then a quiet count for the standing rest. A silent gate would be the invisible book change
+// PLAN-BOOK-SELF-HEAL exists to end; re-announcing old rows every sync is the boilerplate Ben kills.
+function printShortHeuristic(r) {
+  const { newSettled = [], newRefused = [], pos } = r;
+  for (const s of newSettled) console.log(
     `⚖ short SETTLED at breakeven (undeclared, older than ${SHORT_MAX_AGE_DAYS}d): item ${s.itemId} × ${s.qty} sold @${s.sellEach} ` +
     `(beRebuy ${s.beRebuy}) — realised 0, no longer consumes rebuys. Revive: add-manual-fill.mjs --revive ${s.itemId} --sell-ts ${s.sellTs}`);
-  for (const f of pos.refusedCloses || []) console.log(
+  for (const f of newRefused) console.log(
     `⚖ round-trip close REFUSED (${f.reason}): item ${f.itemId} rebuy @${f.buyEach} ` +
     (f.reason === 'price' ? `above beRebuy ${f.beRebuy}` : `${Math.round((f.buyTs - f.sellTs) / 86400)}d after the sale`) +
     ` — it opened a normal flip lot instead`);
+  const standing = (pos.settled.length - newSettled.length) + (pos.refusedCloses.length - newRefused.length);
+  if (standing) console.log(`(${standing} standing settle(s)/refusal(s) from earlier runs — positions.json carries them)`);
 }
 
 function readLogFiles(logDir = LOG_DIR) {
@@ -299,9 +303,16 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR,
       `(≥${risk.threshold}) — likely mis-seeded. A traded keep distorts round-trip matching; consider ` +
       `\`node pipeline/commands/declare-owned.mjs classify "${risk.name}" flip\`.`);
   }
-  let priorPosSig = null;
-  if (existsSync(positionsPath)) { try { priorPosSig = positionsSig(JSON.parse(readFileSync(positionsPath, 'utf8'))); } catch { /* rebuild */ } }
-  const positionsChanged = positionsSig(pos) !== priorPosSig;
+  let priorPos = null;
+  if (existsSync(positionsPath)) { try { priorPos = JSON.parse(readFileSync(positionsPath, 'utf8')); } catch { /* rebuild */ } }
+  const positionsChanged = positionsSig(pos) !== (priorPos ? positionsSig(priorPos) : null);
+  // H1 summary is NEW-only: both lists are recomputed from the whole history every run, so printing
+  // them all would re-announce the same rows forever. A settle is new if the prior positions.json
+  // didn't carry it; a refused close is new if its buy postdates that file.
+  const priorSettled = new Set((priorPos?.settled || []).map(s => s.itemId + ':' + s.sellTs));
+  const priorGeneratedTs = priorPos?.generatedAt ? Math.floor(Date.parse(priorPos.generatedAt) / 1000) : 0;
+  const newSettled = pos.settled.filter(s => !priorSettled.has(s.itemId + ':' + s.sellTs));
+  const newRefused = pos.refusedCloses.filter(f => !(f.buyTs <= priorGeneratedTs));
 
   // LW1 offers.json — live GE offer slots (buy/sell resting), read from the exchange-logger dir
   // ONLY (mobile/manual booked fills are not live offers). Best-effort + offline: a missing/
@@ -328,7 +339,7 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR,
     if (offersChanged) writeFileSync(offersPath, JSON.stringify(offersSnap));
   }
 
-  return { sources, mobilePath, mobilePresent, rawLines, parsedLines, parsed, merged, pos,
+  return { sources, mobilePath, mobilePresent, rawLines, parsedLines, parsed, merged, pos, newSettled, newRefused,
     offersSnap, eventsChanged, positionsChanged, offersChanged, changed, realisedTotal, removeTargetCount, removedCount,
     reEmitDropped: reEmitDropped.length, worthMismatches: worthMismatches.length };
 }
@@ -361,7 +372,7 @@ function main() {
     if (r.reEmitDropped) console.log(`(${r.reEmitDropped} suspected re-emit(s) dropped — run --publish for the per-event detail)`);
     if (r.worthMismatches) console.log(`⚠ ${r.worthMismatches} source file(s) FAILED the worth-convention audit — see warnings above; realised P/L may be mis-taxed until resolved`);
     console.log(`${r.sources.length} log source(s)${r.mobilePresent ? ' (incl. ' + MOBILE_REL + ')' : ''}, ${r.rawLines} lines (${r.parsedLines} valid trade line(s)), ${r.parsed} events, ${r.merged.length} after merge${r.eventsChanged ? '' : ' (no change)'}`);
-    printShortHeuristic(r.pos);
+    printShortHeuristic(r);
     console.log(`positions: ${r.pos.closed.length} closed, ${r.pos.open.length} open, ${r.pos.unmatched.length} unmatched, ${r.pos.settled.length} settled · offers: ${r.offersSnap.offers.length} open${r.offersChanged ? '' : ' (no change)'}`);
     console.log(`local rebuild — NO git (desk-side freshness). Publish to the deployed app nightly with --publish (/overnight).`);
     return;
@@ -379,7 +390,7 @@ function main() {
   if (removeTargetCount) console.log(`${removeTargetCount} tombstone target(s); ${removedCount} event(s) removed`);
 
   console.log(`${r.sources.length} log source(s)${existsSync(mobilePath) ? ' (incl. ' + MOBILE_REL + ')' : ''}, ${r.rawLines} lines (${r.parsedLines} valid trade line(s)), ${r.parsed} events after sequencing, ${merged.length} after merge${eventsChanged ? '' : ' (no change)'}`);
-  printShortHeuristic(pos);
+  printShortHeuristic(r);
   console.log(`positions: ${pos.closed.length} closed lot(s) (realised ${realisedTotal >= 0 ? '+' : ''}${realisedTotal} after tax), ${pos.open.length} open, ${pos.unmatched.length} unmatched sell(s), ${pos.settled.length} settled short(s)${positionsChanged ? '' : ' (no change)'}`);
   if (DRY) {
     for (const e of merged) {
@@ -404,14 +415,10 @@ function main() {
 
   // fills.json / positions.json / offers.json already written by regenerate({ write: true }) above.
 
-  // commit + push
-  //
-  // On-demand only: every sync is its own fresh checkpoint commit landed via the normal push
-  // path. The scheduler-era --auto amend/--force-with-lease rolling-commit branch was excised
-  // 2026-07-05 (chunk X2) — it existed only to collapse the eliminated CofferFillsSync job's
-  // ~20-min commits (FILLS-PIPELINE.md §12); git history is the recovery story. The
-  // syncMainToRemote() clobber-guard above (ff-or-abort) is the live protection against
-  // clobbering a phone push or a PR-merged main — a plain push here is safely rejected on any
+  // commit + push. On-demand only: every sync is its own fresh checkpoint commit on the normal push
+  // path (the scheduler-era amend/--force-with-lease branch was excised with the job it served,
+  // FILLS-PIPELINE.md §12; git history is the recovery story). syncMainToRemote()'s ff-or-abort above
+  // is the live protection against clobbering a phone push — a plain push is safely rejected on any
   // race it didn't already catch.
   try {
     // Commit set: fills + positions always; the rest are OTHER pipeline-derived, git-tracked

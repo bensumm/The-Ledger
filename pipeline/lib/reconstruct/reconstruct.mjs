@@ -29,13 +29,10 @@ import { tax, grossFromNet } from '../../../js/quotecore.js'; // the ONE tax imp
  * cumulative tax — carried as `taxAmt` (either convention, unhashed): gross = spent + taxAmt,
  * a read not an inversion; grossFromNet is the fallback without it.
  *
- * The plugin emits explicit "CANCELLED_BUY"/"CANCELLED_SELL" states
- * (confirmed against a live log 2026-07-02) — normalizeStateStr() maps
- * any CANCEL* to 'cancelled' — and that explicit line is the ONLY source of
- * a cancel: the old cancel-to-EMPTY inference was REMOVED 2026-07-05 (a
- * logout EMPTY-burst fabricated phantom cancels; see buildEvents() below
- * and FILLS-PIPELINE.md §10). parseJsonLine() here
- * only normalizes one line; it returns `{ empty: true }` markers for
+ * The plugin emits explicit "CANCELLED_BUY"/"CANCELLED_SELL" states — normalizeStateStr() maps any
+ * CANCEL* to 'cancelled' — and that explicit line is the ONLY source of a cancel: the cancel-to-EMPTY
+ * inference was REMOVED (a logout EMPTY-burst fabricated phantom cancels; FILLS-PIPELINE.md §10).
+ * parseJsonLine() only normalizes one line; it returns `{ empty: true }` markers for
  * EMPTY/unrecognized lines so the sequencer can see slot-clear events.
  *
  * Normalized trade event: { ts, type:'buy'|'sell',
@@ -104,7 +101,7 @@ export function parseJsonLine(line, { worthNet = false } = {}) {
   }
   // REVIVE directive (PLAN-BOOK-SELF-HEAL H1): exempts one open short from the age settle AND from
   // the time/price gate on its next rebuy. A marker like REMOVE — no ts/slot, never an event, never
-  // hashed. `target` is the short's sellTs; null = the item's only short. buildEvents drops it.
+  // hashed. `target` is the short's sellTs; null covers EVERY short on the item. buildEvents drops it.
   if (marker === 'REVIVE') {
     const t = Number(pick(o, 'target', 'sellTs'));
     return { revive: { itemId: Number(pick(o, 'item', 'itemId', 'item_id')), target: Number.isFinite(t) ? t : null } };
@@ -328,7 +325,7 @@ export function auditWorthConvention(rows, assignedNet, filename) {
    a DECLARED short (`declared`, from hold-thesis reverseFlip:true) or a REVIVEd one (`revives`, from a
    log REVIVE line) has no deadline and no gate. An UNDECLARED short takes a rebuy only within
    SHORT_MAX_AGE_DAYS AND at or below its `beRebuy`; refused on price the buy opens an ordinary lot,
-   past the age the short SETTLES at breakeven (realised 0 by construction, lifetime realised unmoved).
+   past the age the short SETTLES at breakeven — no closed row is written, so realised cannot move.
    Without it an intent-blind close ate a fresh flip's buy and orphaned its sell — a clean day read red.
    `declared`/`revives`/`now` are PARAMETERS like `keeps`: omitting them on a book whose shorts are
    inside the gate reproduces pre-H1 output exactly. */
@@ -439,7 +436,9 @@ export function matchTrades(offers, { keeps, declared, revives, now = Math.floor
   const awaitingRebuy = [];
   for (const [itemId, sq] of shorts) for (const s of sq) {
     if (s.qty <= 0) continue;
-    if (!declaredSet.has(itemId) && !isRevived(s) && now - s.ts > maxAge) { settle(s, now); continue; }
+    // settledTs is the AGE EDGE, never the wall clock: `now` decides only WHETHER, so repeated syncs
+    // over an unchanged log write byte-identical rows and the write-skip can fire.
+    if (!declaredSet.has(itemId) && !isRevived(s) && now - s.ts > maxAge) { settle(s, s.ts + maxAge); continue; }
     awaitingRebuy.push({ itemId, qty: s.qty, sellEach: Math.round(s.each), tax: s.taxEach * s.qty,
       beRebuy: s.beRebuy, sellTs: s.ts });
   }

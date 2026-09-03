@@ -125,6 +125,16 @@ ok('reverseFlip:false explicitly drops the marker', () => {
   assert.equal('reverseFlip' in off[0], false, 'false clears the key');
 });
 
+// H1: matchTrades keeps a declared short out of the age settle by reading this marker, but
+// declare-thesis.mjs SAVES the pruned store — so a TTL drop here would silently re-arm the settle
+// from a command that never mentioned the item.
+ok('a reverseFlip:true entry is PRUNE-EXEMPT (its marker gates the short settle)', () => {
+  const stale = (NOW - (HOLD_THESIS_TTL_DAYS + 30) * DAY);
+  const store = [{ id: 5075, ts: stale, reverseFlip: true }, { id: 99, tripwire: 1, ts: stale }];
+  assert.deepEqual(pruneHoldThesis(store, NOW).map(e => e.id), [5075],
+    'the declared reverse flip survives; an equally stale ordinary thesis still expires');
+});
+
 /* --- clear ---------------------------------------------------------------------------------- */
 ok('clearThesis removes every entry for an id and is PURE', () => {
   const before = [{ id: 5075, ts: NOW }, { id: 99, ts: NOW }];

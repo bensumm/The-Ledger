@@ -9,7 +9,7 @@
  * Run: `node pipeline/test/symmetric-matching.test.mjs`.
  */
 import assert from 'node:assert/strict';
-import { matchTrades, GE_TAX } from '../lib/reconstruct/reconstruct.mjs';
+import { matchTrades, GE_TAX, SHORT_MAX_AGE_DAYS } from '../lib/reconstruct/reconstruct.mjs';
 import { keepIds, keepMisclassificationRisks } from '../lib/capital/ownedledger.mjs';
 
 let pass = 0;
@@ -199,15 +199,30 @@ ok('a DECLARED reverse flip overrides both legs of the gate (old + above beRebuy
   assert.equal(r.refusedCloses.length, 0);
 });
 
-ok('settle books realised 0 by construction and preserves every revival field', () => {
+ok('settle books nothing and preserves every revival field', () => {
   const r = matchTrades([at('sell', KEEP, 2, SOLD, T0)], { keeps, now: T0 + 30 * DAY });
   assert.equal(r.awaitingRebuy.length, 0, 'awaitingRebuy empties into settled');
   assert.equal(r.settled.length, 1);
   const s = r.settled[0];
   assert.deepEqual([s.itemId, s.qty, s.sellEach, s.tax, s.beRebuy, s.sellTs, s.reason],
     [KEEP, 2, SOLD, GE_TAX(SOLD) * 2, BE, T0, 'aged-out']);
-  assert.equal(s.settledTs, T0 + 30 * DAY, 'stamped when the settle fired');
-  assert.equal(r.closed.length, 0, 'nothing is booked — lifetime realised does not move (buyEach = beRebuy)');
+  assert.equal(r.closed.length, 0, 'no closed row at all — realised 0 by construction, lifetime realised unmoved');
+});
+
+// The sweep's settledTs must NOT read the wall clock: two syncs over an unchanged log would then
+// write different positions.json, the write-skip could never fire, and --publish would commit churn.
+ok('DETERMINISM: a swept settle stamps the AGE EDGE, so repeated runs are byte-identical', () => {
+  const offers = [at('sell', KEEP, 1, SOLD, T0)];
+  const early = matchTrades(offers, { keeps, now: T0 + 30 * DAY });
+  const later = matchTrades(offers, { keeps, now: T0 + 99 * DAY });
+  assert.equal(early.settled[0].settledTs, T0 + SHORT_MAX_AGE_DAYS * DAY, 'the edge, not the clock');
+  assert.deepEqual(early.settled, later.settled, 'two runs at different clocks agree row-for-row');
+});
+
+ok('a mid-match settle keeps the deciding BUY ts (already deterministic — a log fact)', () => {
+  const buyTs = T0 + 20 * DAY;
+  const r = matchTrades([at('sell', KEEP, 1, SOLD, T0), at('buy', KEEP, 1, BE, buyTs)], { keeps, now: buyTs + 5 * DAY });
+  assert.equal(r.settled[0].settledTs, buyTs);
 });
 
 ok('an UNSETTLED young short is untouched by the settle sweep', () => {

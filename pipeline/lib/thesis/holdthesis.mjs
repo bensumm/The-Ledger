@@ -103,16 +103,16 @@ export function clearThesis(store, id) { return (store || []).filter(e => !(e &&
 /* pruneHoldThesis — drop entries older than ttlDays (stale declared intent) or malformed. PURE.
    watch-positions.mjs prunes on read so a forgotten TIMESTAMPED plan can't silence forever.
 
-   KNOWN GAP, deliberately left (reviewed 2026-08-10 — do not "fix" this without Ben): a `ts`-LESS
-   entry is kept forever, so the sentence above does NOT hold for one. That is a real hazard on paper
-   — a hold thesis SILENCES a CUT, so an un-expirable entry could hide an exit signal indefinitely.
-   It is left alone because expiring it is WORSE: the prune is read-only in quote-items.mjs, but
-   declare-thesis.mjs SAVES the pruned store back (lines 86/117), so dropping ts-less entries would
-   permanently delete a HAND-WRITTEN thesis the next time any thesis was declared. Deleting declared
-   intent beats a stale silence only if Ben says so.
-   In practice the gap is currently unreachable: setThesis always stamps `ts` (see it below), and all
-   7 live hold-thesis.json entries carry one. The behaviour is pinned in holdthesis.test.mjs. */
+   KNOWN GAP, deliberately left (do not "fix" without Ben): a `ts`-LESS entry is kept forever, so the
+   sentence above does NOT hold for one — an un-expirable entry could hide a CUT indefinitely. Expiring
+   it is WORSE: declare-thesis.mjs SAVES the pruned store, so dropping ts-less entries would delete a
+   HAND-WRITTEN thesis the next time any thesis was declared. Unreachable in practice (setThesis always
+   stamps `ts`); pinned in holdthesis.test.mjs.
+
+   H1 EXEMPTION, same mechanism: a `reverseFlip:true` entry never expires here — matchTrades reads the
+   marker to keep a short out of its age settle, so a TTL drop would re-arm that settle from a
+   declaration that never named the item. Only an explicit clear drops it. */
 export function pruneHoldThesis(store, now = Math.floor(Date.now() / 1000), ttlDays = HOLD_THESIS_TTL_DAYS) {
   const cutoff = now - ttlDays * 86400;
-  return (store || []).filter(e => e && e.id != null && (e.ts == null || e.ts >= cutoff));
+  return (store || []).filter(e => e && e.id != null && (e.reverseFlip === true || e.ts == null || e.ts >= cutoff));
 }
