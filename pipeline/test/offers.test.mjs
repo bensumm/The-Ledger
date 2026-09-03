@@ -262,13 +262,21 @@ ok('a price change starts a NEW episode even with no terminal row logged between
   assert.equal(activeOffers(rows)[0].placedTs, epAt('12:00:00'), 'the reprice is the placement');
 });
 
-ok('cancel-and-relist at the SAME price is a new episode (terminal row breaks the run)', () => {
+ok('cancel-and-relist at the SAME price AND size is a new episode (pins the STATE identity check — with every other field equal, only the terminal row\'s state breaks the run)', () => {
   const rows = [
     rawRow(0, 'BUYING', 4151, { max: 10, filled: 2, offer: 100, time: '10:00:00' }),
     rawRow(0, 'CANCELLED_BUY', 4151, { max: 10, filled: 2, offer: 100, time: '10:30:00' }),
-    rawRow(0, 'BUYING', 4151, { max: 8, filled: 0, offer: 100, time: '11:00:00' }),    // relisted
+    rawRow(0, 'BUYING', 4151, { max: 10, filled: 0, offer: 100, time: '11:00:00' }),   // relisted, identical fields
   ];
   assert.equal(activeOffers(rows)[0].placedTs, epAt('11:00:00'), 'the relist is the placement');
+});
+
+ok('a size (max) change alone starts a new episode (pins the MAX identity check)', () => {
+  const rows = [
+    rawRow(0, 'BUYING', 4151, { max: 10, filled: 0, offer: 100, time: '10:00:00' }),
+    rawRow(0, 'BUYING', 4151, { max: 20, filled: 0, offer: 100, time: '11:00:00' }),   // re-placed bigger
+  ];
+  assert.equal(activeOffers(rows)[0].placedTs, epAt('11:00:00'), 'the re-place is the placement');
 });
 
 ok('EMPTY→offer transition starts a new episode (restart-blind wipes reset the clock — age is a floor)', () => {

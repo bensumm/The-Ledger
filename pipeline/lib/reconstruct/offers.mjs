@@ -92,7 +92,7 @@ export function offersSnapshot(rows, nameFor = () => undefined, ignoredCfg = nul
 
 /** Read the flat repo-root offers.json snapshot (the app-fetched LW1 file written by
  *  sync-fills.mjs / watch-log.mjs from THIS same reader). Returns the `offers` array
- *  ([{ slot, side:'buy'|'sell', itemId, item, price, qty, filled, lastUpdateTs }]) or [] on
+ *  ([{ slot, side:'buy'|'sell', itemId, item, price, qty, filled, lastUpdateTs, placedTs }]) or [] on
  *  ANY failure (missing / stale / corrupt) — a bad snapshot must never break a caller (the
  *  loadState degrade-not-throw precedent). This is the OTHER-machine-safe book source: unlike
  *  readExchangeLog (which needs the local ~/.runelite log dir), quote-items.mjs reads offers.json so
@@ -138,9 +138,9 @@ function supersedes(cand, prev) {
 /** FD3 (PLAN-FLOW-DIET) — a slot's current offer-EPISODE start: the contiguous same-
  *  (state·item·price·max) run of its stamped rows in (wall-clock, read-order) order — the same total
  *  order supersedes() resolves to, so the anchor is the row activeOffers picked. A partial fill
- *  CONTINUES the episode; EMPTY / terminal / any identity-field change breaks it (a restart-blind
- *  wipe resets the clock — age is a floor, never overstated). Unstamped winner → null, not a throw.
- *  Takes `stamped` = [{ r, ep, idx }] sorted by (ep, idx) and `cur` = the slot's winning row. */
+ *  CONTINUES it; EMPTY / terminal / any identity change breaks it (a restart-blind wipe resets the
+ *  clock — age is a floor over STAMPED rows; an unstamped terminal between identical stamped runs is
+ *  invisible, but no real writer emits one). Unstamped winner → null. Takes `stamped` = [{r,ep,idx}] sorted by (ep, idx); `cur` = the slot's winning row. */
 function episodePlacedTs(stamped, cur) {
   let i = stamped.length - 1;
   if (i < 0 || stamped[i].r !== cur) return null;
