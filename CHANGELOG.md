@@ -37,6 +37,14 @@ screen lanes above. Left alone with reasons: `driftInformNote` (inform-only, no 
 in the money path), the retro/analyze joins (they score LOGGED history, where re-costing would rewrite the
 record), and the book/ledger surfaces — the bond is in `ignored-items.json` and `quarantineEvents` drops it
 BEFORE reconstruction, so `js/ui.js` `realised()` stays the documented LATENT gap it already was.
+**NOT bond-covered, on the record (PLAN.md Discovered):** the **value/Invest lane's actual money path** —
+`js/valuescreen.mjs` `afterTaxAmpPct` and `js/validate.mjs` `valueAmplitudeValidator` (a GATE) take no id,
+and `gateValueCandidates` returns before `spec.edge` runs, so the `ctx.guide` thread above never reaches
+them; a bond can still be admitted there on tax-model economics (mitigated: `value` is out of `--mode all`,
+explicit-only). Likewise `pipeline/lib/signal/watchlist-report.mjs` (bond not watchlisted; latent) and
+`js/reverseflip.mjs` `beRebuy` (ownership-gated; conservative direction for a hypothetical bond keep).
+The line above naming value/amplitude/reverse edges describes what `gatecandidates.mjs` CAN fill, not
+production coverage — those edges never run in the value gate branch.
 
 **Also in this commit (pipeline-side, PLAN-BOOK-SELF-HEAL H3):** `activeOffers`
 (`pipeline/lib/reconstruct/offers.mjs`) now picks each slot's current state by WALL-CLOCK
