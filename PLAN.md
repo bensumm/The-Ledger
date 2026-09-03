@@ -425,8 +425,11 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   (CHANGELOG pipeline 1.4.0). **FD3 ✅ `b9f993c`+`884854c`** (offer `placedTs` = episode
   start — a partial fill does NOT reset it; nullable additive `offers.json` field, shared
   `restingAge()` on monitor + watch bid notes; mutation-pinned fixtures; CHANGELOG pipeline
-  1.5.0). FD4–FD6 (declared-deep bids + inform-only stale-bid flag → bids on the positions
-  surface → shown reclaimable-stale capital line) staged behind it. Ruling: NO grade term in any filter predicate (grade tuning is later,
+  1.5.0). **FD4 ✅ `33e8a87`+`0c13296`** (bid-thesis declaration store + inform-only ⏳
+  stale-bid flag on watch's three bid sites — declared bids silent, never-chase level gate,
+  V1-deduped, `bid-thesis.json` joins the NINE-file nightly publish; two review rounds, the
+  second empty on code; CHANGELOG pipeline 1.6.0). FD5–FD6 (bids on the positions surface →
+  shown reclaimable-stale capital line) staged behind it. Ruling: NO grade term in any filter predicate (grade tuning is later,
   F1-tagged work); the still-large winners table (a rank-based cap?) is an OPEN question for
   Ben, recorded in the plan.
 

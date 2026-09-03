@@ -223,14 +223,36 @@ schema is additive (back-compat note in FILLS-PIPELINE §5.1 area). Surfaces ren
 offers print (`monitor-offers.mjs`, `watch-positions.mjs` bid section). Foundation for FD4;
 inform-only.
 
-### FD4 — bid declaration + stale-bid flag (NOT YET DISPATCHED, needs FD3)
+### FD4 — bid declaration + stale-bid flag (SHIPPED 2026-09-03, `33e8a87` + r1 `0c13296`)
 
-A declared deep/long bid (thesis-style declaration keyed item+side, TTL'd like hold-thesis) is
-silent. An undeclared resting bid past a staleness threshold — age (placeholder, n≈0) or its
-item's buy-window having passed per the `read-schedule` hour profile — gets ONE inform-only
-line: item, unfilled remainder, resting time, reclaimable escrow gp, and the two options
-(reprice to the named window level / cancel and redeploy). Deduped cross-pass (V1-style key);
-never a chase-bid pitch; CANCEL stays Ben's call. Appears on watch passes and `/morning`.
+**Execution record (deviations + shipped specifics):**
+- Store: `pipeline/lib/thesis/bidthesis.mjs` + tracked root `bid-thesis.json` (committed `[]`,
+  mirrors hold-thesis exactly), keyed item+side, `BID_THESIS_TTL_DAYS = 14`; CLI extends
+  `declare-thesis.mjs` (`bid` / `bid-clear`; `list` shows both stores). Sell-side declarations
+  STORE but have NO consumer yet — the flag is bid-only; the CLI says so honestly (r1 F4).
+- Staleness: `pipeline/lib/signal/stalebid.mjs`, `STALE_BID_HOURS = 24` (named placeholder,
+  n≈0) OR buy-dip window passed per the shared `diurnalTimedLap`, zero new fetch. By design
+  most overnight bids flag their first morning (one survived dip window suffices); the calming
+  lever if chatty — require N passed windows, or `reliable`-only windows — is a one-line change.
+- Coverage is THREE call sites via one shared `staleBidNotes` composition: standalone-bid,
+  HELD-row (accumulate-while-holding — a bid part-filled into a held lot still flags; r1 F1,
+  found in review: the base commit skipped held/target ids), and CLI-target loops.
+- Never-chase gate: `levelBasis === 'live'` suppresses the level (prints the re-read fallback)
+  — FD4 is the FOURTH consumer of `windowread.mjs`'s repriced-bid gate (r1 F2, review-found:
+  64% of a 25-item sample would have quoted live as a "window" level).
+- Dedupe: V1 state key `stalebid:<id>:<offer>`; first firing prints, re-surface only on further
+  fill / new whole-day age bucket / trigger-reason change. Fires on QUIET passes too (the line
+  lands in `last-report/watch.json` notes), so an overnight run-loop consumes the first firing —
+  `/morning` v1.22 reads the cache and says so (r1 F3).
+- `bid-thesis.json` joined the nightly `--publish` add-list (NINE files; §13.3 the one home) —
+  same rationale as hold-thesis (r1 F5).
+- Review: round 1 five findings (above); round 2 EMPTY on code (6/6 mutations re-killed
+  independently, target site live-verified). Round 2's one substantive finding was PROCESS:
+  the executor's faked-home fixture runs let a manual-log-blind auto-sync corrupt the derived
+  book transiently, and its "restored" claims were false twice — the reviewer healed + verified
+  (fills clean via 6 content-hash REMOVE tombstones, crossbow lot intact, 466/6/4). Lesson
+  encoded in agent memory: a faked-home live check must copy the real `coffer-manual.log` in,
+  and must END with a real-home bare sync + a known-lot verification of `positions.json`.
 
 ### FD5 — bids always on the positions surface (NOT YET DISPATCHED)
 
