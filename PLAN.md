@@ -93,6 +93,7 @@ Needs-a-Ben-decision lists. The planning process itself is documented in `docs/P
 | **YIELD** | Yield-improvement program (folded from `PLAN-YIELD.md`, all shipped 2026-07-06): FC1 (fetch cache) → YF1 (historical market-state helper) → YS1 (outcomes v2 schema) ∥ YS2 (forward suggestion enrichment) → YV1 (velocity+capital-util #3) → YT1 (session-thesis #4) ∥ YP2 (state-transition scan #2) → YP1 (guide re-anchor #2, gated) → YA1 (in-app utilization #5). Full story: `CHANGELOG.md`. |
 | **V2** | Pipeline v2 (ACTIVE): D0 (snapshot+SQLite archive) → P0 (context chain) → P1 (surface extraction + replay harness) → P2/P3 (validators, every surface) → P4a/b/c (path engine → persistence → declarative specs) → P5 (scalp/value + path-aware bids) → P6 (evidence viability) → P7 (docs/skills triage + skill-lint) → P8 (desk orchestrator). D0 ∥ P1-mechanical parallel-safe (disjoint primaries). |
 | **SLT** | Sale-log tax fix (folded from `plans/PLAN-SALE-LOG-TAX.md`, shipped 2026-09-01): C1 (worthNet flag at ingest — `.json`-era sell `worth` is NET of GE tax) → C2 (net-primary matchTrades + `sellNetEach`, `grossFromNet` display inverse in quotecore) → C3 (warn-only per-file convention audit) → C4 (real-book acceptance + docs) → C5 (the §3a amendment, shipped 2026-09-02: the `.json` format RECORDS the tax — carried as `taxAmt`, gross becomes a read with `grossFromNet` as fallback, and the audit reads the field). Design home: `pipeline/FILLS-PIPELINE.md` §5.1 + the reconstruct.mjs header; full §1–§12 text `git show d1a6516:plans/PLAN-SALE-LOG-TAX.md` (the §3a amendment arrived uncommitted after the fold — its content is re-homed in §5.1 and CHANGELOG pipeline 1.2.0). |
+| **BSH** | Book self-heal (folded from `plans/PLAN-BOOK-SELF-HEAL.md`, all shipped 2026-09-03): H1 (rebuy time/price gate `SHORT_MAX_AGE_DAYS` ∧ ≤`beRebuy`, hold-thesis `reverseFlip` override; breakeven closeout of undeclared aged shorts into positions.json `settled` — no closed row, lifetime unmoved; `REVIVE` exemption directive; AMENDS the "open measurement, no deadline" doctrine for undeclared shorts, Ben 2026-09-02) → H2 (money-math bond opt-in threaded through amplitude/band/churn screens) → H3 (`activeOffers` per-slot winner by wall-clock — kills the mtime-race phantom-slot class) → H4 (personal-use is per-TRADE withdraw, never item-level ignore unasked). Design homes: FILLS-PIPELINE §5.1a + reconstruct.mjs/offers.mjs headers; full text `git show 9fe4787:plans/PLAN-BOOK-SELF-HEAL.md`. |
 | gated | **F1** (algorithm feedback) — opens only when O1's sample thresholds clear |
 
 ## Status
@@ -101,6 +102,8 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 
 | Chunk | What | Primary files | State |
 | --- | --- | --- | --- |
+| BSH H1+H4 | Rebuy gate + breakeven closeout + `settled` + REVIVE + deterministic settledTs; personal-use per-trade docs | `pipeline/lib/reconstruct/reconstruct.mjs`, `pipeline/commands/sync-fills.mjs`, `pipeline/commands/add-manual-fill.mjs`, `pipeline/lib/thesis/holdthesis.mjs`, `.claude/skills/positions/SKILL.md`, tests | ✅ 2026-09-03 (CHANGELOG pipeline 1.3.0) |
+| BSH H2+H3 | Bond costed as a bond on the screens (opt-in threaded + sweep); offers per-slot wall-clock winner | `js/amplitudescreen.mjs`, `js/flip-niches.mjs`, `pipeline/lib/signal/gatecandidates.mjs`, `pipeline/lib/reconstruct/offers.mjs`, tests | ✅ `bddf12f`+`08ebb20` (CHANGELOG 0.76.1) |
 | SLT C1–C4 | Sale-log worth-convention fix: `worthNet` flag (SELL events, outside the eventId hash so fills.json auto-migrates), net-primary money paths incl. deriveCash sellIn, `grossFromNet`, `auditWorthConvention` guard, real-book acceptance | `pipeline/lib/reconstruct/reconstruct.mjs`, `pipeline/lib/reconstruct/offers.mjs`, `pipeline/commands/sync-fills.mjs`, `pipeline/lib/capital/derive-cash-tiers.mjs`, `js/quotecore.js`, tests | ✅ `dc07707` |
 | SLT C5 | The §3a recorded-tax read: `taxAmt` carried outside the id hash, gross = `spent + taxAmt` (exact at the inversion's ≤1gp collision points, `grossFromNet` the fallback), audit reads the field both directions | `pipeline/lib/reconstruct/reconstruct.mjs`, `pipeline/commands/sync-fills.mjs`, `pipeline/commands/monitor-offers.mjs`, `pipeline/commands/trigger-alerts.mjs`, tests | ✅ 2026-09-02 (CHANGELOG pipeline 1.2.0) |
 | DL2 | Reactive liquid-flush loop — `flushSignal` + `watch.mjs --dip` FLUSH alert (bid-into-the-fall, liquid-only, unit-flow fillability); widened SIGNAL log (liquid+illiquid, `alerted`/`gatedReason`) + `analyze.mjs §4` candidate-surfacing retro; PLACEHOLDERS n=2, ALERTS-never-places | `js/quotecore.js`, `pipeline/commands/watch-positions.mjs`, `pipeline/lib/suggestlog.mjs`, `pipeline/lib/analyze.mjs`, `pipeline/commands/analyze-record.mjs`, `dip-watchlist.json`, `pipeline/test/diploop.test.mjs` | ✅ `73eb65e` |
@@ -583,6 +586,25 @@ the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the co
    characterised now and its round trip is 1.5%. Revisit only against these numbers.
 
 ## Discovered
+
+- **The value/Invest lane's money path is NOT bond-covered (BSH H2 review, 2026-09-03).**
+  `js/valuescreen.mjs` `afterTaxAmpPct` and `js/validate.mjs` `valueAmplitudeValidator` (a GATE)
+  take no item id, and `gateValueCandidates` returns before `spec.edge` runs, so the `ctx.guide`
+  bond thread never reaches them — a bond can still be admitted there on tax-model economics.
+  Mitigated: `value` is out of `--mode all` (explicit-only) and the bond is book-quarantined. Fix =
+  thread a guide into the value gate branch + validator ctx — its own chunk, not a drive-by.
+- **`restartBlindSuspects` still walks per-slot rows in READ order (BSH H3 review, 2026-09-03)** —
+  the same mtime race `activeOffers` now survives can, in shape, flag a wall-clock-superseded stale
+  BUYING as a restart suspect (spurious ⚠ on capital surfaces). Inform-only, unmeasured occurrence;
+  fold it onto `supersedes()` when next in `offers.mjs`.
+- **The bond no-guide refusal lives duplicated in two private `netOf` helpers (BSH H2, 2026-09-03)**
+  (`amplitudescreen.mjs`, `flip-niches.mjs`) while `bondFee(null) → 0` in money-math stays silently
+  fee-free for `computeQuote` — one policy, three behaviors. ENCODE candidate: one shared refusal
+  home in money-math.
+- **`REPO_DIR` (pipeline/lib/paths.mjs) is hardcoded to the main checkout**, so a bare sync run from
+  a WORKTREE without `--repo-dir` writes the LIVE book — bit a reviewer once (2026-09-02, the SLT
+  wave) and every worktree acceptance since has had to remember the flag. Guard candidate: refuse a
+  bare run when `cwd` is inside `.claude/worktrees/` and no `--repo-dir` was given.
 
 - **~~A pure-prior `n:0` annihilates a real sample count through `Math.min`~~ — FIXED (2026-08-30,
   `estSampleN`).** The semantics decision this entry demanded: `estN` = the observation-backed

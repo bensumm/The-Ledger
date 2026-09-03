@@ -1032,16 +1032,6 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `quote-items.mjs` default stdout view with `--raw` as the model-free escape hatch; console-only, no
   `screen.json`/app change). Folds into `PLAN.md` and is deleted when its last chunk ships (the
   plan-file rule).
-- `plans/PLAN-BOOK-SELF-HEAL.md` — in-flight per-topic plan (raised + tradeoffs settled with Ben
-  2026-09-02): the book self-heals so old inconsistencies stop poisoning today's P&L. Four chunks:
-  H1 the reverse-flip rebuy time/price heuristic (`≤ SHORT_MAX_AGE_DAYS` AND `≤ beRebuy`, hold-thesis
-  `reverseFlip` override) + breakeven closeout of undeclared aged shorts into a new positions.json
-  `settled` array (realised 0 by construction) with a `REVIVE` manual-log exemption directive;
-  H2 thread the money-math bond opt-in through `amplitudescreen.mjs` (+ sweep for private after-tax
-  math); H3 `activeOffers` per-slot latest-by-WALL-CLOCK (kills the mtime-race phantom-slot class);
-  H4 personal-use is per-trade withdraw, never item-level ignore unless explicitly asked. Amends the
-  "open measurement, no deadline" doctrine for UNDECLARED shorts (Ben 2026-09-02). Folds into
-  `PLAN.md` and is deleted when its last chunk ships (the plan-file rule).
 - `plans/PLAN-DIGEST-SIGNAL-AND-SCAN-PERF.md` — in-flight per-topic plan (2026-08-07, **PARTLY SHIPPED —
   SP1 landed**; corrected 2026-08-09, this entry said PLANNING ONLY / no code changed): two workstreams that share one file (`pipeline/commands/screen-flip-niches.mjs`)
   and therefore one parallel-safety contract. **A — digest SIGNAL:** as of that plan's writing

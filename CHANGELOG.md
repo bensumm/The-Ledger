@@ -22,8 +22,8 @@ day read red.
   class) of the sale AND at or below the short's `beRebuy` (exactly, no tolerance). Refused on price,
   the buy opens an ordinary flip lot and the short stays open.
 - **The closeout (Q2).** An UNDECLARED short past that age SETTLES at breakeven into a new
-  positions.json `settled` bucket — realised 0 **by construction** (`buyEach = beRebuy`), so a settle
-  shifts no totals — and stops consuming rebuys. The row keeps `sellEach`/`tax`/`beRebuy`/`sellTs`
+  positions.json `settled` bucket — realised impact 0 **by construction** (no `closed` row is
+  written at all, so lifetime realised cannot move) — and stops consuming rebuys. The row keeps `sellEach`/`tax`/`beRebuy`/`sellTs`
   plus `settledTs`/`reason` so revival loses nothing. Recorded tradeoff, told to Ben before encoding:
   the settled round trip's real economics leave lifetime realised for good.
 - **The exemptions.** A `hold-thesis.json` `reverseFlip:true` declaration means no deadline and no
