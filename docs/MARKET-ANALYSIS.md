@@ -19,11 +19,15 @@ compute and print it via `renderReport` — the ONE render path, `pipeline/lib/r
 already-computed facts and decides NOTHING (no numbers, no verdicts). Section types: `headline` /
 `alerts` / `table` (→ `mdTable`) / `lines` / `notes` (typed `{kind,tier,text}`, the per-kind sigil
 lives in render.mjs's `NOTE_KINDS`, not the push site). Every note family carries a **surfacing tier**
-— `core` vs `context`, a TRACKING label only: BOTH render AND relay by default (R10), there is no
-default-hidden tier; `shadow` (suggestions.jsonl analytics) never enters a report object. The tier
-registry + relay rules are in render.mjs's header (encoded) and the four SKILL.md files (the two
-`judgment:` relay rules — raw-unfenced tables, relay both tiers). Don't restate the format elsewhere;
-point here / at render.mjs.
+— `core` vs `context`, a TRACKING label only, never a gate; `shadow` (suggestions.jsonl analytics)
+never enters a report object. **R10's "both render AND relay by default" is SUPERSEDED by winners-only
+(Ben, 2026-09-02):** the report object still carries every tier, but `--verbose` stdout renders
+positive-net rows (HELD/WATCHLIST rows exempt — they print regardless of net; a null net keeps the
+row) and replaces the per-row stanza families with a cache pointer line (`--full`
+restores the full render), and the skills relay actionable-first — read every tier, relay what changes
+a decision. The tier registry is in render.mjs's header; the render filter is in
+`screen-flip-niches.mjs` (both encoded); the relay rules are in the SKILL.md files. Don't restate the
+format elsewhere; point here / at render.mjs.
 
 Every read is ONE table, the **table v2** column set:
 
@@ -767,7 +771,9 @@ placeholder cutoffs.
 
 `--posture overnight|active|auto` (S2) TUNES the stack (not a new flip-niche): overnight keeps only
 flat/rising + confident-band + non-thin + non-breakdown, ranks net-over-velocity, drops
-`overnightStaleRisk` items, and prints the **Overnight accumulation & capital** table (COD-2).
+`overnightStaleRisk` items, and builds the **Overnight accumulation & capital** table (COD-2) — which
+is CACHE-ONLY under `--verbose` (stdout carries a `· accumulation` pointer): read it from
+`pipeline/.cache/last-report/screen.json`, or run `--full` to print it.
 
 ---
 
@@ -942,10 +948,13 @@ simultaneous independent rungs on one item.
 
 - **Diurnal timing (auto).** `screen-flip-niches.mjs` runs `js/windowread.mjs` `diurnalTimedLap` on
   EVERY flip-niche survivor (PLAN-DIURNAL-TIMING DT2, 2026-07-23 — was top-picks-only; zero extra fetch,
-  the 1h series is already in hand) and prints a **Diurnal timing** block via the ONE shared renderer
+  the 1h series is already in hand) and builds a **Diurnal timing** block via the ONE shared renderer
   `pipeline/lib/render/emit.mjs` `formatTimedLap` (also `quote-items.mjs`'s DT3 call site, so
   `screen-flip-niches.mjs` and `quote-items.mjs` render byte-identical diurnal text off one
-  definition, not several that can silently disagree). Two shapes off
+  definition, not several that can silently disagree). **On the screen it is CACHE-ONLY under
+  `--verbose`** (a per-flip-niche pointer line prints instead) — read the block, and its `⏲` phase
+  token, from `pipeline/.cache/last-report/screen.json`, or run `--full`; `quote-items.mjs` still
+  prints it. Two shapes off
   **`windowReliability`**'s split-half verdict (DT4, 2026-08-10 — this line said "`hourConcentration`'s
   verdict" until then, contradicting the second bullet immediately below it; that predicate was measured
   NOT to discriminate and since 0.73.0 no longer picks the shape on ANY surface, console or app):
@@ -1017,8 +1026,9 @@ simultaneous independent rungs on one item.
   MULTI-WEEK shape — a live session proved this insufficient on its own: a bludgeon read "+180k flip"
   (scan-smoothed) → "knife" (3-day grid) → "low end of a mean-reverting range, a value level" (the
   multi-week base) — only the third call was right; a fang read similarly went "oscillator at a floor"
-  (14d) → "decaying oscillation in a downtrend" (multi-week). `screen-flip-niches.mjs` now prints a
-  **Base position** block on every band/churn/amplitude survivor: `<item> — base pXX of the 14d
+  (14d) → "decaying oscillation in a downtrend" (multi-week). `screen-flip-niches.mjs` builds a
+  **Base position** block on every band/churn/amplitude survivor — CACHE-ONLY under `--verbose`, like
+  Diurnal timing above (`--full` prints it): `<item> — base pXX of the 14d
   range · <range-bound|trending↑|trending↓|decaying>`. `pXX` is live's percentile position between the
   raw low/high of the 14-day daily-mid lookback `termStructure()` already computes (`js/termstructure.mjs`
   `ts.lookbacks[14].pctInRange`) — the SAME field `classifyTrajectory` already reads for its

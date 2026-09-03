@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.66
+version: 1.68
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -9,7 +9,7 @@ description: Review Ben's held GE positions against the live market and produce 
 Skills-versioning note: this file's `version` bumps on material behavior change; skills
 NEVER bump `APP_VERSION` (that marks the deployed app, which skills never touch).
 
-**Display contract (Ben, 2026-07-17 — SUPERSEDES the 2026-07-16 verbose/paste rule below):**
+**Display contract (Ben, 2026-07-17):**
 run the script QUIET (no `--verbose`, ever, for this skill) and read the JSON report dump
 (`pipeline/.cache/last-report/quote.json` or `watch.json`) — never re-derive the numbers, and
 never shell out with `--verbose` to get stdout text. The dump is a `{kind, generatedAt,
@@ -24,11 +24,20 @@ sections plus your own prose:
   _(judgment: display format, Ben-ruled)_ Read them for anything actionable (a live CUT, a broken
   support level, an alert that changed since the last pass) and fold that into your prose — but
   never as the script's own formatted alert/summary lines.
+- **ACTIONABLE FIRST, QUIET COLLAPSED — the winners-only shape on this surface (Ben, 2026-09-02).**
+  _(judgment: display format; the held set itself comes from `pipeline/commands/quote-items.mjs --positions`)_
+  Every held lot still gets READ in full — you never skip the note block — but the REPLY is
+  asymmetric: a lot with something to act on (a CUT/UNDERWATER verdict, a changed verdict, a broken
+  support, a reprice, a fill) is rendered fully; a quiet, unchanged, on-plan lot gets **ONE line** and
+  nothing more. Do not write a paragraph explaining why a quiet lot is fine. This does not relax the
+  two standing hard rules: ONE LINE PER ITEM always (never `·`-join several items onto one line, even
+  on a quiet pass), and every item line — held, fresh buy, resting bid, analyzed — carries its
+  `list @ X (BE Y)`.
 - **`notes` (the per-item verdict/support/cut-trigger/recovery-read/path/sell-line block) — read
-  it fully, fold the substance into your own prose, don't paste the bulleted block.**
-  _(judgment: display format, Ben-ruled)_ Nothing in it gets silently dropped (R10's spirit
-  stands — read both tiers, miss nothing that's decision-relevant) but it's relayed in your own
-  words, not the script's formatting. The ask-side window-clear / "typical exit" read is now
+  it fully, fold the ACTIONABLE substance into your own prose, don't paste the bulleted block.**
+  _(judgment: display format, Ben-ruled)_ Read every tier so nothing decision-relevant is missed;
+  relay what changes a decision, in your own words, not the script's formatting — an inform-only note
+  on a quiet lot does not earn a line. The ask-side window-clear / "typical exit" read is now
   **AUTO-SURFACED for big-ticket held lots** (lot value ≥ `BIG_TICKET_GP` = 10m, or a watchlist
   member) as the `↗ windowExit` note — the list-price reach/placement, the daily-HIGH typical-exit
   levels (~50%/~75%/every-day + recent-3), live-instabuy-vs-list, the grain-aware 5m reach, and which
@@ -37,39 +46,22 @@ sections plus your own prose:
   that note; a manual `read-window-range.mjs --ask` is only needed for a NON-big-ticket lot, a different
   window/level, or the bid side. (A null 1h series this pass degrades the note to `window read
   unavailable` — the table/verdict is unaffected.)
-- **The `◆ asym fill` counts are in-sample quantile ranks, and the BE-floored `Est. sell` cell now
-  carries the same pair inline — relay both halves of that cell (PP2).** _(judgment: honesty +
-  read-the-row discipline; wording enforced in `pipeline/lib/render/emit.mjs` `formatAsymFill`, rendered
-  into the cell by `js/estimators/cells.mjs`)_ `asymPair` scores each level against the SAME array it
-  was drawn from, so `pAsk` is 0.86 on the large majority of logged rows and `pBid` 0.29 likewise — the
-  `ASYM_P_LO`/`ASYM_P_HI` quantiles read back, not per-item measurements. "printed 12/14d" is a rank
-  position in an in-sample window; it is not a fill probability, and the deep bid is touched about 4
-  days in 14 — a level to leave resting, not a fill to plan a lot around. The ask ordering guard binds
-  on ~70% of rows (the denominator grows with accrual — the shape is
-  the durable claim, the digits accrue), which is why the clause names the quoted price and the measured
-  level separately (`ask X (= live instabuy, above the Y level that printed N/14d)`); collapsing those
-  two numbers into one is the error the wording exists to prevent.
-  **CORRECTED — the patient clause does NOT reach a held lot, and will not until this surface grows
-  `Est.` columns.** This table's headers are Quick/Optimistic + Held@/Break-even/Verdict; there is no
-  `Est. sell` cell here, and the patient clause lives inside that cell. The class-rate footer is
-  likewise absent, because it gates on a `kind:'asym'` note and this surface pushes none. Two separate
-  mechanisms — do not expect either to appear because the other is fixed. So read the clause on
-  `/scan` and a per-item quote, and do NOT go looking for it here (tracked in `PLAN.md`s folded
-  PLAN-PATIENT-PAIR section, open item 1). What follows describes it where it does render.
-  **And the pair is now MEASURED, which is what to carry into any read of it:** over the accruing pool
-  the deep bid is touched **17.8%** within 24h against a logged `pBid` of 31.1%, the ask is
-  reached **~24%** given the touch against a logged `pAsk` of 86.8%, and the round trip completes
-  **4.3%** — **1.5% on big-ticket**. MEASURED, because an earlier version of this line asserted big-ticket
-  is "where nearly all held capital sits" and that was never checked: over 438 closed lots / 5.19b gp,
-  capital in lots whose UNIT price clears `BIG_TICKET_GP` (the definition the study strata on) is **60.1%**;
-  by whole-lot VALUE it is 82.1% — two different thresholds, do not equate them. **Check the book before
-  choosing a column** — on an open book with no ≥10m-per-unit lot the applicable figure is the pooled 4.3%,
-  lots by count, so it is the number that governs a held-lot read. touched/reached ≠ filled,
-  so those bound a real offer from above (`join-asym-outcomes.mjs`). Where it renders, the clause
-  appends to a sub-break-even `Est. sell` cell (`· patient: … · net +N/u — resting levels, in-sample
-  counts, not a fill rate`), so `nothing to price above break-even` is only half of what that cell
-  says: the fold reports the transact-now pair losing, the patient half reports a resting bid into a
-  patient ask not losing. Report both, with the caveats above attached to the patient number.
+- **The `◆ asym fill` clause and the BE-floored `Est. sell` patient half do NOT render on this
+  surface — read them on `/scan` or a per-item quote instead.** _(judgment: scope note; the cell is
+  rendered by `js/estimators/cells.mjs`, the wording by `pipeline/lib/render/emit.mjs` `formatAsymFill`)_
+  This table's headers are Quick/Optimistic + Held@/Break-even/Verdict: there is no `Est. sell` cell
+  for the patient clause to live in, and the class-rate footer gates on a `kind:'asym'` note this
+  surface never pushes. Two separate mechanisms — do not expect either here, and do not go hunting for
+  them (tracked in `PLAN.md`'s folded PLAN-PATIENT-PAIR section, open item 1). What to carry into any
+  read of the pair wherever it DOES render: the counts are in-sample quantile ranks, not fill rates,
+  and forward measurement puts the deep bid touched **17.8%** within 24h (logged `pBid` 31.1%), the ask
+  reached **~24%** given that touch (logged `pAsk` 86.8%), and the round trip completing **4.3%** —
+  **1.5% on big-ticket** (`join-asym-outcomes.mjs`; touched/reached ≠ filled, so these bound a real
+  offer from ABOVE). **Check the book before choosing between those two columns:** with no open lot
+  whose UNIT price clears `BIG_TICKET_GP` the applicable figure is the pooled **4.3%** (lots by count),
+  which is the number that governs a held-lot read — and note that capital-share by unit-price
+  threshold (**60.1%**) and by whole-lot VALUE (**82.1%**, over 438 closed lots / 5.19b gp) are two
+  different thresholds; do not equate them.
 - **A diurnal level that carries a reality clause is relayed WITH it — the clause is not formatting.**
   _(enforced: `js/windowread.mjs` `realityClause`, the ONE renderer across the `↗ windowExit` note, the
   thesis-frame `exit` when it falls back to the derived diurnal peak, and the Diurnal timing bits)_ `⚠ spike-top …` / `⚠ stale …` always names a
@@ -164,10 +156,6 @@ Anchor (2026-07-17, the format that got approved): a positions read that pasted 
 then three short prose paragraphs each naming what changed/mattered per item (a resolved CUT, an
 ask's placement checking out fine on AC4a, a bid's finer-grain reach diverging from the smoothed
 read) — no alert lines, no summary block, nothing pasted verbatim except the table.
-
-_Superseded, kept for context: the 2026-07-16 rule required `--verbose` + pasting the FULL raw
-stdout (table + notes + alerts + summary) verbatim. That's gone for this skill — `--verbose`
-should not be passed at all now._
 
 ## 1. Run the script — never hand-fetch
 

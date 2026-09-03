@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 3.5
+version: 3.8
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -19,44 +19,60 @@ the table, it doesn't replace it. On a repeated/looped scan where nothing materi
 it's fine to note that and skip re-pasting — but when there IS something to report, paste the
 table, don't just describe it.
 
-**"Verbatim" means the NUMBERS aren't altered — it does NOT mean dumping every dust-tier row
-(Ben, 2026-07-19 — reconciles this rule against the standing `actionable-first-dead-last`
-memory, which this skipped in practice).** _(judgment: relay discipline)_ A D-grade row with a
-few-gp net (Sunfire splinters net 9, Amethyst arrowtips net 27 — real anchor, 2026-07-19) is
-noise, not a candidate; pasting the WHOLE script table including its D-grade/BE-floored tail
-every pass is what made a reply "unreadable" in practice. **Trim before pasting**: keep every
-row that's genuinely gradeable (roughly B- and above, or any row you're about to discuss in the
-judgment pass), and collapse the rest into ONE line — `Skipped: N D-grade/BE-floored rows
-(negligible net): Item, Item, …` — at the bottom, per `actionable-first-dead-last`.
-**Do NOT read the grade as a profitability check while trimming.** That phrasing above assumes
-BE-floored ⇒ low grade; it isn't so. Grade follows `rank`, which is built on the raw thesis pair, so
-a row can grade **S+ while the sell price the table PRINTS nets negative** (measured: three churn rows
-at S+/S+/S− on displayed nets of −6, −48, −23, all surviving a ≥B− trim). The screen now drops those
-at render (`spec.admitMinNet`) and names them in its own `skipped: N unprofitable at the shown pair`
-footer — **relay that footer line**; it is the tool telling you what it removed, and a wrong removal is
-only catchable if you pass it on. Grades are a scoring heuristic for elevating candidates, not a
-verdict on whether a trade makes money (Ben, 2026-08-18) — read `Net/u` for that. This is a
-row-count trim, not a column/number edit — nothing about a KEPT row's numbers changes, and
-nothing is silently dropped (the skipped names are still named, just not as full rows). **The
-`--digest` block (§1) does NOT replace this trim rule** — the digest is a SEPARATE, narrower
-cross-niche triage VIEW that sits above the per-niche tables; this trim still governs the FULL
-per-niche table you paste. Two surfaces, two reads.
+**WINNERS ONLY — and the trim is the SCRIPT's job now, not yours (Ben, 2026-09-02: "still run the
+full both-leg verification, but report only the surviving picks; drop the 'what failed and why'
+section").** _(judgment: relay discipline; the filter itself is encoded in
+`pipeline/commands/screen-flip-niches.mjs`)_ `--verbose` renders rows whose **displayed net is
+positive** and collapses what it removed into ONE line per flip-niche — `Skipped: N rows
+non-positive net at the shown pair: Item (net −x), … (+K more)` — beside the existing `rejected:` /
+`crowded out:` / `skipped: N unprofitable at the shown pair` footers. **HELD and WATCHLIST rows are
+EXEMPT** (the same sets `admitMinNet` exempts) and print regardless of net, with no Skipped line: a
+negative net on one of those is a POSITION or WATCH signal, not a surviving pick — read it, act on
+it as a position, and never shortlist it as a winner. The **per-row STANZA families
+do not print at all** under `--verbose` — Diurnal timing, Base position, Entry paths, velocity and
+the overnight accumulation table are replaced by ONE pointer line per flip-niche, `Diurnal timing ·
+Base position · Entry paths: pipeline/.cache/last-report/screen.json (--full to print)` (amplitude
+folds its variant into the doctrine pointer). Only the compact one-line `ℹ`/`⚠` notes still print,
+and those for surviving rows only. **A missing Diurnal/Base-position read therefore means "it is in
+the cache", never "there was no data"** — say so if Ben asks, and go read the cache rather than
+re-running the scan. So
+**paste the `--verbose` table AS PRINTED**: no row-count trim in your head, no re-adding rows out of
+the cache, and no re-narrating what the script removed. "Verbatim" still means the NUMBERS aren't
+altered. Losers and gate chatter are never retold in prose — the script's own Skipped/rejected lines
+ARE the whole story, and relaying them unedited is what keeps a wrong removal catchable (a filter you
+cannot see is a filter you cannot check). The old rule here asked the agent to trim a full dump by
+grade AFTER it had already entered context; that cost is gone at the source.
 
-**Quiet is now the DEFAULT (AO1, default flipped post-review — Ben: an agent must read the JSON dump
+**The filter keys on NET, never on grade — deliberately (Ben, 2026-09-03: "Don't implement a grade
+based filter; grade is notoriously inaccurate and will be tuned later. Positive net seems safe").**
+_(judgment: honesty over the grade column)_ Grade follows `rank`, built on the raw thesis pair, so a
+row can grade **S+ while the sell price the table PRINTS nets negative** (measured: three churn rows
+at S+/S+/S− on displayed nets of −6, −48, −23, all of which a ≥B− trim would have kept). Grades are a
+scoring heuristic for elevating candidates, not a verdict on whether a trade makes money (Ben,
+2026-08-18) — read `Net/u` for that, which is exactly what the render filter reads. Honest limit
+(rule 4): a NON-EXEMPT candidate whose displayed net is negative while its PATIENT economics are
+positive is hidden from stdout — it survives in the cache and the digest, and the Skipped line names
+it. Held/watchlist rows are not dropped at all, so no Skipped line covers them.
+
+**The `--digest` block (§1) is a SEPARATE surface, not a replacement** — a narrower cross-niche
+triage VIEW that sits ABOVE the per-niche tables. Relay both; two surfaces, two reads.
+
+**Quiet is the DEFAULT (AO1, default flipped post-review — Ben: an agent must read the JSON dump
 for the data, not lean on a stdout summary line, so quiet can't be optional).** A bare
 `screen-flip-niches.mjs` run prints one summary line + writes `pipeline/.cache/last-report/screen.json`
-(the render-object dump) — read THAT file for the data. **Pass `--verbose` whenever this skill's job is
-to paste the table to Ben** (the §1 "paste the raw markdown table" rule above) — without it there is no
-table to paste. Bare/quiet is for the agent's own reasoning passes only.
+(the render-object dump). **Pass `--verbose` whenever this skill's job is to paste the table to Ben**
+(the "paste the raw markdown table" rule above) — without it there is no table to paste; bare/quiet is
+for the agent's own reasoning passes. **`--full` restores the complete render** (every row, every
+prose family) and is a DEBUGGING / ANALYSIS tool only — named here so you know it exists, never run
+on a common pass.
 
-**Relay both surfacing tiers — nothing trimmed speculatively (R10, 2026-07-16).** The render
-layer labels every note family a TRACKING tier — `core` (grades/verdicts, alerts, the WATCHLIST,
-the fired REJECT/CAUTION footer) and `context` (the inform-only families: diurnal, forecast, ask
-headroom, asym fill, window-clear, reach relief). _judgment:_ **both render AND relay by
-default** — there is NO default-hidden middle tier, so surface the context footer notes too, don't
-drop them to "keep it short." A note family only stops being surfaced once real sessions evidence
-it's consistently unused (a future ruling, never a per-pass call). The tier registry lives in
-`pipeline/lib/render/render.mjs`'s header — the ONE registry; don't restate tiers here.
+**Common-run data contract — read the cache, never a bigger stdout (Ben, 2026-09-03: "we need to be
+able to reference the full set of data for debugging/analysis purposes but on the common run we
+should read cache json").** Anything the judgment pass (§2) needs BEYOND the pasted table comes from
+`pipeline/.cache/last-report/screen.json` — it carries every row and every note family and is
+identical under quiet / `--verbose` / `--full` (modulo `generatedAt`), because the winners filter is
+render-only — plus `pipeline/.cache/last-report/verify.json` for a candidate you dumped with `--out`
+in §2. Reach for `--full` only when you are debugging the renderer itself.
 
 - **The `◆ asym fill` counts are QUANTILE CONSTANTS read back, not per-item fill rates — relay the
   whole clause, never just the price and the tally.** _(judgment: honesty discipline over an
@@ -97,7 +113,8 @@ node pipeline/commands/screen-flip-niches.mjs --verbose --digest [--mode band|ch
 ```
 
 `--verbose` is required here since this skill's job is to paste the table to Ben (§ above) — quiet
-is now the default (AO1) and without `--verbose` there is no table in stdout to paste.
+is the default (AO1) and without `--verbose` there is no table in stdout to paste. `--verbose` IS
+the winners view; `--full` is the debugging render and is not part of this invocation.
 
 **`--digest` is part of the STANDARD invocation (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST, Workstream C).**
 _(judgment: triage-read discipline; mechanic in `screen-flip-niches.mjs` `buildDigestBlock`)_ It prints
@@ -133,10 +150,10 @@ breaking ↓` (a post-update dump sitting @floor is a falling knife, NOT a disco
 digest excludes held items but still shows FRESH candidates, so the caution guard matters here too: don't
 relay a `@floor` pick as a buy without checking its cue. Relay it when a pick reads `@floor` or is deep into
 its dip window. It
-is an ADDITIVE VIEW, not a replacement: the digest sits ABOVE the full per-niche tables and the context
-footers, it never trims or supersedes them (the `actionable-first-dead-last` trim rule below still governs
-the FULL table you paste). Relay the digest AND the trimmed per-niche table — two different surfaces for two
-different reads (digest = cross-niche triage; the trimmed table = the per-niche detail). CONSOLE-ONLY (never
+is an ADDITIVE VIEW, not a replacement: the digest sits ABOVE the per-niche tables and the footers, it
+never trims or supersedes them (the winners-only render above is what governs which rows the table you
+paste contains). Relay the digest AND the winners-only per-niche table — two different surfaces for two
+different reads (digest = cross-niche triage; the table = the per-niche detail). CONSOLE-ONLY (never
 in `screen.json` / the app), and every column is INFORM-ONLY, PLACEHOLDER (n≈0) — the `verdict` word is a
 deterministic triage prompt (`fill-now` / `weak deploy` / `mirage top` / `starter /
 hold-to-next-peak` / `low-conviction`), NOT a calibrated order. **There is no reach-only verdict** —
@@ -584,8 +601,10 @@ This is the tribal layer the script can't do — apply ALL of these:
   12/14 days yet only print in a 2h nightly spike that's already behind you today, at volume that clears
   a tenth of your tranche (the days-reach ≠ lap-clear trap). Price every pick in three moves:
   1. **Name the exit WINDOW.** *4h-lap* (ask at/just under the live instabuy → clears this window, the
-     churn default) OR *diurnal-spike* (ask at the peak-window level from the **Diurnal timing** block /
-     `read-window-range.mjs --profile` → clears in that window, better margin if you can wait). State which.
+     churn default) OR *diurnal-spike* (ask at the peak-window level from the **Diurnal timing** read —
+     which under `--verbose` lives in `pipeline/.cache/last-report/screen.json`, not stdout (`--full` to
+     print it) — or from `read-window-range.mjs --profile` → clears in that window, better margin if you
+     can wait). State which.
   2. **Quote the reachable-IN-WINDOW ask** (RC1 recency-honest; the Asymmetric ask-reach read below
      verifies it) — NEVER the raw band top.
   3. **BACK-SOLVE the buy from that ask** — bid ≤ the price that leaves break-even + your target margin
@@ -596,7 +615,9 @@ This is the tribal layer the script can't do — apply ALL of these:
      forward from the band low.
   4. **Project TODAY** — is the window ahead or already printed? (`diurnalForecast` eta / the Hydra
      stale-window rule). A spike window behind you today means price the 4h-lap exit or wait for the next.
-  - **Diurnal-phase entry sizing** — read the `⏲` phase token the Diurnal timing block now prints
+  - **Diurnal-phase entry sizing** — read the `⏲` phase token the Diurnal timing read carries. Under
+    `--verbose` that read is CACHE-ONLY: take the token from `pipeline/.cache/last-report/screen.json`
+    (or re-run with `--full` to print it), never from the `--verbose` stdout, where it does not appear
     (`js/windowread.mjs` `diurnalPhase` — inform-only, n≈0, never gates). Entering `post-peak`/cooling
     (peak already closed today, next peak ~Yh away) → REDUCE entry size + label it hold-to-next-peak, don't
     max the buy limit into a fading window. Anchor: maxed the blowpipe limit 8/8 as its peak was CLOSING →
@@ -867,7 +888,9 @@ This is the tribal layer the script can't do — apply ALL of these:
   quoted and graded in the always-shown Watchlist section below, so read it there rather than reporting
   it as crowded out. Full diagnosis + design: `PLAN-SCREEN-ARCHITECTURE.md`.
 - **"Skip despite high grade."** Grade cutoffs are placeholders (`rating.mjs`); a good
-  letter on a ghost-spread / thin / tax-eaten row is still a skip — say why in one line.
+  letter on a ghost-spread / thin / tax-eaten row is still a skip. Under winners-only the skip is
+  SILENT — leave the row off the shortlist rather than writing a rejection line for it; give the
+  reason only if Ben asks about that item.
 - **Lane management — scale what's printing, rotate what's stalling (v1.8, 2026-07-05,
   Ben's framing).** _(judgment: exposure call)_ Read the current book's recent lanes before pitching new picks: an
   item that has closed several profitable laps TODAY is a live, validated edge — the
@@ -943,9 +966,12 @@ This is the tribal layer the script can't do — apply ALL of these:
 
 ## 4. Output
 
-The judgment-filtered shortlist, one-line rationale per pick (why this edge is real), plus
-a note of how many candidates the 250k floor eliminated. If a high-grade row was skipped,
-point at it and give the reason — that's the layer this skill exists for.
+The judgment-filtered shortlist — **the surviving picks only** — with a one-line rationale per pick
+(why this edge is real). Run the full both-leg verification as always; report only what survived it.
+There is **no "what failed and why" section** (Ben, 2026-09-02): the floor/gate counts and the removed
+rows are already named by the script's own `Skipped:` / `rejected:` / `crowded out:` footer lines,
+which you relay as printed and do not re-narrate. If Ben asks about a specific item you passed on,
+answer then — that is a follow-up, not a standing section.
 
 **Cover every flip-niche each pass — "no dips" is NOT a complete scan (Ben, 2026-07-07).** A
 recurring scan (esp. inside a watch loop) drifts narrow: one salient sub-task — the dip-hunt

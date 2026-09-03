@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.27
+version: 1.28
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -8,16 +8,21 @@ description: Two-phase end-of-day setup — resolve current positions, pause for
 
 **Paste the raw markdown table verbatim, unfenced (Ben, 2026-07-16).** This flow runs `/positions`
 then `/scan`; relay each script's own markdown table (the positions table, the screen flip-niche
-tables, the overnight accumulation-and-capital table) as PLAIN markdown — NOT wrapped in a fenced code block
+tables, and the overnight accumulation-and-capital table you reconstruct from the cache per step 6)
+as PLAIN markdown — NOT wrapped in a fenced code block
 (a code fence forces the client to show literal `|`/`-` characters instead of a real table —
 confirmed live, 2026-07-16). The sizing prose supplements the tables, it doesn't replace them.
 
-**Relay both surfacing tiers — nothing trimmed speculatively (R10, 2026-07-16).** The render layer
-labels every note family a TRACKING tier — `core` (verdicts, alerts, the WATCHLIST, the accumulation
-table) and `context` (the inform-only families: diurnal, forecast, ask headroom, asym, window-clear,
-reach relief). _judgment:_ **both render AND relay by default** — there is NO default-hidden
-middle tier, so surface the context notes too. The tier registry lives in `pipeline/lib/render/render.mjs`'s
-header — the ONE registry; don't restate tiers here.
+**READ everything, RELAY what's actionable (winners-only, Ben 2026-09-02 — supersedes R10's
+"relay both tiers by default", 2026-07-16).** The render layer labels every note family a TRACKING
+tier — `core` (verdicts, alerts, the WATCHLIST, the accumulation table) and `context` (the
+inform-only families); the tier registry lives in `pipeline/lib/render/render.mjs`'s header, the ONE
+registry, don't restate tiers here. _judgment:_ **read both tiers so nothing decision-relevant is
+missed, but relay actionable-first** — the lines you are recommending get written up fully, a quiet
+one gets ONE line, and a context note that doesn't change tonight's plan is read and not relayed.
+This flow INVOKES `/scan` and `/positions`, so it inherits their winners-only contracts rather than
+overriding them: the screen's own `Skipped:` / `rejected:` footers are the whole story on what the
+screen dropped, and there is no "what failed and why" section here either.
 
 ## Time-geography of the overnight flip (v1.8, 2026-07-05 — Ben-endorsed)
 
@@ -148,8 +153,9 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
      A `⚠ spike-top …` / `⚠ stale …` tag on a dip/peak level always names the typical level (rendered `~X` in the compact `short` style the console bits use, and spelled out as `typical ~X` in the `exit`/`full` styles — do NOT grep relayed output for the word "typical") and never
      reprices the level itself — so an overnight bid or ask quoted off it is stated with the clause, or
      priced at the typical; a clause dropped on the way into the plan is the flag never having fired.
-6. **Accumulation-and-capital table — the SCRIPT prints it (COD-2, 2026-07-10).** Ben's exact
-   ask ("how many can I accumulate in 8h and how much capital does that require") is now an
+6. **Accumulation-and-capital table — the SCRIPT builds it, and it is CACHE-ONLY (COD-2, 2026-07-10;
+   cache-only since the winners-only render).** Ben's exact
+   ask ("how many can I accumulate in 8h and how much capital does that require") is an
    ENCODED output of `screen-flip-niches.mjs --posture overnight`: an **Overnight accumulation & capital**
    table under each flip-niche, top-down by the overnight sort, with per line `Bid → Ask (sell) ·
    up-to units/8h · Capital · Cum capital · Net/u · Total if cycled`. The up-to-units figure is
@@ -158,13 +164,16 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    asserts its negation, because `expUnits` now takes the haircut 2 windows/day while this keeps the
    physical refill count, so scaling by 8/24 double-counts the haircut —
    `pipeline/lib/signal/gatecandidates.mjs`, so its constants can never drift from `expUnits`); the
-   script prints its UPPER-BOUND caveat itself (assumes fills at your bid, prorates daily volume
+   script carries its UPPER-BOUND caveat with it (assumes fills at your bid, prorates daily volume
    flat across the quiet hours, no fill probability). **Do not hand-compute or restate the
-   formula — read the table.** Your remaining judgment on top of it:
+   formula — read the table.** **WHERE to read it:** stdout carries only a `· accumulation` pointer,
+   so take the table from `pipeline/.cache/last-report/screen.json` (step 4 already runs the script
+   quiet, which is the same read), or re-run with `--full` when you want it printed. Your remaining
+   judgment on top of it:
    - **Timing target on every line (Ben, 2026-07-05):** bind the bid + sell to the window
-     expected to fill them (the bid to the fill-realism / **Diurnal timing** read the script
-     already prints, the sell to tomorrow's morning-lift / next-day churn). "X, targeting Y" —
-     never a bare number. Sell never below break-even.
+     expected to fill them (the bid to the fill-realism / **Diurnal timing** read — also cache-only,
+     same file, `--full` to print it — the sell to tomorrow's morning-lift / next-day churn).
+     "X, targeting Y" — never a bare number. Sell never below break-even.
    - **Take lines top-down against the Phase-1 stated capital** using the running `Cum capital`
      column — stop when it exceeds what Ben freed; **flag retrace risk** on any big-ticket line.
    - **Pair every up-to-units figure with the fill-realism read** (§5 windowrange) — it is a
@@ -180,9 +189,9 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    stay listed at what break-even-floored price, and the prioritized bid table (the script's
    accumulation table, filtered to the lines you're recommending within stated capital).
 
-Note: `screen-flip-niches.mjs --posture overnight` shipped (S2) and now prints the accumulation-and-capital
-table itself (COD-2) — this skill relies on it for BOTH the structural overnight filtering AND
-the sizing; keep only the prioritization + fill-realism judgment here.
+Note: `screen-flip-niches.mjs --posture overnight` shipped (S2) and builds the accumulation-and-capital
+table itself (COD-2, read from the cache per step 6) — this skill relies on it for BOTH the structural
+overnight filtering AND the sizing; keep only the prioritization + fill-realism judgment here.
 
 ## Encode learnings (self-improvement — after the offers are placed, never during)
 

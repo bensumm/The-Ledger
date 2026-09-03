@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.19
+version: 1.20
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -21,11 +21,16 @@ SUPERSEDES the earlier blanket "paste raw stdout for `--positions` too" — `/po
 display rule (2026-07-17), so defer to it, don't duplicate it here (§3 already delegates to `/positions`
 doctrine). The overnight-fill narrative supplements the table, it doesn't replace it.
 
-**Relay both surfacing tiers — nothing trimmed speculatively (R10, 2026-07-16).** The render layer
-labels every note family a TRACKING tier — `core` (verdicts, alerts, the V5 held-note fields) and
-`context` (the inform-only families). _judgment:_ **both render AND relay by default** — there is NO
-default-hidden middle tier, so surface the context notes too. The tier registry lives in
-`pipeline/lib/render/render.mjs`'s header — the ONE registry; don't restate tiers here.
+**READ everything, RELAY what's actionable (winners-only, Ben 2026-09-02 — supersedes R10's
+"relay both tiers by default", 2026-07-16).** The render layer labels every note family a TRACKING
+tier — `core` (verdicts, alerts, the V5 held-note fields) and `context` (the inform-only families);
+the tier registry lives in `pipeline/lib/render/render.mjs`'s header, the ONE registry, don't restate
+tiers here. _judgment:_ **read both tiers so nothing decision-relevant is missed, but relay
+actionable-first**: an item with something to act on overnight (a fill, a changed verdict, a stale bid
+to reprice or cancel, a broken support) is written up fully; an item that did nothing and needs
+nothing gets **ONE line**. Never `·`-join items onto a shared line, and every item line still carries
+its `list @ X (BE Y)`. A context note that doesn't change a decision is read and not relayed — no
+"what didn't happen and why" section.
 
 ## 0. Ensure the local desk is up (Ben, 2026-07-18)
 

@@ -2245,8 +2245,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     computes no numbers. Consumers: `watch-positions.mjs` (`buildWatchReport`, VZ1), `quote-items.mjs`
     (`buildQuoteReport`, both modes, VZ3), `screen-flip-niches.mjs` (`buildScreenNicheReport`, VZ4a/b). Notes
     are typed `{kind,tier,text}`; the per-kind sigil lives in render.mjs's `NOTE_KINDS`, not the push site.
-    Also holds the surfacing-TIER registry (R10 — `core`/`context` both render+relay by default, a tracking
-    label not a gate; `shadow` never enters a report). Byte-identity + the VZ2b canonical-cell format +
+    Also holds the surfacing-TIER registry (`core`/`context`, a tracking label not a gate; `shadow` never
+    enters a report). R10's "both render+relay by default" is superseded by winners-only (2026-09-02):
+    the report object keeps every tier, `--verbose` stdout carries positive-net rows (held/watchlist
+    exempt) plus a cache pointer for the stanza families, `--full` restores everything. Byte-identity + the VZ2b canonical-cell format +
     quote/screen report assembly pinned by `pipeline/test/render.test.mjs`).
     **`rating.mjs` and `estimators.mjs` MOVED to `js/` (2026-07-10, app-parity Wave 2a)** —
     now **APP-IMPORTED by `js/market.js`** (AP4, 0.61.0 — the Finder Grade column + Rating bar + sort use

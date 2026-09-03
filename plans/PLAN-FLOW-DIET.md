@@ -156,6 +156,23 @@ for now-contradicted relay phrasing and fix in place; bump each edited SKILL.md 
 frontmatter (never APP_VERSION). Ship the encode/keep-as-judgment/retire disposition table for
 every prose rule touched (PLANNING.md improvement-loop requirement).
 
+**FD2 disposition table (shipped)** — every prose rule touched:
+
+| Skill · rule | Disposition | Note |
+| --- | --- | --- |
+| `/scan` trim-in-your-head (grade-based row trim, 2026-07-19) | **RETIRE → ENCODE** | Superseded by FD1's positive-net render filter + its `Skipped:` line; the skill now says "paste the `--verbose` table as printed". |
+| `/scan` grade-is-not-a-profitability-check (2026-08-18) | KEEP-AS-JUDGMENT (repurposed) | Kept as the *reason* the filter keys on displayed net, never grade (Ben 2026-09-03). |
+| `/scan` R10 relay-both-tiers / "nothing trimmed speculatively" | **RETIRE** | Countermanded the trim; deleted. Winners-only replaces it; the tier registry pointer stays in `render.mjs`. |
+| `/scan` quiet-default + cache read (AO1) | KEEP + EXTEND | Now names `--full` as debug-only and pins the common-run contract to `last-report/screen.json` + `verify.json`. |
+| `/scan` §4 "note how many candidates the floor eliminated / point at a skipped high-grade row" | **RETIRE** | This *was* the "what failed and why" section Ben dropped; the script's own footer lines carry it. |
+| `/scan` "Skip despite high grade" | KEEP-AS-JUDGMENT (narrowed) | The skip is now silent — reason on request only. |
+| `/scan` per-niche coverage (2026-07-07) · watchlist honesty (S3) | KEEP-AS-JUDGMENT | Untouched — guards the salient-subtask failure and watchlist honesty. |
+| `/positions` asym-fill CORRECTED-then-describes block | **RETIRE (collapse)** | Self-superseding; collapsed to one scope note + the measured pair. |
+| `/positions` "Superseded, kept for context" 2026-07-16 verbose rule | **RETIRE** | Deleted outright; the live contract is two paragraphs above it. |
+| `/positions` display contract (`table`/`alerts`/`lines`/`notes`) | KEEP + EXTEND | Adds actionable-first: actionable lots rendered fully, quiet lots ONE line. |
+| ONE-LINE-PER-ITEM · `list @ X (BE Y)` per line | KEEP-AS-JUDGMENT | Unchanged, and restated inside the new bullet so the diet can't erode them. |
+| `/morning` R10 "both render AND relay by default" | **RETIRE → reshape** | Now read-both-tiers / relay-actionable-first, matching `/positions`. |
+
 ### FD3 — `placedTs` on offers (NOT YET DISPATCHED)
 
 `pipeline/lib/reconstruct/offers.mjs`: derive per-offer placement time (first log line of the
