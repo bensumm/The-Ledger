@@ -81,6 +81,8 @@ import { bookUtilization, totalCapital } from '../lib/capital/capital-utilizatio
 import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';    // total-capital: DERIVED idle-cash denominator (derive-cash.mjs anchor + log flow)
 import { loadThesis, pruneThesis, thesisLine } from '../lib/thesis/sessionthesis.mjs';   // YT1 (#4) — read-only session-thesis reminder
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/thesis/holdthesis.mjs';   // TG1 — read-only declared-hold-thesis store (gates the expected-underwater headline)
+import { loadBidThesis, pruneBidThesis, bidThesisFor } from '../lib/thesis/bidthesis.mjs';
+import { staleBidRead, staleBidState, shouldResurfaceStale, staleBidLine } from '../lib/signal/stalebid.mjs';
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/market/guideanchor.mjs';   // YP1 (#2) advisory guide re-anchor line
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -92,6 +94,7 @@ const WATCH_STATE = path.join(HERE, '..', '.cache', 'watch-state.json'); // giti
 const CYCLE_WATCH = path.join(HERE, '..', '..', 'cycle-watch.json'); // gitignored repo-root sibling, Chunk 4 per-item cycle-expectation state (--cycle)
 const THESIS_PATH = path.join(HERE, '..', '.cache', 'session-thesis.json'); // gitignored, YT1 session thesis (read-only here; declare-thesis.mjs writes)
 const HOLD_THESIS_PATH = path.join(HERE, '..', '..', 'hold-thesis.json'); // TRACKED at repo root, TG1 declared-hold-thesis store (agent-written; read-only here)
+const BID_THESIS_PATH = path.join(HERE, '..', '..', 'bid-thesis.json');
 
 /* Append one line per watched item whose GE guide price CHANGED since the last logged value
    (first sighting logs too). Each line is an observed guide-update event: pinning WHEN an
@@ -712,6 +715,7 @@ async function main() {
   const newCycleState = {};
   const thesisStore = pruneThesis(loadThesis(THESIS_PATH));   // YT1 (#4) read-only: the agent's recorded intent per lane
   const holdThesisStore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));   // TG1 read-only: agent-declared hold plans (gate the expected-underwater headline)
+  const bidThesisStore = pruneBidThesis(loadBidThesis(BID_THESIS_PATH));
   const guideHist = loadGuideHistory(GUIDE_HISTORY);          // YP1 (#2) advisory: guide re-anchor history (gated → silent until it accrues)
   const newState = {};
   const wlWindow = loadWatchlistIds({ map, tolerant: true });   // WC1: big-ticket force-include (mirrors the incidental filter's watchlist test) for the window-clear rung shadow
@@ -1133,6 +1137,12 @@ async function main() {
 
   for (const it of bidItems) {
     const { row, name } = it;
+    // FD4: buy-dip window + guarded level for the stale-bid reprice option (one lap per item, in-hand ts1h)
+    let bidLap = null;
+    try {
+      const lap = diurnalTimedLap(it.ts1h, { nights: 14, liveLo: row.quickBuy ?? null, liveHi: row.quickSell ?? null });
+      if (!lap.degraded) bidLap = lap;
+    } catch { /* inform-only — never block a watch pass */ }
     for (const off of it.bids) {
       const bidVer = offerVerdict(row, off.offer, it._bidPathCtx);   // P5 path-aware
       const bidPos = `bid ${off.qty}/${fmt(off.max)} @ ${fmtP(off.offer)}`;
@@ -1147,9 +1157,21 @@ async function main() {
       const bidPress = pressureText(row.pressure, { compact: true });
       const rest = restingAge(off.placedTs, nowMs);
       notes.push(`- ${name} bid @ ${fmtP(off.offer)}: ${firstSentence(bidAction(row, off, it._bidPathCtx))}${rest ? ` · resting ${rest}` : ''}${wl ? ` · window ${wl}` : ''}${bidPress ? ` · pressure ${bidPress}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
+      // FD4: ONE inform-only stale-bid line on an UNDECLARED bid, V1-state-deduped; a declaration silences it
+      try {
+        if (!bidThesisFor(bidThesisStore, it.id, 'buy')) {
+          const read = staleBidRead({ placedTs: off.placedTs, dipWindow: bidLap ? bidLap.dipWindow : null, nowMs });
+          if (read) {
+            const sKey = `stalebid:${it.id}:${off.offer}`;
+            const sCur = staleBidState(read, off);
+            if (shouldResurfaceStale(priorState[sKey], sCur))
+              notes.push(`    ${staleBidLine({ name, off, read, ageTxt: rest, window: bidLap ? bidLap.dipWindow : null, level: bidLap ? bidLap.bid : null })}`);
+            newState[sKey] = sCur;
+          }
+        }
+      } catch { /* inform-only — never block a watch pass */ }
       // V6 recovery-read on a resting bid — surfaced only when the fill hinges on direction
-      // (BID-BEHIND: below the band, it fills only if the price drops to it). ADVISORY context:
-      // a drop-lean means it's likely to fill, a recover-lean that it drifts away. No verdict input.
+      // (BID-BEHIND: fills only if the price drops to it). ADVISORY context, no verdict input.
       try {
         const bidDirectional = offerVerdict(row, off.offer, it._bidPathCtx) === 'BID-BEHIND';
         if (recoveryTrigger({ kind: 'bid', bidDirectional }).surface) {
@@ -1157,9 +1179,8 @@ async function main() {
           if (line) notes.push(`    ${line}`);
         }
       } catch { /* advisory only — never block a watch pass */ }
-      // V1 cross-pass deltas for a resting bid. breakEven is left null (underwater is a held-lot
-      // concept), so a bid only surfaces Δ instabuy / mom transition / band-top drift. Identity
-      // carries the offer price → a re-priced bid resets its counters. Guarded (observability only).
+      // V1 cross-pass deltas for a resting bid: breakEven null (underwater is a held-lot concept),
+      // identity carries the offer price → a re-priced bid resets its counters. Guarded.
       try {
         const key = `bid:${it.id}:${off.offer}`;
         const cur = { identity: `bid:${off.offer}:${off.max}`, instabuy: row.quickSell, mom: row.mom, bandTop: row.rawBandHi, breakEven: null };

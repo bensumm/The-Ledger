@@ -17,24 +17,32 @@
    path-carrying plan. `--path` is what routes the flags into the latter. `clear` removes the id from
    BOTH stores — FIX 2, 2026-07-13 — so a cleared plan can't leave a gating exit/tripwire behind.)
 
+   FD4 — `bid`/`bid-clear` declare/clear a DEEP/LONG resting-bid intent into TRACKED root bid-thesis.json (bidthesis.mjs): silences watch's stale-bid flag until TTL, gates nothing else.
+
      node pipeline/commands/declare-thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--exit "<gp>"] [--window "<h-h>"] [--path <key>] [--entered-under <key>]
      node pipeline/commands/declare-thesis.mjs clear "<item|id>"
+     node pipeline/commands/declare-thesis.mjs bid "<item|id>" ["<note>"] [--side buy|sell]
+     node pipeline/commands/declare-thesis.mjs bid-clear "<item|id>" [--side buy|sell]
      node pipeline/commands/declare-thesis.mjs list */
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping } from '../lib/market/marketfetch.mjs';
 import { loadThesis, saveThesis, upsertThesis, clearThesis, pruneThesis, thesisLine } from '../lib/thesis/sessionthesis.mjs';
 import { loadHoldThesis, saveHoldThesis, pruneHoldThesis, thesisFor as holdThesisFor, upsertThesis as upsertHoldThesis, clearThesis as clearHoldThesis } from '../lib/thesis/holdthesis.mjs';
+import { loadBidThesis, saveBidThesis, pruneBidThesis, upsertBidThesis, clearBidThesis, BID_THESIS_TTL_DAYS } from '../lib/thesis/bidthesis.mjs';   // FD4 — declared deep/long-bid store
 import { parseGp } from '../lib/render/cli.mjs';   // VN-2 — numeric tripwire/exit for the hold-thesis write
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const THESIS_PATH = path.join(HERE, '..', '.cache', 'session-thesis.json');
 const HOLD_THESIS_PATH = path.join(HERE, '..', '..', 'hold-thesis.json');   // TRACKED repo-root store (P4a path decl)
+const BID_THESIS_PATH = path.join(HERE, '..', '..', 'bid-thesis.json');     // TRACKED repo-root store (FD4 bid decl)
 
 function usage() {
   console.log('Usage:\n' +
     '  node pipeline/commands/declare-thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--window "<h-h>"] [--path <key>] [--entered-under <key>]\n' +
     '  node pipeline/commands/declare-thesis.mjs clear "<item|id>"\n' +
+    '  node pipeline/commands/declare-thesis.mjs bid "<item|id>" ["<note>"] [--side buy|sell]\n' +
+    '  node pipeline/commands/declare-thesis.mjs bid-clear "<item|id>" [--side buy|sell]\n' +
     '  node pipeline/commands/declare-thesis.mjs list');
 }
 
@@ -54,9 +62,11 @@ async function main() {
   if (cmd === 'list') {
     const store = pruneThesis(loadThesis(THESIS_PATH));
     const ids = Object.keys(store);
-    if (!ids.length) { console.log('(no session theses recorded)'); return; }
+    const bstore = pruneBidThesis(loadBidThesis(BID_THESIS_PATH));   // FD4: bid declarations list too
+    if (!ids.length && !bstore.length) { console.log('(no session theses or bid declarations recorded)'); return; }
     const map = await loadMapping();
     for (const id of ids) console.log(`- ${map.byId[id]?.name || ('#' + id)} (${id}): ${thesisLine(store[id])}`);
+    for (const e of bstore) console.log(`- ${map.byId[e.id]?.name || ('#' + e.id)} (${e.id}): declared ${e.side || 'buy'}-side deep/long bid${e.note ? ` — ${e.note}` : ''} (stale-bid flag silent; TTL ${BID_THESIS_TTL_DAYS}d)`);
     return;
   }
 
@@ -69,18 +79,32 @@ async function main() {
     else if (a === '--window') flags.window = argv[++i];
     else if (a === '--path') flags.path = argv[++i];
     else if (a === '--entered-under') flags.enteredUnder = argv[++i];
+    else if (a === '--side') flags.side = argv[++i];
     else pos.push(a);
+  }
+
+  if (cmd === 'bid' || cmd === 'bid-clear') {
+    if (!pos.length) { usage(); process.exit(1); }
+    const side = flags.side || 'buy';
+    if (side !== 'buy' && side !== 'sell') { console.error(`! --side must be buy or sell (got "${flags.side}")`); process.exit(1); }
+    const { id, name } = await resolveId(pos[0]);
+    const bstore = pruneBidThesis(loadBidThesis(BID_THESIS_PATH));
+    if (cmd === 'bid-clear') {
+      saveBidThesis(BID_THESIS_PATH, clearBidThesis(bstore, id, side));
+      console.log(`cleared ${side}-side bid declaration for ${name} (${id}) — the stale-bid flag re-arms (bid-thesis.json).`);
+      return;
+    }
+    const note = pos.slice(1).join(' ') || null;
+    saveBidThesis(BID_THESIS_PATH, upsertBidThesis(bstore, { id, side, note }));
+    console.log(`declared ${side}-side deep/long bid for ${name} (${id})${note ? `: ${note}` : ''} — stale-bid flag silent for ${BID_THESIS_TTL_DAYS}d (bid-thesis.json).`);
+    return;
   }
 
   if (cmd === 'clear') {
     if (!pos.length) { usage(); process.exit(1); }
     const { id, name } = await resolveId(pos[0]);
-    // clear the session-thesis store (free-text INTENT/reminder)…
+    // clear BOTH stores (FIX 2 — a cleared plan must not leave a gating exit/tripwire behind)
     saveThesis(THESIS_PATH, clearThesis(pruneThesis(loadThesis(THESIS_PATH)), id));
-    // …AND the TRACKED hold-thesis store (the declared, GATING, path-carrying plan `set --path` writes).
-    // FIX 2 (2026-07-13): `clear` used to leave the hold-thesis entry behind, so a cleared plan kept
-    // gating (its exit/tripwire lingered — the stale Masori body / Lightbearer / fury pollution). Reach
-    // BOTH stores; only write hold-thesis.json when an entry actually existed (else it's untouched).
     const hstore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));
     const hadHold = holdThesisFor(hstore, id) != null;
     if (hadHold) saveHoldThesis(HOLD_THESIS_PATH, clearHoldThesis(hstore, id));
@@ -96,17 +120,14 @@ async function main() {
     const store = upsertThesis(pruneThesis(loadThesis(THESIS_PATH)), id, { thesis, tripwire: flags.tripwire, window: flags.window });
     saveThesis(THESIS_PATH, store);
     console.log(`set thesis for ${name} (${id}): ${thesisLine(store[id])}`);
-    // P4a: `--path` ALSO declares the path-engine entry path into the tracked hold-thesis store,
-    // preserving any existing declared plan fields (exitPrice/tripwire/horizon/enteredUnder). This
-    // is the ONLY store js/held-item-strategy.mjs reads enteredUnder off; the session thesis above is display-only.
+    // P4a: `--path` ALSO declares the path-engine entry path into the tracked hold-thesis store
+    // (the ONLY store js/held-item-strategy.mjs reads enteredUnder off), preserving existing fields.
     if (flags.path) {
       const hstore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));
       const prev = holdThesisFor(hstore, id) || {};
       const enteredUnder = flags.enteredUnder != null ? flags.enteredUnder
         : (prev.enteredUnder != null ? prev.enteredUnder : flags.path);   // first declaration = entered under this path
-      // VN-2: the declared plan's NUMERIC levels + exit window ride the hold-thesis entry too —
-      // a parseable --tripwire/--exit updates the gating/frame levels; --window updates the exit
-      // window; an omitted/unparseable flag preserves the existing value (never clobbers to null).
+      // VN-2: parseable --tripwire/--exit/--window ride the entry; omitted/unparseable preserves (never clobbers to null).
       const trip = flags.tripwire != null && Number.isFinite(parseGp(flags.tripwire)) ? parseGp(flags.tripwire) : (prev.tripwire ?? null);
       const exit = flags.exit != null && Number.isFinite(parseGp(flags.exit)) ? parseGp(flags.exit) : (prev.exitPrice ?? null);
       const win = flags.window != null ? flags.window : (prev.window ?? null);

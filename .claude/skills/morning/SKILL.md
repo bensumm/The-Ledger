@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.20
+version: 1.21
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -68,13 +68,24 @@ locally. Publishing to the deployed app is the once-a-day `/overnight` job — `
   quarantine is a VIEW filter, not a gag — memory `pricing-ok-on-ignored-items`); this rule
   is just "don't surface them unprompted in the overnight reconstruction".
 
-**Honest gap — no fabricated intent.** Skills are stateless: there is no record of what
-bids were placed last night. Reconstruct intent from the currently-open offers plus Ben's
-recollection; never fabricate what "was supposed to" fill. (If PLAN.md chunk L1
-action-logging lands, that log becomes the memory source — a future input, not available
-yet.)
+**Honest gap — narrowed, not closed (FD3/FD4, 2026-09-03).** WHEN each bid was placed IS now
+recorded: `offers.json` carries `placedTs` and monitor/watch lines render `· resting 26h`; a
+declared deep/long bid lives in `bid-thesis.json` (`declare-thesis.mjs bid` to declare, `list` to
+read). What is still unrecorded is the PLAN behind an *undeclared* bid — reconstruct that from
+the currently-open offers plus Ben's recollection; never fabricate what "was supposed to" fill.
+(If PLAN.md chunk L1 action-logging lands, that log becomes the full memory source.)
 
 ## 2. Re-verdict stale unfilled bids
+
+**Staleness has data behind it now (FD4, 2026-09-03 — this section used to run on pure judgment).**
+Each open offer's resting age is on its monitor line (`offers.json` `placedTs`), and a
+`node pipeline/commands/watch-positions.mjs --verbose` pass prints an inform-only `⏳ stale bid`
+line for any UNDECLARED resting bid past a trigger — episode age ≥ `STALE_BID_HOURS` (a 24h
+placeholder, n≈0) or its daily buy-dip window having passed unfilled — carrying the unfilled
+remainder, reclaimable escrow gp, and a window-named reprice level. A bid declared deep/long
+(`declare-thesis.mjs bid "<item>"` → `bid-thesis.json`, 14d TTL) is SILENT — don't nag it.
+_judgment:_ the flag frames reclaimable capital, it never urges: patience-on-cancel stands and
+CANCEL is Ben's call; never pitch repricing a bid up to chase a fill — name the window instead.
 
 For each still-open offer: `node pipeline/commands/quote-items.mjs "<item>"` (or it's covered by
 `--positions` if held) → fresh gate-tree verdict → recommend **keep / reprice / cancel**.

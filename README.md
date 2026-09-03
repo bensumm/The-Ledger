@@ -759,6 +759,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   RF0 (PLAN-REVERSE-FLIP) adds an optional additive `reverseFlip: true` MARKER to an entry — the Case-A
   flag that elects a normal tracked hold into the reverse-flip candidate pool; written only when set (a
   bare upsert keeps the pre-RF0 shape byte-for-byte), preserved across later upserts.
+- `bid-thesis.json` — tracked repo-root store (FD4, PLAN-FLOW-DIET, 2026-09-03): AGENT-WRITTEN declared
+  deep/long RESTING-BID intent, a flat array of `{id, side ('buy'|'sell'), note, ts}` keyed item+side
+  (the `hold-thesis.json` pattern — tracked so a declaration survives sessions/machines; ids + free
+  text only, no PII). Written via `declare-thesis.mjs bid "<item>" ["<note>"] [--side]` / `bid-clear`;
+  `watch-positions.mjs` reads it READ-ONLY through `pipeline/lib/thesis/bidthesis.mjs`. A declared bid
+  SILENCES the FD4 inform-only stale-bid flag and nothing else (never a verdict/alert input — it only
+  quiets a known-expected signal, the TG1 exception). 14-day TTL (`BID_THESIS_TTL_DAYS`) prunes stale
+  intent so a forgotten declaration re-arms the flag. Ships empty (`[]`); fixture-pinned in
+  `pipeline/test/stalebid.test.mjs`.
 - `owned-items.json` — tracked repo-root store (RF0, PLAN-REVERSE-FLIP, 2026-07-25): the OWNED-ITEM
   REGISTRY for reverse-flip eligibility. `{_doc, items:[{id,name,seedQty,seedTs,classification,source}]}`
   (mirrors `ignored-items.json`'s `{_doc, items:[]}` convention; an optional `pendingClassification[]`
@@ -1307,7 +1316,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     scored number is the model's intrinsic ask) + the fixed-quantile `asym` pair — so the competing
     exit-price estimators ride ONE row for the F1 head-to-head against the realized sell (pressure's
     retired ask no longer among them); zero new fetch,
-    inform-only. The ONE WRITER of the watch-state path fields
+    inform-only. FD4 (PLAN-FLOW-DIET, 2026-09-03): each UNDECLARED resting bid runs the
+    `lib/signal/stalebid.mjs` staleness read (age past the `STALE_BID_HOURS` placeholder, or its
+    buy-dip window — `diurnalTimedLap` off the in-hand ts1h — passed unfilled) and prints the ONE
+    inform-only `⏳ stale bid` line, deduped cross-pass via `stalebid:<id>:<offer>` V1 state keys;
+    a `bid-thesis.json` declaration silences it. The ONE WRITER of the watch-state path fields
     and of `.guide-history.jsonl`; each pass appends the passive Tier-1 archive snapshot. Full output
     contract: `pipeline/MONITORING.md`),
     `monitor-offers.mjs`
@@ -1332,7 +1345,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     preserving any existing plan fields; enteredUnder defaults to the path on first declaration.
     **VN-2** — with `--path`, a numeric `--tripwire`, `--exit <gp>` and `--window <h-h>` now ride the
     hold-thesis entry too (parseGp; omitted/unparseable flags preserve the existing values), making
-    one command the full declared-plan writer the thesis render frame reads),
+    one command the full declared-plan writer the thesis render frame reads.
+    **FD4** — `bid "<item|id>" ["<note>"] [--side buy|sell]` / `bid-clear` declare/clear a deep/long
+    resting-bid intent into the TRACKED root `bid-thesis.json` (silences watch's stale-bid flag for
+    `BID_THESIS_TTL_DAYS`; gates nothing else); `list` shows both stores),
     `declare-owned.mjs` (RF0, PLAN-REVERSE-FLIP — CLI, the sole agent-writer of the TRACKED root
     `owned-items.json`: `seed "<item|id>" [--qty N]` (register pre-log ownership, defaults keep),
     `classify "<item|id>" flip|keep|consumable`, `list` (shows each item's live computed qty via
@@ -2479,6 +2495,18 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     recover-vs-drop LEAN that COMPOSES momVerdict's existing signals (diurnal · regime/phase ·
     underwater-persistence · vs structural support) + the trigger gating that surfaces it only on a
     non-clean position — decides NOTHING, never a verdict/alert input; a `spike` caps confidence),
+    `stalebid.mjs` (FD4, PLAN-FLOW-DIET — PURE stale-bid read on an UNDECLARED resting bid, INFORM-ONLY
+    n≈0, gates nothing: `staleBidRead` fires on EITHER trigger — episode age (FD3 `placedTs`) ≥
+    `STALE_BID_HOURS` (24, a named placeholder: one full daily diurnal lap, six 4h buy-limit resets;
+    uncalibrated) or `buyWindowPassed` (a FULL buy-dip-window occurrence elapsed while the bid rested;
+    a bid placed mid-window gets its next full window, a degenerate full-day window never passes); a
+    null `placedTs` can never fire. `staleBidLine` renders THE one line (remainder, resting time,
+    reclaimable escrow via the suspectBidEscrow `max(0,max−qty)×offer` formula, window-named reprice
+    level + cancel-and-redeploy — never a chase-bid pitch, CANCEL stays Ben's call);
+    `staleBidState`/`shouldResurfaceStale` encode the cross-pass dedupe (print on first firing, again
+    only on further fill / a new whole-day age bucket / a reason change) riding watch's V1 state under
+    `stalebid:<id>:<offer>` keys. Declaration silencing is the CALLER's step (bidthesis.mjs, checked
+    before the read). Mutation-pinned in `stalebid.test.mjs`),
     `freed-capital.mjs` (V6 Companion — PURE `freedCapital`: detects capital freed by a booked SELL between
     passes off V1's prior-pass state and prompts a redeploy scan ≥ `FREED_CAPITAL_SCAN_GP` — surface-
     only, never auto-places/runs the scan; anchor-free, no startup/stale-gap misfire),
@@ -2538,6 +2566,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     touches `momVerdict`; fixture-pinned `holdthesis.test.mjs`; RF0 added the additive optional
     `reverseFlip:true` Case-A marker on an entry — presence-of-true, written only when set, preserved
     across upserts, legacy entries unaffected),
+    `bidthesis.mjs` (FD4, PLAN-FLOW-DIET — PURE declared deep/long-BID store over the TRACKED root
+    `bid-thesis.json`: `loadBidThesis`/`saveBidThesis`/`bidThesisFor(store,id,side)`/`upsertBidThesis`/
+    `clearBidThesis`/`pruneBidThesis`, the holdthesis load/prune/declare shape keyed (id, side) with
+    `BID_THESIS_TTL_DAYS` = 14; load degrades to `[]`, mutators PURE, a ts-less entry is kept forever
+    (the same deliberate holdthesis gap — the CLI saves the pruned store). watch-positions.mjs reads it
+    read-only to silence the stale-bid flag; fixture-pinned `stalebid.test.mjs`),
     `ownedledger.mjs` (RF0, PLAN-REVERSE-FLIP — PURE owned-item registry store + the owned-qty fold over
     `owned-items.json`: `loadOwned`/`saveOwned`/`ownedFor`/`upsertOwnedItem`/`removePending`, the
     `computeOwnedQty(item,fillsEvents)` fold that tracks owned qty via shared `collapseOffers` — seed
@@ -3024,6 +3058,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `sessionthesis.test.mjs` (YT1 — upsert/preserve/clear/prune + `thesisLine` format + file round-trip),
     `holdthesis.test.mjs` (TG1 — load-degrades-to-[]/round-trip/thesisFor-newest/upsert-replaces/clear/prune-TTL;
     P4a — path/enteredUnder persistence + the legacy-entry back-compat fixture),
+    `stalebid.test.mjs` (FD4 — the bidthesis store contract (degrade/round-trip/(id,side)-keying/prune-TTL/
+    ts-less-kept) + the staleness triggers (age placeholder, buyWindowPassed incl. mid-window/midnight-span/
+    degenerate cases, null-placedTs-never-fires) + declaration silencing + the dedupe re-surface policy +
+    the rendered line's remainder/escrow/options/no-chase-pitch pins — all mutation-verified),
     `statetransition.test.mjs` (YP2 — basing/spike-rising/spike-falling classification + the base/decay/null focus guard),
     `guideanchor.test.mjs` (YP1 — the honesty gate + prev:null-baseline filter + modal-hour/median-step above the gate),
     `probes.test.mjs` (PM1 — the loader's empty-passthrough + stage grouping, the observe-touches-no-number

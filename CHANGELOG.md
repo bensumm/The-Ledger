@@ -8,6 +8,43 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## pipeline 1.6.0 — 2026-09-03 — bid declaration + the stale-bid flag: a declared deep bid is silent, an undeclared stale one gets ONE line (PLAN-FLOW-DIET FD4; pipeline/skills only, no APP_VERSION bump)
+
+The gap (FD4 diagnosis): no declared-deep mechanism existed for a bid — `hold-thesis.json`
+silences held-lot nags only — and `/morning`'s "re-verdict stale bids" ran on pure judgment.
+FD3's `placedTs` made age readable; this chunk makes it actionable, inform-only.
+
+- **`bid-thesis.json`** (tracked repo root) + `pipeline/lib/thesis/bidthesis.mjs` — the declared
+  deep/long-bid store, the exact holdthesis load/prune/declare shape keyed **item+side** ("one
+  declaration store pattern, not two"), `BID_THESIS_TTL_DAYS` = 14 so a forgotten declaration
+  re-arms the flag. Written via `declare-thesis.mjs bid "<item>" ["<note>"] [--side]` /
+  `bid-clear`; `list` shows both stores. A declaration silences the stale-bid flag and nothing
+  else — never a verdict/alert input.
+- **`pipeline/lib/signal/stalebid.mjs`** — the staleness read on an UNDECLARED resting bid.
+  Either trigger fires: episode age ≥ **`STALE_BID_HOURS` (24h — a named placeholder, n≈0:**
+  one full daily diurnal lap, so the bid has outlived every buy window on its item's daily
+  clock, and six 4h buy-limit resets); or **the buy-dip window passed** — a FULL occurrence of
+  the item's `hourProfile` dip window elapsed while the bid rested unfilled (a bid placed
+  mid-window gets its next full window; window + guarded level come off the same
+  `diurnalTimedLap` the held path uses, zero new fetch). A null `placedTs` can never fire.
+- **The ONE line** (`watch-positions.mjs` bid section, nested under the bid note): unfilled
+  remainder, resting time, reclaimable escrow gp (the suspectBidEscrow `max(0,max−qty)×offer`
+  formula), and the two options — reprice into the NAMED buy window at its level (never a
+  reprice-up-to-chase pitch), or cancel & redeploy, explicitly "your call" (patience-on-cancel
+  stands). **Deduped cross-pass** on the V1 state file (`stalebid:<id>:<offer>` — a repriced
+  bid is a new key): prints on first firing, re-surfaces only on further fill, a new whole-day
+  age bucket (≤ once/day), or a trigger-reason change.
+- `/morning` v1.21 reconciled in place: the "no record of what bids were placed" honest-gap
+  paragraph is narrowed (placedTs + declarations now exist; the PLAN behind an undeclared bid
+  is still Ben's recollection), and §2's re-verdict step now starts from the resting-age +
+  stale-bid data instead of pure judgment.
+- 20 fixtures in `pipeline/test/stalebid.test.mjs`, with the load-bearing predicates
+  mutation-verified (7 mutations — window predicate, age threshold, both dedupe directions,
+  TTL prune, side keying, escrow formula — each run and shown to fail the suite). Verified
+  live against a fixture exchange log via the faked-home trick: a 47h-old part-filled bid
+  rendered the line on pass 1, deduped silent on pass 2, went silent under a declaration, and
+  the state key dropped. Inform-only everywhere; nothing gates.
+
 ## pipeline 1.5.0 — 2026-09-03 — `placedTs` on offers: bid age becomes a first-class field (PLAN-FLOW-DIET FD3; pipeline-only, no APP_VERSION bump)
 
 The gap (FD3 diagnosis): `offersSnapshot` emitted only `lastUpdateTs`, which a partial fill
