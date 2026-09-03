@@ -27,23 +27,36 @@ FD3's `placedTs` made age readable; this chunk makes it actionable, inform-only.
   the item's `hourProfile` dip window elapsed while the bid rested unfilled (a bid placed
   mid-window gets its next full window; window + guarded level come off the same
   `diurnalTimedLap` the held path uses, zero new fetch). A null `placedTs` can never fire.
-- **The ONE line** (`watch-positions.mjs` bid section, nested under the bid note): unfilled
+- **The ONE line** (`watch-positions.mjs`, nested under the item's note — via the shared
+  `staleBidNotes` composition on ALL THREE row kinds: standalone bids, HELD rows'
+  accumulate-while-holding bids (bidSpecs skips held/target ids, so those needed their own call
+  sites — review finding F1), and CLI-target rows' bids): unfilled
   remainder, resting time, reclaimable escrow gp (the suspectBidEscrow `max(0,max−qty)×offer`
   formula), and the two options — reprice into the NAMED buy window at its level (never a
-  reprice-up-to-chase pitch), or cancel & redeploy, explicitly "your call" (patience-on-cancel
-  stands). **Deduped cross-pass** on the V1 state file (`stalebid:<id>:<offer>` — a repriced
-  bid is a new key): prints on first firing, re-surfaces only on further fill, a new whole-day
-  age bucket (≤ once/day), or a trigger-reason change.
-- `/morning` v1.21 reconciled in place: the "no record of what bids were placed" honest-gap
+  reprice-up-to-chase pitch: a dip level `deriveDiurnalRange` repriced to LIVE (`bidBasis
+  'live'` — a common case, not a tail) is SUPPRESSED and the re-read fallback prints instead — the
+  windowread repriced-bid gate's fourth consumer, review finding F2), or cancel & redeploy,
+  explicitly "your call" (patience-on-cancel stands). **Deduped cross-pass** on the V1 state
+  file (`stalebid:<id>:<offer>` — a repriced bid is a new key): prints on the pass it fires
+  (QUIET passes carry it only in `last-report/watch.json` notes — run-loop's overnight watch
+  passes are quiet, so the first firing is often consumed there; F3), re-surfaces only on
+  further fill, a new whole-day age bucket (≤ once/day), or a trigger-reason change.
+- `/morning` v1.22 reconciled in place: the "no record of what bids were placed" honest-gap
   paragraph is narrowed (placedTs + declarations now exist; the PLAN behind an undeclared bid
   is still Ben's recollection), and §2's re-verdict step now starts from the resting-age +
-  stale-bid data instead of pure judgment.
-- 20 fixtures in `pipeline/test/stalebid.test.mjs`, with the load-bearing predicates
-  mutation-verified (7 mutations — window predicate, age threshold, both dedupe directions,
-  TTL prune, side keying, escrow formula — each run and shown to fail the suite). Verified
-  live against a fixture exchange log via the faked-home trick: a 47h-old part-filled bid
-  rendered the line on pass 1, deduped silent on pass 2, went silent under a declaration, and
-  the state key dropped. Inform-only everywhere; nothing gates.
+  stale-bid data — reading watch.json for fired `⏳` lines rather than expecting a fresh
+  verbose pass to re-print a deduped flag.
+- `declare-thesis.mjs bid --side sell` STORES (the item+side contract) but says honestly that
+  no consumer reads sell-side yet — nothing claims silencing it can't deliver (F4). And
+  `bid-thesis.json` joined the `/overnight` `--publish` add-list (now NINE files — §13.3 is
+  the one home; the identical agent-written-declaration rationale as hold-thesis; F5).
+- 26 fixtures in `pipeline/test/stalebid.test.mjs`, with the load-bearing predicates
+  mutation-verified (10 mutations — window predicate, age threshold, both dedupe directions,
+  TTL prune, side keying, escrow formula, the live-basis level suppression, the held-site
+  wiring, part-fill coverage — each run and shown to fail the suite). Verified live against a
+  fixture exchange log via the faked-home trick: a 47h-old part-filled bid on a HELD item and
+  a standalone bid both rendered the line, deduped silent on the next pass, went silent under
+  a declaration. Inform-only everywhere; nothing gates.
 
 ## pipeline 1.5.0 — 2026-09-03 — `placedTs` on offers: bid age becomes a first-class field (PLAN-FLOW-DIET FD3; pipeline-only, no APP_VERSION bump)
 

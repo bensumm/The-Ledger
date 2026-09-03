@@ -225,13 +225,19 @@ The default run reads the live exchange log via `offers.mjs` (~0 lag) alongside
   honesty bound: touched ≠ filled, ~7 days is a small sample.
 - **FD4 stale-bid flag (PLAN-FLOW-DIET, 2026-09-03):** an UNDECLARED resting bid past a staleness
   trigger — episode age (`placedTs`, FD3) ≥ `STALE_BID_HOURS` (24h, a named placeholder, n≈0) or
-  its daily buy-dip window having PASSED in full while it rested (`lib/signal/stalebid.mjs`) — gets
+  its daily buy-dip window having PASSED in full while it rested (`lib/signal/stalebid.mjs`
+  `staleBidNotes`, shared by the standalone-bid, HELD-row (accumulate-while-holding, its own
+  partial fill included) and TARGET-row call sites) — gets
   ONE inform-only `⏳ stale bid` nested line: unfilled remainder, resting time, reclaimable escrow
   gp (`max(0,max−qty)×offer`), and the two options (reprice into the NAMED buy window at its level /
-  cancel & redeploy — CANCEL stays Ben's call, and never a reprice-up-to-chase pitch). Deduped
-  cross-pass via V1 state (`stalebid:<id>:<offer>`; re-surfaces only on further fill, a new
-  whole-day age bucket, or a trigger change; a repriced bid is a new key). A bid declared deep/long
-  (`declare-thesis.mjs bid` → `bid-thesis.json`, 14d TTL) is SILENT. Never a verdict/alert input.
+  cancel & redeploy — CANCEL stays Ben's call, and never a reprice-up-to-chase pitch; a dip level
+  repriced-to-live by `deriveDiurnalRange` (`bidBasis 'live'`) is NEVER quoted as the window level —
+  the re-read fallback prints instead). The line renders on the pass the flag FIRES — a QUIET pass
+  (run-loop's watch invocations are quiet) carries it only in `last-report/watch.json` notes — and
+  is then deduped cross-pass via V1 state (`stalebid:<id>:<offer>`; re-surfaces only on further
+  fill, a new whole-day age bucket, or a trigger change; a repriced bid is a new key). A bid
+  declared deep/long (`declare-thesis.mjs bid` → `bid-thesis.json`, 14d TTL) is SILENT. Never a
+  verdict/alert input.
 
 **Read-only, human-executed decision support — the hard guardrail.** This tool NEVER places
 or cancels a GE offer, not even stubbed. Automating GE interaction is botting and bannable.

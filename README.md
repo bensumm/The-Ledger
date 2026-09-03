@@ -1316,11 +1316,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     scored number is the model's intrinsic ask) + the fixed-quantile `asym` pair — so the competing
     exit-price estimators ride ONE row for the F1 head-to-head against the realized sell (pressure's
     retired ask no longer among them); zero new fetch,
-    inform-only. FD4 (PLAN-FLOW-DIET, 2026-09-03): each UNDECLARED resting bid runs the
-    `lib/signal/stalebid.mjs` staleness read (age past the `STALE_BID_HOURS` placeholder, or its
-    buy-dip window — `diurnalTimedLap` off the in-hand ts1h — passed unfilled) and prints the ONE
-    inform-only `⏳ stale bid` line, deduped cross-pass via `stalebid:<id>:<offer>` V1 state keys;
-    a `bid-thesis.json` declaration silences it. The ONE WRITER of the watch-state path fields
+    inform-only. FD4 (PLAN-FLOW-DIET, 2026-09-03): every UNDECLARED resting bid — standalone,
+    on a HELD item (accumulate-while-holding; bidSpecs skips held/target ids so those rows carry
+    their own call site), or on a CLI target — runs the shared `lib/signal/stalebid.mjs`
+    `staleBidNotes` read (age past the `STALE_BID_HOURS` placeholder, or its buy-dip window —
+    `diurnalTimedLap` off the in-hand ts1h — passed unfilled). The ONE inform-only `⏳ stale bid`
+    line renders on the pass the flag FIRES (a quiet pass carries it only in
+    `last-report/watch.json` notes — run-loop's overnight watch passes are quiet, so the first
+    firing is often consumed there) and is then deduped cross-pass via `stalebid:<id>:<offer>` V1
+    state keys until further fill / a new whole-day age bucket / a reason change; a
+    `bid-thesis.json` declaration silences it. The ONE WRITER of the watch-state path fields
     and of `.guide-history.jsonl`; each pass appends the passive Tier-1 archive snapshot. Full output
     contract: `pipeline/MONITORING.md`),
     `monitor-offers.mjs`
@@ -2502,11 +2507,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     a bid placed mid-window gets its next full window, a degenerate full-day window never passes); a
     null `placedTs` can never fire. `staleBidLine` renders THE one line (remainder, resting time,
     reclaimable escrow via the suspectBidEscrow `max(0,max−qty)×offer` formula, window-named reprice
-    level + cancel-and-redeploy — never a chase-bid pitch, CANCEL stays Ben's call);
+    level + cancel-and-redeploy — never a chase-bid pitch, CANCEL stays Ben's call; a
+    `levelBasis 'live'` level (deriveDiurnalRange repriced the dip to live) is SUPPRESSED in favour
+    of the re-read fallback — the windowread repriced-bid gate's fourth consumer);
     `staleBidState`/`shouldResurfaceStale` encode the cross-pass dedupe (print on first firing, again
     only on further fill / a new whole-day age bucket / a reason change) riding watch's V1 state under
-    `stalebid:<id>:<offer>` keys. Declaration silencing is the CALLER's step (bidthesis.mjs, checked
-    before the read). Mutation-pinned in `stalebid.test.mjs`),
+    `stalebid:<id>:<offer>` keys. `staleBidNotes` is the ONE per-item composition (declaration check
+    via bidthesis.mjs → per-offer read → dedupe → rendered lines) shared by watch's standalone-bid,
+    held-row and target-row call sites. Mutation-pinned in `stalebid.test.mjs`),
     `freed-capital.mjs` (V6 Companion — PURE `freedCapital`: detects capital freed by a booked SELL between
     passes off V1's prior-pass state and prompts a redeploy scan ≥ `FREED_CAPITAL_SCAN_GP` — surface-
     only, never auto-places/runs the scan; anchor-free, no startup/stale-gap misfire),

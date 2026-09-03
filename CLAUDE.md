@@ -190,7 +190,7 @@ metadata, not a leak; the concern is content, not commit authorship.
    practical path today is attended direct-push under the admin bypass** (`git fetch &&
    rebase origin/main && push`); the PR-for-everything flow is the intent once the token is
    refreshed — full state in `/ship` §2/§6. Describe the change to Ben before landing it.
-   The once-a-day `sync-fills.mjs --publish` (run at `/overnight`) pushes an explicit **EIGHT-file** add-list
+   The once-a-day `sync-fills.mjs --publish` (run at `/overnight`) pushes an explicit **NINE-file** add-list
    direct to `main` (pipeline-owned; clobber-guard reconciles) — the list's one home is `pipeline/FILLS-PIPELINE.md`
    §13.3; this line named three until 2026-08-09. A bare `sync-fills.mjs` is local/zero-git and pushes nothing. No unattended writer
    remains (the schedule was eliminated — `pipeline/FILLS-PIPELINE.md` §12).

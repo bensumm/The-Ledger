@@ -81,8 +81,8 @@ import { bookUtilization, totalCapital } from '../lib/capital/capital-utilizatio
 import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';    // total-capital: DERIVED idle-cash denominator (derive-cash.mjs anchor + log flow)
 import { loadThesis, pruneThesis, thesisLine } from '../lib/thesis/sessionthesis.mjs';   // YT1 (#4) — read-only session-thesis reminder
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/thesis/holdthesis.mjs';   // TG1 — read-only declared-hold-thesis store (gates the expected-underwater headline)
-import { loadBidThesis, pruneBidThesis, bidThesisFor } from '../lib/thesis/bidthesis.mjs';
-import { staleBidRead, staleBidState, shouldResurfaceStale, staleBidLine } from '../lib/signal/stalebid.mjs';
+import { loadBidThesis, pruneBidThesis } from '../lib/thesis/bidthesis.mjs';
+import { staleBidNotes } from '../lib/signal/stalebid.mjs';
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/market/guideanchor.mjs';   // YP1 (#2) advisory guide re-anchor line
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1124,6 +1124,8 @@ async function main() {
     // block (never displaces the sell/list-at line; INFORM-ONLY, never a verdict/alert input). Empty
     // (nothing pushed) on a first-seen / on-prior pass, so a quiet cycle adds no noise.
     if (CYCLE && it._cycle) for (const l of cycleNoteLines(name, it._cycle)) notes.push(l);
+    // FD4: bidSpecs skips held/target ids, so a held item's own still-open bid (accumulate-while-holding) is stale-checked here
+    for (const l of staleBidNotes(it, bids.filter(b => b.item === it.id), { store: bidThesisStore, priorState, newState, nowMs })) notes.push(`    ${l}`);
   }
 
   // asks with no booked lot yet (fresh buy still inside the sync window) — honest gap, no fake basis
@@ -1137,12 +1139,6 @@ async function main() {
 
   for (const it of bidItems) {
     const { row, name } = it;
-    // FD4: buy-dip window + guarded level for the stale-bid reprice option (one lap per item, in-hand ts1h)
-    let bidLap = null;
-    try {
-      const lap = diurnalTimedLap(it.ts1h, { nights: 14, liveLo: row.quickBuy ?? null, liveHi: row.quickSell ?? null });
-      if (!lap.degraded) bidLap = lap;
-    } catch { /* inform-only — never block a watch pass */ }
     for (const off of it.bids) {
       const bidVer = offerVerdict(row, off.offer, it._bidPathCtx);   // P5 path-aware
       const bidPos = `bid ${off.qty}/${fmt(off.max)} @ ${fmtP(off.offer)}`;
@@ -1158,18 +1154,7 @@ async function main() {
       const rest = restingAge(off.placedTs, nowMs);
       notes.push(`- ${name} bid @ ${fmtP(off.offer)}: ${firstSentence(bidAction(row, off, it._bidPathCtx))}${rest ? ` · resting ${rest}` : ''}${wl ? ` · window ${wl}` : ''}${bidPress ? ` · pressure ${bidPress}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
       // FD4: ONE inform-only stale-bid line on an UNDECLARED bid, V1-state-deduped; a declaration silences it
-      try {
-        if (!bidThesisFor(bidThesisStore, it.id, 'buy')) {
-          const read = staleBidRead({ placedTs: off.placedTs, dipWindow: bidLap ? bidLap.dipWindow : null, nowMs });
-          if (read) {
-            const sKey = `stalebid:${it.id}:${off.offer}`;
-            const sCur = staleBidState(read, off);
-            if (shouldResurfaceStale(priorState[sKey], sCur))
-              notes.push(`    ${staleBidLine({ name, off, read, ageTxt: rest, window: bidLap ? bidLap.dipWindow : null, level: bidLap ? bidLap.bid : null })}`);
-            newState[sKey] = sCur;
-          }
-        }
-      } catch { /* inform-only — never block a watch pass */ }
+      for (const l of staleBidNotes(it, [off], { store: bidThesisStore, priorState, newState, nowMs })) notes.push(`    ${l}`);
       // V6 recovery-read on a resting bid — surfaced only when the fill hinges on direction
       // (BID-BEHIND: fills only if the price drops to it). ADVISORY context, no verdict input.
       try {
@@ -1199,6 +1184,7 @@ async function main() {
     briefRows.push({ verdict: tgtVer, name, position: 'watched', listAt: row.optSell ?? null, breakEven: be ?? null });
     const tgtPress = pressureText(row.pressure, { compact: true });
     notes.push(`- ${name}: ${firstSentence(targetAction(row, cls, be))}${tgtPress ? ` · pressure ${tgtPress}` : ''}`);
+    for (const l of staleBidNotes(it, bids.filter(b => b.item === it.id), { store: bidThesisStore, priorState, newState, nowMs })) notes.push(`    ${l}`);
   }
 
   // --brief: the compact one-line-per-item book. Format is OWNED BY watchcore.briefLine (stable,

@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.28
+version: 1.29
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -61,9 +61,9 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    this is where the book gets published to the deployed app: run `node pipeline/commands/sync-fills.mjs
    --publish` once, from the MAIN checkout (`C:\dev\The-Ledger`, **never a worktree** — this is the path
    that commits+pushes to `main`). It fetches/ff-pulls first (folding any phone `mobile-fills.log` trades,
-   the multi-writer contract, FILLS-PIPELINE §13.3) then commits+pushes an explicit **eight-file** add-list
-   (fills/positions/offers/screen/suggestions/dip-watchlist/hold-thesis/alerts — §13.3 is its one home;
-   this line named two until 2026-08-09). Every
+   the multi-writer contract, FILLS-PIPELINE §13.3) then commits+pushes an explicit **nine-file** add-list
+   (fills/positions/offers/screen/suggestions/dip-watchlist/hold-thesis/bid-thesis/alerts — §13.3 is its
+   one home; this line named two until 2026-08-09). Every
    other read (in-session, `/scan`, `/positions`, `/morning`) stays local/zero-git; `--publish` runs ONLY
    here, once per day. If you're in a worktree and can't reach the main checkout, SKIP the publish and note
    the deployed app's book won't update tonight (the local reads are still fresh).

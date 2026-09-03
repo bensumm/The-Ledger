@@ -2016,9 +2016,9 @@ export function diurnalTimedLap(series, {
   // is INCLUSIVE, so a row where live sits exactly ON the dip level is flagged 'live' while `dr.bid` is
   // still numerically the dip level — reality would have described it, and the clause is dropped anyway.
   // Measured at ~1.4% of laps, and it fails in the safe direction (a missing clause, never a wrong one).
-  // The exact predicate is `dr.bid !== profile.dip.level`; it is NOT used here because
-  // all three sites (this one, R1's `→ BID`, R2's `!r.repriced`) must agree, and tightening one alone
-  // would leave three gates with two meanings. Tighten them together or not at all — pinned in
+  // The exact predicate is `dr.bid !== profile.dip.level`; it is NOT used here because all four
+  // sites (this one, R1's `→ BID`, R2's `!r.repriced`, FD4 stale-bid's `levelBasis 'live'` suppression)
+  // must agree — tightening one alone leaves the gates with two meanings. Together or not at all — pinned in
   // pipeline/test/dt4-timedlap-coverage.test.mjs so the boundary is documented, not accidental.
   // INFORM-only; nothing gates.
   const askReaches = [{ level: dr.ask, window: dr.peakWindow, reach: askReach, pool: peakPool,

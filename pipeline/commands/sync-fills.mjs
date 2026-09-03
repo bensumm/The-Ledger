@@ -426,7 +426,7 @@ function main() {
     // just this named list, added only when the file exists on disk. When present but unchanged
     // they simply contribute nothing to the porcelain status below.
     // Ben 2026-07-18: "nothing valuable can be lost" — dip-watchlist.json (DL4 auto-nominations),
-    // hold-thesis.json (declared thesis state) and alerts.json (trigger-alerts.mjs) are all
+    // hold-thesis.json / bid-thesis.json (declared thesis state) and alerts.json (trigger-alerts.mjs) are all
     // pipeline-WRITTEN derived state that was previously left to accumulate uncommitted between
     // sessions; folded in here alongside the pre-existing offers/screen/suggestions set. Deliberately
     // EXCLUDED: watchlist.json / ignored-items.json — those are Ben's own hand-maintained config,
@@ -440,6 +440,7 @@ function main() {
     // ignored path exits 1, so listing it here would abort every `--publish` run and break /overnight.
     const DIP_WATCHLIST_REL = 'dip-watchlist.json';
     const HOLD_THESIS_REL = 'hold-thesis.json';
+    const BID_THESIS_REL = 'bid-thesis.json';
     const ALERTS_REL = 'alerts.json';
     const commitFiles = [FILLS_REL, POSITIONS_REL];
     if (existsSync(join(REPO_DIR, OFFERS_REL))) commitFiles.push(OFFERS_REL);
@@ -447,6 +448,7 @@ function main() {
     if (existsSync(join(REPO_DIR, SUGGEST_REL))) commitFiles.push(SUGGEST_REL);
     if (existsSync(join(REPO_DIR, DIP_WATCHLIST_REL))) commitFiles.push(DIP_WATCHLIST_REL);
     if (existsSync(join(REPO_DIR, HOLD_THESIS_REL))) commitFiles.push(HOLD_THESIS_REL);
+    if (existsSync(join(REPO_DIR, BID_THESIS_REL))) commitFiles.push(BID_THESIS_REL);
     if (existsSync(join(REPO_DIR, ALERTS_REL))) commitFiles.push(ALERTS_REL);
     const fileArgs = commitFiles.join(' ');
     git(`add ${fileArgs}`);

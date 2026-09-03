@@ -66,7 +66,7 @@ async function main() {
     if (!ids.length && !bstore.length) { console.log('(no session theses or bid declarations recorded)'); return; }
     const map = await loadMapping();
     for (const id of ids) console.log(`- ${map.byId[id]?.name || ('#' + id)} (${id}): ${thesisLine(store[id])}`);
-    for (const e of bstore) console.log(`- ${map.byId[e.id]?.name || ('#' + e.id)} (${e.id}): declared ${e.side || 'buy'}-side deep/long bid${e.note ? ` — ${e.note}` : ''} (stale-bid flag silent; TTL ${BID_THESIS_TTL_DAYS}d)`);
+    for (const e of bstore) console.log(`- ${map.byId[e.id]?.name || ('#' + e.id)} (${e.id}): declared ${e.side || 'buy'}-side deep/long bid${e.note ? ` — ${e.note}` : ''} (${(e.side || 'buy') === 'buy' ? 'stale-bid flag silent' : 'no consumer yet — stale flag is bid-only'}; TTL ${BID_THESIS_TTL_DAYS}d)`);
     return;
   }
 
@@ -91,12 +91,14 @@ async function main() {
     const bstore = pruneBidThesis(loadBidThesis(BID_THESIS_PATH));
     if (cmd === 'bid-clear') {
       saveBidThesis(BID_THESIS_PATH, clearBidThesis(bstore, id, side));
-      console.log(`cleared ${side}-side bid declaration for ${name} (${id}) — the stale-bid flag re-arms (bid-thesis.json).`);
+      console.log(`cleared ${side}-side bid declaration for ${name} (${id})${side === 'buy' ? ' — the stale-bid flag re-arms' : ''} (bid-thesis.json).`);
       return;
     }
     const note = pos.slice(1).join(' ') || null;
     saveBidThesis(BID_THESIS_PATH, upsertBidThesis(bstore, { id, side, note }));
-    console.log(`declared ${side}-side deep/long bid for ${name} (${id})${note ? `: ${note}` : ''} — stale-bid flag silent for ${BID_THESIS_TTL_DAYS}d (bid-thesis.json).`);
+    console.log(`declared ${side}-side deep/long bid for ${name} (${id})${note ? `: ${note}` : ''} — ${side === 'buy'
+      ? `stale-bid flag silent for ${BID_THESIS_TTL_DAYS}d`
+      : 'stored, but NO consumer reads sell-side yet (the stale flag is bid-only) — nothing is silenced'} (bid-thesis.json).`);
     return;
   }
 

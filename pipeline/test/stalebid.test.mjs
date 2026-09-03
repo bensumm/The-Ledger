@@ -34,6 +34,7 @@ import {
 } from '../lib/thesis/bidthesis.mjs';
 import {
   STALE_BID_HOURS, buyWindowPassed, staleBidRead, staleBidState, shouldResurfaceStale, staleBidLine,
+  staleBidNotes,
 } from '../lib/signal/stalebid.mjs';
 
 let pass = 0;
@@ -199,6 +200,71 @@ ok('staleBidLine: age-only firing with no window degrades to a re-read pointer, 
   assert.ok(line.includes(`${STALE_BID_HOURS}h placeholder`), 'names the placeholder + that it is uncalibrated');
   assert.ok(line.includes('re-read the window'), 'no invented level');
   assert.ok(line.includes('125k gp escrow reclaimable'));
+});
+
+/* ── F2: the repriced-to-live level is NEVER quoted as a window level (the windowread gate) ──── */
+ok('staleBidLine: levelBasis "live" suppresses the level — no chase pitch wearing window clothes', () => {
+  const args = {
+    name: 'Yew logs', off: { qty: 0, max: 500, offer: 154 },
+    read: { reason: 'window+age', ageH: 30 }, ageTxt: '30h',
+    window: { startH: 2, endH: 5 }, level: 154,
+  };
+  const live = staleBidLine({ ...args, levelBasis: 'live' });
+  assert.ok(!live.includes('@ ~154'), 'a live-basis level must never render as the reprice target');
+  assert.ok(live.includes('re-read the window'), 'falls back to the re-read pointer instead');
+  const diurnal = staleBidLine({ ...args, levelBasis: 'diurnal' });
+  assert.ok(diurnal.includes('reprice into the buy window') && diurnal.includes('@ ~154'),
+    'a non-live basis still names the window level');
+});
+
+/* ── F1: the shared per-item pass (staleBidNotes) — held/target/bid rows all route through it ── */
+const FAKE_LAP = { dipWindow: { startH: 2, endH: 5 }, bid: 245, bidBasis: 'diurnal' };
+const mkIt = () => ({ id: 1515, name: 'Yew logs' });   // surface-agnostic: held-ness is not an input
+const OLD47H = nowMs => nowMs - 47 * H;
+
+ok('staleBidNotes: a 47h PART-FILLED undeclared bid flags (the accumulate-while-holding shape)', () => {
+  const nowMs = AT(12).getTime();
+  const newState = {};
+  const lines = staleBidNotes(mkIt(), [{ qty: 100, max: 500, offer: 250, placedTs: OLD47H(nowMs) }],
+    { store: [], priorState: {}, newState, nowMs, lap: FAKE_LAP });
+  assert.equal(lines.length, 1);
+  assert.ok(lines[0].includes('⏳ stale bid — Yew logs: 100/500 filled'), 'partial fill visible');
+  assert.ok(newState['stalebid:1515:250'], 'dedupe key written');
+});
+ok('staleBidNotes: a declaration silences the whole pass (no line, no state key)', () => {
+  const nowMs = AT(12).getTime();
+  const newState = {};
+  const store = upsertBidThesis([], { id: 1515, note: 'deep' }, Math.floor(nowMs / 1000));
+  const lines = staleBidNotes(mkIt(), [{ qty: 0, max: 500, offer: 250, placedTs: OLD47H(nowMs) }],
+    { store, priorState: {}, newState, nowMs, lap: FAKE_LAP });
+  assert.deepEqual(lines, []);
+  assert.deepEqual(newState, {});
+});
+ok('staleBidNotes: second pass with unchanged state is deduped silent (key still maintained)', () => {
+  const nowMs = AT(12).getTime();
+  const s1 = {}, offs = [{ qty: 0, max: 500, offer: 250, placedTs: OLD47H(nowMs) }];
+  staleBidNotes(mkIt(), offs, { store: [], priorState: {}, newState: s1, nowMs, lap: FAKE_LAP });
+  const s2 = {};
+  const again = staleBidNotes(mkIt(), offs, { store: [], priorState: s1, newState: s2, nowMs, lap: FAKE_LAP });
+  assert.deepEqual(again, []);
+  assert.ok(s2['stalebid:1515:250'], 'key re-written so the dedupe survives further passes');
+});
+ok('staleBidNotes: a live-basis lap never quotes its level (F2 through the composition)', () => {
+  const nowMs = AT(12).getTime();
+  const lines = staleBidNotes(mkIt(), [{ qty: 0, max: 500, offer: 154, placedTs: OLD47H(nowMs) }],
+    { store: [], priorState: {}, newState: {}, nowMs, lap: { ...FAKE_LAP, bid: 154, bidBasis: 'live' } });
+  assert.equal(lines.length, 1);
+  assert.ok(!lines[0].includes('@ ~154') && lines[0].includes('re-read the window'));
+});
+
+/* ── F1 wiring pin: watch-positions.mjs routes ALL THREE row kinds through staleBidNotes.
+ * A source-shape check (the call sites live inside main(), unreachable by a unit test): the held,
+ * target and standalone-bid loops must each call staleBidNotes — removing any call site fails here. */
+ok('watch-positions.mjs carries the held + target + bid staleBidNotes call sites', () => {
+  const src = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..', 'commands', 'watch-positions.mjs'), 'utf8');
+  const calls = (src.match(/staleBidNotes\(it,/g) || []).length;
+  assert.ok(calls >= 3, `expected >=3 staleBidNotes(it, ...) call sites (held/target/bid), found ${calls}`);
+  assert.ok(/bids\.filter\(b => b\.item === it\.id\)/.test(src), 'held/target sites read the item\'s own open bids');
 });
 
 console.log(`stalebid.test.mjs: all ${pass} assertions passed`);
