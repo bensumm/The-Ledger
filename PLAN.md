@@ -416,12 +416,17 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 ## Other unscheduled notes
 
 - **Flow diet — winners-only surfaces, stale-bid flagging, reclaimable capital (FD1–FD6,
-  ACTIVE)** (`plans/PLAN-FLOW-DIET.md`, Ben 2026-09-03). FD1 (positive-net winners-only
-  `--verbose` render + prose kill, `--full` debug restore, cache stays complete) + FD2 (skill
-  reconciliation to winners-only; judgment reads `last-report/screen.json`) dispatched
-  2026-09-03; FD3–FD6 (offer `placedTs` → declared-deep bids + inform-only stale-bid flag →
-  bids on the positions surface → shown reclaimable-stale capital line) staged behind them.
-  Ruling: NO grade term in any filter predicate (grade tuning is later, F1-tagged work).
+  ACTIVE)** (`plans/PLAN-FLOW-DIET.md`, Ben 2026-09-03). **FD1 ✅ `d3bc21c`** (winners-only
+  `--verbose` render — stanza families cache-only behind a pointer line, `--full` debug
+  restore, cache identical across modes; the positive-net row filter ships with the
+  held/watchlist exemption and is unreachable by construction on band/churn/scalp — the ~50%
+  stdout cut is the stanza diet) + **FD2 ✅ `e41db14`** (skills + doctrine homes reconciled;
+  judgment reads `last-report/screen.json`), both through 3 adversarial review rounds
+  (CHANGELOG pipeline 1.4.0). FD3–FD6 (offer `placedTs` → declared-deep bids + inform-only
+  stale-bid flag → bids on the positions surface → shown reclaimable-stale capital line)
+  staged behind them. Ruling: NO grade term in any filter predicate (grade tuning is later,
+  F1-tagged work); the still-large winners table (a rank-based cap?) is an OPEN question for
+  Ben, recorded in the plan.
 
 - **Hybrid-review experiment — wave 1 RUN (2026-08-30), accrual open** (`plans/PLAN-HYBRID-REVIEW.md`,
   Ben 2026-08-29). Both arms ran blind on the forward-record honesty wave's diff; results + scored

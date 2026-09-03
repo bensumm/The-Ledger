@@ -101,7 +101,23 @@ One home per concern:
 
 ## Staged chunks
 
-### FD1 — winners-only stdout render (DISPATCHED with FD2)
+### FD1 — winners-only stdout render (SHIPPED 2026-09-03, `d3bc21c`)
+
+**Execution record (supersedes two spec lines below — the shipped behavior is the contract):**
+- The "thin it for survivors" clause was AMENDED in execution (Ben's kill-prose + read-the-cache
+  rulings): the stanza families (Diurnal timing, Base position, Entry paths, velocity,
+  accumulation) print for NO rows under `--verbose` — they are cache-only behind one pointer
+  line per flip-niche; only the compact one-line `⚠`/`ℹ` notes print, for surviving rows.
+  Amplitude's two honesty banners print as one-line briefs (a warning attached to a winner is
+  triage signal).
+- The row filter gained the HELD/WATCHLIST exemption mirrored from `admitMinNet` (review r1 —
+  dropping them re-did the drop the documented load-bearing exemption exists to prevent), and
+  with it the filter is **effectively unreachable by construction on band/churn/scalp**
+  (`admitMinNet: 0` pre-drops non-positive rows; the exempt rows stay). It ships as defensive
+  depth; the entire measured ~50% stdout cut is the stanza diet. Full analysis: README's
+  `screen-flip-niches.mjs` entry.
+- Landed through four review-round commits (base, amendment, r1, r2 — squashed); r2 also
+  deleted the superseded R10 relay assertions from `render.mjs`'s tier-registry header.
 
 `screen-flip-niches.mjs` (+ `pipeline/lib/render/render.mjs` as needed). Under `--verbose`:
 
@@ -128,7 +144,14 @@ new flag plumbing; (d) all CI guards green, any render fixtures under `pipeline/
 in the same commit; (e) the Skipped line appears whenever ≥1 row was filtered (the
 visible-filter doctrine). Pipeline/console-only — no APP_VERSION bump.
 
-### FD2 — skill reconciliation to winners-only (DISPATCHED with FD1)
+### FD2 — skill reconciliation to winners-only (SHIPPED 2026-09-03, `e41db14`)
+
+**Execution record:** scope grew, sanctioned, to `/overnight` (its relay-both-tiers block
+actively countermanded the children it invokes) and the doctrine homes (`docs/MARKET-ANALYSIS.md`
+tier paragraph, README tier line) — all reconciled in place with the HELD/WATCHLIST exemption
+caveat carried verbatim from the skill so the doctrine home and skill cannot drift apart.
+Landed through four review-round commits (base, r1, r2, r3 — squashed). Final versions:
+scan 3.8 · positions 1.68 · overnight 1.28 · morning 1.20.
 
 `.claude/skills/scan/SKILL.md`, `.claude/skills/positions/SKILL.md`,
 `.claude/skills/morning/SKILL.md`. Grep-and-fix in place (rule 8), not append:
@@ -231,3 +254,8 @@ work, not this plan.
 - FD4's staleness threshold and the 5% deep line are uncalibrated placeholders (n≈0) and ship
   inform-only.
 - The ~40k-token measurement is one run (2026-09-02 `--mode all`); treat as order-of-magnitude.
+- **OPEN QUESTION for Ben (post-FD1):** the winners table itself stays large (~60 band rows —
+  nearly every rated row has positive net, so "winners" ≠ "few"). With grade banned from
+  predicates, the candidate lever is a rank-based row cap (`rank = net × P(fill) ÷ TTF`, the
+  digest's own ordering) with the remainder as one count line. Changes what Ben sees →
+  needs his ruling; not built.

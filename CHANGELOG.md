@@ -8,6 +8,39 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## pipeline 1.4.0 — 2026-09-03 — the scan goes on a diet: winners-only stdout, the full read moves to the cache (PLAN-FLOW-DIET FD1+FD2; pipeline/skills/docs only, no APP_VERSION bump)
+
+Ben: "I don't care about losers and why they are losers, just tell me about the winners" +
+"don't implement a grade based filter; grade is notoriously inaccurate… positive net seems
+safe" + "we need to be able to reference the full set of data for debugging/analysis purposes
+but on the common run we should read cache json." The measured problem: `/scan` mandated
+`--verbose` (~155k chars/run), ~2/3 of it per-row prose stanzas, then told the agent to trim
+in-head after everything had entered context.
+
+- **FD1 (`d3bc21c`).** Under `--verbose` the stanza families (Diurnal timing, Base position,
+  Entry paths, velocity, accumulation) leave stdout entirely — one pointer line per flip-niche
+  names `pipeline/.cache/last-report/screen.json` and `--full`; compact one-line `⚠`/`ℹ` notes
+  print for surviving rows only; amplitude's doctrine preamble collapses to a pointer while its
+  two honesty banners print as briefs. New `--full` restores the complete render (proven 0-diff
+  vs the pre-change output). The cache dump is identical across quiet/`--verbose`/`--full` —
+  the diet is render-only. Roughly a **50% stdout cut**, all of it the stanza diet: the
+  positive-net row filter (NO grade term, by ruling) ships with the held/watchlist exemption
+  mirrored from `admitMinNet` and is thereby **unreachable by construction on
+  band/churn/scalp** — kept as defensive depth (README's entry has the full analysis).
+  `render.mjs`'s tier-registry header lost its superseded R10 relay-half assertions.
+- **FD2 (`e41db14`).** `/scan` 3.8 · `/positions` 1.68 · `/overnight` 1.28 · `/morning` 1.20:
+  paste the winners-only table as printed, judgment reads the cache JSON (a missing stanza
+  read means "in the cache", never "no data"), WINDOW-CLEAR pricing reads the cached `⏲`
+  token, actionable-first replaces R10's relay-everything on every surface, and the doctrine
+  homes (MARKET-ANALYSIS tier paragraph, README tier line) carry the same exemption caveat
+  verbatim. Disposition table in `plans/PLAN-FLOW-DIET.md`.
+- **Process note.** Three adversarial review rounds; among the catches: the cross-branch drift
+  the review was aimed at (skill describing the pre-amendment render), a re-drop of the
+  load-bearing held/watchlist exemption, two amplitude risk banners silently gone, and the
+  doctrine-home over-claim recurring one file over from its fix. FD3–FD6 (bid `placedTs`,
+  declared-deep bids + stale-bid flag, bids on the positions surface, shown reclaimable
+  capital) remain staged in the plan.
+
 ## pipeline 1.3.0 — 2026-09-03 — the book heals itself: an aged half-leg stops eating today's flips (PLAN-BOOK-SELF-HEAL H1 + H4; pipeline-only, no APP_VERSION bump)
 
 Ben: "the sell log should self heal so that an inconsistency days ago shouldn't affect a clean book
