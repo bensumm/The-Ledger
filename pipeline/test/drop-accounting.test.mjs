@@ -59,7 +59,7 @@ test('`drops` is identical across views and carries every family — the account
   });
 });
 
-test('nothing dropped → no lines on either view and drops null (absent from the dump, not `{}`)', () => {
+test('nothing dropped → no lines on either view and drops null (serialized as `"drops":null`, never `{}`)', () => {
   // MUTANT: `drops` defaulting to `{}` — red. An empty object in every clean niche report would make
   // "does drops exist" meaningless as the suspicious-removal check.
   for (const diet of [true, false]) {
