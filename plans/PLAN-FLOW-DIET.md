@@ -267,6 +267,159 @@ Beside every `deployablePool` print (watch footer, `/book`, run-loop gate, `scre
 into the pool silently (the shelved three-bucket redesign stays shelved). Optionally the
 run-loop scan gate counts it toward `--min-idle` (flagged for Ben's veto at dispatch time).
 
+### FD7 — the drop-accounting footers behind `--full` (SHIPPED 2026-09-08)
+
+**Execution record (the problem statement below stands as the dispatch record; every open question
+is answered here, none assumed):**
+- **Mechanism:** exported pure `dropAccounting()` beside `buildScreenNicheReport` — the ONE home for
+  the four families' wording, the diet gate, and a structured `drops` summary; `buildNicheReport`
+  pushes its `footer`/`extra` (empty under diet, byte-identical pre-FD7 lines under `--full`) and
+  attaches `drops` to the report object, which rides `writeLastReport` into the dump on every run,
+  identically across views (renderReport reads only `.sections`, so printing is untouched).
+- **Where the accounting goes / how a suspicious removal is caught** (the doctrinal tension,
+  answered with mechanism not assertion): (1) `drops` is directly addressable in the cache —
+  the answer to "is a footer buried in a big JSON dump checkable?" is that a *footer* isn't but a
+  named top-level key is, which is why the summary is structured rather than the serialized lines;
+  (2) the diet pointer line ends `· drop accounting` whenever a pass dropped anything, so the
+  surface itself says something was dropped and where it lives without naming a loser; (3) `/scan`
+  v3.9 replaces the relay mandate with the recipe (read `drops` when an expected row is missing /
+  Ben names an item; `--full` to debug); (4) "if the filter silently started dropping a good row
+  tomorrow, what would tell us?" — the pointer suffix appears on that pass, the row + its net land
+  in `drops.winnersFiltered` (or the relevant family) that same pass, and
+  `pipeline/test/drop-accounting.test.mjs` pins that the accounting can never thin with the render
+  (drops identical across views — a mutant computing drops only under `--full` is confirmed red).
+- **`rejected:` ruled INTO the cut, with the argument made explicit** (not lumped): it IS a
+  different failure mode (a candidate that never appeared vs a bad row), but the winners-only
+  reader doesn't audit absent candidates off stdout — the absent-candidate question arrives as
+  "why isn't X showing?", which is exactly the recipe's entry point; the validator still rejects
+  identically, the count + reasons land in `drops.reject`/`rejectReasons` every pass, and the line
+  prints under `--full` unchanged. Suppressing the *print* does not remove the *record*.
+- **Open questions answered:** `--full` restores drop accounting on the SAME switch as the stanza
+  families (`DIET = !FULL`) — one seam, not separable, matching the ruling's "no new flag". App
+  `screen.json` untouched (payload built from `pubNiches`; footers never enter it — verified at the
+  publish site). `read-watchlist.mjs` and `--digest` carry none of the four families (grepped all
+  emission sites; watchlist rows are gate-exempt by design). The reverse-flip `(N rejected: …)`
+  header is OUT of the ruling: different surface, different reader — it names Ben's OWN owned items
+  that failed the harvest gate (actionable per-item inventory info on a tiny pool), not scan losers.
+- **The FD1 stdout `Skipped:` line was DELETED** (it printed on no remaining path: diet suppresses
+  it by ruling, full has no filtered rows) — its line-of-record is `drops.winnersFiltered`
+  (name + shown net, full list, no 10-name cap). `SKIPPED_NAME_MAX` removed with it.
+- **Regression test:** `drop-accounting.test.mjs`, presence AND absence off the same builder (the
+  anti-renamed-string shape the problem statement demanded); 4 named mutants (gate flip, family
+  rename, view-dependent drops, reintroduced Skipped line) each confirmed RED then restored green.
+- **Honesty (rule 4), measured as demanded:** on a live band pass the printed families totalled
+  **722 chars of a 68k `--verbose` output (~1%)** — trivially small, said plainly; the shipped case
+  is Ben's thrice-stated preference + surface coherence, not tokens. (The live `rejected:` reasons
+  are full sentences — ~511 chars of the 722 was that one line — so the worst case is bigger than
+  the shape suggests, but still ~1%.)
+- Skill/doc reconciliation in the same change: scan 3.8→3.9 (§1 winners paragraph, the crowded-out
+  bullet, §4 Output, the honest-limit note), overnight 1.29→1.30, README `screen-flip-niches.mjs`
+  entry, MARKET-ANALYSIS MT3 note, the in-code SC1/FD1 comments.
+- **Found while here, NOT fixed (Ben's call):** `PIPELINE_VERSION` (`pipeline/lib/version.mjs`) is
+  `1.3.0` but CHANGELOG carries entries titled pipeline 1.4.0–1.6.0 — the constant was never
+  bumped alongside those entries (CHANGELOG is exempt from lint-docs' constant-drift check, so CI
+  cannot see it). Either the constant catches up or the headers were aspirational; flagged in the
+  FD7 report.
+
+**This section deliberately does NOT contain a solution.** It states the problem, the evidence,
+the ruling that constrains it, and the doctrinal tension any fix has to resolve. The executor
+designs the mechanism; nothing below should be read as a prescribed implementation.
+
+**The problem.** FD1 stopped the scan from *rendering* losing rows, but it did not stop the scan
+from *talking about* them. Four footer lines survive on stdout whose entire subject is rows the
+reader will never act on — what was dropped, how many, why, and by name. On a `--mode all`
+`--verbose` pass these are the last thing printed under each niche, so the surface FD1 made
+winners-only still ends every section with a roll-call of losers. Ben's standing instruction
+("do not waste time explaining to me about the losers, let's focus on the winners", 2026-09-07 —
+the third restatement of the FD1 ruling) is not satisfied by the row filter alone.
+
+**The four sites** (all currently pushing into the same `footerLines` array consumed by
+`buildScreenNicheReport`, `screen-flip-niches.mjs:1040`):
+
+| Site | Emits | What it is accounting for |
+| --- | --- | --- |
+| `:1755` | `rejected: N (floor×3, reach×1)` | P2/P3 **validator** rejects |
+| `:1760` | `skipped N unprofitable at the shown pair: …` | the `admitMinNet` drop |
+| `:1766` | `Skipped: N rows non-positive net at the shown pair: …` | FD1's own winners filter |
+| `:1947` | `crowded out: N gated candidate(s) never got a fetch slot…` | fetch-budget exclusion |
+
+Everything else in `footerLines` concerns **surviving** rows and is out of scope: the `⚠ caution`
+block already filters through `keepIds` (`:1782`), and the `ℹ` / `⤴` / `◆` / `↻` / `⚠ exemption
+dropped` families only carry notes for printed rows. The scope of this chunk is those four lines
+and no others — an executor that widens it has changed the ask.
+
+**Ben's ruling (2026-09-08): it goes behind `--full`.** `--full` already means "the complete
+render, debugging and analysis only, never a common pass" (`/scan` SKILL.md §1), so the restore
+path is an existing seam and no new flag is introduced. `--verbose` — the flag `/scan` mandates
+so a table can be pasted — must come back clean.
+
+**The doctrinal tension the executor must resolve, not paper over.** Each of those four lines
+carries an in-repo comment stating why it exists, in nearly the same words: *"A filter you cannot
+see is a filter you cannot check"* (`:1758-1759`, `:1764`). That is not decoration — it is the
+stated justification for why FD1's filter was safe to ship on n≈0 evidence at all: a wrong
+removal is visible the moment it happens. Any change that makes a drop unobservable retroactively
+removes FD1's own safety argument. The chunk therefore has to answer, with evidence rather than
+assertion, *where the accounting goes and how a suspicious removal is actually caught*, and the
+answer has to survive the question "if the filter silently started dropping a good row tomorrow,
+what would tell us?" A design whose honest answer is "nothing would" is a failed design, even if
+the console looks right.
+
+Relevant fact, verified 2026-09-08 and offered as evidence rather than as the answer: the
+per-niche report objects are written to `pipeline/.cache/last-report/screen.json` on **every**
+invocation regardless of verbosity (`:2974`, AO1), and `footerLines` is a serialised part of that
+object (`:1049`). Whether that is a sufficient home for drop accounting — and whether a footer
+buried in a large JSON dump is meaningfully "checkable" or only nominally so — is an open
+question for the executor, not a settled one.
+
+**`rejected:` is not the same animal as the other three and should not be assumed to share their
+fate.** The other three all mean "this row's shown pair does not make money" — pure loser noise
+under the FD1 ruling. `rejected:` is **validator** output: a `floorValidator` reject means the
+buy price sits above the durable multi-week floor, which is the falling-knife guard (the fang
+anchor, and the Snape-grass entry that motivated `FLOOR_CAUTION_RANGES`). Suppressing it hides
+not "a bad row" but *the reason a candidate a reader might expect to see never appeared at all* —
+a different failure mode, and a silent one. Whether it belongs in this cut, belongs in it with
+distinct handling, or belongs outside it is a question this chunk has to answer explicitly.
+Lumping it in without argument is the specific error to avoid.
+
+**The script change alone will regress — the skill is half the defect.** `.claude/skills/scan/SKILL.md`
+(v3.8) does not merely tolerate these footers, it *mandates relaying them*: "the script's own
+Skipped/rejected lines ARE the whole story, and relaying them unedited is what keeps a wrong
+removal catchable", plus the `rejected:` / `crowded out:` / `skipped:` footers named in the §1
+winners-only paragraph. If the script stops printing them while the skill still instructs an
+agent to relay them, the next agent goes and digs them out of the cache — strictly worse than
+today, because it pays the context cost *and* an extra read. Script and skill must move together
+or the chunk has not shipped. The skill's prose quotes the footer wording verbatim, so
+`lint-docs.mjs`'s duplicate-phrase and denylist checks are in the blast radius.
+
+**What "done" looks like, as an outcome rather than a mechanism.** A `--verbose --mode all` pass
+prints no drop accounting; a `--full` pass prints all four families as they read today; the
+last-report dump is unchanged or richer, never poorer; `/scan` SKILL.md no longer instructs
+relaying them and says instead what a reader should do when they *do* suspect a wrong removal;
+and there is a regression test that fails if any of the four families reappears on the
+`--verbose` path. Note that a test asserting absence is exactly the kind that passes for the
+wrong reason (a renamed string is also an absent string) — process rule 10's mutation-check
+applies with force here.
+
+**Open questions for the executor to answer, not assume.**
+- Does `--full` mean "restore these four" or "restore everything FD1 removed"? Today `--full`
+  also restores the per-row stanza families; whether drop accounting rides that same switch or
+  needs to be separable is undetermined.
+- Is `screen.json` (the published app artifact) affected at all, or is this strictly the
+  console/last-report path? The FD1 filter was render-only; this should be established, not
+  presumed to match.
+- `read-watchlist.mjs` and the `--digest` block are separate render paths. Do they carry any of
+  the same four families, and does the ruling reach them?
+- Does the reverse-flip surface's own `(N rejected: …)` header (`:2660`) fall inside this ruling
+  or outside it? It is a different surface with a different reader.
+
+**Honesty (rule 4).** Nothing here is measured. The claim that these four lines cost meaningful
+context is not quantified in this write-up — FD1's ~40k-token measurement covered rows and
+stanzas, not footers, and the footer families are plausibly a small fraction of that. The case
+for this chunk is Ben's stated preference and surface coherence (a winners-only surface that ends
+in a loser roll-call is incoherent), **not** a token saving, and it should not be sold as one. An
+executor that finds the four lines to be trivially small should say so plainly rather than
+inflating the benefit.
+
 ## Encoding boundary
 
 Winners-only + prose-kill are ENCODED in the script (FD1); the skills keep only judgment

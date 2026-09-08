@@ -1253,29 +1253,38 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     are exempt from `admitMinNet` at its own call site: each holds a reserved fetch slot, so hiding one
     would silently undo the reserve, and a negative net on a lot you hold or an item you track is a
     position/watch signal rather than a scan loser (it also keeps that row's own notes, including the
-    `⚠ … you HOLD this item` line). Non-exempt drops collapse to ONE named `Skipped: N rows non-positive
-    net at the shown pair: …` footer line (up to 10 names, then `(+K more)`) — the same
-    filter-you-cannot-see-you-cannot-check doctrine as the existing `skipped N unprofitable…` line, which
-    stays, as do `rejected:` and `crowded out:`. ⚠ On today's gate stack that Skipped line is unreachable
-    for band/churn/scalp — BY CONSTRUCTION, not merely by sampling: all three specs set `admitMinNet: 0`
+    `⚠ … you HOLD this item` line). **FD7 (2026-09-08, Ben's ruling): the DROP-ACCOUNTING families —
+    validator `rejected:`, the `skipped N unprofitable…` admitMinNet line, the FD1 winners filter, and
+    `crowded out:` — print under `--full` only; the common `--verbose` pass carries no drop accounting
+    at all.** Their one home is the exported pure `dropAccounting()` (wording + the diet gate + the
+    structured summary in one place, pinned by `pipeline/test/drop-accounting.test.mjs` with presence
+    AND absence asserted off the same builder), and the accounting itself never thins: every flip-niche
+    report in the dump carries a `drops` object (validator reject count + reasons, admitMinNet skips,
+    `winnersFiltered` name+net pairs, crowded-out count/best/reason) on every run, identically across
+    views. The FD1 stdout `Skipped:` line was DELETED with this (its line-of-record is now
+    `drops.winnersFiltered`) — it was unreachable on today's gate stack for band/churn/scalp anyway,
+    BY CONSTRUCTION, not merely by sampling: all three specs set `admitMinNet: 0`
     (`js/flip-niches.mjs`), `belowAdmitNet` already drops `estNet <= 0` under the IDENTICAL held/watchlist
     exemption, and when `estShown` is null the fallback `er.net` is guaranteed positive by the step-2 drop
     just above it. So a non-positive row is either already gone before rating or is one of the exempt rows
-    that now stay. The line survives as correct defensive behaviour should a spec routed through
-    `renderMode` ever carry a null or negative `admitMinNet`; the measured winners-view saving comes from
-    the prose diet below, NOT from the row filter. The multi-line STANZA families — Diurnal timing, Base
+    that now stay; the filter itself survives as defensive depth should a spec routed through
+    `renderMode` ever carry a null or negative `admitMinNet`, and the measured winners-view saving comes
+    from the prose diet below, NOT from the row filter. The multi-line STANZA families — Diurnal timing, Base
     position, Entry paths, velocity, the overnight accumulation table — do not print to stdout at all
     under `--verbose`; they ride the dump and one pointer line stands in their place per flip-niche
     (`Diurnal timing · Base position · Entry paths…: pipeline/.cache/last-report/screen.json (--full to
-    print)`), with the amplitude branch's own doctrine preamble + Base position folded into its
+    print)`, ending `· drop accounting` when the pass dropped anything — where the accounting lives,
+    never what it was), with the amplitude branch's own doctrine preamble + Base position folded into its
     equivalent pointer. What DOES stay on stdout, for surviving rows only, are the compact one-line
     footers — `⚠ caution`, `ℹ trajectory/reach`, `⤴ ask headroom`, `ℹ window-clear`, `ℹ drift-exit`,
     `◆ asym fill`, `↻ repriced entry`, `⚠ exemption dropped`, plus amplitude's two honesty banners
     (`⚠ thin — NO fast exit` and `⚠ make-or-break`, in compact one-line form; the long forms ride the
     dump): a warning attached to a winner is triage signal, not prose. **`--full` restores the complete
     render** (every rated row, every
-    prose family) and implies `--verbose`. The filter is RENDER-ONLY and the cache contract is pinned:
-    `pipeline/.cache/last-report/screen.json` carries every row and every note family IDENTICALLY under
+    prose family, the drop-accounting footers) and implies `--verbose`. The filter is RENDER-ONLY and the
+    cache contract is pinned:
+    `pipeline/.cache/last-report/screen.json` carries every row, every note family and every `drops`
+    summary IDENTICALLY under
     quiet / `--verbose` / `--full` (verified byte-identical modulo `generatedAt`), so the debugging surface
     is the dump, not a re-run. Repo-root `screen.json` (the app publish), the `--digest` block and the
     WATCHLIST section are untouched — read the dump for anything the winners table does not show.

@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.29
+version: 1.30
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -21,8 +21,9 @@ registry, don't restate tiers here. _judgment:_ **read both tiers so nothing dec
 missed, but relay actionable-first** — the lines you are recommending get written up fully, a quiet
 one gets ONE line, and a context note that doesn't change tonight's plan is read and not relayed.
 This flow INVOKES `/scan` and `/positions`, so it inherits their winners-only contracts rather than
-overriding them: the screen's own `Skipped:` / `rejected:` footers are the whole story on what the
-screen dropped, and there is no "what failed and why" section here either.
+overriding them: the screen prints no drop accounting on the common pass (FD7 — what it dropped
+lives in the scan cache's per-niche `drops`, printed only under `--full`), and there is no "what
+failed and why" section here either.
 
 ## Time-geography of the overnight flip (v1.8, 2026-07-05 — Ben-endorsed)
 

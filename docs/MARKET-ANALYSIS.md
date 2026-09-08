@@ -404,8 +404,9 @@ ranked among their OWN lane on the same `expGpDay × trackBoost` axis, tagged `v
 than defaulting to gear. Note the **attention floor was NOT the cause** and is unchanged: `MIN_GPD` is a
 hard PRE-fetch gate on Stage-1 `expGpDay` which mid-tier gear passes, while the `⚠<floor` marker on the
 table measures Path-A gp/day POST-fetch — two different numbers against one constant (MT1). MT3 reports
-the exploration reserve's true rotation period on the `crowded out:` line, since 1 velocity slot over
-~140 excluded is a ~70h wait per row, not a prompt lottery. INFORM/ADMISSION-ONLY — no grade, rank, or
+the exploration reserve's true rotation period on the `crowded out:` line (a `--full`-only render
+since FD7 — every pass it rides the last-report dump's `drops.crowdedOut` instead), since 1 velocity
+slot over ~140 excluded is a ~70h wait per row, not a prompt lottery. INFORM/ADMISSION-ONLY — no grade, rank, or
 `screen.json` change; n=0, no mid-tier flip has ever been logged.
 
 **PLAN-MID-TIER-V2 (2026-07-27) — `GEAR_RESERVE` alone did NOT reach the class it targets.** A

@@ -334,12 +334,11 @@ const VERBOSE = A.verbose === true || A.full === true;   // --full is a debuggin
 // niche tables, ranked by capital-efficiency. OFF by default. It prints REGARDLESS of --verbose via
 // `realLog` in main(), on its own `if (DIGEST)` gate. Never in screen.json; it does ride the dump.
 const DIGEST = A.digest === true;
-// FD1 (PLAN-FLOW-DIET) — the WINNERS view: a niche table drops rows whose DISPLAYED net at the shown pair is
-// non-positive (never a grade term — Ben's ruling), names them on one Skipped line, and prints the per-row
-// prose for survivors only. RENDER-ONLY — the dump is identical under quiet/--verbose/--full.
+// FD1 (PLAN-FLOW-DIET) — the WINNERS view: a niche table drops rows whose DISPLAYED net at the shown
+// pair is non-positive (never a grade term), prose prints for survivors only, and (FD7) the drop-accounting
+// footers print under --full only (see dropAccounting()). RENDER-ONLY — the dump is view-identical.
 const FULL = A.full === true;
 const DIET = !FULL;
-const SKIPPED_NAME_MAX = 10;   // names on the Skipped line before it collapses to a `(+K more)` count
 const REPORTS = [];   // per-niche screen-report objects for this pass (renderMode niches only)
 function emitReport(report, printReport) { REPORTS.push(report); console.log(renderReport(printReport || report)); }   // REPORTS = the full report; console.log (a no-op unless --verbose) gets the winners view
 // AMPLITUDE / INVEST / WATCHLIST / WATCH CLOSELY / Dip pool render as raw console.log streams rather
@@ -1051,6 +1050,35 @@ export function buildScreenNicheReport({ headerLines = [], table = null, estExpl
   return { kind: 'screen', generatedAt: null, sections };
 }
 
+// FD7 (PLAN-FLOW-DIET) — the ONE home for the drop-accounting families (validator rejects, the
+// admitMinNet drop, the FD1 winners filter, fetch-budget exclusion): none print under diet; --full
+// prints the same lines as before; `drops` (the structured summary) rides EVERY report into the
+// last-report dump regardless, so "a filter you cannot see is a filter you cannot check" is answered
+// by the dump, not stdout. PURE — pinned by pipeline/test/drop-accounting.test.mjs (presence AND
+// absence off the same builder, so a renamed family and a flipped gate both fail).
+export function dropAccounting({ reject = 0, rejReasons = {}, skippedNames = [], winnersFiltered = [], crowded = null } = {}, { diet = true } = {}) {
+  const footer = [];
+  const extra = [];
+  if (!diet) {
+    if (reject > 0) {
+      const top = Object.entries(rejReasons).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([why, n]) => `${why}×${n}`).join(', ');
+      footer.push(`rejected: ${reject}${top ? ` (${top})` : ''}`);
+    }
+    if (skippedNames.length) footer.push(`skipped ${skippedNames.length} unprofitable at the shown pair: ${skippedNames.join(' · ')}`);
+    if (crowded && crowded.count > 0) {
+      extra.push(`crowded out: ${crowded.count} gated candidate(s) never got a fetch slot (best excluded: ${crowded.bestName}, ~${crowded.bestGpDay}/d expected net, reason: ${crowded.reason})`);
+      if (crowded.rotation) extra.push(crowded.rotation);
+    }
+  }
+  const drops = (reject > 0 || skippedNames.length > 0 || winnersFiltered.length > 0 || (crowded && crowded.count > 0)) ? {
+    ...(reject > 0 ? { reject, rejectReasons: rejReasons } : {}),
+    ...(skippedNames.length ? { skippedUnprofitable: skippedNames } : {}),
+    ...(winnersFiltered.length ? { winnersFiltered } : {}),
+    ...(crowded && crowded.count > 0 ? { crowdedOut: { count: crowded.count, bestName: crowded.bestName, bestGpDay: crowded.bestGpDay, reason: crowded.reason } } : {}),
+  } : null;
+  return { footer, extra, drops };
+}
+
 // render one niche: filter the fetched pool, rate, sort by grade/score, print table + footer.
 // v24 (the whole-market 24h map) is passed through for the PM1 probe ctx (dip's avgLow24, decant's
 // sibling dose prices) — read-only, never a gate/verdict input.
@@ -1066,8 +1094,8 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   const dist = {};
   const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0, negNet: 0, subBeNet: 0, notFalling: 0, partition: 0 };  // post-fetch discard reasons (--stats)
   const skippedNames = [];
-  const skippedRows = [];   // the same drops, kept for the ledger — see the admitSkip marker at logSuggestions  // rows dropped by spec.admitMinNet — NAMED in the footer, never a silent drop
-  const rejReasons = {};   // P2: reject reason → count, for the `rejected: N (top reasons)` footer
+  const skippedRows = [];   // the same drops, kept for the ledger — see the admitSkip marker at logSuggestions  // rows dropped by spec.admitMinNet — NAMED in the --full footer + `drops` summary (FD7), never a silent drop
+  const rejReasons = {};   // P2: reject reason → count, for the `rejected: N (top reasons)` footer (--full) + `drops` (FD7)
   const cautionNotes = []; // P2: one flagged-caution note per item (the row still shows)
   const informNotes = [];  // inform-mode validator findings (trajectory/reach analysis) — decision support, never a drop
   const headroomNotes = []; // Bar E ask-headroom (PLAN Bar-E-signal): the robust p90 shaved a TRADED in-band top off the quoted ask — sibling inform note, never a gate/drop/grade/screen.json input
@@ -1691,10 +1719,18 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   const isWinner = r => HELD_IDS.has(r.id) || WATCHLIST_IDS.has(r.id) || (n => n == null || n > 0)(shownNet(r));
   const dietRows = rows.filter(isWinner);
   const dietLosers = rows.filter(r => !isWinner(r));
+  // FD7: the pre-formatted drop-accounting input, built ONCE per niche for dropAccounting().
+  const dropInput = {
+    reject: disc.reject, rejReasons,
+    skippedNames,
+    winnersFiltered: dietLosers.map(r => ({ name: map.byId[r.id]?.name || ('#' + r.id), net: shownNet(r) })),
+    // excluded is pre-sorted desc by expGpDay in admission.mjs, so [0] is the best excluded candidate.
+    crowded: excluded.length ? { count: excluded.length, bestName: map.byId[excluded[0].id]?.name || ('#' + excluded[0].id), bestGpDay: fmt(excluded[0].expGpDay || 0), reason: excluded[0].reason, rotation: rotationNote(excluded) } : null,
+  };
   const fullReport = buildNicheReport(rows, false);
   emitReport(fullReport, DIET ? buildNicheReport(dietRows, true) : fullReport);
 
-  // `diet` additionally restricts the per-row note families to `useRows` and appends the Skipped line.
+  // `diet` additionally restricts the per-row note families to `useRows` and suppresses drop accounting.
   function buildNicheReport(useRows, diet) {
   const keepIds = new Set(useRows.map(r => r.id));
   const noteTexts = arr => arr.filter(n => !diet || n.id == null || keepIds.has(n.id)).map(n => n.text);
@@ -1745,26 +1781,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // PLAN-LANE-ADMISSION Chunk D legend: Path-A is now the PRIMARY console sort; Grade is the shown BACKUP +
   // live A/B column. Loud about the placeholder (rule 4). Console/last-report only — screen.json stays on Grade.
   if (useRows.length) footerLines.push(`Path-A gp/d* = NEW PRIMARY console/last-report sort — after-tax intraday-flip gp/day (captureFrac PLACEHOLDER, n≈0, live A/B vs the Grade backup column) · L#·lane = rank within its gear/churn volume lane · ⚠<floor = below the ${(MIN_GPD / 1e3).toLocaleString()}k attention floor (surfaced, not gated) · no-pathA = no intraday range → grade-ranked. The published screen.json / app stay on Grade + the neutral sort (console-only until validated).`);
-  // P2: the coordinator-ruled reject footer — printed whenever any row was validator-REJECTED, naming
-  // the count + the top-3 reasons. reachValidator still degrades to pass here (no 1h series fetched);
-  // P3's floorValidator CAN reject (a buy parked well above the durable multi-week floor) once the
-  // loadDaily archive has enough history — until it warms, floor also degrades to pass and this line is
-  // absent (default output byte-identical). Caution rows still show; each is flagged on its own line.
-  if (disc.reject > 0) {
-    const top = Object.entries(rejReasons).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([why, n]) => `${why}×${n}`).join(', ');
-    footerLines.push(`rejected: ${disc.reject}${top ? ` (${top})` : ''}`);
-  }
-  // The admitMinNet drop, NAMED. A filter you cannot see is a filter you cannot check — and the whole
-  // reason this drop is safe to make on n≈0 is that a wrong one is visible the moment it happens.
-  if (skippedNames.length) {
-    footerLines.push(`skipped ${skippedNames.length} unprofitable at the shown pair: ${skippedNames.join(' · ')}`);
-  }
-  // The winners-view filter, NAMED — a filter you cannot see is a filter you cannot check.
-  if (diet && dietLosers.length) {
-    const named = dietLosers.slice(0, SKIPPED_NAME_MAX).map(r => `${map.byId[r.id]?.name || ('#' + r.id)} (net ${fmt(shownNet(r))})`);
-    const rest = dietLosers.length - named.length;
-    footerLines.push(`Skipped: ${dietLosers.length} rows non-positive net at the shown pair: ${named.join(', ')}${rest > 0 ? ` (+${rest} more)` : ''}`);
-  }
+  // FD7: drop accounting prints under --full only (dropAccounting() owns the wording + gate +
+  // `drops`); reachValidator degrades to pass here (no 1h series), floorValidator CAN reject once
+  // loadDaily warms. Caution rows still show.
+  const da = dropAccounting(dropInput, { diet });
+  footerLines.push(...da.footer);
   // C: BUCKET, don't sort. To "would we put severe at the top or the
   // bottom?" the honest answer is that ordering fourteen identically-formatted lines just picks
   // which one you read first. Every floor caution lives in the 1.5×–2.0× band by construction (above
@@ -1933,22 +1954,19 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   }
   // FD1: the stanza families ride the dump on every run; the winners view prints a pointer instead. The
   // compact caution / trajectory-reach footers above STAY — a warning on a winner is triage, not prose.
+  // FD7: the pointer also names `drop accounting` when the pass dropped anything (where, never what).
   if (!diet) extraSections.push(...stanza);
-  else if (stanza.length) extraSections.push({ type: 'lines', blank: false, lines: [`Diurnal timing · Base position · Entry paths${VEL && VEL.byItem.size ? ' · velocity' : ''}${POSTURE === 'overnight' ? ' · accumulation' : ''}: pipeline/.cache/last-report/screen.json (--full to print)`] });
-  // SC1 (PLAN-SCREEN-ARCHITECTURE) — exclusion visibility. UNCONDITIONAL (not behind
-  // --stats): the bludgeon/sanguinesti anchor incident was invisible for months because nothing
-  // reported that a real edge lost its fetch slot to a higher-gp-flow big ticket; this line exists
-  // so that class of silent starvation can't happen again without being named every single pass.
-  // Empty under `--admission legacy` (rankAndSlice never returns excluded) and on the value niche
-  // (its own §F admitted/shown footer already covers this).
-  if (excluded.length) {
-    const best = excluded[0];   // pre-sorted desc by expGpDay in admission.mjs
-    const bestName = map.byId[best.id]?.name || ('#' + best.id);
-    const lines = [`crowded out: ${excluded.length} gated candidate(s) never got a fetch slot (best excluded: ${bestName}, ~${fmt(best.expGpDay || 0)}/d expected net, reason: ${best.reason})`];
-    const rot = rotationNote(excluded);
-    if (rot) lines.push(rot);
-    extraSections.push({ type: 'lines', blank: false, lines });
+  else {
+    const fams = [];
+    if (stanza.length) fams.push(`Diurnal timing · Base position · Entry paths${VEL && VEL.byItem.size ? ' · velocity' : ''}${POSTURE === 'overnight' ? ' · accumulation' : ''}`);
+    if (da.drops) fams.push('drop accounting');
+    if (fams.length) extraSections.push({ type: 'lines', blank: false, lines: [`${fams.join(' · ')}: pipeline/.cache/last-report/screen.json (--full to print)`] });
   }
+  // SC1 (PLAN-SCREEN-ARCHITECTURE) — exclusion visibility, RE-HOMED by FD7: the bludgeon/sanguinesti
+  // class of silent starvation is still named every pass, but in the dump (`drops.crowdedOut`) + the
+  // --full render — the common --verbose pass is winners-only. Empty under `--admission legacy`
+  // (rankAndSlice never returns excluded) and on the value niche (its own §F footer covers this).
+  if (da.extra.length) extraSections.push({ type: 'lines', blank: false, lines: da.extra });
   if (STATS) {
     const fetched = survivors.length, kept = rows.length;
     const reasons = `falling ${disc.falling}` + (mode === 'scalp' ? `, not-falling ${disc.notFalling}` : '') + (partition ? `, band-lane partition ${disc.partition}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '') + `, validator-reject ${disc.reject}, validator-caution ${disc.caution}, neg-net ${disc.negNet}, below-shown-net ${disc.subBeNet}`;
@@ -1957,7 +1975,10 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // The trailing blank line that separated niches (the pre-VZ4 `console.log('')`) rides as a final
   // flush empty line, so the ONE renderReport call reproduces the whole niche's stdout byte-for-byte.
   extraSections.push({ type: 'lines', blank: false, lines: [''] });
-  return buildScreenNicheReport({ headerLines, table, estExplainer, footerLines, extraSections });
+  // FD7: `drops` rides the report into the dump (renderReport reads only .sections — print untouched).
+  const report = buildScreenNicheReport({ headerLines, table, estExplainer, footerLines, extraSections });
+  report.drops = da.drops;
+  return report;
   }
   // publishable rows (sorted-by-grade, byte-identical cells + itemId for the app's deep link).
   // P6c: sub-floor rows are STDOUT-ONLY — publish [] so screen.json/the app see exactly what a

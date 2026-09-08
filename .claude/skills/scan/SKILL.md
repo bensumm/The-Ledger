@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 3.8
+version: 3.9
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -23,24 +23,33 @@ table, don't just describe it.
 full both-leg verification, but report only the surviving picks; drop the 'what failed and why'
 section").** _(judgment: relay discipline; the filter itself is encoded in
 `pipeline/commands/screen-flip-niches.mjs`)_ `--verbose` renders rows whose **displayed net is
-positive** and collapses what it removed into ONE line per flip-niche — `Skipped: N rows
-non-positive net at the shown pair: Item (net −x), … (+K more)` — beside the existing `rejected:` /
-`crowded out:` / `skipped: N unprofitable at the shown pair` footers. **HELD and WATCHLIST rows are
-EXEMPT** (the same sets `admitMinNet` exempts) and print regardless of net, with no Skipped line: a
+positive** and prints **NO drop accounting at all** (FD7, Ben 2026-09-08: "do not waste time
+explaining to me about the losers"): the `rejected:` / `skipped … unprofitable` / `crowded out:`
+footers and the winners-filter `Skipped:` line are gone from the common pass — they print under
+`--full` only, and every drop is recorded structurally in the cache on every run regardless (each
+flip-niche report in `pipeline/.cache/last-report/screen.json` carries a `drops` object: validator
+rejects + reasons, admitMinNet skips, winners-filtered rows with their nets, crowded-out count +
+best excluded). **HELD and WATCHLIST rows are
+EXEMPT** (the same sets `admitMinNet` exempts) and print regardless of net: a
 negative net on one of those is a POSITION or WATCH signal, not a surviving pick — read it, act on
 it as a position, and never shortlist it as a winner. The **per-row STANZA families
 do not print at all** under `--verbose` — Diurnal timing, Base position, Entry paths, velocity and
 the overnight accumulation table are replaced by ONE pointer line per flip-niche, `Diurnal timing ·
-Base position · Entry paths: pipeline/.cache/last-report/screen.json (--full to print)` (amplitude
-folds its variant into the doctrine pointer). Only the compact one-line `ℹ`/`⚠` notes still print,
-and those for surviving rows only. **A missing Diurnal/Base-position read therefore means "it is in
-the cache", never "there was no data"** — say so if Ben asks, and go read the cache rather than
-re-running the scan. So
+Base position · Entry paths: pipeline/.cache/last-report/screen.json (--full to print)`, which also
+names `drop accounting` whenever the pass dropped anything — where it lives, never what it was
+(amplitude folds its variant into the doctrine pointer). Only the compact one-line `ℹ`/`⚠` notes
+still print, and those for surviving rows only. **A missing Diurnal/Base-position read therefore
+means "it is in the cache", never "there was no data"** — say so if Ben asks, and go read the cache
+rather than re-running the scan. So
 **paste the `--verbose` table AS PRINTED**: no row-count trim in your head, no re-adding rows out of
 the cache, and no re-narrating what the script removed. "Verbatim" still means the NUMBERS aren't
-altered. Losers and gate chatter are never retold in prose — the script's own Skipped/rejected lines
-ARE the whole story, and relaying them unedited is what keeps a wrong removal catchable (a filter you
-cannot see is a filter you cannot check). The old rule here asked the agent to trim a full dump by
+altered. Losers and gate chatter are never retold in prose — and never relayed out of the cache
+either. **How a wrong removal is caught now (the check MOVED, it didn't disappear):** when a row you
+expected is missing — Ben names an item, a watched edge vanishes, a flip-niche looks implausibly thin —
+read the cache's `drops` before concluding it has no edge
+(`node -e "const d=require('./pipeline/.cache/last-report/screen.json');for(const r of d.reports) if(r.drops) console.log(JSON.stringify(r.drops))"`)
+or re-run with `--full`; `pipeline/test/drop-accounting.test.mjs` pins that the accounting itself
+can never thin with the render. The old rule here asked the agent to trim a full dump by
 grade AFTER it had already entered context; that cost is gone at the source.
 
 **The filter keys on NET, never on grade — deliberately (Ben, 2026-09-03: "Don't implement a grade
@@ -51,8 +60,8 @@ at S+/S+/S− on displayed nets of −6, −48, −23, all of which a ≥B− tr
 scoring heuristic for elevating candidates, not a verdict on whether a trade makes money (Ben,
 2026-08-18) — read `Net/u` for that, which is exactly what the render filter reads. Honest limit
 (rule 4): a NON-EXEMPT candidate whose displayed net is negative while its PATIENT economics are
-positive is hidden from stdout — it survives in the cache and the digest, and the Skipped line names
-it. Held/watchlist rows are not dropped at all, so no Skipped line covers them.
+positive is hidden from stdout — it survives in the cache (named with its net in the flip-niche report's
+`drops.winnersFiltered`) and the digest. Held/watchlist rows are not dropped at all.
 
 **The `--digest` block (§1) is a SEPARATE surface, not a replacement** — a narrower cross-niche
 triage VIEW that sits ABOVE the per-niche tables. Relay both; two surfaces, two reads.
@@ -873,17 +882,21 @@ This is the tribal layer the script can't do — apply ALL of these:
   heading, run the same full-day multi-week trajectory read — `/positions` "trajectory read for
   confidence on a marginal/big-ticket hold" (`read-window-range.mjs --window 0-23 --nights 21`,
   phase-mapped). Point to it; don't copy the method here.
-- **A "crowded out: N (best excluded: X)" footer line means a real edge lost its fetch slot — read
-  it, don't skip past it (PLAN-SCREEN-ARCHITECTURE, 2026-07-18).** _(judgment: relay discipline; mechanic in `pipeline/lib/signal/admission.mjs` `pickFetchPool`)_
+- **`crowded out:` means a real edge lost its fetch slot — it lives in the cache now; check it when
+  something you expected is missing (PLAN-SCREEN-ARCHITECTURE, 2026-07-18; off the common pass by
+  FD7, 2026-09-08).** _(judgment: diagnosis discipline; mechanic in `pipeline/lib/signal/admission.mjs` `pickFetchPool`)_
   The fetch pool is bounded (API-fetch cost) — only so many gated candidates get priced each pass.
   Since the anchor incident (Abyssal bludgeon / Sanguinesti staff never surfacing despite real
   profitable history — the raw-gp-flow-ranked thin reserve was silently starving them out every
   single pass), the DEFAULT admission path ranks the thin/big-ticket lane on real after-tax edge
   instead of raw turnover, rotates in starved candidates on a bounded exploration reserve, and
-  reports every excluded candidate with a reason instead of dropping it silently. When you see this
-  line, name the best-excluded item to Ben if it's genuinely close — that's the whole point of the
-  line existing. `--admission legacy` restores the old raw-gp-flow thin-lane rank (rollback/comparison
-  only, never the default). ONE reason means something different and should NOT be relayed as a lost
+  records every excluded candidate with a reason instead of dropping it silently. That record lands
+  in each flip-niche report's `drops.crowdedOut` (count + best excluded + reason) on every run and prints
+  as a line under `--full` only — so the protection is exercised in the §2 judgment pass, not by
+  relay: when an expected item is absent from the tables, check `drops` before concluding it has no
+  edge, and name the best-excluded item to Ben only if it's genuinely close. `--admission legacy`
+  restores the old raw-gp-flow thin-lane rank (rollback/comparison
+  only, never the default). ONE reason means something different and is NOT a lost
   edge: `watch-reserve-full` (PP-R) means a WATCHLIST item lost the bounded watch reserve — it is still
   quoted and graded in the always-shown Watchlist section below, so read it there rather than reporting
   it as crowded out. Full diagnosis + design: `PLAN-SCREEN-ARCHITECTURE.md`.
@@ -968,10 +981,11 @@ This is the tribal layer the script can't do — apply ALL of these:
 
 The judgment-filtered shortlist — **the surviving picks only** — with a one-line rationale per pick
 (why this edge is real). Run the full both-leg verification as always; report only what survived it.
-There is **no "what failed and why" section** (Ben, 2026-09-02): the floor/gate counts and the removed
-rows are already named by the script's own `Skipped:` / `rejected:` / `crowded out:` footer lines,
-which you relay as printed and do not re-narrate. If Ben asks about a specific item you passed on,
-answer then — that is a follow-up, not a standing section.
+There is **no "what failed and why" section** (Ben, 2026-09-02) and **no drop-accounting relay**
+(FD7, 2026-09-08): the floor/gate counts and the removed rows live in the cache — each flip-niche
+report's `drops` object, printed only under `--full` — and are never re-narrated. If Ben asks about
+a specific item you passed on, read `drops` and answer then — that is a follow-up, not a standing
+section.
 
 **Cover every flip-niche each pass — "no dips" is NOT a complete scan (Ben, 2026-07-07).** A
 recurring scan (esp. inside a watch loop) drifts narrow: one salient sub-task — the dip-hunt

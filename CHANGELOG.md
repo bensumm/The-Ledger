@@ -8,6 +8,41 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## pipeline console — 2026-09-08 — drop accounting goes behind `--full`: the winners view stops narrating losers (PLAN-FLOW-DIET FD7; pipeline/skills/docs only — render + cache-dump change, so no APP_VERSION or PIPELINE_VERSION bump per the version.mjs discipline)
+
+FD1 stopped the scan from *rendering* losing rows but kept four footer lines whose whole subject
+was those rows — `rejected:`, `skipped N unprofitable…`, the winners-filter `Skipped:` line, and
+`crowded out:` — so every winners-only niche still ended in a roll-call of losers. Ben's ruling
+(2026-09-08): behind `--full`.
+
+- **`dropAccounting()`** (exported, pure, `screen-flip-niches.mjs`) is now the ONE home for all
+  four families: wording, the diet gate (`--verbose` emits nothing; `--full` emits the exact
+  pre-FD7 lines), and a structured **`drops`** summary `{reject+rejectReasons, skippedUnprofitable,
+  winnersFiltered (name+net), crowdedOut (count/best/reason)}` attached to every niche report in
+  `pipeline/.cache/last-report/screen.json` on EVERY run, identically across views.
+- **The "filter you cannot see" doctrine moved rather than died**: the check is no longer a stdout
+  relay but (a) `drops` in the dump — directly addressable, not serialized prose; (b) the diet
+  pointer line now ends `· drop accounting` when a pass dropped anything (where it lives, never
+  what it was); (c) `/scan` v3.9 carries the suspicious-removal recipe (read `drops` / re-run
+  `--full`) instead of the relay mandate; (d) `pipeline/test/drop-accounting.test.mjs` pins
+  presence AND absence off the same builder (4 named mutants confirmed red), so a renamed family
+  or flipped gate both fail.
+- **`rejected:` was ruled INTO the cut deliberately, not lumped**: it is validator output (the
+  falling-knife guard), a different failure mode from loser noise — but under winners-only the
+  reader doesn't audit absent candidates from stdout; the "why didn't X appear" question is what
+  the `drops` recipe + pointer exist for, and the line still prints under `--full`.
+- **The FD1 stdout `Skipped:` line was DELETED** (unreachable by construction on band/churn/scalp
+  since FD1 shipped; line-of-record → `drops.winnersFiltered`). The reverse-flip header's own
+  `(N rejected: …)` is OUT of the ruling — it names Ben's OWN items that failed the harvest gate
+  (per-item actionable inventory info, tiny pool), not scan losers. `--digest`, the watchlist
+  surface, and app `screen.json` carry none of the four families (verified).
+- Honesty (rule 4, as the plan demanded): measured on a live band pass the three printed families
+  were **722 chars of a 68k-char `--verbose` output (~1%)** — the case for this chunk was Ben's
+  thrice-stated preference and surface coherence, not a token saving, and it isn't sold as one.
+
+Skills: scan 3.8→3.9, overnight 1.29→1.30. Doc homes reconciled in place: README
+`screen-flip-niches.mjs` entry, `docs/MARKET-ANALYSIS.md` MT3 note.
+
 ## pipeline 1.6.0 — 2026-09-03 — bid declaration + the stale-bid flag: a declared deep bid is silent, an undeclared stale one gets ONE line (PLAN-FLOW-DIET FD4; pipeline/skills only, no APP_VERSION bump)
 
 The gap (FD4 diagnosis): no declared-deep mechanism existed for a bid — `hold-thesis.json`
