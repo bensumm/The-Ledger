@@ -630,6 +630,8 @@ the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the co
   table was the 00:00–08:00 window; two overlapping windows, no subset relation, no data bug (live
   `/timeseries` verified bucket-identical to the archive). Doctrine home: `floorCeilingTrack`'s
   header + README's `windowread.mjs`/`cells.mjs` entries; story: CHANGELOG "pipeline 1.4.0".
+  Execution: 3bdca47 (plan + EC1 record) · ac25b5c (the wave, pipeline 1.4.0) · 9925847 (skill
+  cue-enumeration follow-on). Two review rounds; round 2 empty (the stopping signal).
 
 - **The value/Invest lane's money path is NOT bond-covered (BSH H2 review, 2026-09-03).**
   `js/valuescreen.mjs` `afterTaxAmpPct` and `js/validate.mjs` `valueAmplitudeValidator` (a GATE)
