@@ -267,7 +267,7 @@ Beside every `deployablePool` print (watch footer, `/book`, run-loop gate, `scre
 into the pool silently (the shelved three-bucket redesign stays shelved). Optionally the
 run-loop scan gate counts it toward `--min-idle` (flagged for Ben's veto at dispatch time).
 
-### FD7 — the drop-accounting footers behind `--full` (SHIPPED 2026-09-08)
+### FD7 — the drop-accounting footers behind `--full` (SHIPPED 2026-09-08, `94473a2` + r1 `2726e78`)
 
 **Execution record (the problem statement below stands as the dispatch record; every open question
 is answered here, none assumed):**
@@ -315,6 +315,14 @@ is answered here, none assumed):**
 - Skill/doc reconciliation in the same change: scan 3.8→3.9 (§1 winners paragraph, the crowded-out
   bullet, §4 Output, the honest-limit note), overnight 1.29→1.30, README `screen-flip-niches.mjs`
   entry, MARKET-ANALYSIS MT3 note, the in-code SC1/FD1 comments.
+- **Adversarial review (rule 10): ONE round, empty on code** — the reviewer independently re-ran the
+  12 guards, a live `--verbose`/`--full` pair (byte-exact families, positions, pointer), the skill's
+  `node -e` recipe, the publish/dump seams, and the measurements (718 vs my 722 chars — same ~1%);
+  it also pressure-tested "unreachable by construction" against `--raw` (holds: view flags change
+  printed columns, not the filter input). Findings: one genuine doc miss (README's `admission.mjs`
+  MT3 clause lacked the `--full` qualifier) + two one-clause honesty tweaks (MARKET-ANALYSIS
+  floorValidator row; the test's "absent vs null" wording) — fixed in r1 `2726e78`. Per the
+  stop-rule an empty-on-code round with only sub-clause doc findings ends the loop.
 - **Found while here, NOT fixed (Ben's call):** `PIPELINE_VERSION` (`pipeline/lib/version.mjs`) is
   `1.3.0` but CHANGELOG carries entries titled pipeline 1.4.0–1.6.0 — the constant was never
   bumped alongside those entries (CHANGELOG is exempt from lint-docs' constant-drift check, so CI

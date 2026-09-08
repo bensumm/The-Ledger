@@ -415,7 +415,7 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 
 ## Other unscheduled notes
 
-- **Flow diet — winners-only surfaces, stale-bid flagging, reclaimable capital (FD1–FD6,
+- **Flow diet — winners-only surfaces, stale-bid flagging, reclaimable capital (FD1–FD7,
   ACTIVE)** (`plans/PLAN-FLOW-DIET.md`, Ben 2026-09-03). **FD1 ✅ `d3bc21c`** (winners-only
   `--verbose` render — stanza families cache-only behind a pointer line, `--full` debug
   restore, cache identical across modes; the positive-net row filter ships with the
@@ -428,7 +428,11 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   1.5.0). **FD4 ✅ `33e8a87`+`0c13296`** (bid-thesis declaration store + inform-only ⏳
   stale-bid flag on watch's three bid sites — declared bids silent, never-chase level gate,
   V1-deduped, `bid-thesis.json` joins the NINE-file nightly publish; two review rounds, the
-  second empty on code; CHANGELOG pipeline 1.6.0). FD5–FD6 (bids on the positions surface →
+  second empty on code; CHANGELOG pipeline 1.6.0). **FD7 ✅ `94473a2`+`2726e78`** (drop
+  accounting — `rejected:`/skipped-unprofitable/the FD1 `Skipped:` line/`crowded out:` — behind
+  `--full`; the pure `dropAccounting()` one-home + a structured `drops` summary on every
+  flip-niche report in the dump, mutation-pinned; scan 3.9/overnight 1.30 reconciled; one
+  review round, empty on code). FD5–FD6 (bids on the positions surface →
   shown reclaimable-stale capital line) staged behind it. Ruling: NO grade term in any filter predicate (grade tuning is later,
   F1-tagged work); the still-large winners table (a rank-based cap?) is an OPEN question for
   Ben, recorded in the plan.
