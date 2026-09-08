@@ -369,7 +369,7 @@ export function driftAdjustedExit(fc, { ceilingSlope = null, floorSlope = null, 
  * PLAN-OSCILLATION-CYCLE Chunk 2 established this caller pattern; Chunk 6 (per-thesis integration) REUSES
  * it rather than forking the three steps (one-home discipline — the amplitude lane is the FIRST caller).
  * Steps, all off data ALREADY in the caller's hand (NO fetch): (1) source the CEILING-track and FLOOR-track
- * slopes from floorCeilingTrack(days) — the same daily windowStats().days series the caller already built;
+ * slopes from floorCeilingTrack(days) — the caller's own daily windowStats().days series (EC2: deliberately NO `forming` — slopes are completed-days-only; the contradiction is a cue concept);
  * (2) build the diurnalForecast wrapper from the in-hand hourProfile; (3) call driftAdjustedExit with those
  * slopes. PURE and TAX-FREE: forecast.mjs deliberately never imports the quote engine, so the after-tax
  * MARGIN (afterTax(peak) − entry − requiredMargin) stays the caller's concern (js/amplitudescreen.mjs

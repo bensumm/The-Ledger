@@ -195,8 +195,8 @@ const cap=s=>s?s[0].toUpperCase()+s.slice(1):s;
 export const REGIME_MIN_DAYS = 5;   // fewer daily buckets than this ⇒ unknown (floorCeilingTrack's own floor)
 export function regimeDrift(points){
   if(!points || points.length<2) return {ok:false};
-  // bucket the 6h series into full-LOCAL-day low/high (today auto-excluded by windowStats); the shape
-  // is windowStats().days = [[key,{low,hi}], …] oldest→newest — the exact input floorCeilingTrack wants.
+  // bucket the 6h series into full-LOCAL-day low/high (today auto-excluded; windowStats().days is the exact
+  // floorCeilingTrack input). EC2: DELIBERATELY no `forming` — a GATE reads COMPLETED days only, stable intraday.
   const stats=windowStats(points, {nights:20, wStart:0, wEnd:0});
   if(!stats || !Array.isArray(stats.days) || stats.days.length<REGIME_MIN_DAYS) return {ok:false};
   const fc=floorCeilingTrack(stats.days);

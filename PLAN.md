@@ -609,6 +609,28 @@ the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the co
 
 ## Discovered
 
+- **PLAN-ENTRY-CONFIDENCE — SHIPPED 2026-09-08 (EC1–EC4, one wave; plan folded + deleted, full text
+  via `git show 3bdca47:plans/PLAN-ENTRY-CONFIDENCE.md`).** The Avernic-hilt entry post-mortem (executed 0.061% off the suggested price,
+  CUT-CANDIDATE 2h16m later — the confidence attached to the number was wrong, not the number).
+  **EC1 measured it systematic first**: 60.6% of shipped buys sat above their own
+  `dipReality.typicalLevel`, median premium ≈ the ENTIRE expected net; 44.1% of `rising` floor labels
+  at 21:00 had the forming day already under the last completed low, and that contradiction predicts
+  "cheaper entry within 3d" at 88.5% vs 53.1% (forward slope unpredicted — the rising label itself is
+  ~noise for 3-day direction, 48.0% vs 45.7% base; 21,013 archive item-day cells). **EC2**: the
+  monotone-certainty forming read (a day's low only falls ⇒ `forming.low <` a completed statistic is
+  decided at ANY hour — no elapsed-fraction estimator needed): `windowStats` returns `forming`,
+  `floorCeilingTrack` emits `formingContradiction`, renderer stale-marks/withholds, soft-buy cue
+  gains `stale-uptrend`; gates/replays stay completed-days-only by design. The draft's Defect-2
+  divergence claim was REFUTED (windowStats strips today at every site — the defect was uniform
+  discard, and `fc.forming` was structurally null everywhere: Defect 3's answer). **EC3**: the dip
+  level + premium now render ON the buy line (⚠ when the premium ≥ the whole net) — the check that
+  would have caught the hilt (its forming triggers would NOT have fired: on true full-day buckets the
+  entry cue read `healthy-trend, run falling ×1`, not the relayed untraced `rising ×5`). **EC4**:
+  Defect 5 dissolved — `read-window-range.mjs` bare defaults to `--window 0-8`, so the "full-day"
+  table was the 00:00–08:00 window; two overlapping windows, no subset relation, no data bug (live
+  `/timeseries` verified bucket-identical to the archive). Doctrine home: `floorCeilingTrack`'s
+  header + README's `windowread.mjs`/`cells.mjs` entries; story: CHANGELOG "pipeline 1.4.0".
+
 - **The value/Invest lane's money path is NOT bond-covered (BSH H2 review, 2026-09-03).**
   `js/valuescreen.mjs` `afterTaxAmpPct` and `js/validate.mjs` `valueAmplitudeValidator` (a GATE)
   take no item id, and `gateValueCandidates` returns before `spec.edge` runs, so the `ctx.guide`

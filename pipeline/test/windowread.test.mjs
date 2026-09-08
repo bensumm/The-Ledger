@@ -896,22 +896,99 @@ ok('floorCeilingTrack: HEALTHY-TREND — both floor and ceiling rising, new high
   assert.equal(fc.classification, 'healthy-trend');
 });
 
-ok('floorCeilingTrack: FORMING-DAY GUARD (req #1) — an incomplete latest day never trips a false break', () => {
+ok('floorCeilingTrack: FORMING-DAY GUARD (req #1) — the forming day never feeds the slope/break STATISTICS', () => {
   // 6 COMPLETED flat days at a ~1000 floor, then a forming (mid-session) day whose low dipped to 500.
+  // EC2 (PLAN-ENTRY-CONFIDENCE) AMENDED SEMANTICS — the argued change this test's original spirit
+  // ("a deep intraday print is NOT a real daily low") required: a forming day's low is a MONOTONE LOWER
+  // BOUND on its eventual daily low (a day's min only falls), so a 500 print under a 1000 trough is not
+  // a fake break — it is a break that is CERTAIN to read `broke` at day end (measured 8,463/8,463 in the
+  // EC1 archive backtest). What this test still rightly pins: the forming day must not feed the SLOPE or
+  // the DISCRETE floorBreak statistic (those describe completed days, and early in the day a partial low
+  // biases the slope). The certainty now rides the separate `formingContradiction` field, asserted below.
   const completed = [0, 1, 2, 3, 4, 5].map(i => fcDay(`2026-07-0${i + 1}`, 1000 + (i % 2), 1200));
-  const forming = fcDay('2026-07-07', 500, 1150);   // incomplete — a deep intraday print, NOT a real daily low
+  const forming = fcDay('2026-07-07', 500, 1150);   // incomplete — a lower BOUND on today's eventual low
   const days = [...completed, forming];
   // WITH the guard: the forming day is dropped from the completed series + surfaced separately.
   const fc = floorCeilingTrack(days, { todayKey: '2026-07-07' });
   assert.equal(fc.forming.key, '2026-07-07', 'the forming day is split off, not fed to the slope/break');
   assert.equal(fc.forming.low, 500);
   assert.equal(fc.nDays, 6, 'only the 6 completed days feed the read');
-  assert.equal(fc.floorBreak.broke, false, 'the 500 forming dip is EXCLUDED → no false floor break');
+  assert.equal(fc.floorBreak.broke, false, 'the completed-days floorBreak statistic EXCLUDES the forming 500');
   assert.ok(fc.floor.series.every(v => v >= 1000), 'the completed floor series never sees the forming 500');
-  // WITHOUT the guard (no todayKey): the 500 IS counted as the latest low → a FALSE break. Proves the guard matters.
+  // EC2: …but the certainty is REPORTED, not hidden — 500 sits under the prior trough, so the break is
+  // already decided (monotone), and the field the renderer/cue must obey says so.
+  assert.equal(fc.formingContradiction.kind, 'under-trough', 'forming low under the prior trough = a break CERTAIN at day end');
+  assert.equal(fc.formingContradiction.formingLow, 500);
+  // WITHOUT the guard (no todayKey): the 500 IS counted as the latest low → the completed-days statistics
+  // are polluted (slope + break read the partial day as a full one). Still the behaviour to prevent.
   const unguarded = floorCeilingTrack(days);
-  assert.equal(unguarded.floorBreak.broke, true, 'counting the incomplete day fakes a break — exactly what the guard prevents');
-  assert.equal(unguarded.classification, 'crash-risk', 'and would mislabel a stable item as a crash');
+  assert.equal(unguarded.floorBreak.broke, true, 'counting the incomplete day pollutes the completed-days break statistic');
+  assert.equal(unguarded.classification, 'crash-risk');
+});
+
+ok('EC2: windowStats returns `forming` (today\'s partial-day aggregates) and keeps it OUT of days', () => {
+  const now = new Date(2026, 6, 4, 21, 0, 0);   // 2026-07-04 21:00 local
+  const pt = (d, h, low, hi) => ({ timestamp: Math.floor(new Date(2026, 6, d, h, 0, 0).getTime() / 1000), avgLowPrice: low, avgHighPrice: hi, lowPriceVolume: 1, highPriceVolume: 1 });
+  const series = [];
+  for (const d of [1, 2, 3]) for (const h of [2, 10, 18]) series.push(pt(d, h, 1000 + d, 1200 + d));
+  series.push(pt(4, 3, 990, 1150), pt(4, 12, 940, 1180));   // today — two partial buckets
+  const ws = windowStats(series, { nights: 14, wStart: 0, wEnd: 0, now });
+  assert.equal(ws.forming.key, '2026-07-04');
+  assert.equal(ws.forming.low, 940, 'forming.low = the min printed so far today');
+  assert.equal(ws.forming.hi, 1180);
+  assert.ok(ws.days.every(([k]) => k !== '2026-07-04'), 'today never enters the completed days');
+  assert.equal(ws.days.length, 3);
+  // no points today ⇒ forming null (and a `now` outside the scored window would give the same)
+  const wsNoToday = windowStats(series.slice(0, 9), { nights: 14, wStart: 0, wEnd: 0, now });
+  assert.equal(wsNoToday.forming, null);
+});
+
+ok('EC2: formingContradiction — monotone-certainty states, strict boundaries', () => {
+  // 7 completed days, floor rising 1000→1060, prior trough 1000, latest low 1060.
+  const days = [0, 1, 2, 3, 4, 5, 6].map(i => fcDay(`2026-07-0${i + 1}`, 1000 + i * 10, 2000 + i * 10));
+  const at = low => floorCeilingTrack(days, { forming: { key: '2026-07-08', low, hi: 2000 } }).formingContradiction;
+  assert.equal(at(1060), null, 'forming low EQUAL to the last completed low proves nothing (strict <)');
+  assert.equal(at(1059).kind, 'under-last-low', 'one gp under the last completed low = the label is stale');
+  assert.equal(at(1059).gap, 1, 'gap = last completed low − forming low');
+  assert.equal(at(1000).kind, 'under-last-low', 'at the prior trough exactly — still only under-last (strict <)');
+  assert.equal(at(999).kind, 'under-trough', 'under the prior trough = the discrete break is certain at day end');
+  const none = floorCeilingTrack(days);
+  assert.equal(none.formingContradiction, null, 'no forming read ⇒ no contradiction claim');
+  // BROKE floor: troughRef must be min(priorFloor, latest), not priorFloor alone — a forming 970 above a
+  // 950 latest (but under the 1000 prior floor) proves nothing new (review-1 mutant: priorFloor-only survives).
+  const brokeDays = [0, 1, 2, 3, 4, 5].map(i => fcDay(`2026-07-0${i + 1}`, 1000, 1200)).concat([fcDay('2026-07-07', 950, 1200)]);
+  const broke = floorCeilingTrack(brokeDays, { forming: { key: '2026-07-08', low: 970, hi: 1200 } });
+  assert.equal(broke.floorBreak.broke, true, 'fixture sanity: the completed floor already broke');
+  assert.equal(broke.formingContradiction, null, 'forming above the broken latest low makes no claim');
+});
+
+ok('EC2: a rising label cannot render unqualified while today already printed under it (regression, both directions)', () => {
+  const idfmt = n => String(n);
+  // ceiling steepened (i*40) so BOTH tracks read rising ⇒ classification healthy-trend, the label under test
+  const days = [0, 1, 2, 3, 4, 5, 6].map(i => fcDay(`2026-07-0${i + 1}`, 1000 + i * 10, 2000 + i * 40));
+  // WITHOUT forming: the healthy-trend label renders clean (the absence half that makes the presence half meaningful).
+  const clean = formatFloorCeiling(floorCeilingTrack(days), idfmt);
+  assert.ok(clean.includes('healthy-trend'), 'rising floor + rising ceiling renders healthy-trend');
+  assert.ok(!clean.includes('STALE') && !clean.includes('breaking down'), 'no contradiction ⇒ no stale/withheld wording');
+  // under-last-low: the label survives but is MARKED STALE with the measured meaning.
+  const stale = formatFloorCeiling(floorCeilingTrack(days, { forming: { key: '2026-07-08', low: 1030, hi: 2000 } }), idfmt);
+  assert.ok(stale.includes('STALE: today already printed 30 under the last completed low'), 'under-last-low marks the rising label stale with the gap');
+  assert.ok(stale.includes('today forming low 1030'), 'the forming clause renders too');
+  // under-trough: the label is WITHHELD outright — the break is certain.
+  const withheld = formatFloorCeiling(floorCeilingTrack(days, { forming: { key: '2026-07-08', low: 900, hi: 2000 } }), idfmt);
+  assert.ok(withheld.includes('breaking down') && withheld.includes('label withheld'), 'under-trough withholds the trend word');
+  assert.ok(withheld.includes('was healthy-trend'), 'and still names the completed-days read it overrode');
+});
+
+ok('EC2: softBuyRead cue — stale-uptrend / caution off the forming contradiction', () => {
+  const prof = { dip: { level: 1000, startH: 1, endH: 3 } };
+  const days = [0, 1, 2, 3, 4, 5, 6].map(i => fcDay(`2026-07-0${i + 1}`, 1000 + i * 10, 2000 + i * 10));
+  const fcClean = floorCeilingTrack(days);
+  assert.equal(softBuyRead(prof, { live: 1000, fc: fcClean }).cue, 'favorable', 'rising + no contradiction = favorable (unchanged)');
+  const fcStale = floorCeilingTrack(days, { forming: { key: '2026-07-08', low: 1030, hi: 2000 } });
+  assert.equal(softBuyRead(prof, { live: 1000, fc: fcStale }).cue, 'stale-uptrend', 'under-last-low on a rising label downgrades favorable');
+  const fcTrough = floorCeilingTrack(days, { forming: { key: '2026-07-08', low: 900, hi: 2000 } });
+  assert.equal(softBuyRead(prof, { live: 1000, fc: fcTrough }).cue, 'caution', 'under-trough = the same caution a broke floor gets');
 });
 
 ok('floorCeilingTrack: honesty rails — thin history / no data ⇒ null (never a fake read)', () => {

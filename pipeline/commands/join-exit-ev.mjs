@@ -236,8 +236,8 @@ export function incumbentAsksAt({ series, cut, nights = DEFAULT_NIGHTS, depthQty
   return { asks, stats, live, statsSeries, qty, rawAsym, guardBound };
 }
 
-/* One origin's record: every contender's ask plus the forward outcome per horizon. The surface is
- * built once and read at every (horizon, delayCost), so the sweep costs nothing extra. */
+/* One origin's record: every contender's ask plus the forward outcome per horizon; built once, read at
+ * every (horizon, delayCost). EC2: no `forming` below — a replay origin scores completed-days labels. */
 export function buildOriginRecord({ series, itemId, ts, horizons, delayCostFracs = [0], nights = DEFAULT_NIGHTS, depthQtyFrac = DEFAULT_DEPTH_QTY_FRAC, ladderZ = LADDER_Z_STEP }) {
   const cut = readableCut(series, ts);
   if (!cut) return null;

@@ -72,17 +72,11 @@ export function estPairCells(est) {
   // (askReachFactor), while the Rank cell's `P~` is the TWO-LEG product (entry × ask). The same row was
   // printing `P~57%` here beside `P~0.00` in the rank cell with no marker — the label names which leg
   // each number is, and the rank cell now labels a collapsed leg (screen-flip-niches.mjs consoleRankCell).
-  // THE BASIS — CORRECTED 2026-08-09. This block used to say the ask-leg factor is on the DISPLAY
-  // (recent-3) basis while the rank stays full-window, "so these two are NOT the same number and are not
-  // meant to be… Never claim they match." Both halves are FALSE since the 2026-08-09 flip: `pair.mjs`
-  // computes this factor with `{prefer:'full'}` at both call sites — the SAME basis as the rank — so the
-  // display-vs-rank divergence is retired and the numbers DO agree in basis.
-  // This mattered more than a stale comment: `pair.mjs:113-116` pins the invariant that its `frac` and
-  // `pFill` must ALWAYS declare the same basis, and this file documented the OPPOSITE, pointing readers
-  // at pair.mjs for a rationale pair.mjs no longer holds. An editor following it would have flipped
-  // `pFill` back to `recent` and reintroduced the exact bug RB-3 existed to remove.
-  // (Still true, and unrelated: `P(ask)~` is the ASK LEG ONLY; the Rank cell's `P~` is the two-leg
-  // product, which is why the same row can show two different percentages.)
+  // THE BASIS — CORRECTED 2026-08-09: this factor is `{prefer:'full'}` at both pair.mjs call sites, the
+  // SAME basis as the rank (an earlier claim of a display-vs-rank basis split was FALSE — `pair.mjs:113-116`
+  // pins that its `frac` and `pFill` always declare ONE basis; do not flip `pFill` back to `recent`, the
+  // exact bug RB-3 removed). Still true and unrelated: `P(ask)~` is the ASK LEG ONLY; the Rank cell's
+  // `P~` is the two-leg product, which is why one row can show two different percentages.
   const pTok = (est.estNet != null && est.pFill != null && c.ask && !c.foldExempt)
     ? ` · P(ask)~${Math.round(est.pFill * 100)}%` : '';
   // PP2 — on the BE-floored branch ONLY, name the PATIENT alternative, so "nothing to price above
@@ -93,8 +87,20 @@ export function estPairCells(est) {
     ? ` · patient: ${est.patient.bidTxt} → ${est.patient.askTxt} · net +${fmtP(est.patient.net)}/u — resting levels, in-sample counts, not a fill rate` : '';
   const netTxt = est.estNet == null ? '—'
     : `${est.estNet > 0 ? '+' : ''}${fmtP(est.estNet)} (${est.estRoi != null ? (est.estRoi >= 0 ? '+' : '') + est.estRoi.toFixed(1) + '%' : '—'})${pTok}`;
+  // EC3 (PLAN-ENTRY-CONFIDENCE): a buy above a HIGH-REACH (≥½ of days) dip level says so ON the buy line —
+  // level, reach fraction, premium; ⚠ when the premium eats the whole net. Display-only over the caller-
+  // attached `est.dipRef` (diurnalTimedLap dipReality — already computed, already logged via timedLap).
+  let dipSeg = '';
+  const dref = est.dipRef;
+  if (dref && dref.level != null && est.estBuy != null && est.estBuy > dref.level
+      && dref.nDays > 0 && dref.reachedDays / dref.nDays >= 0.5) {
+    const prem = est.estBuy - dref.level;
+    const overNet = est.estNet != null && est.estNet > 0 && prem >= est.estNet;
+    const rec = (dref.recentDays > 0 && dref.recentHit < dref.recentDays) ? `, rec ${dref.recentHit}/${dref.recentDays}` : '';
+    dipSeg = ` · ${overNet ? '⚠ ' : ''}dip ~${fmtP(dref.level)} prints ${dref.reachedDays}/${dref.nDays}d${rec} — buy +${fmtP(prem)} above${overNet ? ' (≥ the whole net)' : ''}`;
+  }
   return [
-    { t: `${fmtP(est.estBuy)} (${buyTok(c)})` },
+    { t: `${fmtP(est.estBuy)} (${buyTok(c)})${dipSeg}` },
     { t: `${fmtP(est.estSell)}${sellSuffix}${fwdSeg}${patSeg}`, c: c.beFloored ? 'amber' : (c.declaredAnchored ? 'gain' : undefined) },
     { t: netTxt, c: est.estNet == null ? undefined : (est.estNet >= 0 ? 'gain' : 'loss') },
     { t: fmtP(est.be), c: 'mini' },

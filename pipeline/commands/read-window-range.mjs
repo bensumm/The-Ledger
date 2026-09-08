@@ -353,11 +353,10 @@ for (const want of positionals) {
       const nowT = new Date();
       const todayKeyT = `${nowT.getFullYear()}-${pad2(nowT.getMonth() + 1)}-${pad2(nowT.getDate())}`;
       const liveRef = latest ? (latest.low ?? latest.high ?? null) : null;
-      // R6 (PLAN-SIGNAL-RECENCY): trajectoryRead's SHAPE `read:` line is RETIRED (weaker than / could
-      // contradict floorCeilingTrack's independent-slope classification). Its unique floor/ceiling band +
-      // livePos fold into the fc note below; the oscillation read rides fc.oscillating. One combined note.
+      // R6 (PLAN-SIGNAL-RECENCY): trajectoryRead's SHAPE `read:` line is RETIRED; its unique floor/ceiling
+      // band + livePos fold into the fc note below, the oscillation read rides fc.oscillating. One combined note.
       const tr = trajectoryRead(tdays, { liveRef });
-      const fc = floorCeilingTrack(tdays, { todayKey: todayKeyT });
+      const fc = floorCeilingTrack(tdays, { todayKey: todayKeyT, forming: tstats && tstats.forming });
       // Chunk 5: the drift-adjusted exit level off a profile computed from the SAME 1h series already in hand
       // (zero new fetch) + the day series; degrades to null (clause omitted) on a thin/degraded projection.
       const trajProf = hourProfile(series, { nights: NIGHTS });
@@ -534,10 +533,11 @@ for (const want of positionals) {
     // PLAN-DRIFT-VS-CRASH: the floor/ceiling slope-asymmetry + floor-break read (the drift-vs-crash
     // classifier), from the SAME shared floorCeilingTrack helper quote-items.mjs folds under its
     // trajectory note — so both surfaces render byte-identically. Forming-day guard: scored is already
-    // today-excluded by windowStats, so the todayKey match is a no-op here (belt-and-suspenders).
+    // today-excluded by windowStats (todayKey = belt-and-suspenders). EC2: `stats.forming` threads today's
+    // partial-WINDOW read; now outside the scored window ⇒ the day is complete ⇒ forming rightly null.
     const pad2fc = n => String(n).padStart(2, '0');
     const nowFc = new Date();
-    const fc = floorCeilingTrack(scored, { todayKey: `${nowFc.getFullYear()}-${pad2fc(nowFc.getMonth() + 1)}-${pad2fc(nowFc.getDate())}` });
+    const fc = floorCeilingTrack(scored, { todayKey: `${nowFc.getFullYear()}-${pad2fc(nowFc.getMonth() + 1)}-${pad2fc(nowFc.getDate())}`, forming: stats.forming });
     // Chunk 5: the drift-adjusted exit level, reusing the profMargin hourProfile already computed this pass
     // (zero new fetch) + the scored day series; null (clause omitted) when the projection degrades.
     const dailyDae = profMargin ? driftExitFrom(profMargin, scored, { liveLo: latest ? latest.low ?? null : null, liveHi: latest ? latest.high ?? null : null, ...guardCtx }) : null;

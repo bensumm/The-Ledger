@@ -8,6 +8,53 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## pipeline 1.4.0 — 2026-09-08 — the buy line learns what it already knew (PLAN-ENTRY-CONFIDENCE EC1–EC4; console/cue surfaces only, no APP_VERSION bump — `js/` modules changed but no app-rendered behavior did: the app consumes `windowStats().days` (unchanged) and never renders `formatFloorCeiling`/`estPairCells`)
+
+From the Avernic defender hilt post-mortem (bought 0.061% off the suggested price, CUT-CANDIDATE
+2h16m later — the *execution* was faithful; the *confidence* the tool attached was wrong). The plan
+was a problem statement; the executor's mechanism landed as:
+
+- **EC1 — the failure is SYSTEMATIC, measured first as the plan demanded.** Over deduped
+  `suggestions.jsonl` screen rows (759 item×days): **60.6%** of shipped buys sat above their own
+  `dipReality.typicalLevel`; **median premium ≈ 0.95× the entire expected net** (p75 2.08×); 27.8%
+  exceeded the whole net. Archive backtest (369 items × ~70d, 21,013 item-day cells @21:00 local):
+  **44.1%** of `rising` floor labels had the forming day *already* under the last completed low, and
+  that contradiction means "cheaper entry likely" — the next 3 days print below the current floor
+  **88.5%** vs 53.1% — while forward floor *slope* is unpredicted either way (the rising label itself
+  carries ~no 3-day direction information: 48.0% vs 45.7% base). Monotone certainty verified
+  8,463/8,463. Full record: PLAN.md's fold entry (the plan file is folded + deleted per lifecycle).
+- **EC2 — the monotone-certainty forming read** resolves the plan's guard tension WITHOUT an
+  elapsed-fraction estimator: a forming day's low only FALLS, so `forming.low < a completed-days
+  statistic` is decided at any hour. `windowStats` now RETURNS the partial-day aggregates it always
+  computed and discarded (`forming`; `days` unchanged — and this discard is why `fc.forming` was
+  structurally null in production and the "provisional" clause NEVER rendered: Defect 3's answer).
+  `floorCeilingTrack({ forming })` emits `formingContradiction` (`under-trough` = break certain at
+  day end / `under-last-low` = label stale); `formatFloorCeiling` stale-marks or withholds a
+  rising-flavored label; `softBuyFloorCue` gains `stale-uptrend` (rising + under-last-low) and routes
+  under-trough to `caution`. Threaded at quote/positions trajectory, read-window-range (trajectory +
+  scored), and both scan soft-buy sites; the regime GATE (`regimeDrift`), `driftExitFrom` slopes and
+  `join-exit-ev` replay deliberately stay completed-days-only (documented at each site). The pinned
+  false-break test's SPIRIT is amended with an argued reason (its "not a real daily low" premise is
+  wrong for the low side — the break it suppressed is certain, 8,463/8,463); its LETTER stands
+  (slope/`floorBreak` statistics stay completed-days-only). New tests are mutation-verified (3
+  mutants, each breaks the suite).
+- **EC3 — the dip level reaches the buy line.** `estPairCells` renders ` · dip ~L prints r/nd — buy
+  +P above` (⚠ `… (≥ the whole net)`) off a caller-attached `est.dipRef` when the buy sits above a
+  ≥half-of-days dip level; both the scan and quote attach it. Arithmetic over fields already computed
+  AND already logged — nothing new logs, `screen.json` untouched. This is the check that would have
+  caught the hilt (paid 2.7× the trade's whole net over a 6/7d level).
+- **EC4 — Defect 5 dissolved as methodology, not data.** `read-window-range.mjs` bare defaults to
+  `--window 0-8`; the plan's "full-day" table was the 00:00–08:00 window (its 09-06 "full-day low"
+  is exactly the 07:00 bucket), so window-low-below-"full-day"-low compared two OVERLAPPING windows.
+  Live `/timeseries` verified bucket-identical to the archive on the hilt — no source divergence.
+- **Hilt corrections against the plan's draft:** on true full-day buckets the entry-time cue was
+  `healthy-trend +171,745/d, run falling ×1` (not `rising ×5`), the forming low sat 26k ABOVE the
+  last completed low (so EC2's triggers would NOT have fired for the hilt — EC3 is the hilt's own
+  save), and the plan's Defect-2 "unguarded sites fold the partial day back in" is behavioral
+  fiction — `windowStats` strips today everywhere, so all sites already agreed; the real defect was
+  uniform time-of-day blindness plus the discarded forming read. The relayed `+235,079/d / rising
+  ×5` stays untraced (consistent with a 0-8-window basis).
+
 ## pipeline console — 2026-09-08 — drop accounting goes behind `--full`: the winners view stops narrating losers (PLAN-FLOW-DIET FD7; pipeline/skills/docs only — render + cache-dump change, so no APP_VERSION or PIPELINE_VERSION bump per the version.mjs discipline)
 
 FD1 stopped the scan from *rendering* losing rows but kept four footer lines whose whole subject

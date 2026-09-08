@@ -178,18 +178,17 @@ const EST_EXPLAINER = `(Est. buy/sell are ESTIMATES — reach-folded, PLACEHOLDE
 // rides fc.oscillating (the one signal fc's classifier can't otherwise express). Data rows ride as plain
 // strings (the V5-block pattern). ZERO new fetch — `days` is already in hand. `label` prefixes the header
 // on the multi-item positions surface so each block stays tied to its item.
-// PLAN-OSCILLATION-CYCLE Chunk 5: `prof`+`ctx` (the in-hand hourProfile + the diurnalForecast ctx bits the
-// caller already has — liveLo/liveHi/phase/mom/reliable) fold the drift-adjusted exit LEVEL into the SAME
-// combined note (driftExitFrom off the in-hand `prof`+`days` — NO fetch; forecast degrades ⇒ dae null ⇒ the
-// clause is simply omitted). Display-only, direction-agnostic — never a verdict/gate.
-function pushTrajectory(notes, days, { liveRef = null, label = '', prof = null, ctx = null } = {}) {
+// PLAN-OSCILLATION-CYCLE Chunk 5: `prof`+`ctx` fold the drift-adjusted exit LEVEL into the SAME combined
+// note (driftExitFrom, NO fetch; degrade ⇒ clause omitted). Display-only, direction-agnostic — never a verdict/gate.
+function pushTrajectory(notes, days, { liveRef = null, label = '', prof = null, ctx = null, forming = null } = {}) {
   const tr = trajectoryRead(days, { liveRef });
   if (!tr) return null;
   notes.push(`  ${label ? label + ': ' : ''}trajectory (14d window low/high, oldest→newest):`);
   for (const [key, n] of tr.scored) notes.push(`    ${key}  low ${fmt(n.low)}  high ${fmt(n.hi)}`);
   // PLAN-DRIFT-VS-CRASH + R6: the floor/ceiling slope-asymmetry + floor-break read, now ALSO carrying
-  // trajectoryRead's retired floor/ceiling band + livePos + the oscillation qualifier — one combined note.
-  const fc = floorCeilingTrack(days, { todayKey: localDayKey() });
+  // trajectoryRead's retired band + livePos + the oscillation qualifier — one combined note. EC2:
+  // `forming` = windowStats().forming feeds the contradiction read; todayKey = the hand-built-days guard.
+  const fc = floorCeilingTrack(days, { todayKey: localDayKey(), forming });
   // Chunk 5: the drift-adjusted exit level, off the in-hand prof+days (zero fetch); null when no profile/ctx
   // or the forecast degrades — formatFloorCeiling then omits the clause (honest degrade).
   const dae = (prof && ctx) ? driftExitFrom(prof, days, ctx) : null;
@@ -495,7 +494,7 @@ async function runItems() {
     // multi-day trajectory (shape + floor/ceiling + live position) — the fang under-read fix; zero fetch.
     // Chunk 5: prof (line 330) + the diurnalForecast ctx bits (already used for the forecast lines above)
     // fold the drift-adjusted exit level into the note — all in-hand, no new fetch.
-    const fcTraj = pushTrajectory(notes, ast && ast.days, { liveRef: row.quickBuy ?? row.quickSell,
+    const fcTraj = pushTrajectory(notes, ast && ast.days, { liveRef: row.quickBuy ?? row.quickSell, forming: ast && ast.forming,
       prof, ctx: { liveLo: row.quickBuy, liveHi: row.quickSell, phase: ph?.phase ?? null, mom: row.mom, reliable: row.reliable } });
     // The ADD-while-holding SOFT-BUY timing read — pushed AFTER pushTrajectory so its @floor cue reuses the
     // floorCeilingTrack fc just computed (bare-quote & --positions surfaces stay identical; zero new fetch).
@@ -571,6 +570,13 @@ async function runItems() {
     // the ACTIVE model when --est-sell names a non-default one (else the same neutral).
     const est = estimatePair(FLIP_NICHES.band, row, extraEst, { nudge: anchorNudge, sellModel: 'reach-fold' });
     const estShown = SELL_MODEL === 'reach-fold' ? est : estimatePair(FLIP_NICHES.band, row, extraEst, { nudge: anchorNudge, sellModel: SELL_MODEL });
+    // EC3: dipReality rides the est → estPairCells' buy-vs-dip line (same attach as the screen).
+    if (timedLap && timedLap.dipReality && timedLap.dipReality.typicalLevel != null) {
+      const drl = timedLap.dipReality;
+      const dipRef = { level: drl.typicalLevel, reachedDays: drl.reachedDays, nDays: drl.nDays, recentHit: drl.recentHit, recentDays: drl.recentDays };
+      if (est) est.dipRef = dipRef;
+      if (estShown && estShown !== est) estShown.dipRef = dipRef;
+    }
     // PLAN-LIQUIDITY-REACH inform line (never a table/verdict/price-column input): the relief that
     // counterweights the ⚠ reach caution above on a liquid small-relative-size book.
     if (est && est.confidence.relief) {
@@ -915,7 +921,7 @@ async function runPositions() {
     // phase off the 6h series, NOT `row.phase` — computeQuote returns no such field, and an absent
     // ctx.phase silently disables forecast's post-shock-shape refusal (see the note beside `ph` in runItems).
     const phHeld = phase(inp.ts6h);
-    const fcHeld = pushTrajectory(notes, astHeld && astHeld.days, { liveRef: row.quickBuy ?? row.quickSell, label: name,
+    const fcHeld = pushTrajectory(notes, astHeld && astHeld.days, { liveRef: row.quickBuy ?? row.quickSell, label: name, forming: astHeld && astHeld.forming,
       prof: profT, ctx: { liveLo: row.quickBuy, liveHi: row.quickSell, phase: phHeld?.phase ?? null, mom: row.mom, reliable: row.reliable } });
     // ADD-while-holding SOFT-BUY timing — the held-lot surface is exactly where the "should I add at the dip?"
     // decision lives. inp.ts1h is in hand (fetched at the vol24 parity step above), so this is zero new fetch.

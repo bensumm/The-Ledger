@@ -246,26 +246,30 @@ export function realityClause(reality, { side = 'ask', fmt = String, style = 'fu
  * Bucket a 1h timeseries into per-day window stats.
  * @param {Array} series  raw /timeseries 1h points ({timestamp, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume})
  * @param {object} opts   { nights=14, wStart, wEnd, now=new Date() }
- * @returns {null | { days, lows, his, medVolLo, medVolHi }}
- *   days: [[key, {low, hi, volLo, volHi}], …] oldest→newest (complete days only — today is
- *   skipped while we're inside the window); lows/his: ascending-sorted arrays for the
+ * @returns {null | { days, lows, his, medVolLo, medVolHi, forming }}
+ *   days: [[key, {low, hi, volLo, volHi}], …] oldest→newest (complete days only — today never
+ *   enters it); forming (EC2): today's partial-day {key, low, hi, volLo, volHi} while we're
+ *   inside the window, else null; lows/his: ascending-sorted arrays for the
  *   quantile helpers; null when no traded window-hours exist in the history.
  */
 export function windowStats(series, { nights = 14, wStart, wEnd, now = new Date() } = {}) {
   const days = new Map();
   const today = inWindow(now.getHours(), wStart, wEnd) ? dayKey(now, wStart, wEnd) : null;
+  let forming = null;
   for (const pt of series) {
     const d = new Date(pt.timestamp * 1000);
     if (!inWindow(d.getHours(), wStart, wEnd)) continue;
     const key = dayKey(d, wStart, wEnd);
-    if (key === today) continue;
-    const n = days.get(key) || { low: null, hi: null, volLo: 0, volHi: 0 };
+    const isToday = key === today;
+    const n = (isToday ? forming : days.get(key)) || { low: null, hi: null, volLo: 0, volHi: 0 };
     if (pt.avgLowPrice != null && (n.low == null || pt.avgLowPrice < n.low)) n.low = pt.avgLowPrice;
     if (pt.avgHighPrice != null && (n.hi == null || pt.avgHighPrice > n.hi)) n.hi = pt.avgHighPrice;
     n.volLo += pt.lowPriceVolume || 0;
     n.volHi += pt.highPriceVolume || 0;
-    days.set(key, n);
+    if (isToday) forming = n; else days.set(key, n);
   }
+  if (forming && forming.low == null && forming.hi == null) forming = null;
+  if (forming) forming = { key: today, ...forming };
   const scored = [...days.entries()].filter(([, n]) => n.low != null || n.hi != null)
     .sort((a, b) => b[0].localeCompare(a[0])).slice(0, nights).reverse();
   if (!scored.length) return null;
@@ -279,6 +283,7 @@ export function windowStats(series, { nights = 14, wStart, wEnd, now = new Date(
     his,
     medVolLo: medOf(scored.map(([, n]) => n.volLo)),
     medVolHi: medOf(scored.map(([, n]) => n.volHi)),
+    forming,
   };
 }
 
@@ -465,16 +470,20 @@ export function projectTrajectory(days, extractFn, {
   return { series, latest: ref, slope, step: slope == null ? null : Math.round(slope), dir, run, nUsed: window.length, forming, break: brk, projected };
 }
 
-export function floorCeilingTrack(days, { todayKey = null, recentN = FC_RECENT_N, minDays = FC_MIN_DAYS, flatFrac = FC_FLAT_FRAC, breakLookback = FC_BREAK_LOOKBACK } = {}) {
+export function floorCeilingTrack(days, { todayKey = null, forming: formingOpt = null, recentN = FC_RECENT_N, minDays = FC_MIN_DAYS, flatFrac = FC_FLAT_FRAC, breakLookback = FC_BREAK_LOOKBACK } = {}) {
   const usable = Array.isArray(days) ? days.filter(([, n]) => n && (n.low != null || n.hi != null)) : [];
   if (!usable.length) return null;
   // REQUIREMENT #1: split off the forming (incomplete) current day so it never feeds a slope / the break.
+  // EC2: live cues pass `forming` = windowStats().forming (days arrive today-stripped); todayKey = the
+  // hand-built-days fallback; historical replays + the regime GATE deliberately pass neither.
   let forming = null, completed = usable;
-  if (todayKey != null && usable[usable.length - 1][0] === todayKey) {
+  if (usable[usable.length - 1][0] === (formingOpt ? formingOpt.key : todayKey) && (todayKey != null || formingOpt)) {
     const [key, n] = usable[usable.length - 1];
     forming = { key, low: n.low ?? null, hi: n.hi ?? null };
     completed = usable.slice(0, -1);
   }
+  if (formingOpt && (formingOpt.low != null || formingOpt.hi != null))
+    forming = { key: formingOpt.key ?? null, low: formingOpt.low ?? null, hi: formingOpt.hi ?? null };
   const nDays = completed.length;
   if (nDays < minDays) return null;
   // two-call wrapper over the shared projectTrajectory primitive (R1): the floor track WITH the discrete
@@ -487,6 +496,20 @@ export function floorCeilingTrack(days, { todayKey = null, recentN = FC_RECENT_N
   // (priorExtreme → priorFloor) so every downstream consumer of fc.floorBreak stays byte-identical.
   const b = floor.break;
   const floorBreak = { broke: b.broke, latest: b.latest, priorFloor: b.priorExtreme, gap: b.gap, lookback: b.lookback };
+
+  // EC2 (PLAN-ENTRY-CONFIDENCE) MONOTONE CERTAINTY: a forming day's low only FALLS as the day completes,
+  // so `forming.low < a completed-days statistic` is decided at ANY hour — never provisional (the mirror
+  // claims prove nothing; the ceiling side is unmeasured and stays out). Slope/floorBreak stay completed-
+  // days-only; renderers/cues must not contradict this field. 'under-trough' = floorBreak CERTAIN at day
+  // end; 'under-last-low' = the label is STALE ("cheaper entry likely": 88.5% vs 53.1%, EC1 backtest).
+  let formingContradiction = null;
+  if (forming && forming.low != null && floor.latest != null) {
+    const troughRef = floorBreak.priorFloor != null ? Math.min(floorBreak.priorFloor, floor.latest) : floor.latest;
+    if (forming.low < troughRef)
+      formingContradiction = { kind: 'under-trough', formingLow: forming.low, ref: troughRef, gap: troughRef - forming.low };
+    else if (forming.low < floor.latest)
+      formingContradiction = { kind: 'under-last-low', formingLow: forming.low, ref: floor.latest, gap: floor.latest - forming.low };
+  }
 
   const classification = floorBreak.broke ? 'crash-risk'
     : floor.dir === 'rising' && ceiling.dir === 'rising' ? 'healthy-trend'
@@ -506,7 +529,7 @@ export function floorCeilingTrack(days, { todayKey = null, recentN = FC_RECENT_N
   for (let i = 2; i < mids.length; i++) { const a = Math.sign(mids[i - 1] - mids[i - 2]), b2 = Math.sign(mids[i] - mids[i - 1]); if (a && b2 && a !== b2) flips++; }
   const oscillating = classification === 'ranging' && mids.length >= 3 && (flips / (mids.length - 2)) >= FC_OSC_FRAC;
 
-  return { completed, forming, nDays, floor, ceiling, floorBreak, classification, oscillating };
+  return { completed, forming, nDays, floor, ceiling, floorBreak, classification, oscillating, formingContradiction };
 }
 
 /* formatFloorCeiling(fc, fmt, opts) — the ONE compact one-line render of a floorCeilingTrack result, so
@@ -543,7 +566,14 @@ export function formatFloorCeiling(fc, fmt, { label = '', live = null, drift = n
   const soft = t => (t.run && t.run.dir && t.run.dir !== t.dir && t.run.len >= 2) ? ` (${t.run.dir} ${t.run.len}d)` : '';
   // R6: the classification, qualified with `(oscillating floor↔ceiling)` when the ranging item is actually
   // bouncing between its floor and ceiling — the one read fc's slope-direction classifier can't otherwise say.
-  const classTxt = fc.oscillating ? `${fc.classification} (oscillating floor↔ceiling)` : fc.classification;
+  let classTxt = fc.oscillating ? `${fc.classification} (oscillating floor↔ceiling)` : fc.classification;
+  // EC2: under-trough withholds the label; under-last-low stale-marks a rising-flavored one (see floorCeilingTrack).
+  const fcc = fc.formingContradiction;
+  if (fcc && fcc.kind === 'under-trough') {
+    classTxt = `⚠ breaking down — today already printed ${fmt(fcc.gap)} under the prior trough (label withheld; completed-days read was ${classTxt})`;
+  } else if (fcc && (fc.floor.dir === 'rising' || fc.classification === 'healthy-trend' || fc.classification === 'compressing-up')) {
+    classTxt = `${classTxt} — STALE: today already printed ${fmt(fcc.gap)} under the last completed low (cheaper entry likely)`;
+  }
   const parts = [
     `floor ${dirStep(fc.floor)} over ${fc.floor.nUsed}d${soft(fc.floor)}`,
     `ceiling ${dirStep(fc.ceiling)}${soft(fc.ceiling)}`,
@@ -1431,12 +1461,8 @@ export function deriveDiurnalRange(profile, { liveLo = null, liveHi = null } = {
 // post-update dump — an item sitting at its diurnal floor EVERY day because it's falling — as a discount
 // (the fang dumped while the label stayed bullish). The fix does NOT re-derive a slope: it consults the
 // MULTI-DAY floorCeilingTrack `fc` the caller ALREADY computed one line away (pushTrajectory's fcTrack
-// note), reading its DISCRETE floorBreak flag + classification ONLY. When live sits @floor:
-//   • fc.floorBreak.broke OR classification 'crash-risk'          → 'caution'   — @floor is a dump artifact,
-//                                                                    not a discount (the guard)
-//   • classification 'healthy-trend' | 'compressing-up' (rising)  → 'favorable' — a dip WITHIN an uptrend
-//   • anything else (ranging/cooling/mild-cooldown/flat), OR no    → 'buy now'   — the unqualified cue
-//     fc / too few days to classify
+// note), reading its DISCRETE floorBreak/formingContradiction flags + classification ONLY — the state
+// map IS softBuyFloorCue's code, one screen down.
 // UPDATE-BLINDNESS CAVEAT (rule 4): 'favorable' is a PRICE-TREND read ONLY — blind to game-update/regime
 // breaks (a rising floor equally describes a PRE-update pump), so it is worded as a DESCRIPTION ("dip in
 // uptrend (price-trend only)"), NOT an imperative "GO"; the operator overlays update knowledge. Both cues
@@ -1445,9 +1471,8 @@ export function deriveDiurnalRange(profile, { liveLo = null, liveHi = null } = {
 // reachMargin ask-CUSHION extending/fading line, so a reader doesn't conflate the three.
 export const SOFT_BUY_AT_FLOOR_PCT = 0.5;   // live within this % over the dip floor (or below) ⇒ @floor / buy now (mirrors the digest branch)
 
-// the @floor floor-aware cue off the ALREADY-computed fc (NO re-derived slope — discrete floorBreak +
-// classification only). Missing fc / no classification ⇒ 'buy now' (honest degrade: no favorable/caution
-// claim without the floor read). Module-internal; the read carries the resolved `cue`, formatSoftBuy words it.
+// the @floor floor-aware cue off the ALREADY-computed fc (NO re-derived slope). Missing fc/classification ⇒
+// 'buy now' (honest degrade). Module-internal; the read carries the resolved `cue`, formatSoftBuy words it.
 // ── A (the Snape grass entry) — the LEVEL half this cue is otherwise structurally blind to ──────────
 // `fc` answers SHAPE over a 5-DAY window: which way are the floor and ceiling sloping? It cannot answer
 // LEVEL — is this price near durable support at all? On a 4-day-old spike those two disagree completely,
@@ -1472,8 +1497,12 @@ export const SOFT_BUY_AT_FLOOR_PCT = 0.5;   // live within this % over the dip f
 // behaviour (the honest degrade — the trio has no term structure in hand).
 function softBuyFloorCue(fc, durable = null) {
   if (!fc || !fc.classification) return 'buy now';
-  if ((fc.floorBreak && fc.floorBreak.broke) || fc.classification === 'crash-risk') return 'caution';
+  // EC2: the forming contradiction outranks the completed-days label — never an unqualified 'favorable'.
+  const fcc = fc.formingContradiction;
+  if ((fc.floorBreak && fc.floorBreak.broke) || fc.classification === 'crash-risk'
+      || (fcc && fcc.kind === 'under-trough')) return 'caution';
   const rising = fc.classification === 'healthy-trend' || fc.classification === 'compressing-up';
+  if (rising && fcc) return 'stale-uptrend';
   // a RISING 5d floor that the 28d durable-support check still cautions/rejects is a post-spike
   // retracement wearing an uptrend's clothes — the dip is into an UNPROVEN base, not a proven one.
   if (rising && durable && (durable.status === 'caution' || durable.status === 'reject')) return 'unproven-base';
@@ -1522,14 +1551,11 @@ export function softBuyHoursClause(reliable, dipWindow, fmtHour, { style = 'full
   return 'dip hours unverified';
 }
 
-// cue → rendered wording. ONE map so both surfaces (positions note + screen digest) word the four states
-// identically. The 'favorable' text carries its update-blindness caveat inline (never an imperative GO).
+// cue → rendered wording. ONE map so both surfaces (positions note + screen digest) word the states identically.
 export const SOFT_BUY_CUE_TEXT = {
   'buy now':   'buy now',
-  // DT2: the key reads 'wait' but must NOT say to delay. "Wait for the dip window to come round" is
-  // measured wrong for a RESTING offer — the window doesn't time fills (71.2% vs 70.5% random), so
-  // waiting forfeits ~29% of fill-days at the same price. The level is the decision; the hours are
-  // attended-taking context. The key stays 'wait' so callers/tests don't churn.
+  // DT2: the key reads 'wait' but must NOT say to delay — the measurement is softBuyRead's header (the
+  // one home). The key stays 'wait' so callers/tests don't churn.
   'wait':      'rest the bid at the floor now — windows don\'t time fills',
   'favorable': '▲ favorable — dip in uptrend (price-trend only)',
   'caution':   '▽ caution — floor breaking ↓',
@@ -1541,15 +1567,14 @@ export const SOFT_BUY_CUE_TEXT = {
   // but the DESTINATION does not. This cue composes that verdict and cannot assert what the source does
   // not claim. It says elevated-over-the-floor, which is what is actually measured.
   'unproven-base': '▽ caution — dip into an UNPROVEN base, still elevated over the durable floor',
+  'stale-uptrend': '▽ caution — uptrend label STALE: today already printed under yesterday\'s low (cheaper entry likely)',
 };
 
 // formatSoftBuy(read, opts) — the ONE one-line render off a softBuyRead result, shared so both surfaces
 // phrase it identically. Null read ⇒ null (no note). `fmtHour` defaults to the HH:00 formatter that
 // money-format's fmtHour produces, so windowread stays import-free; a caller may pass its own to match.
-// DT2: LEVEL-FIRST. The floor level leads the line and the dip window trails in a parenthetical
-// explicitly labelled "attended", because the window does not time a resting offer's fill (see
-// softBuyRead's header for the measurement). `fmt` is injected like every other renderer here so
-// windowread stays dependency-free; it formats the floor LEVEL, which is the number the operator acts on.
+// DT2: LEVEL-FIRST — the floor level leads, the dip window trails labelled "attended" (the measurement
+// is softBuyRead's header). `fmt` is injected; it formats the floor LEVEL, the number the operator acts on.
 export function formatSoftBuy(read, { fmtHour = h => String(h).padStart(2, '0') + ':00', fmt = String } = {}) {
   if (!read) return null;
   // DT4: the HOURS are gated, the LEVEL is not. The floor still leads the line and the cue is untouched

@@ -359,6 +359,40 @@ ok('PAIR INVARIANT: the fold price and its pFill are on the same (full-window) b
   assert.equal(e.estSell, eFullOnly.estSell, 'the recent counts do not move the fold PRICE either');
 });
 
+// EC3 (PLAN-ENTRY-CONFIDENCE): the dip-reality check ON the buy line. EC1 measured 60.6% of shipped
+// buys above their own dipReality.typicalLevel with a median premium ≈ the entire expected net, and the
+// Avernic hilt paid 2.7× net over a 6/7d level the buy line never showed. The caller attaches
+// est.dipRef (already-computed, already-logged diurnalTimedLap dipReality fields); estPairCells says so
+// beside the price — high-reach levels only, ⚠ when the premium meets/exceeds the whole net.
+ok('EC3: buy cell names a HIGH-REACH dip level the buy sits above — and escalates when the premium eats the net', () => {
+  const row = { quickBuy: 29_900_000, quickSell: 30_700_000, optBuy: 29_890_000, optSell: 30_860_000 };
+  const rc = { reachedDays: 12, nDays: 14, recentHit: 3, recentDays: 3 };
+  const e = estimatePair(FLIP_NICHES.band, row, { askReach: rc, bidReach: rc });
+  // no dipRef attached ⇒ byte-identical buy cell (the absence half)
+  assert.doesNotMatch(estPairCells(e)[0].t, /dip/, 'no dipRef ⇒ no dip segment');
+  // the hilt shape: buy 525k over a 6/7d level, premium ≥ the whole net ⇒ the ⚠ escalation
+  e.dipRef = { level: 29_383_485, reachedDays: 6, nDays: 7, recentHit: 3, recentDays: 3 };
+  const cell = estPairCells(e)[0].t;
+  assert.match(cell, /dip ~29\.38m prints 6\/7d/, `the level + its reach fraction ride the buy line: ${cell}`);
+  assert.match(cell, /buy \+\S+ above/, 'and the premium is stated');
+  // ⚠ escalation tracks the premium-vs-net arithmetic exactly (asserted BOTH ways so neither is vacuous)
+  const escalates = e.estNet != null && e.estNet > 0 && (e.estBuy - e.dipRef.level) >= e.estNet;
+  if (escalates) { assert.match(cell, /⚠/, 'premium ≥ the whole net escalates to ⚠'); assert.match(cell, /≥ the whole net/); }
+  else assert.doesNotMatch(cell, /⚠/, 'premium under the net stays un-escalated');
+  // a SMALL premium (under the net) renders un-escalated — the ⚠-off branch actually executes
+  // (review-1: the hilt fixture always escalated, so an always-⚠ mutant survived)
+  e.dipRef = { level: e.estBuy - 50_000, reachedDays: 6, nDays: 7, recentHit: 1, recentDays: 3 };
+  const small = estPairCells(e)[0].t;
+  assert.match(small, /dip .*prints 6\/7d, rec 1\/3 — buy \+50,000 above/, `small premium + diverging recent both render: ${small}`);
+  assert.doesNotMatch(small, /⚠|≥ the whole net/, 'premium under the net stays un-escalated');
+  // a LOW-reach level (2/7d) makes no claim — the level barely prints, paying over it is not the miss
+  e.dipRef = { level: 29_383_485, reachedDays: 2, nDays: 7, recentHit: 0, recentDays: 3 };
+  assert.doesNotMatch(estPairCells(e)[0].t, /dip/, 'sub-half reach ⇒ no dip segment');
+  // buy AT/below the level ⇒ nothing to say
+  e.dipRef = { level: 29_900_000, reachedDays: 6, nDays: 7, recentHit: 3, recentDays: 3 };
+  assert.doesNotMatch(estPairCells(e)[0].t, /dip/, 'buy at/below the level ⇒ no dip segment');
+});
+
 ok('rev1 recent + full AGREEING shows the recent token ALONE (no divergence clutter)', () => {
   const row = { quickBuy: 100, quickSell: 110, optBuy: 90, optSell: 130 };
   const e = estimatePair(FLIP_NICHES.band, row, { askReach: { reachedDays: 12, nDays: 14, recentHit: 3, recentDays: 3 } });

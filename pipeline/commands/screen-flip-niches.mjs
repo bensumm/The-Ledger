@@ -809,7 +809,7 @@ function digestSoftBuy(ts1h, row, fc = null, durable = null, lap = null) {
   // triage surface by construction), but read the marker correctly — `+X%` states WHERE LIVE SITS relative
   // to the dip floor, it is NOT an instruction to wait. A resting bid goes in at the floor level regardless
   // of the hour; the window is where an attended TAKE is cheapest. See softBuyRead's header for why.
-  const cueTag = (read.cue === 'favorable' || read.cue === 'caution' || read.cue === 'unproven-base') ? ` · ${SOFT_BUY_CUE_TEXT[read.cue]}` : '';
+  const cueTag = (read.cue === 'favorable' || read.cue === 'caution' || read.cue === 'unproven-base' || read.cue === 'stale-uptrend') ? ` · ${SOFT_BUY_CUE_TEXT[read.cue]}` : '';
   return `${win} · ${read.marker}${cueTag}`;
 }
 // DT4b-fix: the `phase` column reads off the LAP's peak window, NOT the `prof` fit — diurnalPhase is a
@@ -1336,11 +1336,17 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // token is suppressed by foldExempt but the percentile stays). scalp/value never reach it. Attached to
     // the est confidence so estPairCells renders `(4/14 · p36)` and estConfLean shadows it for the F1 join.
     // A non-neutral estShown (--est-sell) renders its own cell regardless, so its placement is a
-    // harmless shadow.
+    // harmless shadow. EC3 below: dipReality rides the est → estPairCells' buy-vs-dip line (display-only).
     if (est && est.confidence.doctrine === 'band-low' && rbStats && rbStats.lows && rbStats.lows.length) {
       est.confidence.buyPlacement = placement(rbStats.lows, est.estBuy);
       if (estShown && estShown !== est && estShown.estBuy != null)
         estShown.confidence.buyPlacement = placement(rbStats.lows, estShown.estBuy);
+    }
+    if (timedLap && timedLap.dipReality && timedLap.dipReality.typicalLevel != null) {
+      const drl = timedLap.dipReality;
+      const dipRef = { level: drl.typicalLevel, reachedDays: drl.reachedDays, nDays: drl.nDays, recentHit: drl.recentHit, recentDays: drl.recentDays };
+      if (est) est.dipRef = dipRef;
+      if (estShown && estShown !== est) estShown.dipRef = dipRef;
     }
     // PLAN-WINDOW-CLEAR B2 (churn/scalp only): does the quoted ask PRINT inside its diurnal peak window
     // (not just on N/M DAYS), and does that window absorb a buy-limit tranche? Inform-only (the askHeadroom/
@@ -1562,9 +1568,9 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // digestPlacementDiverges — was MOVED ABOVE the estimate/rank calls by EF1: the placement now also
     // bounds the churn exemption, so the estimate, the rank and the digest read the ONE stale-guarded
     // number. Stored on the row below; the digest is collected after the sort, unchanged.)
-    // softBuyFc: the floorCeilingTrack read off the in-hand rbStats.days (zero new fetch) — carried to the
-    // digest's collectDigestRow (called in a later loop) so digestSoftBuy's @floor cue is floor-aware too.
-    const softBuyFc = (rbStats && rbStats.days) ? floorCeilingTrack(rbStats.days) : null;
+    // softBuyFc: the floorCeilingTrack read off the in-hand rbStats.days + forming (EC2, zero new fetch) —
+    // carried to collectDigestRow (a later loop) so digestSoftBuy's @floor cue is floor- and forming-aware.
+    const softBuyFc = (rbStats && rbStats.days) ? floorCeilingTrack(rbStats.days, { forming: rbStats.forming }) : null;
     // EF-0a: carry the admission-provenance stamps (s.via — reserve/explore tag; s.preRank/s.prePool —
     // the pre-fetch-ordering position, stamped in admission.mjs) onto the row so the ledger log below
     // can record them. Inform-only pass-through — read by nothing else here.
@@ -1774,7 +1780,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       const base = [c[0], c[2], ...estPairCells(r.estShown), c[5], c[6], c[7], c[1], consoleRankCell(r)];   // estShown = the active --est-sell model's legs (the neutral est by default)
       return [...base, pathABCell(r, MIN_GPD), ...(anyProbe ? [{ t: r.probeStr, c: 'mini' }] : [])];
     });
-    if (useRows.length) estExplainer = `(Est. buy/sell are ESTIMATES — strategy-aware entry (scalp near-live · value trough · band prices the band low + reach/percentile annotation · churn reach-folded to fill-now), reach-folded exit, PLACEHOLDER model n≈3–14. Confidence rides in the cell: the buy carries its RECENT-3 touch-reach and, on band rows, the placement percentile of the band-low bid within the 14-day daily-LOW distribution (e.g. 4/14 · p36 = a deep/patient entry); the sell token shows RECENT-3 · FULL when they diverge (0/3 · 12/14 = stale) — the fold PRICE and its P are on the FULL-WINDOW basis (2026-08-09), the recent count is shown, not applied; '–' = no read. This is a DISCOVERY screen — no held-lot declared-exit anchoring here. Est. sell is the HONEST reach-fold price with its ASK-LEG P beside the net (labeled P(ask)~ — the Rank cell's P~ is the TWO-LEG entry×ask product, and a collapsed leg is named, e.g. "P~0.00 (bid leg)" — EF1(c)); a sub-break-even fold is ANNOTATED ("reach-fold floored to BE X") with its real (possibly-negative) net shown, never substituted with a "+1". --raw restores the model-free Quick/Optimistic columns.)`;
+    if (useRows.length) estExplainer = `(Est. buy/sell are ESTIMATES — strategy-aware entry (scalp near-live · value trough · band prices the band low + reach/percentile annotation · churn reach-folded to fill-now), reach-folded exit, PLACEHOLDER model n≈3–14. Confidence rides in the cell: the buy carries its RECENT-3 touch-reach and, on band rows, the placement percentile of the band-low bid within the 14-day daily-LOW distribution (e.g. 4/14 · p36 = a deep/patient entry), plus — EC3 — the buy-vs-dip check when the buy sits above a HIGH-REACH dip level ("dip ~L prints r/nd — buy +P above", ⚠ when the premium ≥ the whole net: paying that premium costs more than the flip earns); the sell token shows RECENT-3 · FULL when they diverge (0/3 · 12/14 = stale) — the fold PRICE and its P are on the FULL-WINDOW basis (2026-08-09), the recent count is shown, not applied; '–' = no read. This is a DISCOVERY screen — no held-lot declared-exit anchoring here. Est. sell is the HONEST reach-fold price with its ASK-LEG P beside the net (labeled P(ask)~ — the Rank cell's P~ is the TWO-LEG entry×ask product, and a collapsed leg is named, e.g. "P~0.00 (bid leg)" — EF1(c)); a sub-break-even fold is ANNOTATED ("reach-fold floored to BE X") with its real (possibly-negative) net shown, never substituted with a "+1". --raw restores the model-free Quick/Optimistic columns.)`;
   }
   const table = useRows.length ? { headers: printHeaders, rows: printCells } : null;   // null → the report renders '_none_'
   const footerLines = [`Grades: ${gradeDist(dist)}`];
@@ -2342,8 +2348,8 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
     // Degrade to ar.netPerCycle when no drift margin is available (null read) so a missing projection never
     // punishes a real amplitude edge.
     const ampEr = { pair: { bid: ar.ampBid, ask: ar.ampAsk }, net: (driftShadow && driftShadow.margin != null) ? driftShadow.margin : ar.netPerCycle, ttf, pFill, rank, lapUnits };
-    // softBuyFc off the in-hand amplitude windowStats days (zero new fetch) → digestSoftBuy's floor-aware @floor cue.
-    const softBuyFc = (stats && stats.days) ? floorCeilingTrack(stats.days) : null;
+    // softBuyFc off the in-hand amplitude windowStats days + forming (EC2) → digestSoftBuy's @floor cue.
+    const softBuyFc = (stats && stats.days) ? floorCeilingTrack(stats.days, { forming: stats.forming }) : null;
     collectDigestRow({ id: s.id, name, spec: FLIP_NICHES.amplitude, row, er: ampEr, grade, reachFrac: null, askPlacement: null, prof, ts1h: ts1h || null, lap: null, fc: softBuyFc, subFloor: null });
     // A3: the day-crossing day-of-week seasonality read (fires whenever holdDays > 1 — i.e. always at
     // the 4-day default since DT1; it originated with the 1.5-day experiment) (net-new — no day-of-week tooling existed).
