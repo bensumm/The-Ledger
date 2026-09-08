@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.68
+version: 1.69
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -103,7 +103,15 @@ sections plus your own prose:
   discount:
     - `@floor · ▽ caution — floor breaking ↓` — the multi-day floor BROKE / is crash-risk. **@floor here
       is a dump artifact, not a discount** — don't add on the dip alone; this is a falling knife (the fang
-      dumped ~32m while the old label stayed bullish).
+      dumped ~32m while the old label stayed bullish). **EC2 (2026-09-08): a forming day already printed
+      under the prior trough joins this branch** — a day's low only falls, so the break is certain at day
+      end even though the completed-days statistic hasn't flipped yet.
+    - `@floor · ▽ caution — uptrend label STALE: today already printed under yesterday's low (cheaper
+      entry likely)` — **EC2 (2026-09-08, the Avernic-hilt post-mortem)**: the completed-days floor reads
+      RISING but TODAY has already printed under the last completed low, a monotone fact. Measured over
+      21,013 archive item-days: the next 3 days print below the current floor 88.5% when this fires vs
+      53.1% when it doesn't — so "the rung is walking away" is exactly backwards here; a cheaper entry is
+      the likely outcome, NOT a trend reversal (forward slope is unpredicted either way).
     - `@floor · ▲ favorable — dip in uptrend (price-trend only)` — the multi-day floor is RISING
       (healthy-trend / compressing-up) AND the 28-day durable-floor check passes: a dip WITHIN an uptrend.
       **PRICE-TREND ONLY** — it is blind to game-update/regime breaks (a rising floor also describes a
