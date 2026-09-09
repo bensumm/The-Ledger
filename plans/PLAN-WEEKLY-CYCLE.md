@@ -1,4 +1,4 @@
-# PLAN-WEEKLY-CYCLE — the weekday price cycle (WK1 null; WK2 branch (c) after review correction: measured, too thin, don't build)
+# PLAN-WEEKLY-CYCLE — the weekday price cycle (WK1 null; WK2 branch (c); REOPENED by owner for WK3 — class-conditioned yield, running)
 
 Chunk prefix **WK** (verified collision-free, `lint-plan-refs.mjs --collisions`, 2026-09-08).
 
@@ -67,8 +67,20 @@ predictability."*
      more likely real. A *temper* on the knife guard (analogous to `oscillationVsKnife`) and an
      input to the DL4 dip loop — the one approach that creates NEW entries rather than re-timing
      existing ones.
-- Each measurement keeps §5's pre-registered null: no weekday structure → the effect ships as
-  annotation at most, and the plan closes as "measured, too thin, don't build".
+- **Third owner refinement (2026-09-08, after WK2 closed branch (c); REOPENS the plan for WK3).**
+  First, the class question: *"Was the WK2 analysis done by item class? We should investigate
+  which kinds of items fail and which kinds of items succeed."* (WK2 tested per-item cycles and
+  the whole-universe basket, never class-level baskets — and §1 was precisely a class-basket
+  effect.) Then, before any WK3 result was computed, the goal reframe, verbatim: *"The end goal
+  is to be able to judge if an item is advantageous to buy and determine the yield as it
+  fluctuates, we don't need to define or identify a concrete cycle necessarily."* So WK3's
+  PRIMARY measurement is a per-class DEVIATION-CONDITIONED FORWARD-YIELD profile off a STRICTLY
+  TRAILING reference (the centered detrend that describes cycles is lookahead and must not price
+  a buy signal), with the cycle tests demoted to secondary/explanatory; success and failure per
+  class are judged on conditional after-tax yield vs the item's own unconditional baseline, and
+  classes where deep deviations predict CONTINUED fall are reported as the knife classes. The
+  full pre-registered rule (taxonomy, buckets, horizons, item-paired aggregation, BH cells,
+  lane-increment check, outcomes) is the WK3 script header, committed before the run.
 
 A full merge into one period+phase cycle lane (amplitude's current behavior = the special case
 "phase from price only") is the end-state ONLY if measurement 1–2 show calendar phase actually
@@ -189,6 +201,15 @@ to anchor it and closes with the plan. What ships is at most annotation: the res
 sized at "suggestive, unproven". The derived-window idea (§0) was the right instrument to ask the question with — the
 answer came back "too thin at this era's resolution"; a second archive era is the only thing
 that reopens this.
+
+### WK3 (2026-09-08) — REOPENED: class-conditioned yield profile; pre-registered, results pending
+
+`pipeline/experiments/wk3-class-cycle-study.mjs` — the §0 third-refinement measurement. The full
+decision rule (metadata taxonomy with first-match-wins classes and a seeded audit; TEST Y =
+deviation-conditioned forward yield off a trailing-15d reference, item-paired, BH over deep-bucket
+× 4d decision cells, lane-increment check; secondary class-basket/enrichment/§1-confirmation
+tests) is the script header, committed BEFORE the full run per WK2's process correction. Results
+land as their own commit and replace this stub.
 
 ---
 
