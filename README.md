@@ -910,6 +910,24 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   "WK2 result" section before quoting anything. `--item`/`--limit` spot modes print no branch;
   `--json <path>`; needs the local archive + `mapping.cache.json`, so it does NOT run on a clean
   checkout. Freely deletable; nothing imports it.
+  Plus **`wk3-class-cycle-study.mjs`** (2026-09-08, PLAN-WEEKLY-CYCLE WK3 — the owner's class
+  question + the yield reframe) — per ITEM CLASS (metadata-only taxonomy: name + limit + era-mean
+  mid, first-match-wins, seeded audit printed), is a deviation from the item's own STRICTLY
+  TRAILING 15d mean advantageous to buy, and what after-tax forward yield does it carry? Primary
+  TEST Y: item-paired conditional-minus-unconditional net at 2/4/7d per depth bucket, BH over
+  deep-bucket×4d decision cells, plus a lane-increment split (sub-p10 days ≈ what the amplitude
+  lane's trough-touch already catches); cycle tests (class baskets under persistence-matched
+  nulls, MW enrichment, the §1 gear confirmation) are secondary. **Pre-registered outcome (i)
+  fired: 8 classes show a significant deep-dislocation advantage, 6 beyond the lane's reach; NO
+  knife class exists at class level; the ≥+4% elevated bucket is significantly NEGATIVE nearly
+  everywhere (the sell-side mirror).** ⚠ Read the plan's WK3 section before quoting ANY yield
+  number: deep-bucket conditional yields on thin/cheap classes are inflated by a daily-mid
+  composition artifact (one-sided prints), and mid-to-mid at the daily mean mid is NOT an
+  executable price — the numbers rank classes, they are not returns. §1's five reproduce
+  (t 4.33) and the metadata gear class confirms diluted (+0.36%/wk, t 2.18). Decision rule
+  committed before the run (`9eb2743`); `--audit`/`--limit` smokes print no class results;
+  `--json <path>`; needs the local archive + `mapping.cache.json`, so it does NOT run on a clean
+  checkout. Freely deletable; nothing imports it.
   All read the `/1h` SQLite archive read-only and gate nothing.
 - `ignored-items.json` — tracked repo-root config (2026-07-07): items QUARANTINED from the MERCH
   book (farming inputs / loot / personal-use — e.g. snapdragon seed 5300, snapdragon 3000). Its

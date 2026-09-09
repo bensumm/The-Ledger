@@ -1,4 +1,4 @@
-# PLAN-WEEKLY-CYCLE — the weekday price cycle (WK1 null; WK2 branch (c); REOPENED by owner for WK3 — class-conditioned yield, running)
+# PLAN-WEEKLY-CYCLE — the weekday price cycle (WK1 null; WK2 branch (c); WK3 outcome (i): deep-dislocation yield advantage in 8 classes, 6 beyond the lane — next chunk designs the inform-only surface)
 
 Chunk prefix **WK** (verified collision-free, `lint-plan-refs.mjs --collisions`, 2026-09-08).
 
@@ -202,14 +202,61 @@ sized at "suggestive, unproven". The derived-window idea (§0) was the right ins
 answer came back "too thin at this era's resolution"; a second archive era is the only thing
 that reopens this.
 
-### WK3 (2026-09-08) — REOPENED: class-conditioned yield profile; pre-registered, results pending
+### WK3 result (2026-09-08) — outcome (i): deep dislocations carry a real conditional yield advantage, and it is class-structured
 
-`pipeline/experiments/wk3-class-cycle-study.mjs` — the §0 third-refinement measurement. The full
-decision rule (metadata taxonomy with first-match-wins classes and a seeded audit; TEST Y =
-deviation-conditioned forward yield off a trailing-15d reference, item-paired, BH over deep-bucket
-× 4d decision cells, lane-increment check; secondary class-basket/enrichment/§1-confirmation
-tests) is the script header, committed BEFORE the full run per WK2's process correction. Results
-land as their own commit and replace this stub.
+`pipeline/experiments/wk3-class-cycle-study.mjs` — the §0 third-refinement measurement (rule
+committed before the run, `9eb2743`; 4,323 archive items, 2,516 tested, 10 named metadata classes
++ unclassified). PRIMARY question per the owner reframe: is a dislocated price advantageous to
+buy, and what yield does it carry — no cycle required. Reference is STRICTLY TRAILING (15d);
+advantage is item-paired (conditional minus the item's own unconditional 4d net, t across items).
+
+**Outcome (i) fired. Deep dislocation (mid ≤ −7% of trailing mean) is a BH-significant BUY
+advantage in 8 of 10 named classes, and in 6 it survives the beyond-the-lane split** (advantage
+recomputed only on days at or above the item's own era-p10 deviation — days the amplitude lane's
+trough-touch entry would NOT already catch): potion-dose (+8.3pp over baseline, beyond-lane
++4.9pp t=3.3), ammo (+4.8pp, beyond +1.7pp), herb (+3.2pp, beyond +2.9pp), bones-ashes (sig at
+(−4,−2], beyond +1.8pp t=4.8), midvalue-lowlimit (+1.8pp on 208 items, ALL THREE deep buckets
+significant, beyond +1.2pp t=3.4), bulk-commodity (+9.6pp, beyond +6.6pp). bigticket-lowlimit
+(+1.8pp, t=8.7-ish se 0.21) and rune are significant but LANE-CONFINED — for big-ticket gear the
+lane's trough-touch already owns this edge, which is WK1's null seen from the other side.
+**NO knife class exists at class level** — §4's feared "deep deviation predicts continued fall"
+class did not materialize at this grain (the closest, bigticket (−4,−2], is −0.21pp ns).
+**The elevated ≥+4% bucket is significantly NEGATIVE nearly everywhere** (midvalue −8.8pp,
+unclassified −22.0pp vs baselines) — the sell-side mirror: elevated prices revert too, which is
+the reverse-flip/exit-timing read.
+
+**Two caveats govern every yield number (read before quoting):** (1) deep-bucket conditional
+yields on thin/cheap classes are inflated by a daily-mid COMPOSITION artifact — a −7% daily mean
+mid on a thin item is often one-sided prints, and its "recovery" is not a fill anyone can buy;
+the +15–30% conditional means on bulk-commodity/unclassified are artifact-heavy, which is
+precisely why the DECISION statistic is the within-item paired advantage, not the raw
+conditional mean. (2) Mid-to-mid at the daily mean mid is not an executable price. The profile
+RANKS classes and depths; it does not promise returns. Both mean the next chunk's surface must
+price EXECUTABILITY: liquidity floor, bid-side entry, spread- and depth-aware.
+
+**Secondary (explains, does not decide):** class-basket periodicity — NO FDR discovery in either
+family under persistence-matched nulls (the yield advantage is NOT a clean class-wide sinusoid;
+it is mean-reversion from dislocation, exactly the owner's "no concrete cycle necessarily").
+Enrichment: bigticket/herb/raw-material shift toward-cycle (BH✓, r1-saturation caveats apply);
+potion-dose/bones-ashes/midvalue/ammo/seed-sapling/bulk-commodity are DEAD for per-item cycles at
+this resolution. §1's five REPRODUCE (+1.257%/wk weekend-minus-Tue, t=4.33, 12/13 weeks — §5
+bullet 1 closed) and the 118-member metadata gear class CONFIRMS the §1 prior DILUTED
+(+0.363%/wk, t=2.18 ≥ crit 1.782 one-sided): §1 is a real class property, ~3× weaker class-wide
+than on the five book items, consistent with few members expressing it strongly. Descriptively,
+rune/ammo/unclassified run the OTHER way (weekend LOWER — e.g. rune −1.10%/wk t=−2.8): §4's
+"inverted class" exists, but on commodity classes, not the hilt.
+
+**Limits.** ONE era; mid-to-mid touch proxies; the p10 lane-split is an in-sample percentile and
+a proxy (the lane fits levels, not percentiles); cross-item same-day correlation makes
+across-item se's optimistic; heuristic taxonomy dilutes (unclassified = 953 tested items, 38%);
+BH cells were registered only at h=4d deep buckets — every other cell is descriptive.
+
+**Consequences:** the program does NOT close. Next chunk (WK4, needs owner alignment on shape):
+design the inform-only "current deviation vs trailing mean + measured class-conditional yield"
+surface, connected to the amplitude lane's estimator frame — with executability pricing as the
+first design constraint, big-ticket explicitly annotated as lane-owned (no double-count), and
+the ≥+4% elevated read surfaced on the SELL side (reverse-flip/exit timing). Nothing gates,
+sizes, or auto-prices off WK3.
 
 ---
 

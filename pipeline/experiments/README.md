@@ -311,6 +311,40 @@ depended on a session-scratch `hp-lib.mjs`, which is why two production headers 
   print no branch; `--json <path>`; needs the local archive + a populated `mapping.cache.json`,
   so it does NOT run on a clean checkout. Freely deletable; nothing imports it.
 
+- **`wk3-class-cycle-study.mjs`** (PLAN-WEEKLY-CYCLE WK3 — the owner's class question, amended
+  before any run by the yield reframe: judge whether an item is advantageous to buy and measure
+  the yield as it fluctuates; no concrete cycle needed) — machinery copied from
+  `wk2-period-phase-universe.mjs` @ `9fb2cd9` (C1/C2-corrected; WK2 is top-level, not
+  importable). Metadata-only taxonomy (name + GE limit + archive era-mean mid; 10 named classes
+  + unclassified, first match wins, 10 seeded samples printed per class; the §1 five qualify for
+  `bigticket-lowlimit` by metadata, never enumeration). PRIMARY TEST Y: per item-day, deviation
+  from the item's own STRICTLY TRAILING 15d mean (the centered detrend is lookahead — stated as
+  disqualifying for a buy signal), bucketed by depth; forward after-tax mid-to-mid net at
+  2/4/7d; advantage = item-paired conditional minus that item's own unconditional mean, t across
+  items (kills overlapping-window dependence; cross-item same-day correlation stays a stated
+  limit); BH q=0.05 over the 3 deep buckets × 4d decision cells; knife classes = significantly
+  NEGATIVE deep-bucket advantage. Lane-increment check: advantage recomputed on bucket-days at
+  or above the item's own era-p10 deviation (sub-p10 ≈ days the amplitude lane's trough-touch
+  entry would already catch). **Pre-registered outcome (i) fired: 8 of 10 named classes show a
+  BH-significant deep-dislocation advantage (≤−7% bucket: potion-dose +8.3pp, ammo +4.8pp,
+  bulk-commodity +9.6pp, midvalue-lowlimit +1.8pp, bigticket-lowlimit +1.8pp over per-item
+  baselines), 6 survive the beyond-the-lane split; NO knife class at class level; the elevated
+  ≥+4% bucket is significantly negative nearly everywhere — the sell-side mirror.** ⚠ Two
+  caveats govern every number: deep-bucket conditional yields on thin/cheap classes are inflated
+  by a daily-mid COMPOSITION artifact (a −7% mid print on a thin item is often one-sided trades,
+  and its "recovery" is not a fill you can buy), and mid-to-mid at the daily mean mid is not an
+  executable price — the profile RANKS classes and buckets, it does not promise returns; the
+  next chunk's surface design must price executability (liquidity floor, bid-side entry, spread).
+  Secondary: class baskets under persistence-matched nulls (AR(1) below the r1≈0.61 ceiling, a
+  bisection-tuned MA-innovation family above it) → NO basket FDR discovery in either family; MW
+  enrichment: bigticket/herb/raw-material BH✓ toward-cycle (with r1-saturation caveats), five
+  classes DEAD at this resolution; §1's five reproduce (+1.26%/wk, t 4.33 vs the reported 4.48)
+  and the 118-member metadata gear class CONFIRMS diluted (+0.36%/wk, t 2.18, one-sided α=0.05
+  — §1's single registered prior). Decision rule committed before the run (`9eb2743`);
+  `--audit`/`--limit` smokes are structurally unable to print class results; `--json <path>`;
+  needs the local archive + a populated `mapping.cache.json`, so it does NOT run on a clean
+  checkout. Freely deletable; nothing imports it.
+
 To retire these experiments: delete `pipeline/experiments/` — with ONE exception. `amp-cycle-reproduction.mjs`
 IS referenced: `js/amplitudescreen.mjs` and `js/estimators/families.mjs` both name it as the validation
 source for ranking on the walk-forward, so deleting it orphans two production headers. Everything else in
