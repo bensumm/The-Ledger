@@ -76,6 +76,14 @@
  *    a once-built inverse lookup so the surrogate's FILTERED lag-1 matches the item's observed
  *    deviation lag-1. Branches re-fire under the honest null; the first run's numbers are recorded
  *    in the plan as a dated corrected record.
+ *    STATED LIMIT (round 2, not rebuilt): the AR(1)-mid family's FILTERED lag-1 saturates at
+ *    ≈0.61, and phiFor() maps any higher observed r1 to φ≈0.99 — ~28% of tested items (716 by
+ *    the reviewer's count) sit ABOVE the ceiling, including every weekly-residue item, and the
+ *    null is ANTI-conservative there. Reviewer's persistence-matched re-measurement: bond
+ *    0.0014→≈0.0008 (robust), mole skin similar, blowpipe 0.036→0.048, fang 0.060→≈0.106 (falls
+ *    out of the residue criterion). Branch (c) is unaffected A FORTIORI — a stricter null keeps
+ *    zero discoveries. A redder surrogate family is deliberately NOT built: the plan is closed
+ *    inform-only and this sentence is the encoded form of the limit.
  * C2. Every printed trough weekday was +1: dayIdx rounds local noon to the NEXT UTC day index and
  *    troughWeekday read it back at UTC noon. wd0 now derives from the date STRING (local parse).
  *    True troughs: bond SAT, fang and blowpipe TUE — fang thereby agrees EXACTLY with §4's Tue.

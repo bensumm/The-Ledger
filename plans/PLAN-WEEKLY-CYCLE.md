@@ -148,18 +148,26 @@ thin, don't build" — which §5 has said from the start is a successful complet
 1,934-member basket is not significant either (p=0.586): §6's one-index question stays answered
 NO, and branch (b) did not fire.
 
-**The honest residue — the weekly trio, reported as inform-only annotation (the §0 null
-consequence), NOT as discoveries:** the only three liquid items whose P* sits at 7.0d with
-locked phase and p < 0.07: **Old school bond** (p=0.0014 raw, 0.0002 basket-subtracted — the
-single smallest p in the family — trough SATURDAY, peak-to-trough 4.2%, drift 0.5d; a
-real-money instrument with weekend demand is also the most economically coherent story on the
-board), **Toxic blowpipe (empty)** (p=0.036, trough TUESDAY, drift 0.2d), **Osmumten's fang**
-(p=0.060, trough TUESDAY, drift 0.0d — EXACT agreement with §4's Tue trough after the weekday
-fix). Against 2,516 tests these are not distinguishable from multiplicity (120 items land P* in
-the weekly band by chance; 3 with p<0.05 vs ~6 expected), and an FDR resolution limit applies:
-at 10k surrogate draws the smallest achievable p (1e-4) is above the BH single-discovery
-threshold (2e-5), so NO lone item could have cleared FDR — only a cluster could, and none did.
-Bond is the one name that would repay a second era's data.
+**The honest residue — reported as inform-only annotation (the §0 null consequence), NOT as
+discoveries. The set, defined once: calendar-LOCKED items (P* ∈ [6.5,7.5], drift ≤ 1d) with
+p < 0.05 — there are exactly three:** **Old school bond** (p=0.0014 raw, 0.0002
+basket-subtracted — the smallest p in the basket-subtracted family (the raw family's smallest
+belongs to a non-weekly item) — trough SATURDAY, peak-to-trough 4.2%, drift 0.5d; a real-money
+instrument with weekend demand is also the most economically coherent story on the board),
+**Mole skin** (p=0.0050, trough SUNDAY, peak-to-trough 3.4%, drift 0.3d, ~330m gp/day), and
+**Toxic blowpipe (empty)** (p=0.036, trough TUESDAY, drift 0.2d). **Osmumten's fang is
+suggestive only, NOT in the set** (p=0.060, trough TUESDAY, drift 0.0d — EXACT agreement with
+§4's Tue trough after the weekday fix, but its p roughly doubles to ≈0.106 under the reviewer's
+persistence-matched null, below). Against 2,516 tests even the set of three is not
+distinguishable from multiplicity (120 items land P* in the weekly band; these 3 at p<0.05 vs
+~6 expected by chance), and an FDR resolution limit applies: at 10k surrogate draws the
+smallest achievable p (1e-4) is above the BH single-discovery threshold (2e-5), so NO lone item
+could have cleared FDR — only a cluster could, and none did. A further stated limit
+(review round 2): the surrogate family's filtered lag-1 saturates at ≈0.61 and ~28% of items —
+including every residue item — sit above it, where the null is ANTI-conservative; the
+reviewer's persistence-matched re-measurement moved bond 0.0014→≈0.0008 (robust), blowpipe
+0.036→0.048, fang 0.060→≈0.106. Branch (c) is unaffected a fortiori (a stricter null keeps
+zero discoveries). Bond is the one name that would repay a second era's data.
 
 **§1-five consistency check under the honest null:** staff/crossbow/ring not detected (crossbow
 p=0.89, ring p=0.66 — §4's weekday rows for them were fitted noise, a call that is STRONGER
@@ -176,9 +184,9 @@ read is that nothing tradeable was demonstrated.
 **Consequences:** the program CLOSES per the pre-registered rule. Measurement 2 stays
 unmotivated (WK1) and its weekly-class premise failed here; measurement 4's knife-prior premise
 (a derived trough window worth disambiguating toward) now has no demonstrated per-item cycle set
-to anchor it and closes with the plan. What ships is at most annotation: the weekly-trio note
-above (bond Sat / blowpipe Tue / fang Tue), inform-only, never a gate, sized at "suggestive,
-unproven". The derived-window idea (§0) was the right instrument to ask the question with — the
+to anchor it and closes with the plan. What ships is at most annotation: the residue note above
+(bond Sat / mole skin Sun / blowpipe Tue, with fang suggestive-only), inform-only, never a gate,
+sized at "suggestive, unproven". The derived-window idea (§0) was the right instrument to ask the question with — the
 answer came back "too thin at this era's resolution"; a second archive era is the only thing
 that reopens this.
 

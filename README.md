@@ -902,9 +902,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   that was an instrument artifact (the surrogate null skipped the MA15 detrend, whose gain
   concentrates filtered noise at 8–14d — caught by adversarial review, corrected in the script's
   C1–C3 header block; first-run numbers only in `git show fd3f769`, not to be quoted). The honest
-  residue is an inform-only weekly-trio annotation — Old school bond (p=0.0014, trough Sat),
-  Toxic blowpipe (p=0.036) + Osmumten's fang (p=0.060, exact §4 Tue agreement), both trough Tue —
-  suggestive, not distinguishable from multiplicity at this era's resolution. Read the plan's
+  residue is an inform-only annotation on the locked weekly set at p<0.05 — Old school bond
+  (p=0.0014, trough Sat), Mole skin (p=0.0050, trough Sun), Toxic blowpipe (p=0.036, trough Tue),
+  with Osmumten's fang suggestive-only (p=0.060, exact §4 Tue agreement; ≈0.106 under the round-2
+  persistence-matched null) — not distinguishable from multiplicity at this era's resolution.
+  Read the plan's
   "WK2 result" section before quoting anything. `--item`/`--limit` spot modes print no branch;
   `--json <path>`; needs the local archive + `mapping.cache.json`, so it does NOT run on a clean
   checkout. Freely deletable; nothing imports it.

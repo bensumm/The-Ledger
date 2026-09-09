@@ -292,13 +292,17 @@ depended on a session-scratch `hp-lib.mjs`, which is why two production headers 
   deviations()/MA15 pipeline with φ matched on the filtered lag-1; the weekday +1 local/UTC bug
   is fixed; the header's "near-uniform band gain" claim is retracted (amplitudes carry ≤22%
   filter inflation + winner's curse). Under the honest null the basket is not significant
-  (p=0.586 — §6 answered: not one index) and the residue is the weekly trio, inform-only:
-  Old school bond (p=0.0014 raw / 0.0002 basket-subtracted — the family's smallest p — trough
-  SAT, p2t 4.2%), Toxic blowpipe (p=0.036, trough TUE), Osmumten's fang (p=0.060, trough TUE —
-  exact §4 agreement). Not distinguishable from multiplicity (3 weekly-band items at p<0.05 vs
-  ~6 expected by chance), and an FDR resolution floor applies (min achievable p 1e-4 > the BH
-  single-discovery threshold 2e-5 — no lone item could clear FDR at 10k draws; only a cluster
-  could, and none did). §1-five: crossbow p=0.89 / ring p=0.66 (their §4 weekday rows were
+  (p=0.586 — §6 answered: not one index) and the residue is the locked weekly set at p<0.05,
+  inform-only: Old school bond (p=0.0014 raw / 0.0002 basket-subtracted — the SUB-family's
+  smallest p — trough SAT, p2t 4.2%), Mole skin (p=0.0050, trough SUN, ~330m gp/d), Toxic
+  blowpipe (p=0.036, trough TUE); Osmumten's fang is suggestive-only (p=0.060, trough TUE —
+  exact §4 agreement — but ≈0.106 under the round-2 persistence-matched null: the surrogate
+  family's filtered lag-1 saturates at ≈0.61 and ~28% of items, all residue items included, sit
+  above it where the null is anti-conservative — stated limit in the script's C1 block, branch
+  (c) unaffected a fortiori). Not distinguishable from multiplicity (these 3 weekly-band items
+  at p<0.05 vs ~6 expected by chance), and an FDR resolution floor applies (min achievable p
+  1e-4 > the BH single-discovery threshold 2e-5 — no lone item could clear FDR at 10k draws;
+  only a cluster could, and none did). §1-five: crossbow p=0.89 / ring p=0.66 (their §4 weekday rows were
   fitted noise — a STRONGER call under the corrected test); hilt p=0.049 at 14d, not a
   discovery. §1's five-item BASKET result is a different statistic and is not contradicted — it
   just doesn't generalize. Limits: one era, touch mids, filter+selection-inflated amplitudes;
