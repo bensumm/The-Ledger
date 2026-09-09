@@ -154,7 +154,8 @@ Logged HERE, before the outcome, so it can be scored honestly later.
   placement and `askSide` quantile the tool renders is biased low, and asks are being set below
   what the market would pay. That is a candidate for its own pre-registration — measure realised
   sell prices against the same hour's `avgHighPrice` across the closed record and quantify the
-  gap by volume tier. Do not act on it beyond this note until measured.
+  gap by volume tier. Do not act on it beyond this note until measured. (Now registered:
+  `plans/PLAN-AVGHIGH-BIAS.md`, 2026-09-09.)
 - **What would make this a FAILURE, stated in advance (restated at the amended level):** the
   ask does not reach 36.25m by
   end of Sunday 2026-09-13. A fill on Mon–Fri at a lower relist, or a hold into the
