@@ -182,6 +182,47 @@ for (const it of itemJudged.filter(x => x.j.length >= 20).sort((a, b) => b.j.len
   console.log(`${it.name.padEnd(30)} ${cells.join(' ')}  (judged ${it.j.length}, rate ${pct(it.j.filter(r => r.outcome === 'completed').length / it.j.length)})`);
 }
 
+// ---- descriptive: serial dependence + within-item-centered net (review follow-up F3/F4 — added
+// AFTER the pre-registered run; reproducers for the prose numbers, they decide nothing). The
+// independence baseline is PER-ITEM pairs-weighted (Σ p_i²+(1−p_i)² over consecutive-pair counts) —
+// a pooled-rate baseline double-counts between-item heterogeneity (the F2 regression this encodes).
+let agree = 0, pairs = 0, baseW = 0, denomW = 0;
+for (const it of itemJudged) {
+  const p = it.j.filter(r => r.outcome === 'completed').length / it.j.length;
+  for (let i = 1; i < it.j.length; i++) {
+    pairs++;
+    if (it.j[i].outcome === it.j[i - 1].outcome) agree++;
+    baseW += p * p + (1 - p) * (1 - p);
+    denomW += 2 * p * (1 - p);
+  }
+}
+const obsAgree = pairs ? agree / pairs : null;
+const baseAgree = pairs ? baseW / pairs : null;
+const rho = denomW ? (agree - baseW) / denomW : null;
+const nEff = rho != null ? Math.round(NP * (1 - rho) / (1 + rho)) : null;
+const seBucket = nEff ? Math.sqrt((CP / NP) * (1 - CP / NP) / (nEff / 7)) : null;
+console.log('\nDESCRIPTIVE — serial dependence (the reproducer for the prose numbers; decides nothing):');
+console.log(`  lag-1 outcome agreement (within item)        ${(100 * obsAgree).toFixed(1)}%  (${pairs} pairs)`);
+console.log(`  independence baseline (per-item, pairs-wtd)  ${(100 * baseAgree).toFixed(1)}%`);
+console.log(`  implied lag-1 correlation rho                ${rho.toFixed(2)}`);
+console.log(`  effective n = N(1-rho)/(1+rho)               ~${nEff} (~${Math.round(nEff / 7)}/bucket → per-bucket se ~${(100 * seBucket).toFixed(1)}pp)`);
+const centered = [];
+for (const it of itemJudged) {
+  const nets = it.recs.filter(r => r.netPct != null);
+  if (nets.length < 2) continue;
+  const m = nets.reduce((a, b) => a + b.netPct, 0) / nets.length;
+  for (const r of nets) centered.push({ dow: r.dow, v: r.netPct - m });
+}
+const cline = DAYS.map((d, i) => {
+  const vs = centered.filter(c => c.dow === i).map(c => c.v);
+  if (!vs.length) return `${d} —`;
+  const mu = vs.reduce((a, b) => a + b, 0) / vs.length;
+  const sd = Math.sqrt(vs.reduce((a, b) => a + (b - mu) * (b - mu), 0) / Math.max(1, vs.length - 1));
+  return `${d} ${mu >= 0 ? '+' : ''}${mu.toFixed(1)}±${(sd / Math.sqrt(vs.length)).toFixed(1)}`;
+}).join('  ');
+console.log(`  net-if-completed, WITHIN-ITEM CENTERED, by weekday (pp vs item mean ± se) — the raw
+  net-by-weekday spread is item MIX, this is the de-mixed view: ${cline}`);
+
 console.log(`\nPRE-REGISTERED TEST (${PERM_N} within-item permutations, seed ${SEED}):`);
 console.log(`  S1 (pooled calendar-aligned)  = ${S1obs.toFixed(3)}   p = ${p1.toFixed(4)}`);
 console.log(`  S2 (item-aligned, ${String(s2Items.length).padStart(2)} items)  = ${S2obs.toFixed(3)}   p = ${p2.toFixed(4)}`);
@@ -198,6 +239,7 @@ if (jsonAt !== -1 && process.argv[jsonAt + 1]) {
   const out = {
     generatedAt: new Date().toISOString(), params: { horizonDays: 4, askQ: 0.5, bidQ: 0.5, days: 120, permN: PERM_N, seed: SEED },
     items: perItem.length, pooled: poolRows, S1: S1obs, p1, S2: S2obs, p2, s2Items: s2Items.map(i => i.name), branch,
+    serial: { lag1Agree: obsAgree, indepBaseline: baseAgree, rho, nEff },
     perItem: itemJudged.map(it => ({ name: it.name, id: it.id, judged: it.j.length, completed: it.j.filter(r => r.outcome === 'completed').length })),
   };
   fs.writeFileSync(process.argv[jsonAt + 1], JSON.stringify(out, null, 2));

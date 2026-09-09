@@ -623,7 +623,7 @@ the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the co
   Note the failure survived the `list @ X (BE Y)` relay format: printing two numbers adjacently is not
   joining them. Scope is the note assembly; nothing here moves a verdict, a gate, or the BE floor itself.
 
-- **WEEKDAY-LEVEL — a measured weekly price cycle the tool cannot express (OPEN, found 2026-09-08; written up as `plans/PLAN-WEEKLY-CYCLE.md`, prefix WK, problem-statement-only, NOT yet dispatched).**
+- **WEEKDAY-LEVEL — a measured weekly price cycle the tool cannot express (OPEN, found 2026-09-08; written up as `plans/PLAN-WEEKLY-CYCLE.md`, prefix WK. WK1 EXECUTED 2026-09-08 — the pre-registered null branch fired: the amplitude lane's own walk-forward entries show no detectable weekday structure, measurement 2 not motivated, measurement 3 decides the program; do NOT re-dispatch measurement 1 — see the plan's WK1 result section).**
   Owner hypothesis: big-ticket gear dips Mon/Tue and rises Fri/Sat. **Measured and CONFIRMED at basket
   level** over the 104-day local 1h archive (5 gear items; each day's mid detrended against its own 7-day
   centered mean, then averaged within each week so correlated items cannot inflate n): weekend-minus-Tuesday

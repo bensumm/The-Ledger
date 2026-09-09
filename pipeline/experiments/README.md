@@ -252,15 +252,19 @@ depended on a session-scratch `hp-lib.mjs`, which is why two production headers 
   28.6 / 29.5% (Sun–Sat), pooled 28.5% on 2,958 judged entries — a 2.2pp spread ≈ one naive
   binomial se per bucket. S1 p=0.9945, S2 p=1.0000. The p≈1 (flatter than chance) was
   investigated, not shrugged off: consecutive entries share overlapping 4d horizons, and measured
-  lag-1 outcome agreement is 86.2% vs 59.2% under independence — outcome runs smear evenly across
-  weekdays, deflating the statistic and cutting effective n well below 2,958. So the i.i.d.
-  p-values are not literal; the raw flatness is the finding. Entry counts are also flat —
-  trough-touches don't cluster on Tuesdays.
+  lag-1 outcome agreement is 86.2% vs a 64.4% per-item pairs-weighted independence baseline
+  (ρ≈0.61 — the script prints these; an earlier prose draft quoted a 59.2% pooled-rate baseline,
+  which double-counts item mix, corrected in review) — outcome runs smear evenly across weekdays,
+  deflating the statistic and cutting effective n to ≈712 (~102/bucket, per-bucket se ~4.5pp — so
+  effects of several pp are not excluded). The i.i.d. p-values are not literal; the raw flatness
+  is the finding. Entry counts are also flat — trough-touches don't cluster on Tuesdays. The raw
+  net-if-completed spread by weekday is item MIX: within-item centered it is −1.1…+1.7pp, every
+  bucket within ~1 se of zero (also printed).
 
   **What it means and does not mean:** it does NOT refute the plan's §1 basket price-level cycle;
-  it shows the lane's trough-touch entry already conditions on level, and given that, weekday adds
-  no completion information (a Tue entry rides the §1 up-leg and completes at 28.2%; a Sat entry
-  rides the down-leg and completes at 29.5%). Per the pre-registration, measurement 2 is not
+  it shows the lane's trough-touch entry already conditions on level, and given that, no weekday
+  structure is detectable at this grain in its completion record (a Tue entry rides the §1 up-leg
+  and completes at 28.2%; a Sat entry rides the down-leg and completes at 29.5%). Per the pre-registration, measurement 2 is not
   motivated by this record and measurement 3 (full-universe period+phase on LEVELS — a different
   statistic) decides the program. Limits: median-quantile entries only (deep-quantile not split —
   recorded as a limit, not rerun), touch proxies, one archive era. `--json <path>`; needs the

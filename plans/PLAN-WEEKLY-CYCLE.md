@@ -91,19 +91,27 @@ Entry counts are also flat — trough-touches do not cluster on any weekday.
 
 **Why p≈1 (flatter than chance), verified rather than asserted:** consecutive entries share
 overlapping 4d horizons and consecutive days are different weekdays, so outcome RUNS smear evenly
-across buckets. Measured: lag-1 outcome agreement 86.2% vs 59.2% expected under independence. So
-the i.i.d. permutation p-values must not be read literally (effective n ≪ 2,958, statistic
-mechanically deflated); the load-bearing fact is the raw flatness itself.
+across buckets. Measured (the script now prints this — it is the reproducer for these numbers):
+lag-1 outcome agreement 86.2% vs a 64.4% per-item pairs-weighted independence baseline, implied
+ρ ≈ 0.61. (The first commit's prose quoted 59.2% — a pooled-rate baseline that double-counts
+between-item heterogeneity; corrected in review, ~5.2pp of the claimed excess was item mix.) So
+the i.i.d. permutation p-values must not be read literally; the load-bearing fact is the raw
+flatness itself.
 
-**Reading:** the lane's trough-touch entry already conditions on price LEVEL, and given that,
-entry weekday adds nothing — a Tue entry (window = the §1 up-leg) completes at 28.2% vs a Sat
-entry (window = the down-leg) at 29.5%. The §1 cycle lives in levels, and the lane already trades
-levels. This is consistent with §1 being real AND useless as an entry overlay here.
+**Reading:** the lane's trough-touch entry already conditions on price LEVEL, and given that, no
+weekday structure is detectable at this grain in its completion record — a Tue entry (window =
+the §1 up-leg) completes at 28.2% vs a Sat entry (window = the down-leg) at 29.5%. The §1 cycle
+lives in levels, and the lane already trades levels. This is consistent with §1 being real and
+this record carrying no residual calendar signal for the entry leg.
 
-**Limits.** Board-default 0.5/0.5 quantiles = the MEDIAN trough — weak conditioning (an entry on
-~45% of scoreable days); deep-quantile entries were not split (rarer → worse power) and per the
-pre-registered rule this run was not re-analysed — recorded as a limit, not rerun. Touch proxies,
-one era, mean net-if-completed by weekday (7.6–17.3%) is mix-confounded and decides nothing.
+**Limits.** With ρ ≈ 0.61, effective n ≈ N(1−ρ)/(1+ρ) ≈ 712 (~102/bucket), honest per-bucket se
+~4.5pp — so this study CANNOT exclude weekday effects of several pp; "no structure detectable at
+this grain" is the registered claim, not "no effect exists". Board-default 0.5/0.5 quantiles =
+the MEDIAN trough — weak conditioning (an entry on ~45% of scoreable days); deep-quantile entries
+were not split (rarer → worse power) and per the pre-registered rule this run was not re-analysed
+— recorded as a limit, not rerun. Touch proxies, one era. The raw mean net-if-completed by
+weekday (7.6–17.3%) is item MIX: within-item centered it collapses to −1.1…+1.7pp, every bucket
+within ~1 se of zero (also printed by the script).
 
 **Consequences (per the pre-registration):** measurement 2 (gated §3 re-run) is NOT motivated by
 this record. Measurement 3 — per-item period+phase on price LEVELS over the universe, a different

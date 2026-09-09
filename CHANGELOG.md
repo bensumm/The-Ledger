@@ -8,6 +8,18 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## 0.76.2 — 2026-09-08 — ampWalkForward gains an opt-in per-entry detail collector (PLAN-WEEKLY-CYCLE WK1)
+
+`js/amplitudescreen.mjs` `ampWalkForward({ collect: true })` now returns `entriesDetail`
+(`[{ entryTs, bid, ask, outcome }]`) alongside its aggregates — which are byte-identical whether or
+not the flag is passed (suite 31/31; independently verified old-vs-new, 0 mismatches over 65 archive
+items in review). No app surface passes the flag; the bump is rule-5 policy (`js/` is the deployed
+app graph via `js/estimators/families.mjs`), not a behavior change. First consumer:
+`pipeline/experiments/wk1-weekday-split-study.mjs`, whose pre-registered NULL branch fired — the
+lane's entries show no detectable weekday structure (plan §0 "WK1 result" is the one home for the
+numbers; a first-commit prose baseline of 59.2% was corrected to the per-item 64.4% in review,
+CLAUDE.md rule 12's derived-numbers-in-prose failure mode, now encoded as script output).
+
 ## pipeline 1.4.0 — 2026-09-08 — the buy line learns what it already knew (PLAN-ENTRY-CONFIDENCE EC1–EC4; console/cue surfaces only, no APP_VERSION bump — `js/` modules changed but no app-rendered behavior did: the app consumes `windowStats().days` (unchanged) and never renders `formatFloorCeiling`/`estPairCells`)
 
 From the Avernic defender hilt post-mortem (bought 0.061% off the suggested price, CUT-CANDIDATE
