@@ -312,6 +312,15 @@ regenerated and verified identical before the constants were written down):
   "~4d" always — the registered horizon; the owner's "2 days" phrasing is deliberately NOT
   rendered (no 2d cell was registered).
 
+**Intraday read quality (round-1 review K1, re-derived as the study's labeled `--transitions`
+block — the committed reproducer):** a first-6-local-hours partial-mean bucket read holds its
+bucket at the full-day close **86–91%** of the time at deep7 and **69–88%** at elevated — quotable
+at read time — but only **41–74%** at deep4/deep2 (bones-ashes deep2 49%, midvalue deep4/deep2
+60%/53%, with 15–29% dissolving to neutral), so every rendered shallow-bucket buy line carries its
+cell's measured hold rate in the line itself (`holds ~N% by close`; a dissolve ≈ baseline entry —
+forgone edge, not loss). The rates ride the table as per-cell `hold` constants, pinned in the
+fixtures.
+
 Honesty constraints encoded, not prosed: potion-dose/bulk-commodity deep cells ABSENT (unresolved
 under the trailing split — quoting them would invite acting on an unestablished number); rune deep
 ABSENT (items floor); elevated cells carried as descriptive (p≤0.05, ≥15 items — the registered

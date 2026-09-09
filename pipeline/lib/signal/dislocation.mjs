@@ -17,7 +17,10 @@
  *   - `lag` (enter NEXT day's mid — the honest actionable magnitude), `vol` (day-t traded gp ≥
  *     the item's own median — the executability check; the deep edge is volume-fragile), `adv`
  *     (same-day, descriptive upper bound), `cond` (raw class-conditional 4d net, drives the
- *     elevated wait-savings arithmetic). All % after 2% tax, mid-to-mid — NOT executable prices.
+ *     elevated wait-savings arithmetic), `hold` (the study's --transitions measurement: % of
+ *     first-6h partial-mean reads still in the same bucket at full-day close — deep7 86–91% and
+ *     elevated 69–88% quote cleanly at read time; deep4/deep2 run 41–74%, so those rendered lines
+ *     carry the hold clause). All % after 2% tax, mid-to-mid — NOT executable prices.
  * DOCTRINE: inform-only. Nothing here may gate, size, re-rank, or move a suggested price.
  */
 
@@ -50,36 +53,36 @@ export function classifyItem({ name, limit = null, eraMid = 0 }) {
 export const DISLOCATION_TABLE = {
   'bigticket-lowlimit': {
     lane: 'owned',
-    deep: { deep7: { adv: 1.81, lag: 2.43, lagT: 10.4, vol: 1.19, volT: 3.3, t: 8.55, nItems: 81 } },
-    elevated: { adv: -1.06, cond: -3.25, t: -5.61, nItems: 96 },
+    deep: { deep7: { adv: 1.81, lag: 2.43, lagT: 10.4, vol: 1.19, volT: 3.3, t: 8.55, nItems: 81, hold: 91 } },
+    elevated: { adv: -1.06, cond: -3.25, t: -5.61, nItems: 96, hold: 88 },
   },
   'ammo': {
     lane: 'beyond',
-    deep: { deep7: { adv: 4.76, lag: 3.26, lagT: 4.7, vol: 0.62, volT: 0.7, t: 5.69, nItems: 93 } },
-    elevated: { adv: -5.53, cond: -6.07, t: -6.66, nItems: 100 },
+    deep: { deep7: { adv: 4.76, lag: 3.26, lagT: 4.7, vol: 0.62, volT: 0.7, t: 5.69, nItems: 93, hold: 86 } },
+    elevated: { adv: -5.53, cond: -6.07, t: -6.66, nItems: 100, hold: 76 },
   },
   'herb': {
     lane: 'beyond',
-    deep: { deep7: { adv: 3.23, lag: 3.35, lagT: 8.0, vol: 2.17, volT: 2.3, t: 5.02, nItems: 23 } },
-    elevated: { adv: -1.98, cond: -3.78, t: -3.51, nItems: 23 },
+    deep: { deep7: { adv: 3.23, lag: 3.35, lagT: 8.0, vol: 2.17, volT: 2.3, t: 5.02, nItems: 23, hold: 87 } },
+    elevated: { adv: -1.98, cond: -3.78, t: -3.51, nItems: 23, hold: 82 },
   },
   'bones-ashes': {
     lane: 'beyond',
-    deep: { deep2: { adv: 1.46, lag: 0.74, lagT: 2.1, vol: 0.77, volT: 2.0, t: 4.31, nItems: 21 } },
-    elevated: { adv: -7.01, cond: -5.42, t: -3.06, nItems: 24 },
+    deep: { deep2: { adv: 1.46, lag: 0.74, lagT: 2.1, vol: 0.77, volT: 2.0, t: 4.31, nItems: 21, hold: 49 } },
+    elevated: { adv: -7.01, cond: -5.42, t: -3.06, nItems: 24, hold: 79 },
   },
   'midvalue-lowlimit': {
     lane: 'beyond',
     deep: {
-      deep7: { adv: 1.78, lag: 1.57, lagT: 8.4, vol: 0.02, volT: 0.1, t: 8.32, nItems: 208 },
-      deep4: { adv: 1.32, lag: 1.09, lagT: 3.1, vol: 0.03, volT: 0.1, t: 4.08, nItems: 217 },
-      deep2: { adv: 0.56, lag: 0.23, lagT: 1.2, vol: 0.33, volT: 1.6, t: 3.14, nItems: 225 },
+      deep7: { adv: 1.78, lag: 1.57, lagT: 8.4, vol: 0.02, volT: 0.1, t: 8.32, nItems: 208, hold: 89 },
+      deep4: { adv: 1.32, lag: 1.09, lagT: 3.1, vol: 0.03, volT: 0.1, t: 4.08, nItems: 217, hold: 60 },
+      deep2: { adv: 0.56, lag: 0.23, lagT: 1.2, vol: 0.33, volT: 1.6, t: 3.14, nItems: 225, hold: 53 },
     },
-    elevated: { adv: -3.04, cond: -5.33, t: -11.71, nItems: 211 },
+    elevated: { adv: -3.04, cond: -5.33, t: -11.71, nItems: 211, hold: 84 },
   },
-  'potion-dose': { lane: 'unresolved', deep: {}, elevated: { adv: -7.52, cond: -3.58, t: -4.89, nItems: 150 } },
-  'bulk-commodity': { lane: 'unresolved', deep: {}, elevated: { adv: -8.83, cond: -3.66, t: -3.22, nItems: 550 } },
-  'rune': { lane: 'unresolved', deep: {}, elevated: { adv: -2.40, cond: -4.11, t: -3.80, nItems: 17 } },
+  'potion-dose': { lane: 'unresolved', deep: {}, elevated: { adv: -7.52, cond: -3.58, t: -4.89, nItems: 150, hold: 77 } },
+  'bulk-commodity': { lane: 'unresolved', deep: {}, elevated: { adv: -8.83, cond: -3.66, t: -3.22, nItems: 550, hold: 81 } },
+  'rune': { lane: 'unresolved', deep: {}, elevated: { adv: -2.40, cond: -4.11, t: -3.80, nItems: 17, hold: 69 } },
 };
 
 // 1h archive rows → local-calendar daily mean mids (the study's grain), ascending [{di, mid, n}].
@@ -159,5 +162,9 @@ export function formatDislocation(info, { fmt = v => String(Math.round(v)) } = {
   if (info.lane === 'owned') {
     return `dislocated ${devTxt} — big-ticket class: the amplitude lane already prices this trough (lane-owned, no double-count; at-volume ${pp(info.cell.vol)}/4d t=${info.cell.volT} is the one class figure that survives the volume condition)`;
   }
-  return `dislocated ${devTxt} — ${info.cls} class measured ${pp(info.cell.lag)}/4d vs baseline entering next day (t=${info.cell.lagT}; at-volume ${pp(info.cell.vol)} t=${info.cell.volT}, n=${info.cell.nItems} items) — class-conditional, inform-only, one era`;
+  // K1: shallow buckets (deep4/deep2) are coin-flips intraday — an early partial-day read holds its
+  // bucket at close only ~41–74% of the time (--transitions), so the line says so. deep7 holds 86–91%.
+  const holdTxt = (info.bucket !== 'deep7' && info.cell.hold != null)
+    ? `; intraday read — this bucket holds ~${info.cell.hold}% by close (a dissolve ≈ baseline entry)` : '';
+  return `dislocated ${devTxt} — ${info.cls} class measured ${pp(info.cell.lag)}/4d vs baseline entering next day (t=${info.cell.lagT}; at-volume ${pp(info.cell.vol)} t=${info.cell.volT}, n=${info.cell.nItems} items${holdTxt}) — class-conditional, inform-only, one era`;
 }

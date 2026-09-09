@@ -859,8 +859,13 @@ BH-registered). potion-dose/bulk-commodity deep cells are deliberately ABSENT (m
 significance failed the trailing split — unresolved, not established). Unclassified items, absent
 cells, neutral deviations and stale archives are SILENCE, never a hedge line. Surfaces:
 `quote-items.mjs` (bare + held-lot views) and the scan's decision digest (rendered rows only).
-INFORM-ONLY, one era, class-conditional — never an entry signal, never a gate/size/price input;
-every number is a measured constant with the WK3 study as its reproducer.
+An **intraday read is provisional at shallow depths**: the study's `--transitions` block measures
+that a first-6-hours partial-mean bucket read still sits in the same bucket at the full-day close
+86–91% of the time at deep7 and 69–88% at elevated, but only 41–74% at deep4/deep2 — so
+shallow-bucket buy lines carry their cell's measured `holds ~N% by close` clause in the line (a
+dissolve ≈ baseline entry — forgone edge, not loss). INFORM-ONLY, one era, class-conditional —
+never an entry signal, never a gate/size/price input; every number is a measured constant with the
+WK3 study as its reproducer.
 
 Any scored `--bid`/`--ask`/`--exit` run also prints a **three-part `fold:` line** (PLAN-ESTIMATOR-POSTURE
 AC8 + PLAN-ESTIMATOR-HONEST-SELL E3, 2026-07-22): `best-case ask X · honest net ±N · P(fill)~p%[ (recent-3

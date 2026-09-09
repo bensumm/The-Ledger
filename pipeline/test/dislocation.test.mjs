@@ -17,7 +17,7 @@
  */
 import assert from 'node:assert/strict';
 import {
-  classifyItem, dailyMidsFrom1h, trailingDeviation, dislocationRead, waitSavesGp,
+  classifyItem, dailyMidsFrom1h, trailingDeviation, dislocationRead, waitSavesGp, formatDislocation,
   DISLOCATION_TABLE, TAX,
 } from '../lib/signal/dislocation.mjs';
 
@@ -122,6 +122,28 @@ ok('bigticket deep carries lane:owned', () => {
 ok('unclassified is silence at any depth', () => {
   const s = series({ midFor: b => b === 0 ? 90 : 100 });
   assert.equal(dislocationRead({ series1h: s, name: 'Rune scimitar', limit: 70, nowMs: NOW }), null);
+});
+
+ok('table values pinned as literals (K2 — the WK3 measured record; a drift here is a data corruption)', () => {
+  assert.equal(DISLOCATION_TABLE.herb.deep.deep7.lag, 3.35);
+  assert.equal(DISLOCATION_TABLE['bones-ashes'].deep.deep2.lag, 0.74);
+  assert.equal(DISLOCATION_TABLE['midvalue-lowlimit'].deep.deep7.lag, 1.57);
+  assert.equal(DISLOCATION_TABLE.ammo.deep.deep7.lag, 3.26);
+  assert.equal(DISLOCATION_TABLE['bigticket-lowlimit'].deep.deep7.vol, 1.19);
+  assert.equal(DISLOCATION_TABLE['midvalue-lowlimit'].elevated.cond, -5.33);
+  // absences ARE the record too: bones' deeper cells never cleared BH; unresolved classes carry no deep cells
+  assert.equal(DISLOCATION_TABLE['bones-ashes'].deep.deep7, undefined);
+  assert.equal(DISLOCATION_TABLE['bones-ashes'].deep.deep4, undefined);
+  for (const c of ['potion-dose', 'bulk-commodity', 'rune']) assert.deepEqual(DISLOCATION_TABLE[c].deep, {});
+});
+
+ok('K1 hold clause: shallow-bucket lines carry the measured hold-by-close rate; deep7 lines do not', () => {
+  const shallow = dislocationRead({ series1h: series({ midFor: b => b === 0 ? 97 : 100 }), name: 'Dragon bones', limit: 13000, nowMs: NOW });
+  assert.ok(shallow && shallow.bucket === 'deep2' && shallow.cell.hold === 49);
+  assert.match(formatDislocation(shallow), /holds ~49% by close/);
+  const deep = dislocationRead({ series1h: series({ midFor: b => b === 0 ? 90 : 100 }), name: 'Grimy ranarr weed', limit: 13000, nowMs: NOW });
+  assert.ok(deep && deep.bucket === 'deep7');
+  assert.doesNotMatch(formatDislocation(deep), /holds ~/);
 });
 
 ok('waitSavesGp arithmetic: after-tax cell inverts to a price drop', () => {

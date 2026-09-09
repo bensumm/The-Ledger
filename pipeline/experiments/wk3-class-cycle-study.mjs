@@ -374,6 +374,49 @@ for (const c of CLASSES) {
 }
 if (auditOnly) { console.log('\n(--audit: stopping before any detection — pre-registration smoke)'); process.exit(0); }
 
+// ── POST-REGISTRATION `--transitions` (WK4 K1, labeled — decides nothing): does an EARLY-day
+// partial-mean bucket read still hold at the full-day close? Feeds the lib's per-cell hold rates. --
+if (process.argv.includes('--transitions')) {
+  const h2 = open(undefined, { readonly: true });
+  const pRows = h2.db.prepare(`
+    SELECT itemId, date(ts, 'unixepoch', 'localtime') AS d,
+           AVG((avgHighPrice + avgLowPrice) / 2.0) AS pm, COUNT(*) AS n
+      FROM observations
+     WHERE grain = '1h' AND ts <= ? AND avgHighPrice IS NOT NULL AND avgLowPrice IS NOT NULL
+       AND CAST(strftime('%H', ts, 'unixepoch', 'localtime') AS INTEGER) < 6
+     GROUP BY itemId, d`).all(eraEnd);
+  h2.close?.();
+  const partial = new Map();
+  for (const r of pRows) { if (r.n >= 3) partial.set(r.itemId + '|' + dayIdx(r.d), r.pm); }
+  const bkt = dev => dev <= -7 ? 'deep7' : dev <= -4 ? 'deep4' : dev <= -2 ? 'deep2' : dev >= 4 ? 'elevated' : 'mid';
+  const tally = new Map();
+  for (const u of tested) {
+    if (u.cls === 'unclassified') continue;
+    const midBy = new Map(u.days.map(x => [x.di, x.mid]));
+    for (const x of u.days) {
+      let s = 0, n = 0;
+      for (let k = 1; k <= 15; k++) { const m0 = midBy.get(x.di - k); if (m0 != null) { s += m0; n++; } }
+      if (n < 12 || x.mid <= 0) continue;
+      const ref = s / n;
+      const pm = partial.get(u.id + '|' + x.di);
+      if (pm == null || pm <= 0) continue;
+      const pb = bkt((pm / ref - 1) * 100), fb = bkt((x.mid / ref - 1) * 100);
+      if (pb === 'mid') continue;
+      const key = u.cls + '|' + pb;
+      const e = tally.get(key) || { n: 0, hold: 0, neutral: 0 };
+      e.n++; if (fb === pb) e.hold++; else if (fb === 'mid') e.neutral++;
+      tally.set(key, e);
+    }
+  }
+  console.log('\nTRANSITIONS (first-6-local-hours partial-mean bucket vs full-day close bucket; hold = same bucket at close):');
+  for (const c of CLASSES) for (const b of ['deep7', 'deep4', 'deep2', 'elevated']) {
+    const e = tally.get(c + '|' + b);
+    if (e && e.n >= 20) console.log(`  ${c.padEnd(20)} ${b.padEnd(8)} n=${String(e.n).padStart(5)}  holds ${(100 * e.hold / e.n).toFixed(0)}%  dissolves-to-neutral ${(100 * e.neutral / e.n).toFixed(0)}%`);
+  }
+  console.log('(--transitions: stopping before any detection — a read-quality measurement, not a yield result)');
+  process.exit(0);
+}
+
 // ---- per-item detection (raw + universe-basket-subtracted; WK2 instrument) ---------------------
 const basketMembers = tested.filter(u => u.gpd >= BASKET_MIN_GPD);
 const basketAcc = new Map();
