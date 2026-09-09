@@ -474,7 +474,8 @@ the measured cell beside, not instead of, the ⚠; the label still describes the
 daily-grain end-of-day while the live surface also fires intraday; the labels and the
 dislocation depth share one price series, so "subsumed" = redundant given depth+class, not
 useless. **(iv) covers the falling label {crash-risk, cooling} ONLY; mild-cooldown — the §2
-crossbow's own classification, i.e. the ceiling-trend warning that motivated this plan —
-was outside the registered label set and stays UNMEASURED, so no ship may demote it.**
+crossbow's own classification, i.e. the ceiling-slope display that motivated this plan —
+was outside the registered label set and its forward-yield content stays UNMEASURED, so no
+ship may demote it.**
 Inform-only; nothing gates. Reproduce: `node pipeline/experiments/wpc-label-study.mjs`
 (registered) / `--all-mids` (supplementary).
