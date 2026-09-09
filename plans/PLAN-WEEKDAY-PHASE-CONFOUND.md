@@ -78,7 +78,7 @@ the same items WK's §1 basket was built from, so this is NOT an out-of-sample c
 of WK; one era, one season; hourly touch mids, not fills. Do not cite the table above as a
 result. It exists to justify running §3.
 
-## §3. The registered test (not yet run)
+## §3. The registered test (run 2026-09-08/09 — see §3+§6 RESULTS)
 
 **Pre-registered before any run. Decision rule fixed here.**
 
@@ -473,5 +473,8 @@ the measured cell beside, not instead of, the ⚠; the label still describes the
 **Limits:** one era (2026-05-28→09-09, one season); touch mids, not fills; labels are
 daily-grain end-of-day while the live surface also fires intraday; the labels and the
 dislocation depth share one price series, so "subsumed" = redundant given depth+class, not
-useless. Inform-only; nothing gates. Reproduce: `node pipeline/experiments/wpc-label-study.mjs`
+useless. **(iv) covers the falling label {crash-risk, cooling} ONLY; mild-cooldown — the §2
+crossbow's own classification, i.e. the ceiling-trend warning that motivated this plan —
+was outside the registered label set and stays UNMEASURED, so no ship may demote it.**
+Inform-only; nothing gates. Reproduce: `node pipeline/experiments/wpc-label-study.mjs`
 (registered) / `--all-mids` (supplementary).
