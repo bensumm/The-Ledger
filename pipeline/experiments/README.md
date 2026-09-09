@@ -236,6 +236,37 @@ Reads the archive READ-ONLY and `js/` production code; writes nothing. Re-run:
 `pipeline/lib/market/archive.mjs` + `archive-series.mjs` directly and runs on a clean checkout (it briefly
 depended on a session-scratch `hp-lib.mjs`, which is why two production headers cite it).
 
+## The 2026-09-08 WK1 weekday-split study
+
+- **`wk1-weekday-split-study.mjs`** (PLAN-WEEKLY-CYCLE §0, decisive measurement 1) — do the
+  amplitude lane's own walk-forward entries complete at different rates by LOCAL entry weekday?
+  Uses the PRODUCTION `ampWalkForward` with its opt-in `collect:true` per-entry detail (added for
+  this study; aggregates byte-identical), 65 items = watchlist ∪ the plan's §1 five ∪ the DT1b
+  validation four, 120d of the 1h archive, board defaults (4d horizon, 0.5/0.5 quantiles).
+  **Decision rule PRE-REGISTERED in the script header before the first run** (within-item
+  permutation test, seeded; α=0.05 on either a pooled or an item-aligned statistic; a ≥100 pooled
+  judged power floor separating "null" from "underpowered"; the Wednesday game-update confound
+  deferred to measurement 2 by construction).
+
+  **The null branch fired.** Completion by entry weekday: 28.2 / 27.3 / 28.2 / 28.5 / 29.4 /
+  28.6 / 29.5% (Sun–Sat), pooled 28.5% on 2,958 judged entries — a 2.2pp spread ≈ one naive
+  binomial se per bucket. S1 p=0.9945, S2 p=1.0000. The p≈1 (flatter than chance) was
+  investigated, not shrugged off: consecutive entries share overlapping 4d horizons, and measured
+  lag-1 outcome agreement is 86.2% vs 59.2% under independence — outcome runs smear evenly across
+  weekdays, deflating the statistic and cutting effective n well below 2,958. So the i.i.d.
+  p-values are not literal; the raw flatness is the finding. Entry counts are also flat —
+  trough-touches don't cluster on Tuesdays.
+
+  **What it means and does not mean:** it does NOT refute the plan's §1 basket price-level cycle;
+  it shows the lane's trough-touch entry already conditions on level, and given that, weekday adds
+  no completion information (a Tue entry rides the §1 up-leg and completes at 28.2%; a Sat entry
+  rides the down-leg and completes at 29.5%). Per the pre-registration, measurement 2 is not
+  motivated by this record and measurement 3 (full-universe period+phase on LEVELS — a different
+  statistic) decides the program. Limits: median-quantile entries only (deep-quantile not split —
+  recorded as a limit, not rerun), touch proxies, one archive era. `--json <path>`; needs the
+  local archive + a populated `mapping.cache.json`, so it does NOT run on a clean checkout.
+  Freely deletable; nothing imports it.
+
 To retire these experiments: delete `pipeline/experiments/` — with ONE exception. `amp-cycle-reproduction.mjs`
 IS referenced: `js/amplitudescreen.mjs` and `js/estimators/families.mjs` both name it as the validation
 source for ranking on the walk-forward, so deleting it orphans two production headers. Everything else in

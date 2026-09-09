@@ -879,6 +879,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   as specified (suppressing the window on failure) in favour of modulating confidence. It measures
   within-day HOUR RANKING, not fills — deliberately a different question from the triage's resting-offer
   null, and not an EV claim. Freely deletable; nothing imports it.
+  Plus **`wk1-weekday-split-study.mjs`** (2026-09-08, PLAN-WEEKLY-CYCLE WK1) — is the amplitude
+  lane's own walk-forward entry record weekday-structured? Runs the PRODUCTION `ampWalkForward`
+  (via its opt-in `collect:true` per-entry detail — not a reimplementation) over 65 items
+  (watchlist ∪ the plan's five ∪ the DT1b four) and buckets judged entries by LOCAL entry weekday.
+  **The pre-registered NULL branch fired**: completion 27.3–29.5% across all seven weekdays
+  (pooled 28.5%, n=2,958 judged), permutation p 0.99/1.00 — and the p≈1 under-dispersion is
+  measured serial correlation (lag-1 agreement 86.2% vs 59.2% independent), so effective n is far
+  lower and the load-bearing fact is the raw flatness. Read the plan's "WK1 result" section before
+  quoting it: it does NOT refute the §1 price-level cycle, it shows the trough-touch entry already
+  absorbs it. `--json <path>`; needs the local archive + `mapping.cache.json`, so it does NOT run
+  on a clean checkout. Freely deletable; nothing imports it.
   All read the `/1h` SQLite archive read-only and gate nothing.
 - `ignored-items.json` — tracked repo-root config (2026-07-07): items QUARANTINED from the MERCH
   book (farming inputs / loot / personal-use — e.g. snapdragon seed 5300, snapdragon 3000). Its

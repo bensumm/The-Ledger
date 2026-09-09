@@ -1,4 +1,4 @@
-# PLAN-WEEKLY-CYCLE — the weekday price cycle (PROBLEM STATEMENT ONLY, NOT YET DISPATCHED)
+# PLAN-WEEKLY-CYCLE — the weekday price cycle (WK1 EXECUTED 2026-09-08 — null branch; WK2+ open)
 
 Chunk prefix **WK** (verified collision-free, `lint-plan-refs.mjs --collisions`, 2026-09-08).
 
@@ -73,6 +73,43 @@ predictability."*
 A full merge into one period+phase cycle lane (amplitude's current behavior = the special case
 "phase from price only") is the end-state ONLY if measurement 1–2 show calendar phase actually
 moves EV — it is a rebuild of a lane still at n≈0 and is not to be started on this document alone.
+
+### WK1 result (2026-09-08) — the pre-registered NULL branch fired
+
+`pipeline/experiments/wk1-weekday-split-study.mjs` (decision rule pre-registered in its header
+before the first run; permutation test, seed pinned). 65 items (watchlist ∪ the §1 five ∪ the DT1b
+validation four), 120d archive, the PRODUCTION `ampWalkForward` itself via a new opt-in
+`collect:true` per-entry detail (aggregates byte-identical; suite green) at board defaults
+(4d horizon, 0.5/0.5 quantiles).
+
+**Completion by entry weekday is FLAT.** Judged n per bucket 412–440; completion rates
+Sun–Sat: 28.2 / 27.3 / 28.2 / 28.5 / 29.4 / 28.6 / 29.5% — a 2.2pp spread around the pooled 28.5%
+(n=2,958), about one naive binomial se per bucket. S1 (pooled) p=0.9945, S2 (item-aligned)
+p=1.0000 → **"NO STRUCTURE at this grain — measurement 2 not motivated by this record;
+measurement 3 decides the program"** (the power floor, pooled judged ≥ 100, was met 30× over).
+Entry counts are also flat — trough-touches do not cluster on any weekday.
+
+**Why p≈1 (flatter than chance), verified rather than asserted:** consecutive entries share
+overlapping 4d horizons and consecutive days are different weekdays, so outcome RUNS smear evenly
+across buckets. Measured: lag-1 outcome agreement 86.2% vs 59.2% expected under independence. So
+the i.i.d. permutation p-values must not be read literally (effective n ≪ 2,958, statistic
+mechanically deflated); the load-bearing fact is the raw flatness itself.
+
+**Reading:** the lane's trough-touch entry already conditions on price LEVEL, and given that,
+entry weekday adds nothing — a Tue entry (window = the §1 up-leg) completes at 28.2% vs a Sat
+entry (window = the down-leg) at 29.5%. The §1 cycle lives in levels, and the lane already trades
+levels. This is consistent with §1 being real AND useless as an entry overlay here.
+
+**Limits.** Board-default 0.5/0.5 quantiles = the MEDIAN trough — weak conditioning (an entry on
+~45% of scoreable days); deep-quantile entries were not split (rarer → worse power) and per the
+pre-registered rule this run was not re-analysed — recorded as a limit, not rerun. Touch proxies,
+one era, mean net-if-completed by weekday (7.6–17.3%) is mix-confounded and decides nothing.
+
+**Consequences (per the pre-registration):** measurement 2 (gated §3 re-run) is NOT motivated by
+this record. Measurement 3 — per-item period+phase on price LEVELS over the universe, a different
+statistic — now decides the program; if it is also null the plan closes "measured, too thin,
+don't build". Measurement 4's knife-prior premise concerns dip-entry disambiguation, not
+touch-entry completion, so it is untouched by this null but inherits measurement 3's answer.
 
 ---
 

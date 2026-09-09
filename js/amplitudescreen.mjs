@@ -243,8 +243,10 @@ export function cycleCompletion(days, { bid = null, ask = null, horizonDays = AM
 }
 
 /* --- DT1b: the WALK-FORWARD per-item round-trip rate ---------------------------------------------
-   ampWalkForward(series1h, { horizonDays, askQ, bidQ, nights, fitDays, warmupDays }) →
+   ampWalkForward(series1h, { horizonDays, askQ, bidQ, nights, fitDays, warmupDays, collect }) →
      { origins, entries, judged, completed, pending, frac, horizonDays, askQ, bidQ } | null
+     (+ entriesDetail: [{ entryTs, bid, ask, outcome }] ONLY when collect:true — diagnostic
+      instrumentation for WK1's weekday split; every aggregate above is byte-identical either way)
 
    THIS is the honest answer to "once the trough bid fills, does the peak ask get reached inside the
    hold horizon?" — the question `pFill2leg` got wrong by multiplying marginals and `cycleCompletion`
@@ -291,6 +293,7 @@ export const AMP_WF_MIN_JUDGED  = 10;
 export function ampWalkForward(series1h, {
   horizonDays = AMP_HOLD_DAYS_DEFAULT, askQ = AMP_ASK_Q, bidQ = AMP_BID_Q,
   nights = 14, fitDays = AMP_WF_FIT_DAYS, warmupDays = AMP_WF_WARMUP_DAYS,
+  collect = false,
 } = {}) {
   if (!Array.isArray(series1h) || series1h.length < 24 * (warmupDays + 1)) return null;
   const pts = series1h.filter(p => p && typeof p.timestamp === 'number').sort((a, b) => a.timestamp - b.timestamp);
@@ -314,6 +317,7 @@ export function ampWalkForward(series1h, {
   const midnightOf = key => { const [y, m, d] = key.split('-').map(Number); return Math.floor(new Date(y, m - 1, d).getTime() / 1000); };
 
   let origins = 0, entries = 0, judged = 0, completed = 0, pending = 0;
+  const detail = collect ? [] : null;   // opt-in per-entry record (WK1 diagnostics); rates above are untouched
   for (let di = warmupDays; di < keys.length; di++) {
     const T = keys[di], eT = days.get(T);
     if (!eT || eT.nLow < AMP_WF_MIN_HOURS || eT.nHi < AMP_WF_MIN_HOURS) continue;   // a half-logged day can't be scored
@@ -343,15 +347,18 @@ export function ampWalkForward(series1h, {
       if (p.timestamp > entryTs + horizonSec) break;
       if (p.avgHighPrice != null && p.avgHighPrice >= ar.ampAsk) { done = true; break; }
     }
-    if (done) { completed++; judged++; }
-    else if (entryTs + horizonSec <= lastTs) judged++;             // a FULL horizon elapsed → a real miss
-    else pending++;                                                // horizon runs past the data → unresolved
+    let outcome;
+    if (done) { completed++; judged++; outcome = 'completed'; }
+    else if (entryTs + horizonSec <= lastTs) { judged++; outcome = 'missed'; }   // a FULL horizon elapsed → a real miss
+    else { pending++; outcome = 'pending'; }                       // horizon runs past the data → unresolved
+    if (detail) detail.push({ entryTs, bid: ar.ampBid, ask: ar.ampAsk, outcome });
   }
   if (!origins) return null;
   return {
     origins, entries, judged, completed, pending,
     frac: judged ? completed / judged : null,
     horizonDays, askQ, bidQ,
+    ...(detail ? { entriesDetail: detail } : {}),
   };
 }
 
