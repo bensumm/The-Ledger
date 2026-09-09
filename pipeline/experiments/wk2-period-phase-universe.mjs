@@ -60,6 +60,33 @@
  * disagreement is reported plainly, never reconciled silently.
  * ─────────────────────────────────────────────────────────────────────────────────────────────────
  *
+ * ── CORRECTIONS (adversarial review, 2026-09-08 — AFTER the first full run, BEFORE the rerun;
+ *    the pre-registered text above is kept verbatim, §2-retraction style) ──────────────────────────
+ * C1 (FATAL — the first run's branch (a) did not survive it). The null above was never passed
+ *    through the MA15 detrend: real data was scored as mid/MA15−1, surrogates as RAW AR(1). The
+ *    filter's gain amplifies 8–14d (×1.07–1.22, peak at P≈10.5d) and suppresses P>15d, so
+ *    FILTERED noise concentrates power exactly where the first run's discoveries massed
+ *    (179/193 at P*≥9.5d, 0 below 6d — the filter's signature). The reviewer's end-to-end probe:
+ *    pure non-periodic red noise yields P(p ≤ the BH cut) = 8.8–12.4% vs nominal 0.38% → ~220–310
+ *    false discoveries expected of 2,516, MORE than the observed 193 — consistent with ZERO true
+ *    mid-band periodicity. The refuting test cost ~3 minutes (rule 11); the first run's Limits
+ *    line named the neighborhood ("residual redness would inflate") but misattributed the
+ *    mechanism. FIX (amended null, in force below): surrogate MID series 100·(1+0.01·AR1(φ)) are
+ *    passed through the SAME deviations()/MA15 pipeline before scoring; φ is chosen per item via
+ *    a once-built inverse lookup so the surrogate's FILTERED lag-1 matches the item's observed
+ *    deviation lag-1. Branches re-fire under the honest null; the first run's numbers are recorded
+ *    in the plan as a dated corrected record.
+ * C2. Every printed trough weekday was +1: dayIdx rounds local noon to the NEXT UTC day index and
+ *    troughWeekday read it back at UTC noon. wd0 now derives from the date STRING (local parse).
+ *    True troughs: bond SAT, fang and blowpipe TUE — fang thereby agrees EXACTLY with §4's Tue.
+ * C3. The header's "passes the 3–14d band near-uniformly (gain ≈ 0.93+)" is FALSE — measured
+ *    |1−H| ≈ 0.867 at P=6 rising to ×1.22 at P≈10.5d, so in-band peak-to-trough amplitudes are
+ *    inflated up to ~22% (the 4% branch floor is effectively ~3.3% at P*≈10.5d), and selected
+ *    amplitudes additionally carry winner's-curse inflation (the "full-capture upper bound"
+ *    caveat does not cover selection). The floor itself stays as registered; read amplitudes with
+ *    both caveats.
+ * ─────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * HONESTY. ONE era (~104d), one season; ~15 cycles at 7d, ~7 at 14d — stability claims are
  * half-era-vs-half-era, nothing finer. Mids off 1h touch aggregates; no depth/fill claim anywhere.
  * §4's class-story axes beyond the printed tiers (limit, price, gp/day) need metadata the repo
@@ -178,20 +205,35 @@ function mulberry32(seed) { let a = seed >>> 0; return () => { a |= 0; a = (a + 
 const rnd = mulberry32(SEED);
 function gauss() { let u = 0, v = 0; while (!u) u = rnd(); while (!v) v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
 
-// binned surrogate null: key (r1 bin, n bin) → sorted S* draws
+// C1 amended null: surrogate MIDS through the SAME deviations()/MA15 pipeline before scoring.
+function filteredDevs(phi, n) {
+  const need = n + MA_W - 1;                       // full MA windows → exactly n deviations out
+  let x = 0; for (let i = 0; i < 50; i++) x = phi * x + gauss();
+  const days = [];
+  for (let i = 0; i < need; i++) { x = phi * x + gauss(); days.push({ di: i, mid: 100 * (1 + 0.01 * x) }); }
+  return deviations(days);
+}
+// once-built inverse map: latent φ → lag-1 of the FILTERED series, so per-item matching happens
+// on the statistic actually observed (the deviation lag-1), through the actual instrument.
+const phiMap = [];
+for (let phi = 0; phi <= 0.9901; phi += 0.01) {
+  let s = 0; const R = 60;
+  for (let k = 0; k < R; k++) s += lag1(filteredDevs(phi, 90));
+  phiMap.push({ phi: Number(phi.toFixed(2)), r1f: s / R });
+}
+const phiFor = r1 => phiMap.reduce((b, e) => Math.abs(e.r1f - r1) < Math.abs(b.r1f - r1) ? e : b).phi;
+
+// binned surrogate null: key (φ bin, n bin) → sorted S* draws off FILTERED surrogates
 const surrCache = new Map();
 function surrDraws(r1, n) {
-  const r1b = Math.max(-0.30, Math.min(0.95, Math.round(r1 / 0.05) * 0.05));
+  const phib = Math.round(phiFor(r1) / 0.02) * 0.02;
   const nb = Math.max(MIN_DAYS, Math.round(n / 5) * 5);
-  const key = `${r1b.toFixed(2)}|${nb}`;
+  const key = `${phib.toFixed(2)}|${nb}`;
   if (surrCache.has(key)) return surrCache.get(key);
-  const ts = Array.from({ length: nb }, (_, i) => i);
   const draws = new Float64Array(SURR_N);
-  const vs = new Array(nb);
   for (let k = 0; k < SURR_N; k++) {
-    let x = 0; for (let i = 0; i < 50; i++) x = r1b * x + gauss();
-    for (let i = 0; i < nb; i++) { x = r1b * x + gauss(); vs[i] = x; }
-    draws[k] = maxR2(ts, vs).r2;
+    const devs = filteredDevs(phib, nb);
+    draws[k] = maxR2(devs.map(z => z.di), devs.map(z => z.v)).r2;
   }
   draws.sort();
   surrCache.set(key, draws);
@@ -211,8 +253,8 @@ function troughWeekday(devs) {   // full-era 7.00d fit → local weekday of the 
   const phi = Math.atan2(f.b, f.a);              // v ≈ A·sin(w·t + phi)
   const tMin = ((-phi - Math.PI / 2) / (2 * Math.PI)) * 7;   // sin minimal at w·t+phi = −π/2
   const anchor = devs[0].di;
-  // weekday of absolute day index k: day 0 of Date.parse-epoch days is Thu(4) — derive from a known date instead
-  const wd0 = new Date((anchor * 86400000) + 12 * 3600000).getDay();
+  // C2: wd0 from the date STRING (local parse) — dayIdx's UTC rounding made every weekday +1
+  const wd0 = new Date(devs[0].d + 'T12:00:00').getDay();
   const off = ((tMin - anchor) % 7 + 7) % 7;     // days from anchor to a minimum, mod 7
   return (wd0 + Math.round(off)) % 7;
 }
@@ -319,11 +361,11 @@ if (!smoke) {
   else branch = '(c) TOO THIN — the plan closes "measured, too thin, don\'t build"';
   console.log(`\nPRE-REGISTERED BRANCH: ${branch}`);
 }
-// POST-HOC SENSITIVITY (added after the registered run; labeled, decides NOTHING — the reproducer
-// for the band-edge caveat in the write-up). The registered band caps at 14d; if a discovery's R²
-// over an EXTENDED 3–30d grid peaks BEYOND 14.25d, its in-band P* is a truncation of longer-period
-// power — and claims outside 3–14d are refused by the pre-registration, so such items are flagged
-// band-edge-unreliable rather than re-branched.
+// POST-HOC SENSITIVITY (added after the registered run; labeled, decides NOTHING). Tests ONLY the
+// truncation-alias hypothesis: a discovery whose R² over an EXTENDED 3–30d grid peaks beyond
+// 14.25d is longer-period power truncated by the band cap. A pass here does NOT certify a
+// discovery as genuine — C1's filtered noise also rarely peaks past 14.25d, because the MA15
+// filter suppresses P>15d (the first run's write-up drew that false inference; corrected).
 const EXT = []; for (let p = 3; p <= 30.0001; p += 0.25) EXT.push(Number(p.toFixed(2)));
 const extBest = devs => { let b = { r2: -1, P: null }; const ts = devs.map(x => x.di), vs = devs.map(x => x.v); for (const P of EXT) { const f = fitPeriod(ts, vs, P); if (f.r2 > b.r2) b = { r2: f.r2, P }; } return b; };
 for (const u of rawDisc) u.ext = extBest(u.devs);

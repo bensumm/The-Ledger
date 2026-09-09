@@ -1,4 +1,4 @@
-# PLAN-WEEKLY-CYCLE — the weekday price cycle (WK1 null; WK2 branch (a): per-item multi-day structure real, WEEKLY-locked class near-empty; WK3+ open)
+# PLAN-WEEKLY-CYCLE — the weekday price cycle (WK1 null; WK2 branch (c) after review correction: measured, too thin, don't build)
 
 Chunk prefix **WK** (verified collision-free, `lint-plan-refs.mjs --collisions`, 2026-09-08).
 
@@ -119,61 +119,68 @@ statistic — now decides the program; if it is also null the plan closes "measu
 don't build". Measurement 4's knife-prior premise concerns dip-entry disambiguation, not
 touch-entry completion, so it is untouched by this null but inherits measurement 3's answer.
 
-### WK2 result (2026-09-08) — branch (a) fired: per-item structure is real; the WEEKLY class is near-empty
+### WK2 result (2026-09-08) — branch (c) fired: measured, too thin, don't build
 
 `pipeline/experiments/wk2-period-phase-universe.mjs` — §0 measurement 3, the program-decider. The
 decision rule was committed BEFORE the run this time (pre-registration commit `b34bc7d`; detection
-= max-R² sinusoid fit over 3–14d on 15d-detrended daily mids, AR(1) red-noise surrogate null,
-BH-FDR q=0.05, branch floors — the script header is the one full spec). 4,323 archive items,
-2,516 tested (≥70 valid days, ≥85% coverage), era to 2026-09-08.
+= max-R² sinusoid fit over 3–14d on 15d-detrended daily mids, red-noise surrogate null, BH-FDR
+q=0.05, branch floors — the script header is the one full spec). 4,323 archive items, 2,516
+tested (≥70 valid days, ≥85% coverage), era to 2026-09-08.
 
-**Branch (a) — PER-ITEM STRUCTURE WORTH BUILDING — fired:** 193 raw FDR discoveries (expected
-false ≈ 9.7); 152 survive basket subtraction; **83 clear every branch-(a) floor** (both-FDR,
-peak-to-trough ≥ 4%, ≥ 5m gp/day, phase drift ≤ 1.5d) against the pre-registered ≥ 15.
-Measurements 2 and 4 revive per the pre-registration.
+**⚠ The FIRST run of this section reported branch (a) — 193 discoveries, 83 clearing every floor
+— and that result was an INSTRUMENT ARTIFACT, caught by adversarial review (§2-retraction style:
+recorded here, not silently replaced).** The registered null was never passed through the MA15
+detrend: real data was scored as mid/MA15−1, surrogates as raw AR(1). The filter amplifies
+8–14d (up to ×1.22 at P≈10.5d) and suppresses P>15d, so FILTERED noise concentrates power
+exactly where the "discoveries" massed (179/193 at P*≥9.5d, 0 below 6d — the filter's own
+signature). The reviewer's end-to-end probe: pure non-periodic red noise through the actual
+pipeline yields ~220–310 false discoveries of 2,516 — MORE than the observed 193, consistent
+with ZERO true mid-band periodicity. The refuting test cost ~3 minutes (rule 11). Two more
+first-run errors, same correction record: every printed trough weekday was +1 (a local/UTC
+index mismatch), and the header's "passes the band near-uniformly, gain ≈0.93+" claim was false
+(gain 0.87–×1.22 across the band, so printed amplitudes carry up to ~22% filter inflation plus
+winner's-curse selection). The script's C1–C3 header block is the full correction spec; the
+first run's numbers survive only in `git show fd3f769` and are not to be quoted.
 
-**But the structure is NOT weekly, and that is the finding that matters for this plan's title.**
-The discovered periods mass at 9.5–14d (P* ≥ 12d: 103 of 193); the weekly band [6.5, 7.5]d holds
-just **5 of 2,516 tested items**, of which the liquid calendar-LOCKED set is three: **Old school
-bond** (P* 7d, trough Sun — a weekend-demand shape §4 would call inverted, and economically the
-most story-consistent item on the board: a real-money instrument), **Osmumten's fang** and **Toxic
-blowpipe (empty)** (both trough Wed). So §1's basket weekend effect does NOT generalize into a
-per-item weekly class. A hard weekday split would have missed nearly all of the real structure —
-the owner's derived-window refinement (§0) is what this measurement vindicates.
+**The corrected rerun (surrogate mids through the SAME deviations()/MA15 pipeline, φ matched on
+the filtered lag-1): ZERO FDR discoveries of 2,516. Branch (c) — the plan closes "measured, too
+thin, don't build" — which §5 has said from the start is a successful completion.** The
+1,934-member basket is not significant either (p=0.586): §6's one-index question stays answered
+NO, and branch (b) did not fire.
 
-**Item vs index (§6): answered — NOT one index.** The 1,934-member equal-weighted basket itself
-tests NOT significant (p=0.115, P* 9.5d, peak-to-trough 0.64%), branch (b) did not fire, and 152
-of 193 discoveries survive basket subtraction. The §1 five-item gear basket was a small-cluster
-phenomenon, not the market breathing.
+**The honest residue — the weekly trio, reported as inform-only annotation (the §0 null
+consequence), NOT as discoveries:** the only three liquid items whose P* sits at 7.0d with
+locked phase and p < 0.07: **Old school bond** (p=0.0014 raw, 0.0002 basket-subtracted — the
+single smallest p in the family — trough SATURDAY, peak-to-trough 4.2%, drift 0.5d; a
+real-money instrument with weekend demand is also the most economically coherent story on the
+board), **Toxic blowpipe (empty)** (p=0.036, trough TUESDAY, drift 0.2d), **Osmumten's fang**
+(p=0.060, trough TUESDAY, drift 0.0d — EXACT agreement with §4's Tue trough after the weekday
+fix). Against 2,516 tests these are not distinguishable from multiplicity (120 items land P* in
+the weekly band by chance; 3 with p<0.05 vs ~6 expected), and an FDR resolution limit applies:
+at 10k surrogate draws the smallest achievable p (1e-4) is above the BH single-discovery
+threshold (2e-5), so NO lone item could have cleared FDR — only a cluster could, and none did.
+Bond is the one name that would repay a second era's data.
 
-**§1-five consistency check — §4's table mostly does NOT survive the stronger test:** fang ✓
-(locked weekly, trough Wed vs §4's Tue — one day off); hilt is a discovery but at P* 14d, not an
-inverted weekly; staff, crossbow, and ring are NOT discoveries (staff agrees with §4's "inside
-noise"; crossbow p=0.28 and ring p=0.16 mean §4's per-item weekday rows for them were fitted
-noise). The §4 buy-to-use vs raid-loot weekly mechanism is unsupported — the detected structure
-is mid-band multi-day, not weekly.
+**§1-five consistency check under the honest null:** staff/crossbow/ring not detected (crossbow
+p=0.89, ring p=0.66 — §4's weekday rows for them were fitted noise, a call that is STRONGER
+under the corrected test); hilt p=0.049 at P* 14d — not a discovery, not an inverted weekly;
+fang as above. §1's basket weekend effect (t=4.48 on the five-item gear basket) is NOT
+contradicted — this scan tests single sinusoidal periodicity per item, a different statistic —
+but it does not generalize: no per-item weekly class exists at universe scale.
 
-**A band-edge alias worry, raised and REFUTED in-session (the script's labeled post-hoc block is
-the reproducer):** 53% of discoveries sit at P* ≥ 12d, which looked like longer-period power
-truncated by the 14d cap — but on an extended 3–30d grid only 10 of 193 peak beyond 14.25d
-(brA 83 → 82). The 12–14d mass is genuine in-band structure of this era.
+**Limits.** ONE era, one season; touch mids; amplitudes carry filter gain (≤22%) + selection
+inflation; the FDR resolution floor above means "zero discoveries" partly reflects instrument
+resolution, not proof of absence — but the branch-(c) floors were pre-registered and the honest
+read is that nothing tradeable was demonstrated.
 
-**Limits.** ONE era, one season — ~7 full cycles at 13d; an era-specific market rhythm (e.g. the
-update cadence) can masquerade as a per-item period, and no second era exists to check (§6).
-The AR(1) null carries lag-1 redness only; residual mid-band redness would inflate the discovery
-count beyond the FDR's nominal ≈ 9.7 false — stated, not tested. Mids are 1h touch aggregates;
-peak-to-trough 2A is a full-capture UPPER bound (§2a's saturation trap); nothing here is a fill
-claim. ~10 of the 193 names are expected to be false discoveries — no single-item claim is safe,
-the SET is the finding.
-
-**Consequences:** measurements 2 and 4 revive in DERIVED-WINDOW form (per-item period + phase off
-the item's own history — §0's shipped shape), not in weekday form: the calendar/weekday axis
-specifically is dead as a general class (WK1's entry-grain null + a near-empty weekly-locked
-class here), surviving only as the three locked items above. The §3 Tue→Sat backtest question is
-superseded by this result rather than re-run: its premise (a weekly class) failed; the revived
-measurement 2 is "does a derived-window entry/exit beat the lane's current phase-from-price-only
-behavior, walk-forward, gated" and measurement 4's knife-prior becomes "crash landing inside the
-item's DERIVED trough window", both against the 82-item qualifying set (`--json` holds it).
+**Consequences:** the program CLOSES per the pre-registered rule. Measurement 2 stays
+unmotivated (WK1) and its weekly-class premise failed here; measurement 4's knife-prior premise
+(a derived trough window worth disambiguating toward) now has no demonstrated per-item cycle set
+to anchor it and closes with the plan. What ships is at most annotation: the weekly-trio note
+above (bond Sat / blowpipe Tue / fang Tue), inform-only, never a gate, sized at "suggestive,
+unproven". The derived-window idea (§0) was the right instrument to ask the question with — the
+answer came back "too thin at this era's resolution"; a second archive era is the only thing
+that reopens this.
 
 ---
 

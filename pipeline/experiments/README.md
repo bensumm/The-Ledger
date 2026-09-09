@@ -282,23 +282,30 @@ depended on a session-scratch `hp-lib.mjs`, which is why two production headers 
   **The decision rule landed as its OWN commit before the first full run** (`b34bc7d` — closing
   WK1's single-commit pre-registration gap); only no-branch spot smokes preceded it.
 
-  **Branch (a) fired: per-item structure worth building.** 4,323 archive items, 2,516 tested;
-  193 raw discoveries (expected false ≈ 9.7), 152 survive basket subtraction, 83 clear the
-  branch floors (both-FDR ∧ peak-to-trough ≥ 4% ∧ ≥ 5m gp/day ∧ drift ≤ 1.5d) vs the
-  pre-registered ≥ 15. **The weekly band is near-empty** — 5 of 2,516, liquid locked set = Old
-  school bond (trough Sun), fang + blowpipe (trough Wed) — periods mass at 9.5–14d instead, so
-  the derived-window shape (§0), not a weekday bucket, is what the data supports. The
-  1,934-member basket itself is NOT significant (p=0.115, p2t 0.64%): not one index; branch (b)
-  did not fire. §1-five check: fang ✓ weekly-locked (Wed, one day off §4's Tue); hilt a 14d
-  discovery, not an inverted weekly; staff/crossbow/ring not discoveries (§4's rows for the last
-  two were fitted noise). A band-edge alias worry (53% of P* ≥ 12d) was tested and REFUTED via
-  the labeled post-hoc 3–30d grid block: only 10/193 peak beyond 14.25d. Limits: one era (~7
-  cycles at 13d — an era rhythm can masquerade as a period), AR(1) carries lag-1 redness only
-  (residual redness would inflate the count — stated, untested), touch mids, amplitudes are
-  full-capture UPPER bounds; the SET is the finding, no single-item claim is safe. `--item`/
-  `--limit` spot modes print no branch; `--json <path>` (the 82/83-item qualifying set lives
-  there); needs the local archive + a populated `mapping.cache.json`, so it does NOT run on a
-  clean checkout. Freely deletable; nothing imports it.
+  **Branch (c) fired on the corrected rerun: ZERO FDR discoveries of 2,516 — measured, too thin,
+  don't build.** ⚠ The FIRST run reported branch (a) (193 discoveries, 83 clearing every floor);
+  adversarial review found the null was never passed through the MA15 detrend — the filter's gain
+  (up to ×1.22 at P≈10.5d, suppression above 15d) concentrates FILTERED noise exactly where the
+  "discoveries" massed, and an end-to-end probe showed pure red noise produces ~220–310 false
+  discoveries through the broken instrument, more than the 193 observed. Corrected (C1–C3 in the
+  script header, kept as dated retractions): surrogate mids now go through the SAME
+  deviations()/MA15 pipeline with φ matched on the filtered lag-1; the weekday +1 local/UTC bug
+  is fixed; the header's "near-uniform band gain" claim is retracted (amplitudes carry ≤22%
+  filter inflation + winner's curse). Under the honest null the basket is not significant
+  (p=0.586 — §6 answered: not one index) and the residue is the weekly trio, inform-only:
+  Old school bond (p=0.0014 raw / 0.0002 basket-subtracted — the family's smallest p — trough
+  SAT, p2t 4.2%), Toxic blowpipe (p=0.036, trough TUE), Osmumten's fang (p=0.060, trough TUE —
+  exact §4 agreement). Not distinguishable from multiplicity (3 weekly-band items at p<0.05 vs
+  ~6 expected by chance), and an FDR resolution floor applies (min achievable p 1e-4 > the BH
+  single-discovery threshold 2e-5 — no lone item could clear FDR at 10k draws; only a cluster
+  could, and none did). §1-five: crossbow p=0.89 / ring p=0.66 (their §4 weekday rows were
+  fitted noise — a STRONGER call under the corrected test); hilt p=0.049 at 14d, not a
+  discovery. §1's five-item BASKET result is a different statistic and is not contradicted — it
+  just doesn't generalize. Limits: one era, touch mids, filter+selection-inflated amplitudes;
+  zero-discoveries partly reflects the resolution floor, not proof of absence. First-run numbers
+  survive only in `git show fd3f769` and are not to be quoted. `--item`/`--limit` spot modes
+  print no branch; `--json <path>`; needs the local archive + a populated `mapping.cache.json`,
+  so it does NOT run on a clean checkout. Freely deletable; nothing imports it.
 
 To retire these experiments: delete `pipeline/experiments/` — with ONE exception. `amp-cycle-reproduction.mjs`
 IS referenced: `js/amplitudescreen.mjs` and `js/estimators/families.mjs` both name it as the validation

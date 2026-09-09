@@ -894,17 +894,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   Plus **`wk2-period-phase-universe.mjs`** (2026-09-08, PLAN-WEEKLY-CYCLE WK2 — §0 measurement 3,
   the program decider) — which items cycle at the day scale on price LEVELS, at what period/phase,
   and does it survive basket subtraction? Full-universe scan (4,323 items, 2,516 tested) off ONE
-  bulk SQL aggregate; max-R² sinusoid detection over 3–14d on 15d-detrended daily mids against an
-  AR(1) red-noise surrogate null (binned, seeded), BH-FDR q=0.05; decision rule COMMITTED before
-  the run (`b34bc7d`). **Pre-registered branch (a) fired** — 193 discoveries (~9.7 expected
-  false), 152 surviving basket subtraction, 83 clearing every tradeability floor — **but the
-  weekly-locked class is near-empty (5 of 2,516; liquid: Old school bond trough Sun, fang +
-  blowpipe trough Wed)**, the periods mass at 9.5–14d, the market basket itself is NOT significant
-  (not one index), and §4's crossbow/ring weekday rows were fitted noise. Read the plan's "WK2
-  result" section before quoting any of it — one era, ~10 expected-false names, amplitudes are
-  full-capture upper bounds, and the SET is the finding, never a single item. `--item`/`--limit`
-  spot modes print no branch; `--json <path>`; needs the local archive + `mapping.cache.json`, so
-  it does NOT run on a clean checkout. Freely deletable; nothing imports it.
+  bulk SQL aggregate; max-R² sinusoid detection over 3–14d on 15d-detrended daily mids against a
+  red-noise surrogate null passed through the SAME MA15 pipeline (binned, seeded), BH-FDR q=0.05;
+  decision rule COMMITTED before the run (`b34bc7d`). **Pre-registered branch (c) fired: ZERO FDR
+  discoveries of 2,516 — measured, too thin, don't build** — and the market basket is not
+  significant either (not one index). ⚠ A FIRST run reported branch (a) with 193 discoveries;
+  that was an instrument artifact (the surrogate null skipped the MA15 detrend, whose gain
+  concentrates filtered noise at 8–14d — caught by adversarial review, corrected in the script's
+  C1–C3 header block; first-run numbers only in `git show fd3f769`, not to be quoted). The honest
+  residue is an inform-only weekly-trio annotation — Old school bond (p=0.0014, trough Sat),
+  Toxic blowpipe (p=0.036) + Osmumten's fang (p=0.060, exact §4 Tue agreement), both trough Tue —
+  suggestive, not distinguishable from multiplicity at this era's resolution. Read the plan's
+  "WK2 result" section before quoting anything. `--item`/`--limit` spot modes print no branch;
+  `--json <path>`; needs the local archive + `mapping.cache.json`, so it does NOT run on a clean
+  checkout. Freely deletable; nothing imports it.
   All read the `/1h` SQLite archive read-only and gate nothing.
 - `ignored-items.json` — tracked repo-root config (2026-07-07): items QUARANTINED from the MERCH
   book (farming inputs / loot / personal-use — e.g. snapdragon seed 5300, snapdragon 3000). Its
