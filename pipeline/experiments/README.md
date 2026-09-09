@@ -442,3 +442,11 @@ paid: (a) the hpv==1 instrument-validity gate, (b) same-hour exceedance descript
 max hourly `avgHighPrice` by ≥1%, per tier × era (last-30d vs earlier), per-item-first.
 Deterministic offline join (a rerun reproduces exactly; instrument confidence rests on
 (a)). Numbers live in the plan, not here; inform-only, gates nothing.
+
+**Result (run 2026-09-09): branch (B) — not material.** Day-max beats are a ~2–4% tail,
+no tier near the registered bar; (a) came back unpowered (n=0 — this book sells into
+liquid hours) with validity carried by the join hit rate + a timestamp audit + an exact
+spot-check of the founding crossbow case, which turned out to be BOTH the recent era's
+only day-max beat AND the record's only date-only midnight-stamped sell. Reach reads stay
+as-is. Full numbers + the tick-size caveat: the plan's RESULTS section — do not restate
+them here.

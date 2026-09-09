@@ -80,3 +80,39 @@ archive series (circularity) and a fill conditions on a buyer paying — so this
 the archive as an instrument for THIS book's realized prices, not a market property.
 Timestamp quality bounds the join (phone trades are logged late; (a) and the sensitivity
 join bound the damage). One era split. Inform-only; nothing gates, sizes, or auto-prices.
+
+## RESULTS (run 2026-09-09 — branch (B): NOT material)
+
+442 non-banked sells, 441 joined (1 missing hour bucket, 0 missing series). Instrument:
+`pipeline/experiments/avghigh-bias-study.mjs` @ c507cae, committed before this run.
+Deterministic offline join — reproduce with a bare rerun.
+
+- **(a) came back UNPOWERED, not failed: n=0.** No qty==1 sell in the record landed in an
+  hpv==1 hour — this book sells into liquid hours. Branch (C)'s bar (match <70% on n≥10)
+  cannot fire on n=0. Validity rests instead on three substitutes, each run: the 441/442
+  join hit rate; a timestamp audit (of 442 sells: ONE exact-local-midnight date-only
+  stamp, 3 on-the-hour, 11 on-the-minute — hour-grain joins are trustworthy for ~99% of
+  rows); and a spot-check that reproduces the founding §Origin case's day-level numbers
+  exactly (Sep-5 local-day max `avgHighPrice` 36,665,998; sell 37,990,000; +3.61%).
+- **(b) descriptive, as mechanics predicted:** 80–86% of sells print above the same-hour
+  `avgHighPrice`, median magnitude ~0.5–1.5%, mildly higher in rune/potion/unclassified
+  classes. An ask fill sits at the top of the hour's print distribution while the average
+  includes the cheaper prints — this is NOT bias evidence and must not be quoted as such.
+- **(c) — the branch decider — day-max beats ≥1% are RARE:** recent-30d era 1/51 (2.0%);
+  earlier era ~4% of 390. No hpv tier with n ≥ 20 reaches the registered 15% bar in either
+  era. Per-item (≥5 joined sells, 25 items): mean beat rate 6.7%, 6 items ever beat.
+- **The founding anecdote, resolved:** the 37.99m crossbow IS the recent era's single
+  day-max beat — and is ALSO the record's only date-only (midnight-stamped) sell, so WPC
+  §4's "inside an hour whose recorded high is 36,665,998 / hpv 3" was a plausible
+  arithmetic reconstruction (the 06:00 hour), not a logged fact; its DAY-level beat
+  stands. It is a real ~2–4%-of-sells tail event, not a systematic bias.
+- **Tick-size artifact, named so nobody quotes it:** Coal "beat the day max ≥1%" on 5/5
+  sells because 1% of ~190 gp is about one price tick; the (c) bar is scale-sensitive
+  below a few hundred gp. Those 5 rows are inside the earlier-era 4% figure.
+
+**Branch (B) ships nothing:** reach counting against the day's max `avgHighPrice` is not
+systematically conservative for this book; the reach reads stay as-is. Asymmetry to keep
+in mind when re-reading this: (c) only observes OUR asks — a sell that fails to beat the
+day-max proves nothing about prints the archive missed elsewhere, so (B) means "no
+evidence of a frequent effect in this book's fills", not "avgHighPrice is a faithful
+max". One era, one book; inform-only; gates nothing.
