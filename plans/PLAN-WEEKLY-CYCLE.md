@@ -110,8 +110,8 @@ this grain" is the registered claim, not "no effect exists". Board-default 0.5/0
 the MEDIAN trough — weak conditioning (an entry on ~45% of scoreable days); deep-quantile entries
 were not split (rarer → worse power) and per the pre-registered rule this run was not re-analysed
 — recorded as a limit, not rerun. Touch proxies, one era. The raw mean net-if-completed by
-weekday (7.6–17.3%) is item MIX: within-item centered it collapses to −1.1…+1.7pp, every bucket
-within ~1 se of zero (also printed by the script).
+weekday (7.6–17.3%) is item MIX: within-item centered it collapses to −1.1…+1.7pp, max 1.6 se
+from zero — consistent with noise across 7 buckets (also printed by the script).
 
 **Consequences (per the pre-registration):** measurement 2 (gated §3 re-run) is NOT motivated by
 this record. Measurement 3 — per-item period+phase on price LEVELS over the universe, a different

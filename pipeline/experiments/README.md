@@ -258,8 +258,8 @@ depended on a session-scratch `hp-lib.mjs`, which is why two production headers 
   deflating the statistic and cutting effective n to ≈712 (~102/bucket, per-bucket se ~4.5pp — so
   effects of several pp are not excluded). The i.i.d. p-values are not literal; the raw flatness
   is the finding. Entry counts are also flat — trough-touches don't cluster on Tuesdays. The raw
-  net-if-completed spread by weekday is item MIX: within-item centered it is −1.1…+1.7pp, every
-  bucket within ~1 se of zero (also printed).
+  net-if-completed spread by weekday is item MIX: within-item centered it is −1.1…+1.7pp, max
+  1.6 se from zero — consistent with noise across 7 buckets (also printed).
 
   **What it means and does not mean:** it does NOT refute the plan's §1 basket price-level cycle;
   it shows the lane's trough-touch entry already conditions on level, and given that, no weekday
