@@ -609,6 +609,38 @@ the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the co
 
 ## Discovered
 
+- **EC5 — the SELL-side twin of EC3: exit rungs render with no break-even mark (OPEN, found 2026-09-08).**
+  EC3 shipped the buy-side check (dip level + premium ON the buy line, ⚠ when the premium ≥ the whole net).
+  The sell side has the identical hole and did NOT ship. `quote-items.mjs:859` assembles the held-lot
+  window-clear ladder — `typical exit ~50% q50 / ~75% q75 / every-day everyDay · recent-3 recent50` — with
+  **no break-even term anywhere in the assembly**, on the one surface where BE is known exactly (it is a
+  column in the same table). By contrast `js/estimators/cells.mjs:58` already floors the scan's Est. sell
+  at BE and annotates it (`reach-fold floored to BE X — nothing to price above break-even`), so both the
+  precedent and the wording already exist. **Live miss, not shape:** on 2026-09-08 the agent priced BOTH
+  open lots off `everyDay` — hilt 30.12m against BE 30.52m, staff 29.11m against BE 29.34m — locking −400k
+  and −230k. `everyDay` is the rung most likely to be picked (it reads as "reaches every day") and was the
+  only one of the four below BE; three of the hilt's four rungs cleared it. Ben caught it, no guard did.
+  Note the failure survived the `list @ X (BE Y)` relay format: printing two numbers adjacently is not
+  joining them. Scope is the note assembly; nothing here moves a verdict, a gate, or the BE floor itself.
+
+- **WEEKDAY-LEVEL — a measured weekly price cycle the tool cannot express (OPEN, found 2026-09-08; written up as `plans/PLAN-WEEKLY-CYCLE.md`, prefix WK, problem-statement-only, NOT yet dispatched).**
+  Owner hypothesis: big-ticket gear dips Mon/Tue and rises Fri/Sat. **Measured and CONFIRMED at basket
+  level** over the 104-day local 1h archive (5 gear items; each day's mid detrended against its own 7-day
+  centered mean, then averaged within each week so correlated items cannot inflate n): weekend-minus-Tuesday
+  gap **+1.395%**, sd 1.165, **paired t 4.48, df 13, 13/14 weeks positive**. Peak Sat/Sun, trough Tue.
+  **But it does not replicate per item, and that is the finding that matters:** Osmumten's fang (Tue −1.69%
+  → Sat +1.84%), Armadyl crossbow and Venator ring show it; Nightmare staff sits inside its own noise
+  (±0.55%); and **Avernic defender hilt is INVERTED** — peaks Thu/Fri (+1.12%/+1.00%), troughs Sun/Mon/Tue.
+  A basket-level rule applied per item would trade the hilt exactly backwards. Trough day also varies (fang
+  Tue; crossbow and ring Wed/Thu), so "buy Mon/Tue" is not what made the crossbow flip work.
+  **The gap:** the amplitude lane's `weekday seasonality` note reports amplitude WIDTH by weekday, not price
+  LEVEL by weekday — a different statistic, so no surface tests this hypothesis today. Amplitude's 4d hold
+  horizon does happen to match a Tue→Sat leg, and it independently flagged `trough phase` for staff/ring/fang
+  on a Tuesday, but it arrives there by another route. **Honesty:** n=14 weeks, ONE archive era, 5 items, and
+  per-item sign is unstable — a basket lean, not a per-item law, and it must not gate. A prior session's
+  per-item 14-day test (n=2/weekday) reported "does not replicate"; that was underpowered and this
+  supersedes it.
+
 - **PLAN-ENTRY-CONFIDENCE — SHIPPED 2026-09-08 (EC1–EC4, one wave; plan folded + deleted, full text
   via `git show 3bdca47:plans/PLAN-ENTRY-CONFIDENCE.md`).** The Avernic-hilt entry post-mortem (executed 0.061% off the suggested price,
   CUT-CANDIDATE 2h16m later — the confidence attached to the number was wrong, not the number).
