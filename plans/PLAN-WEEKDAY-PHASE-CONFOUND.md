@@ -363,3 +363,115 @@ seeing the weekday table.
 decision count, which is not the same as the cost of being at the desk. Mark-to-instasell
 bounds fills from above in both arms, but not necessarily equally: Arm R marks 14× more
 often, so any bias compounds against it. Nothing here may gate, size, or auto-price.
+
+## §8. Extension (pre-registered 2026-09-08, before any run): the timing applies to reverse flips
+
+Owner, 2026-09-08:
+
+> *"Also this timing should probably reflect reverse flips as well."*
+
+The reverse-flip lane (RF2, `screen-flip-niches.mjs --mode reverse`) sells an owned keep
+into a peak and rebuys the dip — a full weekly-phase cycle run in the opposite order from
+the buy lane. §0's basket shape maps onto it with the sign inverted: the weekend elevation
+is the SELL window, the Tuesday trough the REBUY window, and the weekend−Tue gap is the
+gross swing a reverse flip harvests per cycle. Today the reverse screen's Peak/dip windows
+are DIURNAL (`hourProfile`) only; the weekly axis is absent from that surface.
+
+**The central tension, stated before measuring:** WK settled that the weekend effect is a
+BASKET property with no resolvable per-item attribution — and a reverse flip is by
+construction one named item the owner holds. So the strongest honest ship is basket-level
+WINDOW guidance ("weekend sell / Tue rebuy") on the timing surfaces, never a per-item
+expected-value claim.
+
+- **(f) Does the weekly swing clear the tax at basket level?** For the reverse-flip-eligible
+  pool (owned-items `keep` ∪ `hold-thesis` `reverseFlip`, restricted to items with ≥28d 1h
+  coverage), compute the WK-style detrended weekend-vs-Tue gap and net it through the
+  tax-capped `breakEven()` mechanics (`js/quotecore.js`, the ONE definition) as a
+  sell-weekend / rebuy-Tue round trip. Question fixed now: is the net-of-tax basket swing
+  positive and stable across weeks (the WK criterion — week-count consistency, not a pooled
+  t)? The eligible pool overlaps the WK basket heavily, so this is NOT out-of-sample
+  confirmation of the effect — it is a costing of it in the reverse-flip's own mechanics.
+- **(g) Label interaction, inherited from §6:** the reverse screen's regime read is
+  INVERTED (falling/knife = wanted, rising/elevated = bad). §6's pre-named hazard cell —
+  (elevated ≥ +4%) × labelled, measured negative forward — is, read from the sell side,
+  exactly the reverse-flip SELL condition. If §6 fires branch (v), the reverse surface's
+  inverted rendering must be re-derived from the measured cells, not assumed to be the
+  buy-side table with signs flipped.
+
+**Branches, committed now:**
+- **(xi)** The net-of-tax basket swing is material and week-consistent → ship an
+  inform-only weekday line on the reverse screen and `read-schedule.mjs` ("basket weekly
+  window: sell Sat/Sun, rebuy Tue"), basket-scoped wording only, never per-item EV.
+- **(xii)** It does not clear the tax, or is week-inconsistent → record the numbers and
+  change nothing; the diurnal windows remain the only timing read on that surface.
+
+**Limits:** one era; the eligible pool is the owner's book (selection); per-item
+non-resolvability forbids any stronger claim in EITHER branch; inform-only, gates nothing,
+and the owner places every offer. Runs after §3/§6 land, on the same strictly-trailing
+discipline.
+
+## §3+§6 RESULTS (chunk WPC — registered run 2026-09-08, confirming rerun 2026-09-09)
+
+**Instrument:** `pipeline/experiments/wpc-label-study.mjs` (committed before its first run,
+2ce9be3; firing thresholds fixed in its header pre-run since the registration above left
+them qualitative). Labels reconstructed by calling the real `floorCeilingTrack` on the last
+20 completed local daily buckets ending day t−1 (strictly trailing, day t excluded);
+regime `falling` = the real `REGIME_FALLING` mapping {crash-risk, cooling}; `classifyItem`
+imported. Verified against the live surface: the reconstruction reproduces §2's crossbow
+read to the gp (ceiling −220,578/d, floor −56k/d, mild-cooldown). Inference is item-level
+only (per-item means first, t across items — overlapping 4d horizons forbid pooled
+item-day t's). Registered universe: 711 items, 51,458 item-day reads, 31.3% carrying the
+falling label. No downsample was needed.
+
+**Deviations from the registration, flagged:** (1) §3(b) was operationalized as an
+item-paired window-end-weekday contrast on the relative ceiling slope (+ the per-weekday
+dummy table), not a pooled regression with a weekday-aligned-trend covariate — fixed
+pre-run in the script header; the paired design controls the item's own trend by
+construction. (2) The intraday "⚠ breaking down" (EC2 forming-day) variant is not
+reproducible at daily grain; at day close it is crash-risk, which this study covers.
+(3) A `--all-mids` supplementary (committed before ITS run, 0761dd8; post-registration,
+decides no branch) drops the mid≥100k floor because that floor excludes ammo/herb/
+bones-ashes — three of WK3's four robust classes: 3,648 items, 273,772 reads.
+
+### §3 → branch (iii): H1 REFUTED — the trend reads are sound
+
+- **(a) does NOT fire.** No Mon–Wed excess: paired Mon–Wed − Fri–Sun incidence
+  −0.50pp (t=−0.84, 614 items). Incidence by end-weekday is nearly flat
+  (Sun 29.3% … Fri 33.2%). In the supplementary wide universe the effect is
+  significantly OPPOSITE to H1: −1.49pp, t=−6.69 — falling labels are slightly more
+  common on Fri–Sun window-ends, not Mon–Wed.
+- **(b) does NOT fire.** The paired end-weekday slope gap is in H1's direction but under
+  the bar: −0.17%/d, t=−2.22 (needs |t|≥2.5). The dummy pattern also contradicts H1's
+  mechanism: Fri-end windows carry the most negative slope (−1.23%/d), not Tue/Wed-end.
+- **(c) does NOT fire** (barely): Mon–Wed-end labels ran +0.48pp/4d better than
+  Fri–Sun-end (t=2.47, 548 items; needed ≥+0.5pp & t≥2.5). Suggestive of a mild phase
+  tilt in the label's cost; not established, and nothing may be built on it.
+
+The 2026-09-08 crossbow case was a single-item coincidence per branch (iii). Record and
+close §3. No fit repair; the §6 interaction rule is therefore moot ((v) never entered).
+
+### §6 → branch (iv): SUBSUMED — the warning adds nothing the dislocation read doesn't
+
+- **(d):** 0 of 16 registered cells BH-significant at q=0.10 (best p=0.057,
+  midvalue-lowlimit × deep7, Δ−0.78pp). Supplementary all-mids: 0 of 48 cells. Within a
+  (class × dislocation bucket) cell, labelled and unlabelled item-days earn statistically
+  indistinguishable forward 4d nets. The volume-conditioned split flips several cell signs
+  (the WK3 fragility, present here too) and rescues nothing.
+- **(e) hazard cells:** directional but weak support only. Registered universe:
+  bigticket-lowlimit × mid Δ−0.46pp (p=0.09). Supplementary: bulk-commodity × elevated
+  Δ−5.16pp (p=0.012) and unclassified × elevated Δ−4.32pp (p=0.031) — nominally negative,
+  neither survives BH across their 48-cell family, and both attenuate to nothing in the
+  at-volume split. The update-dump hazard is not established at 4d horizon by this design.
+- **Base rate worth recording:** the falling label sits on ~31% of all item-day reads in
+  the tradeable (≥100k) universe — a warning that fires a third of the time and moves no
+  within-cell yield read.
+
+**Ship implied by (iv)** (NOT built here — follow-on after review + owner's call): when a
+quotable dislocation cell exists on the same item, the warning line defers to it — render
+the measured cell beside, not instead of, the ⚠; the label still describes the path.
+
+**Limits:** one era (2026-05-28→09-09, one season); touch mids, not fills; labels are
+daily-grain end-of-day while the live surface also fires intraday; the labels and the
+dislocation depth share one price series, so "subsumed" = redundant given depth+class, not
+useless. Inform-only; nothing gates. Reproduce: `node pipeline/experiments/wpc-label-study.mjs`
+(registered) / `--all-mids` (supplementary).

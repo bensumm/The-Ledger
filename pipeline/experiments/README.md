@@ -401,3 +401,31 @@ superseded first version as a worked example of the pooling failure. The forward
 actually settle this is §7b, and it exists because this script cannot.
 
 Read-only against `positions.json`; no archive fetch, no network.
+
+## wpc-label-study.mjs
+
+`PLAN-WEEKDAY-PHASE-CONFOUND` §3+§6 — the REGISTERED test (chunk WPC; plan committed
+b7e294d, this script committed 2ce9be3, both BEFORE the first run; firing thresholds are
+fixed in the script header). Reconstructs the trend-read labels per item-day by calling
+the real `floorCeilingTrack` (js/windowread.mjs) on the last 20 completed local daily
+buckets ending day t−1 — strictly trailing, day t excluded from its own reference — with
+regime `falling` = the real `REGIME_FALLING` mapping and `classifyItem` imported from
+`pipeline/lib/signal/dislocation.mjs`. Deviation/forward-net machinery copied from
+`wk3-class-cycle-study.mjs`; inference is item-level only (per-item means first, then t
+across items — overlapping 4d horizons forbid pooled item-day t's). `--all-mids` is a
+labelled post-registration supplementary (0761dd8) that drops the mid≥100k universe floor
+so the §6 answer also covers ammo/herb/bones-ashes; it decides no branch.
+
+**Result (run 2026-09-08, confirming rerun 2026-09-09 — both null branches fired):**
+**§3 → (iii), H1 refuted** — no Mon–Wed label excess (the wide universe is significantly
+OPPOSITE to H1), the slope's weekday gap is under the bar with a dummy pattern that
+contradicts H1's mechanism, and the labelled forward-yield tilt (+0.48pp/4d, t=2.47)
+misses its threshold; the 2026-09-08 crossbow case was a single-item coincidence.
+**§6 → (iv), subsumed** — 0 of 16 registered (and 0 of 48 supplementary) class × bucket
+cells BH-significant at q=0.10: within a dislocation cell the falling label moves the
+forward 4d read by nothing measurable, while sitting on ~31% of all tradeable-universe
+reads. The pre-named hazard cells (elevated × labelled, bigticket falls) are directionally
+negative but nothing survives BH and the at-volume split attenuates them. Full numbers,
+deviations from the registration, and limits: the plan's §3+§6 RESULTS section — do not
+restate them here. Read-only against `pipeline/.market-archive.sqlite` +
+`pipeline/.cache/mapping.cache.json`; inform-only, gates nothing.
