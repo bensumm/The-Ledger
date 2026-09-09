@@ -448,5 +448,20 @@ no tier near the registered bar; (a) came back unpowered (n=0 — this book sell
 liquid hours) with validity carried by the join hit rate + a timestamp audit + an exact
 spot-check of the founding crossbow case, which turned out to be BOTH the recent era's
 only day-max beat AND the record's only date-only midnight-stamped sell. Reach reads stay
-as-is. Full numbers + the tick-size caveat: the plan's RESULTS section — do not restate
-them here.
+as-is. Full numbers + the volume-dilution caveat: the plan's RESULTS section — do not
+restate them here.
+
+## reverse-flip-window-study.mjs
+
+`PLAN-WEEKDAY-PHASE-CONFOUND` §8(f) — the registered reverse-flip weekly-window costing
+(committed before its first run; firing bars fixed in the script header, since the
+registration left them qualitative). Costs the REAL reverse-flip cycle order — sell into
+the Sat/Sun peak of week w (raw daily mids), rebuy the FOLLOWING Tuesday — net of the ONE
+`tax()` impl (`js/quotecore.js` re-export), per cycle-week at basket level across the
+owned-keep ∪ reverseFlip-thesis pool, weeks as the independent unit. The WK-style
+detrended gap rides along for comparability and decides nothing. Read-only against
+`owned-items.json` (local populated copy; the public stub exits cleanly),
+`hold-thesis.json`, and `pipeline/.market-archive.sqlite`. **Committed text takes basket
+aggregates only — owned-items.json is deliberately off the public repo, so per-item
+console lines must never be pasted into tracked files.** Numbers live in the plan's §8
+RESULTS; inform-only, gates nothing.
