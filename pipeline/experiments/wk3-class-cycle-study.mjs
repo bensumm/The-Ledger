@@ -308,6 +308,9 @@ function basketNullDraws(r1, n, tag) {
   const key = `MA|${tag}`;
   if (surrCache.has(key)) return { fam: 'MA', draws: surrCache.get(key) };
   const w = maWidthFor(r1, n);
+  // W5a (round-1 review): the family RAILS at w=60 for the highest-r1 baskets — persistence is
+  // not fully matched at the top (WK2 R2-1's sibling); harmless while nothing is significant.
+  const railed = w >= 59.5;
   const draws = new Float64Array(SURR_N);
   for (let k = 0; k < SURR_N; k++) {
     const devs = maFilteredDevs(w, n);
@@ -315,7 +318,7 @@ function basketNullDraws(r1, n, tag) {
   }
   draws.sort();
   surrCache.set(key, draws);
-  return { fam: `MA(w=${w.toFixed(1)})`, draws };
+  return { fam: `MA(w=${w.toFixed(1)}${railed ? ' RAIL — persistence under-matched' : ''})`, draws };
 }
 
 function phaseDrift(devs, P) {
@@ -428,7 +431,7 @@ for (const u of tested) {
     if (n < Y_TRAIL_MIN || x.mid <= 0) continue;
     const dev = (x.mid / (s / n) - 1) * 100;
     devsArr.push(dev);
-    const smp = { b: bucketOf(dev), dev, net: {}, hit: {} };
+    const smp = { b: bucketOf(dev), dev, di: x.di, gp: x.gp || 0, net: {}, hit: {} };
     let any = false;
     for (const h2 of Y_H) {
       const fm = midBy.get(x.di + h2);
@@ -488,8 +491,9 @@ for (const c of CLASSES) {
   if (!rows4.length) continue;
   console.log(`  ${c} (h=4d; base = class-mean per-item unconditional net):`);
   for (const r of rows4) {
-    const dec = Y_DECIDE_BUCKETS.includes(r.b);
-    console.log(`    ${Y_LBL[r.b].padEnd(9)} adv ${r.adv >= 0 ? '+' : ''}${r.adv.toFixed(2)}% ±${r.se.toFixed(2)} t=${r.t.toFixed(2).padStart(6)} p=${r.p.toFixed(4)}${r.sig ? ' BH✓' : '    '} cond ${r.cond >= 0 ? '+' : ''}${r.cond.toFixed(2)}% base ${r.base >= 0 ? '+' : ''}${r.base.toFixed(2)}% Phit ${(100 * r.hit).toFixed(0)}% (base ${(100 * r.baseHit).toFixed(0)}%) items ${r.nItems} days ${r.nDays}${dec ? '' : '  (descriptive)'}`);
+    const deepB = Y_DECIDE_BUCKETS.includes(r.b);
+    const dec = deepB && r.nItems >= Y_MIN_ITEMS && r.c !== 'unclassified';
+    console.log(`    ${Y_LBL[r.b].padEnd(9)} adv ${r.adv >= 0 ? '+' : ''}${r.adv.toFixed(2)}% ±${r.se.toFixed(2)} t=${r.t.toFixed(2).padStart(6)} p=${r.p.toFixed(4)}${r.sig ? ' BH✓' : '    '} cond ${r.cond >= 0 ? '+' : ''}${r.cond.toFixed(2)}% base ${r.base >= 0 ? '+' : ''}${r.base.toFixed(2)}% Phit ${(100 * r.hit).toFixed(0)}% (base ${(100 * r.baseHit).toFixed(0)}%) items ${r.nItems} days ${r.nDays}${dec ? '' : deepB && r.c !== 'unclassified' ? '  (below items floor — non-decision)' : '  (descriptive)'}`);
   }
 }
 console.log(`  decision cells: ${decideCells.length} (deep buckets × h=4d, named classes, ≥${Y_MIN_ITEMS} items), BH cut ${yCut || '—'}`);
@@ -714,6 +718,57 @@ console.log(`\nPRE-REGISTERED OUTCOME (TEST Y decides): ${outcome}`);
 if (knives.length) console.log(`KNIFE classes (deep deviation predicts continued fall — significant NEGATIVE advantage): ${knives.join(', ')}`);
 for (const c of succeeds) { const li = laneIncrement[c]; console.log(`  lane-increment check ${c}: beyond-p10 adv ${li ? `${li.adv >= 0 ? '+' : ''}${li.adv.toFixed(2)}% t=${li.t.toFixed(2)} items ${li.nItems} (bucket ${Y_LBL[li.b]})` : 'no computable cell'} → ${incrementOk(c) ? 'beyond the lane' : 'lane-confined'}`); }
 console.log(`secondary support (fires nothing): class-basket FDR ${winners.length ? winners.map(r => r.c).join(', ') : 'none'}; §1 gear confirmation ${gearConfirm ? (gearConfirm.conf ? 'CONFIRMS' : 'does not confirm') : 'n/a'}`);
+
+// ── POST-REGISTRATION ENCODED CHECKS (added with the round-1 review fix commit; labeled — they
+// decide nothing by themselves, but they GOVERN the honest write-up: W1 the in-sample era-p10
+// lane split flatters some classes, so the honest beyond-lane label uses a TRAILING p10 (each
+// day classified against the item's PRIOR deviations only, ≥30 required); W2 the deep-dip edge
+// is VOLUME-fragile (day-t traded gp ≥ the item's own median); W4 same-day capture is the upper
+// bound — a human acting on a surface enters next day (lag-1d entry). ─────────────────────────
+const pctl10 = arr => { const s = [...arr].sort((a, b) => a - b); return s[Math.floor(0.1 * (s.length - 1))]; };
+function checkCell(ms, b, variant) {     // variant: 'trail' | 'vol' | 'lag'
+  const advs = [];
+  for (const u of ms) {
+    if (!u.trailP10ByDi) {
+      u.trailP10ByDi = new Map(); const prior = [];
+      for (const s of u.ySamples) { if (prior.length >= 30) u.trailP10ByDi.set(s.di, pctl10(prior)); prior.push(s.dev); }
+      const gps = u.ySamples.map(s => s.gp).sort((a, b) => a - b);
+      u.gpMedian = gps.length ? gps[(gps.length - 1) >> 1] : 0;
+      u.midBy = new Map(u.days.map(x => [x.di, x.mid]));
+    }
+    let all, inB;
+    if (variant === 'lag') {
+      const lagNet = s => { const m1 = u.midBy.get(s.di + 1), m2 = u.midBy.get(s.di + 1 + Y_DECIDE_H); return m1 != null && m2 != null && m1 > 0 ? (TAX * m2 - m1) / m1 * 100 : null; };
+      all = u.ySamples.map(lagNet).filter(v => v != null);
+      inB = u.ySamples.filter(s => s.b === b).map(lagNet).filter(v => v != null);
+    } else {
+      const keep = variant === 'trail'
+        ? s => { const p = u.trailP10ByDi.get(s.di); return p != null && s.dev >= p; }
+        : s => s.gp >= u.gpMedian;
+      all = u.ySamples.filter(s => s.net[Y_DECIDE_H] != null).map(s => s.net[Y_DECIDE_H]);
+      inB = u.ySamples.filter(s => s.b === b && s.net[Y_DECIDE_H] != null && keep(s)).map(s => s.net[Y_DECIDE_H]);
+    }
+    if (inB.length < Y_MIN_DAYS_BUCKET || all.length < 20) continue;
+    const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+    advs.push(mean(inB) - mean(all));
+  }
+  if (advs.length < 2) return null;
+  const mean = advs.reduce((s, a) => s + a, 0) / advs.length;
+  const sd = Math.sqrt(advs.reduce((s, a) => s + (a - mean) ** 2, 0) / (advs.length - 1));
+  const t = sd > 0 ? mean / (sd / Math.sqrt(advs.length)) : 0;
+  return { adv: mean, t, n: advs.length };
+}
+console.log('\nPOST-REGISTRATION checks (labeled; the write-up quotes these, not the flattered variants):');
+console.log('  class × deep bucket        trailing-p10 beyond-lane | volume≥median | lag-1d entry');
+for (const c of succeeds) {
+  const ms = members(c);
+  for (const b of Y_DECIDE_BUCKETS) {
+    const base = decideCells.find(r => r.c === c && r.b === b);
+    if (!base) continue;
+    const fmt = x => x ? `${x.adv >= 0 ? '+' : ''}${x.adv.toFixed(2)}pp t=${x.t.toFixed(1)} n=${x.n}` : 'n/a';
+    console.log(`  ${c.padEnd(20)} ${Y_LBL[b].padEnd(9)}${base.sig ? ' SIG' : '    '} ${fmt(checkCell(ms, b, 'trail')).padEnd(26)}| ${fmt(checkCell(ms, b, 'vol')).padEnd(22)}| ${fmt(checkCell(ms, b, 'lag'))}`);
+  }
+}
 console.log(`(surrogate bins ${surrCache.size}, total ${((Date.now() - t0) / 1000).toFixed(0)}s)`);
 
 const jsonAt = argAt('--json');

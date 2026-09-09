@@ -328,13 +328,23 @@ depended on a session-scratch `hp-lib.mjs`, which is why two production headers 
   entry would already catch). **Pre-registered outcome (i) fired: 8 of 10 named classes show a
   BH-significant deep-dislocation advantage (≤−7% bucket: potion-dose +8.3pp, ammo +4.8pp,
   bulk-commodity +9.6pp, midvalue-lowlimit +1.8pp, bigticket-lowlimit +1.8pp over per-item
-  baselines), 6 survive the beyond-the-lane split; NO knife class at class level; the elevated
-  ≥+4% bucket is significantly negative nearly everywhere — the sell-side mirror.** ⚠ Two
-  caveats govern every number: deep-bucket conditional yields on thin/cheap classes are inflated
-  by a daily-mid COMPOSITION artifact (a −7% mid print on a thin item is often one-sided trades,
-  and its "recovery" is not a fill you can buy), and mid-to-mid at the daily mean mid is not an
-  executable price — the profile RANKS classes and buckets, it does not promise returns; the
-  next chunk's surface design must price executability (liquidity floor, bid-side entry, spread).
+  baselines) — of the six that cleared the registered beyond-lane split, FOUR are robust under
+  the review's honest TRAILING split (ammo t=4.3, herb t=5.0, bones-ashes t=7.8/3.4,
+  midvalue-lowlimit t=5.9; encoded in the post-registration block) and TWO are unresolved
+  (potion-dose t=1.0, bulk-commodity t=1.2 — magnitudes hold, significance does not); NO knife
+  class cleared the registered bar (seed-sapling's −1.79pp p=0.025 near-miss noted); the
+  elevated ≥+4% bucket is significantly negative nearly everywhere — the sell-side mirror.**
+  ⚠ Caveats govern every number: deep-bucket conditional yields on thin/cheap classes are
+  inflated by a daily-mid COMPOSITION artifact (a −7% mid print on a thin item is often
+  one-sided trades, and its "recovery" is not a fill you can buy — and the paired advantage does
+  NOT defend against this: the encoded volume-conditioned column shows the deep-dip edge mostly
+  COLLAPSES on ≥median-volume days in the beyond-lane classes, herb the survivor, while the
+  lane-confined bigticket cell survives), the honest actionable magnitudes are the encoded
+  LAG-1d-ENTRY numbers (potion +4.9pp, ammo +3.3pp, herb +3.4pp, bones +2.6pp, midvalue +1.6pp,
+  bulk +6.6pp — same-day is the descriptive upper bound), and mid-to-mid at the daily mean mid
+  is not an executable price — the profile RANKS classes and buckets, it does not promise
+  returns; the next chunk's surface design must price executability (liquidity floor, bid-side
+  entry, spread, volume-conditioned yield beside unconditional).
   Secondary: class baskets under persistence-matched nulls (AR(1) below the r1≈0.61 ceiling, a
   bisection-tuned MA-innovation family above it) → NO basket FDR discovery in either family; MW
   enrichment: bigticket/herb/raw-material BH✓ toward-cycle (with r1-saturation caveats), five

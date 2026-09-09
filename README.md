@@ -918,12 +918,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   deep-bucket×4d decision cells, plus a lane-increment split (sub-p10 days ≈ what the amplitude
   lane's trough-touch already catches); cycle tests (class baskets under persistence-matched
   nulls, MW enrichment, the §1 gear confirmation) are secondary. **Pre-registered outcome (i)
-  fired: 8 classes show a significant deep-dislocation advantage, 6 beyond the lane's reach; NO
-  knife class exists at class level; the ≥+4% elevated bucket is significantly NEGATIVE nearly
-  everywhere (the sell-side mirror).** ⚠ Read the plan's WK3 section before quoting ANY yield
-  number: deep-bucket conditional yields on thin/cheap classes are inflated by a daily-mid
-  composition artifact (one-sided prints), and mid-to-mid at the daily mean mid is NOT an
-  executable price — the numbers rank classes, they are not returns. §1's five reproduce
+  fired: 8 classes show a significant deep-dislocation advantage — FOUR robust beyond the lane
+  under the review's honest trailing split (ammo, herb, bones-ashes, midvalue-lowlimit), TWO
+  unresolved (potion-dose, bulk-commodity — magnitudes hold, significance doesn't survive); NO
+  knife class cleared the registered bar; the ≥+4% elevated bucket is significantly NEGATIVE
+  nearly everywhere (the sell-side mirror).** ⚠ Read the plan's WK3 section before quoting ANY
+  yield number: deep-bucket conditional yields on thin/cheap classes are inflated by a daily-mid
+  composition artifact (one-sided prints), the deep-dip edge is VOLUME-FRAGILE in most
+  beyond-lane classes (encoded volume-conditioned column), the honest actionable magnitudes are
+  the lag-1d-entry numbers (≈half to two-thirds of same-day), and mid-to-mid at the daily mean
+  mid is NOT an executable price — the numbers rank classes, they are not returns. §1's five reproduce
   (t 4.33) and the metadata gear class confirms diluted (+0.36%/wk, t 2.18). Decision rule
   committed before the run (`9eb2743`); `--audit`/`--limit` smokes print no class results;
   `--json <path>`; needs the local archive + `mapping.cache.json`, so it does NOT run on a clean

@@ -1,4 +1,4 @@
-# PLAN-WEEKLY-CYCLE — the weekday price cycle (WK1 null; WK2 branch (c); WK3 outcome (i): deep-dislocation yield advantage in 8 classes, 6 beyond the lane — next chunk designs the inform-only surface)
+# PLAN-WEEKLY-CYCLE — the weekday price cycle (WK1 null; WK2 branch (c); WK3 outcome (i): deep-dislocation yield advantage, FOUR classes robust beyond the lane — next chunk designs the inform-only surface)
 
 Chunk prefix **WK** (verified collision-free, `lint-plan-refs.mjs --collisions`, 2026-09-08).
 
@@ -211,31 +211,53 @@ buy, and what yield does it carry — no cycle required. Reference is STRICTLY T
 advantage is item-paired (conditional minus the item's own unconditional 4d net, t across items).
 
 **Outcome (i) fired. Deep dislocation (mid ≤ −7% of trailing mean) is a BH-significant BUY
-advantage in 8 of 10 named classes, and in 6 it survives the beyond-the-lane split** (advantage
-recomputed only on days at or above the item's own era-p10 deviation — days the amplitude lane's
-trough-touch entry would NOT already catch): potion-dose (+8.3pp over baseline, beyond-lane
-+4.9pp t=3.3), ammo (+4.8pp, beyond +1.7pp), herb (+3.2pp, beyond +2.9pp), bones-ashes (sig at
-(−4,−2], beyond +1.8pp t=4.8), midvalue-lowlimit (+1.8pp on 208 items, ALL THREE deep buckets
-significant, beyond +1.2pp t=3.4), bulk-commodity (+9.6pp, beyond +6.6pp). bigticket-lowlimit
-(+1.8pp, t=8.7-ish se 0.21) and rune are significant but LANE-CONFINED — for big-ticket gear the
-lane's trough-touch already owns this edge, which is WK1's null seen from the other side.
+advantage in 8 of 10 named classes — and after the round-1 review's honest splits, FOUR classes
+are ROBUST beyond the lane, TWO unresolved.** The registered beyond-lane split used each item's
+IN-SAMPLE era-p10 (days the amplitude lane's trough-touch would not already catch); the review's
+TRAILING split (each day classified against the item's PRIOR deviations only, ≥30 required — now
+encoded in the script's post-registration block) is the honest label, and under it:
+**ammo** (+4.8pp same-day, trailing-split t=4.3), **herb** (+3.2pp, t=5.0), **bones-ashes**
+(t=7.8/3.4 at the two deeper cells), **midvalue-lowlimit** (+1.8pp on 208 items, ALL THREE deep
+buckets significant, trailing t=5.9) are robust; **potion-dose** (+8.3pp same-day, registered
+beyond-lane +4.9pp t=3.3, but trailing-split t=1.0) and **bulk-commodity** (+9.6pp; registered
+beyond-lane +6.6pp t=1.74, clearing its one-sided gate by 0.009; trailing-split t=1.2) keep
+their magnitudes but NOT their significance — unresolved, not established. **The honest
+actionable magnitudes are the LAG-1d-ENTRY numbers** (enter at the NEXT day's mid — what a human
+acting on a surface actually does; encoded): potion 8.3→+4.9pp, ammo 4.8→+3.3pp, herb +3.4pp,
+bones +2.6pp, midvalue +1.6pp, bulk +6.6pp — same-day capture is roughly half again higher and
+is quoted only as the descriptive upper bound. bigticket-lowlimit (+1.81pp, t=8.55) is
+significant but LANE-CONFINED under the registered split — the lane's trough-touch already owns
+this edge, which is WK1's null seen from the other side; rune's beyond-lane cell FAILS the items
+floor (12 < 15 — too few members to classify, not a measured confinement).
 **NO knife class exists at class level** — §4's feared "deep deviation predicts continued fall"
-class did not materialize at this grain (the closest, bigticket (−4,−2], is −0.21pp ns).
-**The elevated ≥+4% bucket is significantly NEGATIVE nearly everywhere** (midvalue −8.8pp,
-unclassified −22.0pp vs baselines) — the sell-side mirror: elevated prices revert too, which is
-the reverse-flip/exit-timing read.
+class did not materialize at this grain (the closest calls: bigticket (−4,−2] at −0.21pp ns, and
+seed-sapling's (−7,−4] near-miss at −1.79pp p=0.025 vs the 0.018 BH cut — "no knife class" means
+"none cleared the registered bar", not "none plausible").
+**The elevated ≥+4% bucket is significantly NEGATIVE nearly everywhere** (bulk-commodity −8.8pp,
+midvalue −3.0pp t=−11.7, unclassified −22.0pp vs baselines) — the sell-side mirror: elevated
+prices revert too, which is the reverse-flip/exit-timing read. It survives every review check
+unchanged.
 
-**Two caveats govern every yield number (read before quoting):** (1) deep-bucket conditional
+**Three caveats govern every yield number (read before quoting):** (1) deep-bucket conditional
 yields on thin/cheap classes are inflated by a daily-mid COMPOSITION artifact — a −7% daily mean
 mid on a thin item is often one-sided prints, and its "recovery" is not a fill anyone can buy;
-the +15–30% conditional means on bulk-commodity/unclassified are artifact-heavy, which is
-precisely why the DECISION statistic is the within-item paired advantage, not the raw
-conditional mean. (2) Mid-to-mid at the daily mean mid is not an executable price. The profile
-RANKS classes and depths; it does not promise returns. Both mean the next chunk's surface must
-price EXECUTABILITY: liquidity floor, bid-side entry, spread- and depth-aware.
+the +15–30% conditional means on bulk-commodity/unclassified are artifact-heavy. The paired
+advantage does NOT defend against this (the review measured that claim false): (2) **the
+deep-dip edge is VOLUME-FRAGILE** — restricting to days with traded gp ≥ the item's own median
+(encoded), the beyond-lane classes mostly collapse (potion −0.6pp t=−0.2, midvalue +0.0pp,
+bulk t=0.9, ammo t=0.7; herb +2.2pp t=2.3 is the survivor), while the LANE-CONFINED
+bigticket cell SURVIVES the volume condition (+1.2pp t=3.3) — the class ranking a surface would
+publish INVERTS under a volume condition, and for potion/midvalue the point estimate collapses
+(composition, not power). (3) Mid-to-mid at the daily mean mid is not an executable price. The
+profile RANKS classes and depths; it does not promise returns. All three are the reason the
+WK4 surface must price EXECUTABILITY FIRST: liquidity floor, bid-side entry, spread- and
+depth-aware, volume-conditioned yield shown alongside the unconditional one.
 
 **Secondary (explains, does not decide):** class-basket periodicity — NO FDR discovery in either
-family under persistence-matched nulls (the yield advantage is NOT a clean class-wide sinusoid;
+family under persistence-matched nulls (stated limit: the MA-innovation family RAILS at w=60 for
+the three highest-r1 baskets, so "persistence-matched" saturates at the top — WK2 R2-1's
+sibling; harmless here since nothing was significant) (the yield advantage is NOT a clean
+class-wide sinusoid;
 it is mean-reversion from dislocation, exactly the owner's "no concrete cycle necessarily").
 Enrichment: bigticket/herb/raw-material shift toward-cycle (BH✓, r1-saturation caveats apply);
 potion-dose/bones-ashes/midvalue/ammo/seed-sapling/bulk-commodity are DEAD for per-item cycles at
@@ -246,8 +268,9 @@ than on the five book items, consistent with few members expressing it strongly.
 rune/ammo/unclassified run the OTHER way (weekend LOWER — e.g. rune −1.10%/wk t=−2.8): §4's
 "inverted class" exists, but on commodity classes, not the hilt.
 
-**Limits.** ONE era; mid-to-mid touch proxies; the p10 lane-split is an in-sample percentile and
-a proxy (the lane fits levels, not percentiles); cross-item same-day correlation makes
+**Limits.** ONE era; mid-to-mid touch proxies; both lane-splits are percentile PROXIES (the lane
+fits levels, not percentiles) — the registered one is in-sample (flattering, see above), the
+encoded trailing one governs the write-up; cross-item same-day correlation makes
 across-item se's optimistic; heuristic taxonomy dilutes (unclassified = 953 tested items, 38%);
 BH cells were registered only at h=4d deep buckets — every other cell is descriptive.
 
