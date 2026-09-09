@@ -429,3 +429,16 @@ negative but nothing survives BH and the at-volume split attenuates them. Full n
 deviations from the registration, and limits: the plan's §3+§6 RESULTS section — do not
 restate them here. Read-only against `pipeline/.market-archive.sqlite` +
 `pipeline/.cache/mapping.cache.json`; inform-only, gates nothing.
+
+## avghigh-bias-study.mjs
+
+`PLAN-AVGHIGH-BIAS` — the registered instrument (plan committed ff944a0, this script
+committed before its first run; bars restated in the script header from the plan, which
+owns them). Joins `positions.json` `closed[]` non-banked realized sells to the same-hour
+1h archive bucket (`archive.mjs` `seriesFor`, read-only) and measures whether
+`avgHighPrice` — the hourly AVERAGE of high-side prints — understates what the market
+paid: (a) the hpv==1 instrument-validity gate, (b) same-hour exceedance descriptives by
+`highPriceVolume` tier and class, (c) the branch decider — sells beating the local day's
+max hourly `avgHighPrice` by ≥1%, per tier × era (last-30d vs earlier), per-item-first.
+Deterministic offline join (a rerun reproduces exactly; instrument confidence rests on
+(a)). Numbers live in the plan, not here; inform-only, gates nothing.
