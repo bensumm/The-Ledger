@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * wk2-period-phase-universe.mjs — WK2 (plans/PLAN-WEEKLY-CYCLE.md §0, decisive measurement 3):
+ * wk2-period-phase-universe.mjs — WK2 (PLAN-WEEKLY-CYCLE §0 measurement 3, folded — full text via `git show 6d0d970:plans/PLAN-WEEKLY-CYCLE.md`):
  * over the FULL item universe, which items cycle at the day scale on price LEVELS, which of those
  * are calendar-locked vs free-running vs inverted, and does the structure survive basket
  * subtraction (item vs one-market-index, plan §6)? This measurement DECIDES the program after

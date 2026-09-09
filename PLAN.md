@@ -623,23 +623,32 @@ the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the co
   Note the failure survived the `list @ X (BE Y)` relay format: printing two numbers adjacently is not
   joining them. Scope is the note assembly; nothing here moves a verdict, a gate, or the BE floor itself.
 
-- **WEEKDAY-LEVEL — a measured weekly price cycle the tool cannot express (OPEN — REOPENED 2026-09-08 by owner after a brief CLOSED-NEGATIVE; written up as `plans/PLAN-WEEKLY-CYCLE.md`, prefix WK. WK1 EXECUTED — null: no weekday structure in the lane's own entry record. WK2 EXECUTED — the universe cycle scan fired branch (c) on its corrected rerun: ZERO FDR discoveries of 2,516 items. ⚠ WK2's FIRST run reported branch (a)/193 discoveries; that was an instrument artifact (the surrogate null skipped the MA15 detrend), caught by adversarial review and retracted in the plan + script header — do not quote first-run numbers. Weekly residue = inform-only annotation (bond trough Sat p=0.0014; Mole skin Sun p=0.0050; blowpipe Tue p=0.036; fang suggestive-only). WK3 EXECUTED after the owner's class question + goal reframe ("judge if an item is advantageous to buy and determine the yield as it fluctuates — no concrete cycle necessarily"): deviation-conditioned forward-yield profile per metadata class off a STRICTLY TRAILING reference — outcome (i): deep dislocation (≤−7% of trailing 15d mean) is a BH-significant buy advantage in 8 of 10 classes — FOUR robust beyond the lane under the review's trailing split (ammo, herb, bones-ashes, midvalue-lowlimit), TWO unresolved (potion-dose, bulk-commodity), big-ticket gear LANE-CONFINED (the lane already owns that edge); NO knife class cleared the registered bar; the elevated ≥+4% bucket is significantly negative nearly everywhere (sell-side mirror, survives all review checks). ⚠ Yield numbers rank, they are not returns — thin-class deep-bucket means carry a daily-mid composition artifact, the deep-dip edge is VOLUME-FRAGILE in most beyond-lane classes, honest magnitudes are the lag-1d-entry numbers, and mid-to-mid is not executable; read the plan's WK3 section before quoting. Do NOT re-dispatch WK1/WK2. WK4 SHIPPED 2026-09-08 (owner-aligned homes): `pipeline/lib/signal/dislocation.mjs` (pure — the WK3 taxonomy single-sourced + the measured cell table + the strictly-trailing deviation read) renders the inform-only ◇ dislocation/yield line on `quote-items.mjs` (bare + held; deep→lag-entry+at-volume buy read, big-ticket→lane-owned no-double-count, elevated ≥+4%→"waiting ~4d ≈ X gp/u cheaper") and under the scan's decision digest (rendered rows only). Unresolved classes' deep cells deliberately absent; silence over hedging; gates/sizes/prices nothing. Plan's WK4 section is the record).**
-  Owner hypothesis: big-ticket gear dips Mon/Tue and rises Fri/Sat. **Measured and CONFIRMED at basket
-  level** over the 104-day local 1h archive (5 gear items; each day's mid detrended against its own 7-day
-  centered mean, then averaged within each week so correlated items cannot inflate n): weekend-minus-Tuesday
-  gap **+1.395%**, sd 1.165, **paired t 4.48, df 13, 13/14 weeks positive**. Peak Sat/Sun, trough Tue.
-  **But it does not replicate per item, and that is the finding that matters:** Osmumten's fang (Tue −1.69%
-  → Sat +1.84%), Armadyl crossbow and Venator ring show it; Nightmare staff sits inside its own noise
-  (±0.55%); and **Avernic defender hilt is INVERTED** — peaks Thu/Fri (+1.12%/+1.00%), troughs Sun/Mon/Tue.
-  A basket-level rule applied per item would trade the hilt exactly backwards. Trough day also varies (fang
-  Tue; crossbow and ring Wed/Thu), so "buy Mon/Tue" is not what made the crossbow flip work.
-  **The gap:** the amplitude lane's `weekday seasonality` note reports amplitude WIDTH by weekday, not price
-  LEVEL by weekday — a different statistic, so no surface tests this hypothesis today. Amplitude's 4d hold
-  horizon does happen to match a Tue→Sat leg, and it independently flagged `trough phase` for staff/ring/fang
-  on a Tuesday, but it arrives there by another route. **Honesty:** n=14 weeks, ONE archive era, 5 items, and
-  per-item sign is unstable — a basket lean, not a per-item law, and it must not gate. A prior session's
-  per-item 14-day test (n=2/weekday) reported "does not replicate"; that was underpowered and this
-  supersedes it.
+- **PLAN-WEEKLY-CYCLE (WEEKDAY-LEVEL) — SHIPPED 2026-09-08 (WK1–WK4, one day; plan folded + deleted, full
+  text via `git show 6d0d970:plans/PLAN-WEEKLY-CYCLE.md`).** The owner's weekly-cycle hypothesis
+  (gear dips Mon/Tue, rises Fri/Sat — basket-level t=4.48, 13/14 weeks) walked four chunks to a shipped
+  surface that looks nothing like a weekday rule. **WK1**: weekday-split of the amplitude lane's own
+  `ampWalkForward` record — pre-registered NULL (completion flat 27.3–29.5% across all seven entry
+  days; overlapping-horizon serial dependence ρ≈0.61 cuts effective n to ~712). **WK2**: full-universe
+  period+phase scan — the FIRST run's 193 discoveries massing at 9.5–14d were an INSTRUMENT ARTIFACT
+  (the surrogate null skipped the MA15 detrend, whose gain peaks ×1.22 exactly there; adversarial
+  review measured pure noise producing MORE 'discoveries' than observed), and the corrected rerun
+  fired branch (c): ZERO FDR discoveries of 2,516 — the review inversion is the arc's load-bearing
+  story, and first-run numbers must never be quoted. Weekly residue: bond trough Sat p=0.0014, Mole
+  skin Sun, blowpipe Tue; fang suggestive-only. **WK3** (owner reframe: 'advantageous to buy +
+  yield as it fluctuates, no concrete cycle necessarily'): deviation-conditioned forward yield per
+  metadata class off a STRICTLY TRAILING 15d reference — outcome (i): deep dislocation is a
+  BH-significant buy advantage, FOUR classes robust beyond the lane under the non-lookahead trailing
+  split (ammo, herb, bones-ashes, midvalue-lowlimit), TWO unresolved (potion-dose, bulk-commodity),
+  bigticket LANE-CONFINED (WK1's null from the other side), NO knife class, elevated ≥+4%
+  significantly negative nearly everywhere (the sell-side mirror). The edge is VOLUME-FRAGILE and
+  honest magnitudes are the lag-1d-entry numbers. **WK4** (shipped): `pipeline/lib/signal/dislocation.mjs`
+  renders the inform-only ◇ line on `quote-items.mjs` (bare + held) and the scan's decision digest —
+  deep→lag-entry+at-volume buy read with measured hold-by-close clauses on shallow buckets
+  (--transitions: deep7 86–91%, deep4/deep2 41–74%), bigticket→lane-owned no-double-count, elevated→
+  'waiting ~4d ≈ X gp/u cheaper'; taxonomy single-sourced (study re-imports, --audit byte-identical),
+  table values + absences literal-pinned and mutation-verified. Gates/sizes/prices NOTHING. Eight
+  adversarial review rounds across the arc; every chunk pre-registered its rule before running (as
+  its own commit from WK2 on). Execution shas db9dbd7…6d0d970 (+ d9bdfd7 ratchet trim).
 
 - **PLAN-ENTRY-CONFIDENCE — SHIPPED 2026-09-08 (EC1–EC4, one wave; plan folded + deleted, full text
   via `git show 3bdca47:plans/PLAN-ENTRY-CONFIDENCE.md`).** The Avernic-hilt entry post-mortem (executed 0.061% off the suggested price,

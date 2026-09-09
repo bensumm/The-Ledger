@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * wk1-weekday-split-study.mjs — WK1 (plans/PLAN-WEEKLY-CYCLE.md §0, decisive measurement 1):
+ * wk1-weekday-split-study.mjs — WK1 (PLAN-WEEKLY-CYCLE §0 measurement 1, folded — full text via `git show 6d0d970:plans/PLAN-WEEKLY-CYCLE.md`):
  * is the amplitude lane's OWN walk-forward entry record weekday-structured?
  *
  * WHAT IT ANSWERS. The weekly-cycle plan measured a basket-level weekday price cycle (§1) whose

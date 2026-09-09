@@ -1,5 +1,5 @@
 /**
- * dislocation.mjs — WK4 (plans/PLAN-WEEKLY-CYCLE.md): the inform-only dislocation/yield read.
+ * dislocation.mjs — WK4 (PLAN-WEEKLY-CYCLE, folded — full text via `git show 6d0d970:plans/PLAN-WEEKLY-CYCLE.md`): the inform-only dislocation/yield read.
  * "Is this price dislocated vs the item's own trailing level, and what conditional yield did WK3
  * measure for its class from that state?" Pure math — DOM/fetch/fs-free; callers hand in an
  * archive-shaped 1h series (archiveSeries(...) rows keyed `timestamp`).

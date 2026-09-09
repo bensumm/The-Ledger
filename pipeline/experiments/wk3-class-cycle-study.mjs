@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * wk3-class-cycle-study.mjs — WK3 (plans/PLAN-WEEKLY-CYCLE.md, owner directives 2026-09-08):
+ * wk3-class-cycle-study.mjs — WK3 (PLAN-WEEKLY-CYCLE, owner directives 2026-09-08; folded — full text via `git show 6d0d970:plans/PLAN-WEEKLY-CYCLE.md`):
  * "Was the WK2 analysis done by item class? We should investigate which kinds of items fail and
  * which kinds of items succeed." — AMENDED before any run by a second owner message (2026-09-08,
  * verbatim, folded into this same pre-registration commit): "The end goal is to be able to judge
