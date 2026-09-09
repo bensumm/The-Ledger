@@ -340,7 +340,8 @@ depended on a session-scratch `hp-lib.mjs`, which is why two production headers 
   NOT defend against this: the encoded volume-conditioned column shows the deep-dip edge mostly
   COLLAPSES on ≥median-volume days in the beyond-lane classes, herb the survivor, while the
   lane-confined bigticket cell survives), the honest actionable magnitudes are the encoded
-  LAG-1d-ENTRY numbers (potion +4.9pp, ammo +3.3pp, herb +3.4pp, bones +2.6pp, midvalue +1.6pp,
+  LAG-1d-ENTRY numbers (potion +4.9pp, ammo +3.3pp, herb +3.4pp, bones +0.7pp at its significant
+  (−4,−2] cell — the deeper cell's +2.6pp never cleared BH — midvalue +1.6pp,
   bulk +6.6pp — same-day is the descriptive upper bound), and mid-to-mid at the daily mean mid
   is not an executable price — the profile RANKS classes and buckets, it does not promise
   returns; the next chunk's surface design must price executability (liquidity floor, bid-side

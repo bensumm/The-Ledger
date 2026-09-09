@@ -224,10 +224,15 @@ beyond-lane +6.6pp t=1.74, clearing its one-sided gate by 0.009; trailing-split 
 their magnitudes but NOT their significance — unresolved, not established. **The honest
 actionable magnitudes are the LAG-1d-ENTRY numbers** (enter at the NEXT day's mid — what a human
 acting on a surface actually does; encoded): potion 8.3→+4.9pp, ammo 4.8→+3.3pp, herb +3.4pp,
-bones +2.6pp, midvalue +1.6pp, bulk +6.6pp — same-day capture is roughly half again higher and
-is quoted only as the descriptive upper bound. bigticket-lowlimit (+1.81pp, t=8.55) is
-significant but LANE-CONFINED under the registered split — the lane's trough-touch already owns
-this edge, which is WK1's null seen from the other side; rune's beyond-lane cell FAILS the items
+bones +0.7pp at its significant (−4,−2] cell (the deeper (−7,−4] cell's +2.6pp never cleared BH
+— do not pair it with the headline), midvalue +1.6pp, bulk +6.6pp — same-day capture is roughly
+half again higher and is quoted only as the descriptive upper bound. bigticket-lowlimit
+(+1.81pp, t=8.55) is significant but LANE-CONFINED under the registered split — the lane's
+trough-touch already owns this edge, which is WK1's null seen from the other side; the trailing
+variant nominally passes (+1.88pp t=4.0 n=24), label kept on the registered check because the
+deviation-p10 proxy is weakest for the lane's own class — a WK4 design input for the
+lane-owned/no-double-count annotation, and note bigticket is also the one class whose
+volume-conditioned deep cell survives (+1.19pp t=3.3). rune's beyond-lane cell FAILS the items
 floor (12 < 15 — too few members to classify, not a measured confinement).
 **NO knife class exists at class level** — §4's feared "deep deviation predicts continued fall"
 class did not materialize at this grain (the closest calls: bigticket (−4,−2] at −0.21pp ns, and
