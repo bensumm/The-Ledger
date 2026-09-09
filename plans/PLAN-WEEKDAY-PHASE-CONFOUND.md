@@ -440,6 +440,48 @@ public repo.
 One era, one pool, raw-mid costing (no band-edge execution modelled — that is the point
 of the comparison, not a flaw in it). Inform-only; gates nothing.
 
+## §9. Follow-on (owner directive 2026-09-09, registered, NOT run): the interpretation layer vs declared multi-day holds
+
+Owner:
+
+> *"We should also ensure that as part of this we fix the interpretation layer that runs
+> on scan to not only recommend to cut items like the crossbow which we are planning to
+> flip over several days — but that's a larger more complicated change."*
+
+**The live case that proves it (measured 2026-09-09):** the §4 crossbow — a registered
+five-day hold, entered at the Tue floor, one day in — rendered `CUT @ 34.52m (2h
+breakdown & underwater — free capital)` on the positions read. That is §1's origin story
+happening in real time to this plan's own registered trade, on the trough side of the
+measured weekly cycle.
+
+**What already exists, and the trap found while applying it:** `declare-thesis.mjs` +
+`hold-thesis.json` DO gate the verdict — after declaring the trade with a numeric
+tripwire the same read renders `CUT (2h breakdown) — live 34.52m still ~1.52m ABOVE
+declared abort 33m; within plan — your call`, which is the designed deference. But the
+convictionGate NO-OPS when the declared entry has no numeric tripwire
+(`pipeline/lib/thesis/holdthesis.mjs`, by design "safe-degrade"), and `declare-thesis`
+happily accepts a tripwire-less path declaration and prints "declared plan" — a
+declared-but-non-gating entry, invisible to the declarer. Mitigation applied for the live
+trade: crossbow declared `path wpc-weekly-cycle`, exit 36.25m, tripwire 33.0m recorded
+explicitly as the SUPPRESSION-LAPSE level, not an exit order — §4's registration is
+unchanged (failure stays time-based).
+
+**Scope of the larger chunk (design work; own plan + owner sign-off; not now):**
+1. `declare-thesis` should warn loudly (or refuse without an override) when a path
+   declaration carries no numeric tripwire — today it writes an entry that looks armed
+   and gates nothing.
+2. The interpretation layer (scan/positions skills + verdict rendering) should treat a
+   declared multi-day thesis as the FRAME: render progress against the declared exit and
+   failure condition (the unused `horizon` field could carry a failure DATE for
+   time-based theses like §4's) instead of a CUT recommendation the thesis already
+   overrides. The `hold-thesis` machinery gates; the skill prose still leads with CUT.
+3. §6(iv)'s ship shape rides along when built: where a quotable dislocation cell exists,
+   the warning line defers to it (rendered beside, not instead of, the ⚠) — scoped by
+   the RESULTS limit to {crash-risk, cooling} labels only.
+
+Nothing here changes gates or doctrine by itself; it is presentation/interpretation
+work, and per the process it needs its own per-topic plan before any of it is built.
+
 ## §3+§6 RESULTS (chunk WPC — registered run 2026-09-08, confirming rerun 2026-09-09)
 
 **Instrument:** `pipeline/experiments/wpc-label-study.mjs` (committed before its first run,
