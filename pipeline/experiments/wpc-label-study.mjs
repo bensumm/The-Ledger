@@ -73,6 +73,12 @@ const MONWED = new Set([1, 2, 3]), FRISUN = new Set([5, 6, 0]);
 
 const argAt = f => { const i = process.argv.indexOf(f); return i !== -1 ? Number(process.argv[i + 1]) : null; };
 const limitN = argAt('--limit');
+// --all-mids: POST-REGISTRATION supplementary (added 2026-09-08 after the registered run, labelled,
+// decides no branch): drops the §3 universe's mid≥100k floor, because that floor structurally
+// excludes ammo/herb/bones-ashes — 3 of WK3's 4 robust classes — so the registered §6 answer
+// covers only the ≥100k universe. This run asks whether (iv) also holds in the dislocation
+// table's own classes. Same thresholds; its output must always be quoted as supplementary.
+const allMids = process.argv.includes('--all-mids');
 
 // t CDF (copied from wk3-class-cycle-study.mjs @ 449ef0f)
 function ibetacf(a, b, x) { let m2, aa, c = 1, d = 1 - (a + b) * x / (a + 1); if (Math.abs(d) < 1e-30) d = 1e-30; d = 1 / d; let h2 = d; for (let mm = 1; mm <= 200; mm++) { m2 = 2 * mm; aa = mm * (b - mm) * x / ((a + m2 - 1) * (a + m2)); d = 1 + aa * d; if (Math.abs(d) < 1e-30) d = 1e-30; c = 1 + aa / c; if (Math.abs(c) < 1e-30) c = 1e-30; d = 1 / d; h2 *= d * c; aa = -(a + mm) * (a + b + mm) * x / ((a + m2) * (a + m2 + 1)); d = 1 + aa * d; if (Math.abs(d) < 1e-30) d = 1e-30; c = 1 + aa / c; if (Math.abs(c) < 1e-30) c = 1e-30; d = 1 / d; const del = d * c; h2 *= del; if (Math.abs(del - 1) < 3e-7) break; } return h2; }
@@ -91,7 +97,7 @@ function pairedT(diffs) {
 const fmt = v => (v >= 0 ? '+' : '') + v.toFixed(2);
 
 const mapping = JSON.parse(fs.readFileSync(path.join(ROOT, 'pipeline', '.cache', 'mapping.cache.json'), 'utf8'));
-const metaBy = new Map(mapping.map(m => [m.id, m]));
+const metaBy = new Map(Object.entries(mapping).map(([id, m]) => [Number(id), m]));
 const h0 = open(undefined, { readonly: true });
 const now = new Date(); now.setHours(0, 0, 0, 0);
 const eraEnd = Math.floor(now.getTime() / 1000) - 1;
@@ -118,12 +124,12 @@ const items = [];
 for (const [id, days] of byItem) {
   if (days.length < MIN_DAYS) continue;
   const eraMid = mean(days.map(x => x.mid));
-  if (eraMid < MIN_MID) continue;
+  if (!allMids && eraMid < MIN_MID) continue;
   const meta = metaBy.get(id);
   items.push({ id, name: meta?.name || String(id), cls: classifyItem({ name: meta?.name, limit: meta?.limit ?? null, eraMid }), days });
   if (limitN && items.length >= limitN) break;
 }
-console.log(`# WPC §3+§6 registered run — ${items.length} items (≥${MIN_DAYS}d, mid ≥ ${MIN_MID / 1e3}k), era end ${new Date(eraEnd * 1000).toISOString().slice(0, 10)}`);
+console.log(`# WPC §3+§6 ${allMids ? 'SUPPLEMENTARY --all-mids (post-registration, decides no branch)' : 'registered'} run — ${items.length} items (≥${MIN_DAYS}d${allMids ? '' : `, mid ≥ ${MIN_MID / 1e3}k`}), era end ${new Date(eraEnd * 1000).toISOString().slice(0, 10)}`);
 
 // per item-day reads: trailing fc label + trailing deviation bucket + forward net4
 let nReads = 0, nLabelled = 0;
