@@ -413,6 +413,33 @@ non-resolvability forbids any stronger claim in EITHER branch; inform-only, gate
 and the owner places every offer. Runs after §3/§6 land, on the same strictly-trailing
 discipline.
 
+### §8 RESULTS (run 2026-09-09 — branch (xii): the weekly window does not clear the tax)
+
+Instrument: `pipeline/experiments/reverse-flip-window-study.mjs` @ ab6a99e, committed
+before this run; bars fixed in its header (the registration above left them qualitative).
+Basket aggregates only in this text — the pool's composition is deliberately off the
+public repo.
+
+- **(f) → (xii), decisively.** Pool 26 (all owned keeps eligible; 0 reverseFlip theses),
+  15 cycle-weeks. The real cycle — sell Sat/Sun raw mid, rebuy the following Tue, net of
+  the ONE `tax()` — averages **−1.42%/cycle, 1/15 weeks positive, t=−5.41**. The
+  registered bar (≥ +0.5% and ≥ 70% weeks positive) is not approached.
+- **Why, and what it does NOT contradict:** the owned pool's own detrended weekend−Tue
+  gap is ~0 (mixed sign week to week) — the weekend effect was measured on the FIVE-item
+  gear basket, and per WK it is not per-item-resolvable; this 26-item bank-keep basket is
+  a different basket and shows no usable weekly tilt. And even a +1.4%-gross tilt (the
+  gear basket's) would not clear the ~2% sell tax as a mid-to-mid timing trade. The §4
+  crossbow trade is not refuted by this: it enters at the band FLOOR and exits at the
+  band peak — amplitude does the work, and weekly phase only tilts WHICH days offer the
+  edges. A blanket "reverse-flip the pool weekly" lane would lose money; the reverse
+  screen's diurnal peak/dip windows remain the timing read.
+- **(g) is moot as registered:** it was conditional on §6 firing branch (v); §6 fired
+  (iv), so no measured cells exist to re-derive the inverted rendering from. Nothing
+  ships from §8; the weekday line registered under (xi) is NOT built.
+
+One era, one pool, raw-mid costing (no band-edge execution modelled — that is the point
+of the comparison, not a flaw in it). Inform-only; gates nothing.
+
 ## §3+§6 RESULTS (chunk WPC — registered run 2026-09-08, confirming rerun 2026-09-09)
 
 **Instrument:** `pipeline/experiments/wpc-label-study.mjs` (committed before its first run,
