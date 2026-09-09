@@ -91,6 +91,7 @@ import { pickFetchPool, buildTrackIndex, clampUnionFetch, TOTAL_FETCH_MAX, GEAR_
 import { pathAGpDay, comparePathARows, assignRankInLane } from '../lib/signal/patha.mjs';   // PLAN-LANE-ADMISSION Chunk C/D — the Path-A gp/day scorer (captureFrac PLACEHOLDER n≈0) + the pure two-tier console ranker and in-lane ranker.
 import { classifyVolLane } from '../lib/signal/structural-admission.mjs';   // PLAN-LANE-ADMISSION Chunk B — the gear/churn volume lane selecting Path-A's captureFrac
 import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits = the shared three-way-min deployable position size (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST), reused for the digest's `deploy` SIZING column, never its sort basis.
+import { dislocationRead, formatDislocation } from '../lib/signal/dislocation.mjs';
 import { amplitudeRanges, amplitudeGate, amplitudeDriftMargin, ampWalkForward, AMP_HOLD_DAYS_DEFAULT, AMP_ASK_Q, AMP_BID_Q, AMP_WF_WARMUP_DAYS, AMP_WF_FIT_DAYS, AMP_WF_MIN_JUDGED } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the multi-day niche's Stage-2 gate + its 4d hold-horizon default (DT1); ampWalkForward (DT1b) = the measured round-trip P(fill) + its AMP_WF_* constants; amplitudeDriftMargin (PLAN-OSCILLATION-CYCLE Chunk 2) = the shadow-logged drift-adjusted margin; AMP_ASK_Q/AMP_BID_Q (F-E) = the default reach-vs-margin quantiles behind --amp-ask-q/--amp-bid-q.
 import { driftExitFrom, oscillationVsKnife, OSC_DETECTOR_NIGHTS } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE — driftExitFrom = the ONE slope-sourcing + drift-adjusted-exit composition, off in-hand hourProfile + windowStats().days, NO fetch; oscillationVsKnife tempers the knife guard (a drift-riding oscillator is not a false knife); OSC_DETECTOR_NIGHTS (F-H) = the detector's OWN longer window, decoupled from the gate's AMP_NIGHTS.
 import { amplitudeShadow } from '../lib/render/suggestlog.mjs';   // A5 — the amplitude lane shadow block on suggestions.jsonl
@@ -916,7 +917,7 @@ function enrichDigestAskDecay(rows, series1h, decayLines) {
   });
 }
 
-export function buildDigestBlock(pool = DIGEST_ROWS, { series1h = null } = {}) {
+export function buildDigestBlock(pool = DIGEST_ROWS, { series1h = null, disloc = null } = {}) {
   const lines = ['## DECISION DIGEST — cross-niche triage (INFORM-ONLY, PLACEHOLDER n≈0 — never gates; ranked by RANK = net × P(fill) ÷ TTF — scale-aware and wallet-free, so the order does not move with your cash. capEff = realizable ROI%/day and deploy = parkable capital are SHOWN as sizing, not ranked on)'];
   if (!pool.length) { lines.push('(no candidates this pass)'); return lines.join('\n'); }
   // W3-1: an uncrossable live spread (crossable === false) is FLOORED to -Infinity in the comparator ONLY so it
@@ -971,6 +972,14 @@ export function buildDigestBlock(pool = DIGEST_ROWS, { series1h = null } = {}) {
   }
   lines.push(mdTable(['Item', 'capEff', 'deploy', 'reach', 'trend', 'phase', 'soft-buy', 'grade', 'verdict'], tableRows));
   if (decayLines.length) lines.push('', 'ask-reach decay (top-X only — inform-only, n≈0, never gates):', ...decayLines);
+  if (disloc) {
+    const dislocLines = [];
+    for (const r of [...main, ...bigExtra]) {
+      let t = null; try { t = disloc(r.id, r.name); } catch { t = null; }
+      if (t) dislocLines.push(`  ◇ ${r.name}: ${t}`);
+    }
+    if (dislocLines.length) lines.push('', 'dislocation (WK4 — class-conditional measured yield, inform-only, never gates):', ...dislocLines);
+  }
   return lines.join('\n');
 }
 
@@ -2936,7 +2945,10 @@ async function main() {
   // appears even under the AO1 quiet default (console.log is a no-op there) — its own gate, independent of
   // --verbose. It DOES ride the last-report dump; the scope lock it stays behind is screen.json / the app.
   if (DIGEST) {
-    const digestBlock = buildDigestBlock(DIGEST_ROWS, { series1h });
+    const wfHd = wfArchive();
+    const dislocFn = wfHd ? ((id, name) => formatDislocation(
+      dislocationRead({ series1h: archiveSeries(wfHd, id, '1h', { days: 120 }), name, limit: map.byId[id]?.limit ?? null }), { fmt: fmtP })) : null;
+    const digestBlock = buildDigestBlock(DIGEST_ROWS, { series1h, disloc: dislocFn });
     REPORTS.push({ kind: 'screen', generatedAt: null, sections: [{ type: 'lines', lines: digestBlock.split('\n'), blank: false }] });
     realLog('\n' + digestBlock + '\n');
   }

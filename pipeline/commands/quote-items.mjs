@@ -41,6 +41,9 @@ import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — t
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
 import { warmOverride } from '../lib/market/warm-term-structure.mjs';   // COD-4 + R3 — warm .trajectory AND .recentTrend off ts1h so trajectoryValidator + floorValidator's recency gate FIRE on the explicit-ask surface
 import { loadWatchlistIds } from '../lib/config/watchlist.mjs';
+import { open as openArchive } from '../lib/market/archive.mjs';
+import { archiveSeries } from '../lib/market/archive-series.mjs';
+import { dislocationRead, formatDislocation } from '../lib/signal/dislocation.mjs';
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm, fetchTsCached, vol24FromInputs } from '../lib/market/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence); fetchTsCached — Proposal C's targeted 1h read; vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { staleExitRead, STALE_EXIT_RECENT_FRAC } from '../lib/timing/staleexit.mjs';   // Proposal C — stale declared-exit auto-flag (inform-only)
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
@@ -330,6 +333,8 @@ async function runItems() {
   // volSrc:'bulk'; when cold it's null → classAndSource keeps the per-item volume, tags volSrc:'peritem'.
   // NEVER fetches — loadAll24hWarm is a pure file read; a 1-item ask never triggers the ~4000-item dump.
   const warm24h = loadAll24hWarm();
+  let archH = null;
+  try { archH = openArchive(undefined, { readonly: true }); } catch { archH = null; }
   const rows = [], notes = [], sugg = [], probeStrs = [];
   for (const { id, name } of resolved) {
     // COD-4: BUDGETED ts1h fetch (1–2 items/invocation — cheap). Closes the A4 asymmetry: without a 1h
@@ -439,6 +444,11 @@ async function runItems() {
         if (ws) notes.push({ kind: 'forecast', itemId: id, text: `forecast: ${head} → sellable ${fmtEta(ws.etaH)} (${fmtHour(ws.atHours[0])}) @ ~${fmt(ws.projLevel)} [${fmt(ws.band.lo)}–${fmt(ws.band.hi)}] (provisional, n≈0 — diurnal+trend)` });
         else notes.push({ kind: 'forecast', itemId: id, text: `forecast: ${head} — NOT projected sellable within ${fc.horizonH}h on this model (provisional, n≈0)` });
       }
+    }
+    {
+      const dSeries = archH ? archiveSeries(archH, id, '1h', { days: 120 }) : null;
+      const dTxt = formatDislocation(dislocationRead({ series1h: dSeries, name, limit: map.byId[id]?.limit ?? null }), { fmt });
+      if (dTxt) notes.push({ kind: 'dislocation', itemId: id, text: dTxt });
     }
     // Bar E ask-headroom (inform-only): the robust p90 shaved a TRADED in-band top off the quoted ask —
     // ladder up, don't relist down (the GE better-price rule makes the ladder cheap). Null unless trusted.
@@ -602,6 +612,7 @@ async function runItems() {
     logFirings(fired, { surface: 'quote', id, name, quickBuy: row.quickBuy, quickSell: row.quickSell, guide: row.guide, regimeLabel: row.regimeLabel, phase: ph?.phase ?? null });
     probeStrs.push(fired.map(f => f.tag).join(' · '));
   }
+  if (archH) { try { archH.close?.(); } catch {} }
   // O1 suggestions ledger: log every emitted read at emit time, unconditionally (analytics only).
   logSuggestions('quote', { mode: null, params: { positions: false } }, sugg);
   if (!rows.length) process.exit(1);
@@ -792,6 +803,11 @@ async function runPositions() {
         const reach = se.reachable != null ? `; recent reachable peak ~${fmtP(se.reachable)}` : '';
         notes.push({ kind: 'staleExit', itemId, text: `${name}: declared exit ${fmtP(thesisEntry.exitPrice)} looks STALE on reach — printed ${se.recentHit}/${se.recentDays} recent nights (${se.fullHit}/${se.fullN} over ~14d, bar <${Math.round(STALE_EXIT_RECENT_FRAC * 3)}/3 recent)${reach}. Inform-only (PLACEHOLDER threshold, n≈0; touched ≠ filled) — verdict/thesis unchanged; re-declare via declare-thesis.mjs if you agree.` });
       }
+    }
+    {
+      const dSeries = (snap && snap.archive) ? archiveSeries(snap.archive, itemId, '1h', { days: 120 }) : null;
+      const dTxt = formatDislocation(dislocationRead({ series1h: dSeries, name, limit: map.byId[itemId]?.limit ?? null, nowMs }), { fmt });
+      if (dTxt) notes.push({ kind: 'dislocation', itemId, text: `${name}: ${dTxt}` });
     }
     const ahHeld = askHeadroomText(row);
     if (ahHeld) notes.push({ kind: 'askHeadroom', itemId, text: `${name}: ask headroom — ${ahHeld}` });

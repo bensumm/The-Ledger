@@ -2593,6 +2593,22 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `stalebid:<id>:<offer>` keys. `staleBidNotes` is the ONE per-item composition (declaration check
     via bidthesis.mjs → per-offer read → dedupe → rendered lines) shared by watch's standalone-bid,
     held-row and target-row call sites. Mutation-pinned in `stalebid.test.mjs`),
+    `dislocation.mjs` (WK4, PLAN-WEEKLY-CYCLE — PURE class-conditional dislocation/yield read,
+    INFORM-ONLY, gates/sizes/prices nothing: `classifyItem` is the WK3 pre-registered metadata
+    taxonomy, extracted verbatim and re-imported by `wk3-class-cycle-study.mjs` so record and runtime
+    cannot drift (`--audit` verified byte-identical across the move); `DISLOCATION_TABLE` holds WK3's
+    measured constants — DEEP buy cells ONLY for the trailing-split-robust beyond-lane classes'
+    BH-significant cells (potion-dose/bulk-commodity deliberately ABSENT — unresolved; rune ABSENT —
+    lane-increment items floor; bigticket carries `lane:'owned'` → the no-double-count annotation),
+    ELEVATED ≥+4% wait/sell cells descriptive (p≤0.05, ≥15 items — NOT BH-registered) — each cell
+    carries `lag` (next-day entry, the honest quotable magnitude), `vol` (≥own-median-volume days —
+    the executability check; the deep edge is volume-fragile), `adv` (same-day upper bound), `cond`
+    (raw conditional net → `waitSavesGp`'s after-tax inversion); `dislocationRead` composes daily
+    mids off an archive-shaped 1h series (strictly-trailing 15d reference, ≥12/15 prior days, ≥3
+    rows today, ≤6h fresh — else SILENCE, never a fabricated read) and `formatDislocation` renders
+    the one line. Consumers: `quote-items.mjs` (bare + positions, note kind `dislocation` ◇) and
+    `screen-flip-niches.mjs`'s decision digest (rendered rows only). Fixtures:
+    `dislocation.test.mjs`),
     `freed-capital.mjs` (V6 Companion — PURE `freedCapital`: detects capital freed by a booked SELL between
     passes off V1's prior-pass state and prompts a redeploy scan ≥ `FREED_CAPITAL_SCAN_GP` — surface-
     only, never auto-places/runs the scan; anchor-free, no startup/stale-gap misfire),

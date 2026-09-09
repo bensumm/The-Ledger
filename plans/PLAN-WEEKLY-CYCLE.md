@@ -1,4 +1,4 @@
-# PLAN-WEEKLY-CYCLE — the weekday price cycle (WK1 null; WK2 branch (c); WK3 outcome (i): deep-dislocation yield advantage, FOUR classes robust beyond the lane — next chunk designs the inform-only surface)
+# PLAN-WEEKLY-CYCLE — the weekday price cycle (WK1 null; WK2 branch (c); WK3 outcome (i); WK4 SHIPPED — the inform-only dislocation/yield surface is live on quote + digest)
 
 Chunk prefix **WK** (verified collision-free, `lint-plan-refs.mjs --collisions`, 2026-09-08).
 
@@ -285,6 +285,45 @@ surface, connected to the amplitude lane's estimator frame — with executabilit
 first design constraint, big-ticket explicitly annotated as lane-owned (no double-count), and
 the ≥+4% elevated read surfaced on the SELL side (reverse-flip/exit timing). Nothing gates,
 sizes, or auto-prices off WK3.
+
+### WK4 (2026-09-08) — SHIPPED: the dislocation/yield surface, inform-only, two homes
+
+Owner alignment, verbatim: *"WK4's home depends on how it is implemented; I think we for sure want
+it in the digest as it is functioning as the amplitude strategy, and we probably want it on the
+quote surface as well because being able to say 'Wait 2 days to buy this item to save X' could be
+useful."*
+
+What shipped (every number a WK3 measured constant; reproducer = `wk3-class-cycle-study.mjs`,
+regenerated and verified identical before the constants were written down):
+
+- **`pipeline/lib/signal/dislocation.mjs`** — the ONE pure module: the WK3 taxonomy (extracted
+  verbatim; the study now re-imports it, `--audit` byte-identical across the move — record and
+  runtime cannot drift), the measured cell table, the strictly-trailing deviation read (15d ref,
+  ≥12/15 prior days, ≥3 rows today, ≤6h-fresh archive — anything less is SILENCE), and the
+  after-tax wait-savings inversion. Fixtures: `pipeline/test/dislocation.test.mjs`.
+- **Digest home** (`screen-flip-niches.mjs --digest`): a `dislocation (WK4 …)` block under the
+  digest table, computed for the RENDERED rows only (the enrichDigestAskDecay pattern) — never
+  re-ranks, never resurrects a filtered row.
+- **Quote home** (`quote-items.mjs`, bare + held-lot views): the ◇ note. Deep + robust class →
+  the buy read quoting the LAG-ENTRY magnitude with the AT-VOLUME figure beside it (the
+  volume-fragility caveat is IN the line, not a footnote); deep + big-ticket → the lane-owned
+  no-double-count line; elevated ≥+4% → the owner's wait read, rendered as "waiting ~4d ≈ X gp/u
+  cheaper" off the measured class-conditional mean (`waitSavesGp` inverts the after-tax cell).
+  "~4d" always — the registered horizon; the owner's "2 days" phrasing is deliberately NOT
+  rendered (no 2d cell was registered).
+
+Honesty constraints encoded, not prosed: potion-dose/bulk-commodity deep cells ABSENT (unresolved
+under the trailing split — quoting them would invite acting on an unestablished number); rune deep
+ABSENT (items floor); elevated cells carried as descriptive (p≤0.05, ≥15 items — the registered
+BH family was deep×4d only) and labeled so; unclassified/neutral/stale/absent-cell = silence,
+never a hedge. INFORM-ONLY end to end — the surface gates, sizes, re-ranks, and prices nothing,
+and the numbers are class-conditional expectations from ONE era, said so on every line.
+
+Deliberately NOT built: any estimator/rank coupling (outcome-(ii) checking showed the lane already
+owns the one volume-robust class), any auto-refresh of the constants (a re-run of WK3 is the only
+honest way to move a number — the table is a dated measurement, not a live model), and any
+watchlist/read-watchlist surfacing (not an aligned home; the shared builder would drag the
+annotation into byte-parity contracts for no aligned benefit).
 
 ---
 

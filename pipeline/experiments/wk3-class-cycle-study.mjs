@@ -353,24 +353,11 @@ for (const [id, days] of byItem) {
 }
 if (limitN != null) universe = universe.slice(0, limitN);
 
-// ---- taxonomy (ordered, first match wins — pre-registered above) -------------------------------
-const CLEAN_HERBS = ['Guam leaf', 'Marrentill', 'Tarromin', 'Harralander', 'Ranarr weed', 'Toadflax',
-  'Irit leaf', 'Avantoe', 'Kwuarm', 'Snapdragon', 'Cadantine', 'Lantadyme', 'Dwarf weed', 'Torstol'];
-function classify(u) {
-  const n = u.name;
-  if (u.eraMid >= 5e6 && u.limit != null && u.limit <= 15) return 'bigticket-lowlimit';
-  if (/\(\d\)$/.test(n)) return 'potion-dose';
-  if (/ rune$/i.test(n)) return 'rune';
-  if (/(bolts?( ?\(e\))?$|arrows?( ?\(p\+*\))?$|darts?$|javelins?$|cannonball$|bolt tips$|arrowtips$|dart tips?$)/i.test(n)) return 'ammo';
-  if (/( seed| sapling)s?$/i.test(n)) return 'seed-sapling';
-  if (/^grimy /i.test(n) || CLEAN_HERBS.includes(n)) return 'herb';
-  if (/(bones|ashes)$/i.test(n)) return 'bones-ashes';
-  if (/( ore$| bar$|logs$| plank$|^uncut |^raw )/i.test(n) || /(hide$|leather$)/i.test(n)) return 'raw-material';
-  if (u.eraMid >= 1e5 && u.limit != null && u.limit <= 70) return 'midvalue-lowlimit';
-  if (u.limit != null && u.limit >= 1000) return 'bulk-commodity';
-  return 'unclassified';
-}
-for (const u of universe) u.cls = classify(u);
+// ---- taxonomy (ordered, first match wins — pre-registered above; the rules were extracted
+// VERBATIM into lib/signal/dislocation.mjs by WK4 and re-imported here so the runtime surface and
+// this record cannot drift — the --audit output was verified byte-identical across the move) -----
+const { classifyItem } = await imp('pipeline/lib/signal/dislocation.mjs');
+for (const u of universe) u.cls = classifyItem(u);
 const tested = universe.filter(u => u.tested);
 const CLASSES = ['bigticket-lowlimit', 'potion-dose', 'rune', 'ammo', 'seed-sapling', 'herb',
   'bones-ashes', 'raw-material', 'midvalue-lowlimit', 'bulk-commodity', 'unclassified'];

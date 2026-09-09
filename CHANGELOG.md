@@ -8,6 +8,26 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## pipeline 2026-09-08 — the WK4 dislocation/yield surface (PLAN-WEEKLY-CYCLE WK4; no APP_VERSION bump — console/pipeline only)
+
+The inform-only surface the WK3 measurement earned, in the two owner-aligned homes: the scan's
+**decision digest** (a `dislocation (WK4 …)` block under the table, rendered rows only — the
+enrichDigestAskDecay pattern) and **`quote-items.mjs`** (bare + held-lot views, note kind
+`dislocation` ◇). One new PURE module owns everything measured:
+`pipeline/lib/signal/dislocation.mjs` — the WK3 taxonomy extracted verbatim (the experiment now
+re-imports it; `--audit` verified byte-identical across the move, killing the drift surface), the
+measured class×depth cells as provenance-stamped constants (deep buy cells ONLY for
+trailing-split-robust beyond-lane classes; potion-dose/bulk-commodity/rune deliberately absent;
+bigticket `lane:'owned'` → the no-double-count line; elevated ≥+4% wait/sell cells descriptive),
+the strictly-trailing 15d deviation read (≥12/15 prior days, ≥3 rows today, ≤6h fresh — silence
+otherwise), and the `waitSavesGp` after-tax inversion behind the owner's "wait ~4d to save X gp/u"
+quote line (always "~4d" — the registered horizon; never a false-precision "2 days"). Honesty
+constraints shipped in the line itself: lag-entry magnitude (not the same-day upper bound), the
+at-volume figure beside it (the deep edge is volume-fragile — executability binds), class
+attribution on every number, silence over hedging. Fixtures: `pipeline/test/dislocation.test.mjs`
+(12 assertions — taxonomy order, day-t exclusion, valid-day floors, absent-cell silence, savings
+arithmetic). INFORM-ONLY: gates, sizes, re-ranks, prices — none.
+
 ## 0.76.2 — 2026-09-08 — ampWalkForward gains an opt-in per-entry detail collector (PLAN-WEEKLY-CYCLE WK1)
 
 `js/amplitudescreen.mjs` `ampWalkForward({ collect: true })` now returns `entriesDetail`

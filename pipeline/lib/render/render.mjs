@@ -102,6 +102,7 @@ export const NOTE_KINDS = {
   fcTrack:      { prefix: '  ⇅ ',  tier: TIER.context }, // PLAN-DRIFT-VS-CRASH — the phase-aligned floor/ceiling slope-asymmetry + floor-break read (floorCeilingTrack), folded directly under the trajectory read
   windowExit:   { prefix: '  ↗ ',  tier: TIER.context },  // PLAN-POSITIONS-WINDOW-READ — the auto-surfaced ask-side typical-exit read on a big-ticket held lot (read-window-range.mjs --ask, folded in)
   askReachDecay: { prefix: '  ↕ ', tier: TIER.context },  // PLAN-DIURNAL-TRIAGE DT3 — is the intended ask sliding out of reach? (askReachDecay/askReachDecayNote), folded onto every price-recommendation surface. Replaced the `hourlyDrift` kind when the per-hour slope was deleted; same sigil/tier — it is a reach read, same family.
+  dislocation:  { prefix: '  ◇ ',  tier: TIER.context },  // WK4 — the class-conditional dislocation/yield read (lib/signal/dislocation.mjs); inform-only, never a price input
 };
 
 /* formatNote(item) — render ONE note item to its line. A plain string passes through UNCHANGED (the V5

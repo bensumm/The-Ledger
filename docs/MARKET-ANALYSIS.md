@@ -845,6 +845,23 @@ future BID-decay read). The rest of the RF4 reverse fold is unchanged — each d
 (`reverseFlipPositionLines`), carrying the thin-item rebuy-strand caution + a `REBUY_STALE_DAYS` nudge;
 zero-ripple — an empty store renders NOTHING extra on every surface.
 
+**The dislocation/yield read (WK4, PLAN-WEEKLY-CYCLE, 2026-09-08).** `lib/signal/dislocation.mjs`
+renders ONE ◇ line when an item sits in a state WK3 measured: **deep** (price ≤−2/−4/−7% vs its own
+strictly-trailing 15d mean, in a class whose registered cell survived the non-lookahead beyond-lane
+split — ammo, herb, bones-ashes, midvalue-lowlimit) quotes the **lag-entry** 4d advantage (enter
+next day — the honest actionable magnitude, ~half the same-day figure) beside the **at-volume**
+figure, because the deep edge is VOLUME-FRAGILE (on ≥own-median-volume days most beyond-lane classes
+collapse — executability is the binding constraint, and the line always shows both); **big-ticket**
+deep reads say the amplitude lane already prices that trough (lane-owned, no double-count);
+**elevated** (≥+4%) is the sell-side/wait mirror — the measured class-conditional mean 4d net is
+negative nearly everywhere, rendered as "waiting ~4d ≈ X gp/u cheaper" (descriptive cells, not
+BH-registered). potion-dose/bulk-commodity deep cells are deliberately ABSENT (magnitudes held,
+significance failed the trailing split — unresolved, not established). Unclassified items, absent
+cells, neutral deviations and stale archives are SILENCE, never a hedge line. Surfaces:
+`quote-items.mjs` (bare + held-lot views) and the scan's decision digest (rendered rows only).
+INFORM-ONLY, one era, class-conditional — never an entry signal, never a gate/size/price input;
+every number is a measured constant with the WK3 study as its reproducer.
+
 Any scored `--bid`/`--ask`/`--exit` run also prints a **three-part `fold:` line** (PLAN-ESTIMATOR-POSTURE
 AC8 + PLAN-ESTIMATOR-HONEST-SELL E3, 2026-07-22): `best-case ask X · honest net ±N · P(fill)~p%[ (recent-3
 q%)] · list at F (~Nd hold, conf) · reach-fold Y (secondary — phase-blind) (recent a/b · full c/d)[
