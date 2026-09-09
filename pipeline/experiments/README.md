@@ -360,3 +360,44 @@ To retire these experiments: delete `pipeline/experiments/` — with ONE excepti
 IS referenced: `js/amplitudescreen.mjs` and `js/estimators/families.mjs` both name it as the validation
 source for ranking on the walk-forward, so deleting it orphans two production headers. Everything else in
 here is genuinely free-standing.
+
+## weekday-phase-confound-study.mjs
+
+`PLAN-WEEKDAY-PHASE-CONFOUND` §2 — the motivating measurement, **not** the registered test (§3).
+Asks whether a fitted floor/ceiling slope is confounded with weekly phase: a slope fitted over a
+window that is not weekday-balanced runs from whatever phase it starts in to whatever phase today
+is, so a window ending on the measured trough day (Tue) biases the fitted ceiling negative. Two
+weekday-aligned statistics per item — same-weekday week-over-week change in the daily HIGH (strips
+phase by construction), and the daily mid detrended against its own 7-day *centered* mean bucketed
+into weekend vs Tuesday.
+
+Defaults to the five-item big-ticket gear basket `PLAN-WEEKLY-CYCLE` §1 was built on;
+`--items <id,id,...>` and `--days N` override. Read-only against `pipeline/.market-archive.sqlite`,
+run from the repo root.
+
+**The numbers live in the plan (§2), not here** — and they are motivating only: overlapping centered
+means induce serial dependence, so the nominal n is ~6× the independent-week count and the printed
+t-values are optimistic. The basket is also the same one WK's §1 selected, so this is not an
+out-of-sample confirmation of anything. Do not cite its output as a result; it exists to justify
+running §3.
+
+## hold-duration-lane-study.mjs
+
+`PLAN-WEEKDAY-PHASE-CONFOUND` §7a-CORRECTED — the retrospective lane split behind the owner's
+weekly-large-vs-rapid-attentive question. Buckets non-banked closed lots from `positions.json`
+by HOLD DURATION and reports four views, each of which exists because omitting it produced a
+wrong answer the first time: **win/loss decomposition** (net totals hid 28 winning 12–24h lots
+behind a loss cluster), an **era split** (early / late / last-30-days — the record spans heavy
+strategy change and is not stationary, and the long buckets are POSITIVE in the last 30 days),
+the **named long-hold lots** top and bottom, and **weekday keyed to BOTH buy and sell, split
+same-day vs multi-day** (392 of 470 lots are same-day, so a pooled sell-weekday table mostly
+restates same-day trades and says nothing about the multi-day lane).
+
+**DESCRIPTIVE ONLY — hold duration is ENDOGENOUS.** A losing position is not sold in three
+hours, it sits, so "long holds lose money" is substantially "losers become long holds" and the
+causal arrow may run backwards. The 2–7d bucket carries n=8: the strategy the question is about
+has essentially never been run. Read §7a-CORRECTED before quoting any row — it also retains the
+superseded first version as a worked example of the pooling failure. The forward test that can
+actually settle this is §7b, and it exists because this script cannot.
+
+Read-only against `positions.json`; no archive fetch, no network.
