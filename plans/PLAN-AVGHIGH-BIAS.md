@@ -93,10 +93,12 @@ Deterministic offline join — reproduce with a bare rerun.
   join hit rate; a timestamp audit (of 442 sells: ONE exact-local-midnight date-only
   stamp, 3 on-the-hour, 11 on-the-minute — hour-grain joins are trustworthy for ~99% of
   rows); and a spot-check that reproduces the founding §Origin case's day-level numbers
-  exactly (Sep-5 local-day max `avgHighPrice` 36,665,998; sell 37,990,000; +3.61%).
-- **(b) descriptive, as mechanics predicted:** 80–86% of sells print above the same-hour
-  `avgHighPrice`, median magnitude ~0.5–1.5%, mildly higher in rune/potion/unclassified
-  classes. An ask fill sits at the top of the hour's print distribution while the average
+  exactly (Sep-5 local-day max `avgHighPrice` 36,665,998; sell 37,990,000; +3.61%). The
+  branch decider (c) is DAY-grain, so it is immune to the hour-level join error (a) would
+  have tested; only date errors matter, and the audit bounds those at 1 row in 442.
+- **(b) descriptive, consistent with mechanics:** ~82% of sells pooled (tier cells range
+  60–100%) print above the same-hour `avgHighPrice`, median magnitude ~0.5–1.5%, mildly
+  higher in rune/potion/unclassified classes. An ask fill sits at the top of the hour's print distribution while the average
   includes the cheaper prints — this is NOT bias evidence and must not be quoted as such.
 - **(c) — the branch decider — day-max beats ≥1% are RARE:** recent-30d era 1/51 (2.0%);
   earlier era ~4% of 390. No hpv tier with n ≥ 20 reaches the registered 15% bar in either
@@ -106,9 +108,12 @@ Deterministic offline join — reproduce with a bare rerun.
   §4's "inside an hour whose recorded high is 36,665,998 / hpv 3" was a plausible
   arithmetic reconstruction (the 06:00 hour), not a logged fact; its DAY-level beat
   stands. It is a real ~2–4%-of-sells tail event, not a systematic bias.
-- **Tick-size artifact, named so nobody quotes it:** Coal "beat the day max ≥1%" on 5/5
-  sells because 1% of ~190 gp is about one price tick; the (c) bar is scale-sensitive
-  below a few hundred gp. Those 5 rows are inside the earlier-era 4% figure.
+- **Volume-dilution artifact (corrected in review — the first-run explanation said "tick
+  size" and was FALSE):** Coal beat its day-max on 5/5 sells at +2.65% (sellEach 155 vs
+  day-max 151) in hours with hpv ~500k. At that volume the hourly AVERAGE sits far below
+  the top prints, so the (c) bar is cheap to beat on bulk commodities — a dilution
+  artifact of the average-price basis, not a thin-book signal. Those 5 rows are inside
+  the earlier-era figure.
 
 **Branch (B) ships nothing:** reach counting against the day's max `avgHighPrice` is not
 systematically conservative for this book; the reach reads stay as-is. Asymmetry to keep
