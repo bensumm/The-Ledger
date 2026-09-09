@@ -891,6 +891,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   plan's "WK1 result" section before quoting it: it does NOT refute the §1 price-level cycle, it
   shows the trough-touch entry already absorbs it. `--json <path>`; needs the local archive + `mapping.cache.json`, so it does NOT run
   on a clean checkout. Freely deletable; nothing imports it.
+  Plus **`wk2-period-phase-universe.mjs`** (2026-09-08, PLAN-WEEKLY-CYCLE WK2 — §0 measurement 3,
+  the program decider) — which items cycle at the day scale on price LEVELS, at what period/phase,
+  and does it survive basket subtraction? Full-universe scan (4,323 items, 2,516 tested) off ONE
+  bulk SQL aggregate; max-R² sinusoid detection over 3–14d on 15d-detrended daily mids against an
+  AR(1) red-noise surrogate null (binned, seeded), BH-FDR q=0.05; decision rule COMMITTED before
+  the run (`b34bc7d`). **Pre-registered branch (a) fired** — 193 discoveries (~9.7 expected
+  false), 152 surviving basket subtraction, 83 clearing every tradeability floor — **but the
+  weekly-locked class is near-empty (5 of 2,516; liquid: Old school bond trough Sun, fang +
+  blowpipe trough Wed)**, the periods mass at 9.5–14d, the market basket itself is NOT significant
+  (not one index), and §4's crossbow/ring weekday rows were fitted noise. Read the plan's "WK2
+  result" section before quoting any of it — one era, ~10 expected-false names, amplitudes are
+  full-capture upper bounds, and the SET is the finding, never a single item. `--item`/`--limit`
+  spot modes print no branch; `--json <path>`; needs the local archive + `mapping.cache.json`, so
+  it does NOT run on a clean checkout. Freely deletable; nothing imports it.
   All read the `/1h` SQLite archive read-only and gate nothing.
 - `ignored-items.json` — tracked repo-root config (2026-07-07): items QUARANTINED from the MERCH
   book (farming inputs / loot / personal-use — e.g. snapdragon seed 5300, snapdragon 3000). Its

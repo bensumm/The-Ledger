@@ -319,6 +319,18 @@ if (!smoke) {
   else branch = '(c) TOO THIN — the plan closes "measured, too thin, don\'t build"';
   console.log(`\nPRE-REGISTERED BRANCH: ${branch}`);
 }
+// POST-HOC SENSITIVITY (added after the registered run; labeled, decides NOTHING — the reproducer
+// for the band-edge caveat in the write-up). The registered band caps at 14d; if a discovery's R²
+// over an EXTENDED 3–30d grid peaks BEYOND 14.25d, its in-band P* is a truncation of longer-period
+// power — and claims outside 3–14d are refused by the pre-registration, so such items are flagged
+// band-edge-unreliable rather than re-branched.
+const EXT = []; for (let p = 3; p <= 30.0001; p += 0.25) EXT.push(Number(p.toFixed(2)));
+const extBest = devs => { let b = { r2: -1, P: null }; const ts = devs.map(x => x.di), vs = devs.map(x => x.v); for (const P of EXT) { const f = fitPeriod(ts, vs, P); if (f.r2 > b.r2) b = { r2: f.r2, P }; } return b; };
+for (const u of rawDisc) u.ext = extBest(u.devs);
+const edgeUnreliable = rawDisc.filter(u => u.ext.P > 14.25);
+const brAclean = brA.filter(u => u.ext.P <= 14.25);
+console.log(`\nPOST-HOC band-edge sensitivity (decides nothing): ${edgeUnreliable.length}/${rawDisc.length} raw discoveries peak beyond 14.25d on a 3–30d grid (in-band P* is truncated longer-period power; ${rawDisc.filter(u => u.raw.P >= 12).length} had in-band P* ≥ 12d). brA set excluding them: ${brAclean.length} of ${brA.length}.`);
+
 console.log(`\n(universe ${universe.length}, tested ${tested.length}, surrogate bins ${surrCache.size}, ${((Date.now() - t0) / 1000).toFixed(1)}s detection)`);
 
 const jsonAt = argAt('--json');
@@ -330,7 +342,7 @@ if (jsonAt) {
     basket: basketDet, basketMembers: basketMembers.length,
     items: tested.map(u => ({
       id: u.id, name: u.name, limit: u.limit, gpd: Math.round(u.gpd), midNow: Math.round(u.midNow),
-      raw: u.raw, sub: u.sub, rawDisc: u.rawDisc, subDisc: u.subDisc,
+      raw: u.raw, sub: u.sub, rawDisc: u.rawDisc, subDisc: u.subDisc, ext: u.ext ?? null,
       lock: lockOf(u), troughWd: u.raw && u.raw.P >= LOCK_BAND[0] && u.raw.P <= LOCK_BAND[1] ? troughWeekday(u.devs) : null,
     })),
   }, null, 1));

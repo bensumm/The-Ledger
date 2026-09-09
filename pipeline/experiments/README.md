@@ -271,6 +271,35 @@ depended on a session-scratch `hp-lib.mjs`, which is why two production headers 
   local archive + a populated `mapping.cache.json`, so it does NOT run on a clean checkout.
   Freely deletable; nothing imports it.
 
+- **`wk2-period-phase-universe.mjs`** (PLAN-WEEKLY-CYCLE §0, decisive measurement 3 — the program
+  decider after WK1's null) — over the full universe, which items cycle at the day scale on price
+  LEVELS, at what period and phase, calendar-locked or free-running, and does the structure
+  survive basket subtraction (item vs one-market-index, plan §6)? ONE bulk SQL aggregate → daily
+  mids (local days), 15d-centered detrend (passes the 3–14d claim band near-uniformly where §1's
+  7d window would attenuate the top), max-R² sinusoid detection on a 0.25d period grid, AR(1)
+  red-noise surrogate null (binned by (r1, n), 10k seeded draws — the WK1 lesson that i.i.d.
+  nulls overcall periodicity on red series), BH-FDR q=0.05 per family (raw / basket-subtracted).
+  **The decision rule landed as its OWN commit before the first full run** (`b34bc7d` — closing
+  WK1's single-commit pre-registration gap); only no-branch spot smokes preceded it.
+
+  **Branch (a) fired: per-item structure worth building.** 4,323 archive items, 2,516 tested;
+  193 raw discoveries (expected false ≈ 9.7), 152 survive basket subtraction, 83 clear the
+  branch floors (both-FDR ∧ peak-to-trough ≥ 4% ∧ ≥ 5m gp/day ∧ drift ≤ 1.5d) vs the
+  pre-registered ≥ 15. **The weekly band is near-empty** — 5 of 2,516, liquid locked set = Old
+  school bond (trough Sun), fang + blowpipe (trough Wed) — periods mass at 9.5–14d instead, so
+  the derived-window shape (§0), not a weekday bucket, is what the data supports. The
+  1,934-member basket itself is NOT significant (p=0.115, p2t 0.64%): not one index; branch (b)
+  did not fire. §1-five check: fang ✓ weekly-locked (Wed, one day off §4's Tue); hilt a 14d
+  discovery, not an inverted weekly; staff/crossbow/ring not discoveries (§4's rows for the last
+  two were fitted noise). A band-edge alias worry (53% of P* ≥ 12d) was tested and REFUTED via
+  the labeled post-hoc 3–30d grid block: only 10/193 peak beyond 14.25d. Limits: one era (~7
+  cycles at 13d — an era rhythm can masquerade as a period), AR(1) carries lag-1 redness only
+  (residual redness would inflate the count — stated, untested), touch mids, amplitudes are
+  full-capture UPPER bounds; the SET is the finding, no single-item claim is safe. `--item`/
+  `--limit` spot modes print no branch; `--json <path>` (the 82/83-item qualifying set lives
+  there); needs the local archive + a populated `mapping.cache.json`, so it does NOT run on a
+  clean checkout. Freely deletable; nothing imports it.
+
 To retire these experiments: delete `pipeline/experiments/` — with ONE exception. `amp-cycle-reproduction.mjs`
 IS referenced: `js/amplitudescreen.mjs` and `js/estimators/families.mjs` both name it as the validation
 source for ranking on the walk-forward, so deleting it orphans two production headers. Everything else in
