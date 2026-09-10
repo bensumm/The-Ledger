@@ -519,8 +519,14 @@ bones-ashes — three of WK3's four robust classes: 3,648 items, 273,772 reads.
   Fri–Sun-end (t=2.47, 548 items; needed ≥+0.5pp & t≥2.5). Suggestive of a mild phase
   tilt in the label's cost; not established, and nothing may be built on it.
 
-The 2026-09-08 crossbow case was a single-item coincidence per branch (iii). Record and
-close §3. No fit repair; the §6 interaction rule is therefore moot ((v) never entered).
+Branch (iii)'s "single-item coincidence" wording, stated precisely (owner challenged it
+2026-09-09, correctly): the crossbow's gap is REAL — displayed ceiling −220,578/d against
+a +0.44%/wk weekday-aligned trend, reproduced to the gp — and §3 refutes only the claim
+that window-end weekday CAUSED it ((b)'s own dummy table has Fri-end slopes most
+negative, not Tue/Wed-end, backwards from H1's mechanism). What did cause it (the item's
+own recent path is the unadjudicated candidate) is an n=1 question this design cannot
+answer. Record and close §3. No fit repair; the §6 interaction rule is therefore moot
+((v) never entered).
 
 ### §6 → branch (iv): SUBSUMED — the warning adds nothing the dislocation read doesn't
 
