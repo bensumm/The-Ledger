@@ -609,6 +609,22 @@ the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the co
 
 ## Discovered
 
+- **PLAN-WEEKDAY-PHASE-CONFOUND — is the fitted trend read confounded with weekly phase? (OPEN,
+  pre-registered 2026-09-08, `plans/PLAN-WEEKDAY-PHASE-CONFOUND.md`).** Owner challenge, twice, in one
+  session: the falling-knife rule, and then the ceiling slope it fell back on. WK3 had already settled the
+  first (**NO knife class exists at class level** — the "deep deviation predicts continued fall" class did
+  not materialize), so quoting it as measured was wrong. The second is the new hypothesis: a floor/ceiling
+  slope is fitted over a window whose ENDPOINT is whatever today happens to be, so a window ending on the
+  measured trough day (Tue) biases the fitted ceiling negative — a spurious downtrend, and rejected trades
+  that were only mid-cycle. §2's motivating run weekday-aligns the five-item gear basket over 42d and finds
+  none of them in a significant downtrend, with the weekend-minus-Tuesday gap positive on all five
+  (`pipeline/experiments/weekday-phase-confound-study.mjs`; motivating only — overlapping centered means,
+  optimistic t, and the same basket WK §1 selected, so not out-of-sample). §3 registers the universe test
+  (label-incidence by window-end weekday · slope decomposition on weekday dummies · forward yield of the
+  "falling" label by window-end weekday) with three branches including a live null. §4 logs the owner's
+  2026-09-08 Armadyl crossbow trade — entry, exit, and the failure condition — BEFORE the outcome, to
+  prevent hindsight reconstruction; n=1, an anecdote, never evidence. Inform-only; gates nothing.
+
 - **EC5 — the SELL-side twin of EC3: exit rungs render with no break-even mark (OPEN, found 2026-09-08).**
   EC3 shipped the buy-side check (dip level + premium ON the buy line, ⚠ when the premium ≥ the whole net).
   The sell side has the identical hole and did NOT ship. `quote-items.mjs:859` assembles the held-lot
@@ -673,6 +689,33 @@ the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the co
   header + README's `windowread.mjs`/`cells.mjs` entries; story: CHANGELOG "pipeline 1.4.0".
   Execution: 3bdca47 (plan + EC1 record) · ac25b5c (the wave, pipeline 1.4.0) · 9925847 (skill
   cue-enumeration follow-on). Two review rounds; round 2 empty (the stopping signal).
+
+- **PLAN-THESIS-FRAME — SHIPPED 2026-09-09 (TF1–TF3, one day; plan folded + deleted, full text via
+  `git show 97c52f5:plans/PLAN-THESIS-FRAME.md`).** WPC §9's owner-directed follow-on: the
+  interpretation layer stops leading with CUT on a lot Ben is deliberately flipping over days (the
+  crossbow rendered `CUT … free capital` one day into its registered five-day hold). All
+  presentation/interpretation — gates/sizes/prices NOTHING. **TF1**: `declare-thesis set --path`
+  REFUSES (exit 1, `pathDeclGate`, before ANY store write) without a numeric `--tripwire`, a dated
+  `--until`, or the explicit `--no-tripwire` frame-only override — the declared-but-non-gating trap
+  WPC hit live. **TF3**: the declared plan IS the verdict cell (`item-context.mjs`, the ONE shared
+  renderer): `PLAN <path> · day k/n · exit X @ window · abort < Y · until <wd> <mm-dd>`, machinery
+  read in parens ONLY on disagreement (a bare mv-null UNDERWATER is the one suppressed state —
+  underwater IS the plan), hard `PLAN EXPIRED <date> — reassess · machinery: <full verdict>` lapse
+  past the date. `--until` writes a `YYYY-MM-DD` into the previously display-only `horizon`
+  (`parseHorizonDate` the ONE shape test); the 14d TTL prune stays UNTOUCHED (owner: cycles ≤2wk —
+  the date lapses loudly first; a beyond-TTL date warns at write). Render-only limits stated in the
+  CHANGELOG entry: the alert-layer thesis silence has NO date awareness, and the internal
+  persistence token stays `HOLD — per thesis` (no re-arm). **TF2** deviated on measurement: the
+  digest — THE decision surface (owner: "I just see the digest") — carries no falling warning at
+  all, so it got the context-together fix instead (decay `↕` + dislocation `◇` in ONE `per-item
+  notes` section grouped by item); the falling-warning/measured-cell adjacency shipped as
+  registered on the two quote-items surfaces. §DENSITY (render density) registered as out-of-scope
+  future work — needs its own plan. Review: round 1 five findings all taken (the load-bearing one:
+  watch-positions never threaded `thesis` into the shared verbose renderer — pre-existing, exactly
+  where the header claimed the surfaces couldn't disagree); round 2 one (the frame's `;` read as a
+  sentence end to watch's `firstSentence`, truncating the note line); round 3 empty (the stopping
+  signal). Story: CHANGELOG "pipeline 1.5.0". Execution: 91f93a9 (plan) · 8032441 (owner
+  decisions) · d278d73 (the build, pipeline 1.5.0) · 4adef0a (round 1) · 97c52f5 (round 2).
 
 - **The value/Invest lane's money path is NOT bond-covered (BSH H2 review, 2026-09-03).**
   `js/valuescreen.mjs` `afterTaxAmpPct` and `js/validate.mjs` `valueAmplitudeValidator` (a GATE)
