@@ -30,7 +30,10 @@
  *     id           — item id (number)
  *     exitPrice    — the declared target sell (gp); feeds the VN-2 thesis render frame's exit
  *     tripwire     — the declared structural break level (gp); THE gating level
- *     horizon      — free-text plan horizon ("multi-day", "overnight", …); display only
+ *     horizon      — free-text plan horizon ("multi-day", …) OR an ISO `YYYY-MM-DD` failure DATE
+ *                    (TF3; parseHorizonDate is the ONE shape test; renders `until`/day counts,
+ *                    lapses LOUDLY past it — display only). ⚠ The 14d prune still applies
+ *                    regardless (declare-thesis warns on a beyond-TTL date; re-declare restamps ts).
  *     window       — (VN-2, optional) the declared exit WINDOW, local hours "h-h" (e.g. "1-3" =
  *                    the diurnal peak window the exit targets); display/frame only, never gates
  *     path         — (P4a, optional) the CURRENT declared path key for the lot (js/held-item-strategy.mjs
@@ -58,6 +61,16 @@
 import fs from 'node:fs';
 
 export const HOLD_THESIS_TTL_DAYS = 14;   // a declared plan older than this is stale intent → pruned
+
+/* parseHorizonDate — the ONE shape test for a date-valued `horizon`: a real `YYYY-MM-DD` string →
+   local-midnight Date, anything else (free text, impossible dates, non-strings) → null. */
+export function parseHorizonDate(horizon) {
+  if (typeof horizon !== 'string') return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(horizon);
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return (d.getFullYear() === +m[1] && d.getMonth() === +m[2] - 1 && d.getDate() === +m[3]) ? d : null;
+}
 
 /* loadHoldThesis — read the tracked store. Degrades to [] on ANY failure (missing / corrupt) so a
    bad store file can never break a watch pass — matches watchstate.loadState's degrade-not-throw. */

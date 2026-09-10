@@ -195,12 +195,13 @@ ok('FIXTURE 3: above the tripwire, the frame renders the DECLARED exit (not the 
   const mv = { action: 'CLEAR', verdict: 'LIST-TO-CLEAR', listAt: 43_110_000, gate: 2 };
   const d = heldDisplay({ row, be: 43_070_000, mv, prior: null, nowMs: T0, thesis: MASORI_THESIS });
   assert.equal(d.frame, true);
-  assert.equal(d.token, 'HOLD — per thesis');
-  assert.match(d.label, /HOLD — per thesis \(value-hold\): exit 44\.22m @ 23-6h local · abort < 42\.50m/);
+  assert.equal(d.token, 'HOLD — per thesis', 'the INTERNAL persistence token is unchanged by TF3 (state compat)');
+  // TF3 (PLAN-THESIS-FRAME): the frame leads with PLAN and shows the disagreeing machinery in parens
+  assert.equal(d.label, 'PLAN value-hold · exit 44.22m @ 23-6h local · abort < 42.50m (machinery: LIST-TO-CLEAR — 2h breakdown)');
   assert.equal(d.raw, 'LIST-TO-CLEAR', 'the raw band-flip read stays honest underneath');
   const ctx = { market: { row }, intraday: {}, position: { be: 43_070_000, mv, display: d } };
   assert.equal(renderHeldVerdict(ctx, { mode: 'compact' }), d.label);
-  assert.ok(renderHeldVerdict(ctx, { mode: 'verbose' }).includes('raw band-flip read this pass: LIST-TO-CLEAR'));
+  assert.ok(renderHeldVerdict(ctx, { mode: 'verbose' }).includes('the declared plan governs'));
 });
 
 ok('FIXTURE 3b: the frame exit falls back to the caller-supplied diurnal ASK when no exitPrice declared', () => {
@@ -274,7 +275,7 @@ ok('FIXTURE 3f: a SPIKE-TOP diurnal-ask fallback renders the reality clause on t
   const d = gdlFrame({ peakReality: GDL_SPIKE });
   assert.equal(d.frame, true);
   assert.equal(d.label,
-    'HOLD — per thesis (value-hold): exit 1,904 ⚠ spike-top — typical ~1,828 @ 23-6h local · abort < 1,700');
+    'PLAN value-hold · exit 1,904 ⚠ spike-top — typical ~1,828 @ 23-6h local · abort < 1,700');
   // and it reaches BOTH rendered surfaces, not just the display object
   const ctx = { market: { row: gdlRow() }, intraday: {}, position: { be: 1720, mv: null, display: d } };
   assert.equal(renderHeldVerdict(ctx, { mode: 'compact' }), d.label);
@@ -283,7 +284,7 @@ ok('FIXTURE 3f: a SPIKE-TOP diurnal-ask fallback renders the reality clause on t
 
 ok('FIXTURE 3g: a CLEAN diurnal ask (and an absent reality) is BYTE-IDENTICAL to the pre-2c string', () => {
   const bare = gdlFrame({});                                  // the pre-2c call shape (no peakReality)
-  assert.equal(bare.label, 'HOLD — per thesis (value-hold): exit 1,904 @ 23-6h local · abort < 1,700');
+  assert.equal(bare.label, 'PLAN value-hold · exit 1,904 @ 23-6h local · abort < 1,700');
   assert.equal(GDL_CLEAN.spikeTop, false);
   assert.equal(GDL_CLEAN.staleOptimistic, false);
   assert.equal(gdlFrame({ peakReality: GDL_CLEAN }).label, bare.label, 'a clean read must add NOTHING');
@@ -298,7 +299,7 @@ ok('FIXTURE 3h: a DECLARED exitPrice NEVER gets a clause — even when peakReali
     thesis: th, diurnalAsk: 1904, peakReality: GDL_SPIKE });
   const without = heldDisplay({ row: gdlRow(), be: 1720, mv: null, prior: null, nowMs: T0,
     thesis: th, diurnalAsk: 1904 });
-  assert.equal(withR.label, 'HOLD — per thesis (value-hold): exit 1,950 @ 23-6h local · abort < 1,700');
+  assert.equal(withR.label, 'PLAN value-hold · exit 1,950 @ 23-6h local · abort < 1,700');
   assert.equal(withR.label, without.label);
   assert.ok(!/spike-top|typical/.test(withR.label), 'a declared exit must never carry a reality clause');
   // …and the same holds when there is no fallback level at all (the "exit per plan" degrade)

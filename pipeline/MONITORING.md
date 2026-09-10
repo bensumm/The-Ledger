@@ -147,7 +147,8 @@ Print-only — it never writes trade data. Each run emits:
      (mv-null, non-falling) read, so the per-print HOLD↔UNDERWATER coin-flip is noise; the ungated
      UNDERWATER headline is suppressed inside the band (dead-band = half the 2h raw band width,
      floored at ±0.5% of BE — `BE_DEADBAND_BAND_FRAC`/`BE_DEADBAND_MIN_PCT`, PLACEHOLDERS, n=1) —
-     and **`HOLD — per thesis (…): exit … · abort < …`** (the VN-2 declared-plan frame, above).
+     and **`PLAN <path> · day k/n · exit … · abort < … · until <date>`** (the VN-2 declared-plan
+     frame, re-shaped by TF3 — above; `PLAN EXPIRED … — reassess; machinery: …` past its date).
      Both are DISPLAY states: the raw momVerdict/fallback token is unchanged underneath and stays
      what the ledger logs; a falling regime, an escalated verdict, or a print outside the band
      exits PARKED. Home: `heldDisplay` (`lib/item-context.mjs`), pinned in `verdictpersist.test.mjs`.
@@ -552,10 +553,20 @@ of the numbered signals, in more detail:
        RC7). Below the tripwire it **falls through** to the normal escalation above so the *real* risk
        headlines. The RAW verdict is UNCHANGED (`momVerdict` is untouched; the ledger
        still logs `UNDERWATER`/`CUT-CANDIDATE`/`LIST-TO-CLEAR`, honest) — the headline is gated here.
-       **VN-2 render frame:** on both console surfaces a declared lot above its tripwire also RENDERS
-       as the plan — `HOLD — per thesis (<path>): exit <declared exitPrice, or the diurnal ASK off the
-       in-hand 1h series on watch-positions.mjs, else "exit per plan"> @ <window>h local · abort < <tripwire>` —
-       via the shared display layer (`heldDisplay`), with the raw band-flip read demoted to the note.
+       **VN-2 render frame (label re-shaped by TF3, PLAN-THESIS-FRAME 2026-09-09):** on both console
+       surfaces a declared lot above its tripwire also RENDERS as the plan —
+       `PLAN <path> · day k/n · exit <declared exitPrice, or the diurnal ASK off the
+       in-hand 1h series on watch-positions.mjs, else "exit per plan"> @ <window>h local · abort < <tripwire>
+       · until <date> (machinery: <read>)` — via the shared display layer (`heldDisplay`). The
+       `day k/n`/`until` segments render only when `horizon` carries a `YYYY-MM-DD` date
+       (`declare-thesis --until`; day 1 = the declaration day); the `(machinery: …)` parens show the
+       raw read whenever it DISAGREES (a bare mv-null `UNDERWATER` is the one suppressed state — being
+       underwater IS the plan; `machineryShort`, item-context.mjs). PAST the date the frame
+       hard-lapses: the cell leads `PLAN EXPIRED <date> (<path>) — reassess; machinery: <full verdict>`
+       and normal machinery-led rendering resumes (render-only — the alert-layer thesis silence and
+       the 14d TTL are UNTOUCHED, so an expired-but-unpruned entry still silences headlines above its
+       tripwire until TTL/clear; the internal persistence token also stays `HOLD — per thesis`, so
+       pre-TF3 watch-state entries don't re-arm).
        The frame exit is the DECLARED/diurnal level, never the 2h band top (the band top under-priced
        the diurnal exit — the 43.60m-vs-44.22m Masori leak).
        **Chunk 2c (2026-08-12): when the exit is the DIURNAL fallback it can now carry the level-reality
@@ -563,7 +574,10 @@ of the numbered signals, in more detail:
        artifact and this line is a price to sell at. A **declared** `exitPrice` is NEVER annotated:
        `reality` describes the derived cluster level, not the operator's own number. A clean or absent
        reality renders byte-identically to before. Declare it at entry:
-       `node pipeline/commands/declare-thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h> --path <key>`.
+       `node pipeline/commands/declare-thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h> --until <YYYY-MM-DD> --path <key>`.
+       (TF1: a `--path` declaration with NO numeric tripwire and no `--until` date is REFUSED —
+       it would look armed and gate nothing; `--no-tripwire` is the deliberate frame-only override,
+       and the CUT/UNDERWATER headline then stays live.)
        **Invariants:** the Gate-2 breakdown `CUT` is checked FIRST, so a real breakdown is NEVER
        silenced (or frame-masked) by a thesis — it still fires, headlines, and escalates unchanged.
        **VN-4 ANNOTATE, don't hide (render-only):** when that breakdown `CUT` fires on a declared-thesis

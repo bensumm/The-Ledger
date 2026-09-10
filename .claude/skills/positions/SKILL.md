@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.69
+version: 1.70
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -283,6 +283,13 @@ lives below: the sell-velocity preference (how to step an unfilled ask down towa
 and the fill-progress check before acting on a CUT-CANDIDATE (an actively-filling ask may already
 be resolving the underwater flag).
 
+**Falling label ≠ standalone veto (TF2, WPC §6 branch (iv), measured 2026-09-08):** on a
+`crash-risk`/`cooling` item, when the regime warning carries `→ measured cell:` the dislocation
+line directly under it is the measured forward-yield read for that state — within (class ×
+depth) cells the label moved nothing BH-significant, so read that line (and any declared plan
+frame) before recommending CUT off the label alone. Applies to those two labels ONLY —
+`mild-cooldown` was outside the measured set and keeps its full ceiling-slope caution.
+
 **Sell-velocity preference (Ben, 2026-07-04) — the sell-side voice of `/scan`'s WINDOW-CLEAR PRICING step (days-reach ≠ within-window clear; name the exit window, price to it):** when a held item's ask sits ABOVE the current 2h band top and isn't filling, don't let it ride — recommend stepping the ask down to just under the band top (the price the market is actually printing), and if it still doesn't move within ~an hour or momentum flips ↓, step again to just above the live instabuy to clear. Moving the item and freeing the capital generally beats the patient premium. The floor is unchanged — never below break-even (the shared tax-capped `breakEven()`; see CLAUDE.md "Break-even") — the CUT/CUT-CANDIDATE verdicts remain the only exceptions. Present the rungs with net-per-unit and lot P/L so the velocity/premium trade-off is explicit.
 
 **HOLD defaults to the band-TOP premium — step a NEW/test lane down to a reachable level
@@ -358,11 +365,21 @@ as a hypothesis to keep testing, not an established pattern.
 **Declare the thesis AT ENTRY — every deliberate diurnal/value hold (VN-0, Ben 2026-07-11):**
 a position entered on a plan (buy the dip window, sell the diurnal peak; a value-hold toward a
 multi-week level) gets its plan DECLARED the moment the bid is placed/filled:
-`node pipeline/commands/declare-thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h> --path <key>`.
+`node pipeline/commands/declare-thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h> --until <YYYY-MM-DD> --path <key>`.
 The declared tripwire activates the TG1 headline silence and the thesis render frame
 (MONITORING.md step 4) — without it, the band-flip frame re-litigates the expected pre-peak
 trough as UNDERWATER/LIST-TO-CLEAR churn every pass (the 2026-07-11 Berserker/Masori session).
 An undeclared deliberate hold is an operating error, not a tooling gap.
+**The frame IS the verdict cell for a declared lot (TF3, PLAN-THESIS-FRAME):** it renders
+`PLAN <path> · day k/n · exit X · abort < Y · until <date>` with the machinery's read in parens
+whenever it disagrees — report the lot in the PLAN's terms (progress vs exit/abort/date), the
+machinery read as the parenthetical, and don't re-litigate the gate each pass (the standing
+"overrode cut, be terse" rule). `--until` is the declared failure DATE (render-only, never gates;
+a time-based plan can pass `--no-tripwire` instead of inventing a price stop — the tool now
+REFUSES a path declaration with neither, because it would gate nothing while looking armed).
+Past the date the cell hard-lapses to `PLAN EXPIRED — reassess; machinery: …` — that is the
+moment to actually re-decide, not a nag to silence. Note the ~14d hold-thesis TTL still prunes
+the entry from declaration; re-declare mid-hold to extend either clock.
 A declared exit is point-in-time: `quote-items.mjs --positions` now auto-flags one that has gone
 STALE on reach (`⚠ declared exit X looks STALE — printed N/3 recent nights; recent reachable
 peak ~Y`, Proposal C — inform-only, placeholder <2/3-recent bar, n≈0). On that flag, judge

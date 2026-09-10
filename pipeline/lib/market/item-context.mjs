@@ -44,6 +44,7 @@ import { fmtP } from '../../../js/money-format.js';
 import { realityClause } from '../../../js/windowread.mjs';   // PLAN-DIURNAL-RECENCY-GUARD 2c — the ONE reality-flag renderer; '' on a clean/absent read, so a clean row stays byte-identical
 import { computeDeltas, advanceState, convictionGate, pathPersistence,
   verdictPersistence, VERDICT_PERSIST_MS } from '../thesis/watchstate.mjs';
+import { parseHorizonDate } from '../thesis/holdthesis.mjs';   // TF3 — the ONE shape test for a date-valued horizon
 import { enumeratePaths, weighPaths } from '../../../js/held-item-strategy.mjs';
 
 // ---------------------------------------------------------------------------
@@ -119,6 +120,53 @@ export function rawHeldToken(row, be, mv) {
 export const BE_DEADBAND_BAND_FRAC = 0.5;    // fraction of the 2h raw band width
 export const BE_DEADBAND_MIN_PCT = 0.005;    // floor: ±0.5% of break-even
 
+// TF3 (PLAN-THESIS-FRAME) — thesis-as-frame helpers, ONE home so compact/verbose/watch agree.
+const localMidnightMs = t => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+
+/* thesisUntil — { until, expired, dayBit, untilBit, mmdd } for a date-valued horizon, else null.
+   EOD-local: live THROUGH its date; day counts inclusive from declaration (day 1 = declared day). */
+export function thesisUntil(thesis, nowMs = Date.now()) {
+  const until = parseHorizonDate(thesis && thesis.horizon);
+  if (!until) return null;
+  const expired = localMidnightMs(nowMs) > until.getTime();
+  let dayBit = '';
+  if (thesis.ts != null) {
+    const declared = localMidnightMs(thesis.ts * 1000);
+    const k = Math.round((localMidnightMs(nowMs) - declared) / 86400000) + 1;
+    const n = Math.round((until.getTime() - declared) / 86400000) + 1;
+    if (k >= 1 && n >= k) dayBit = ` · day ${k}/${n}`;
+  }
+  const mmdd = `${String(until.getMonth() + 1).padStart(2, '0')}-${String(until.getDate()).padStart(2, '0')}`;
+  const wd = until.toLocaleDateString(undefined, { weekday: 'short' });
+  return { until, expired, dayBit, untilBit: ` · until ${wd} ${mmdd}`, mmdd };
+}
+
+/* machineryShort — the frame's `(machinery: …)` clause; null on agreement (HOLD-family) AND on a
+   bare mv-null UNDERWATER (underwater IS the plan); fired verdicts + mv-null FALLING always show. */
+export function machineryShort(row, be, mv) {
+  const HOLD_FAMILY = new Set(['HOLD_STRONG', 'HOLD_WATCH', 'HOLD_FILLING', 'HOLD_FRESH']);
+  if (mv) {
+    if (HOLD_FAMILY.has(mv.action)) return null;
+    const why = mv.action === 'NO_READ'       ? 'unreliable read'
+              : mv.action === 'DIURNAL_WATCH' ? 'quiet-hour trough'
+              : mv.action === 'SHOCK_WATCH'   ? 'volume shock'
+              : mv.gate === 'D'               ? 'underwater through a liquid window'
+              : mv.action === 'CUT'           ? '2h breakdown & underwater'
+              : mv.action === 'CLEAR'         ? '2h breakdown'
+              : null;
+    return `${mv.verdict}${why ? ` — ${why}` : ''}`;
+  }
+  return rawHeldToken(row, be, null) === 'FALLING' ? 'FALLING' : null;
+}
+
+/* expiredPlanWrap — hard lapse: past the failure date the machinery verdict returns to the front,
+   EXPIRED-wrapped (null when n/a); self-limiting via the untouched ~14d TTL prune. */
+export function expiredPlanWrap(thesis, machineryText, nowMs = Date.now()) {
+  const tu = thesisUntil(thesis, nowMs);
+  if (!tu || !tu.expired) return null;
+  return `PLAN EXPIRED ${tu.mmdd}${thesis.path != null ? ` (${thesis.path})` : ''} — reassess; machinery: ${machineryText}`;
+}
+
 /* isParkedAtBE — PURE: a held lot counts as PARKED when no momVerdict fired (a clean read — any
    escalated/softened state keeps its own token), the regime is not falling, and |live − BE| sits
    inside the dead-band. Returns the dead-band gp (truthy) or null. */
@@ -153,9 +201,12 @@ export function heldDisplay({ row = null, be = null, mv = null, prior = null,
   peakReality = null } = {}) {
   const raw = rawHeldToken(row, be, mv);
   const immediate = !!(mv && mv.action === 'CUT' && mv.gate === 2);   // the Gate-2 breakdown CUT invariant
-  // VN-2 THESIS RENDER FRAME (RC7): a lot with a DECLARED plan whose live price still holds ABOVE
-  // the declared tripwire RENDERS as the plan — `HOLD — per thesis: exit <declared> @ <window> ·
-  // abort < <tripwire>` — with the band-flip read demoted to the raw/notes layer. The exit is the
+  // VN-2 THESIS RENDER FRAME (RC7; label re-shaped by TF3, PLAN-THESIS-FRAME): a lot with a
+  // DECLARED plan whose live price still holds ABOVE the declared tripwire RENDERS as the plan —
+  // `PLAN <path> · day k/n · exit <declared> @ <window> · abort < <tripwire> · until <date>
+  // (machinery: <disagreeing read>)` — the band-flip read demoted to the machinery parens
+  // (machineryShort's suppression rule). The internal persistence token stays 'HOLD — per thesis'
+  // so pre-TF3 watch-state entries keep matching (no re-arm on deploy). The exit is the
   // DECLARED exitPrice (falling back to the caller-supplied diurnal ASK off the in-hand 1h series —
   // never the 2h band top, which under-priced the diurnal exit: the 43.60m-band-top-vs-44.22m-peak
   // money leak). The Gate-2 breakdown CUT ALWAYS overrides the frame (`immediate` above — same
@@ -167,7 +218,10 @@ export function heldDisplay({ row = null, be = null, mv = null, prior = null,
   // / heldActionVerbose, via breakdownThesisAnnotation) add tripwire context to the CUT string —
   // the verdict/gate/escalation are byte-unchanged; only the rendered text differs.
   const live = row ? row.quickSell : null;
-  const frameActive = !immediate && thesis && thesis.tripwire != null && live != null && live > thesis.tripwire;
+  // TF3: a date horizon bounds the frame — past it the EXPIRED wrap below leads instead (hard lapse).
+  const tu = thesis ? thesisUntil(thesis, nowMs) : null;
+  const frameActive = !immediate && thesis && thesis.tripwire != null && live != null && live > thesis.tripwire
+    && !(tu && tu.expired);
   let frameLabel = null;
   if (frameActive) {
     // PLAN-DIURNAL-RECENCY-GUARD 2c: the exit price this frame prints is a HELD-LOT EXIT. When it comes
@@ -182,8 +236,11 @@ export function heldDisplay({ row = null, be = null, mv = null, prior = null,
       ? realityClause(peakReality, { side: 'ask', fmt: fmtP, style: 'exit' }) : '';
     const exitBit = exit != null ? `exit ${fmtP(exit)}${exitRC ? ` ${exitRC}` : ''}` : 'exit per plan';
     const winBit = thesis.window != null ? ` @ ${thesis.window}h local` : '';
-    const pathBit = thesis.path != null ? ` (${thesis.path})` : '';
-    frameLabel = `HOLD — per thesis${pathBit}: ${exitBit}${winBit} · abort < ${fmtP(thesis.tripwire)}`;
+    // TF3: the frame leads with the PLAN; a disagreeing machinery read shows beside it, never hidden.
+    const mach = machineryShort(row, be, mv);
+    frameLabel = `PLAN${thesis.path != null ? ` ${thesis.path}` : ' — per thesis'}${tu ? tu.dayBit : ''}`
+      + ` · ${exitBit}${winBit} · abort < ${fmtP(thesis.tripwire)}${tu ? tu.untilBit : ''}`
+      + `${mach ? ` (machinery: ${mach})` : ''}`;
   }
   // VN-3 (F2): PARKED dead-band — only reachable on a clean mv-null read (never masks an
   // escalated/softened verdict) and only when no thesis frame governs.
@@ -202,10 +259,14 @@ export function heldDisplay({ row = null, be = null, mv = null, prior = null,
     label += ` (${vp.armedKey} arming ~${min(vp.armedMs)}m/${min(persistMs)}m)`;
   if (vp.unreliableThisPass)
     label += ` (read unreliable this pass${row && row.reliableReason ? ` — ${row.reliableReason}` : ''})`;
+  // TF3 hard lapse: wraps here AND in the renderers (display-less call sites); forcing the synthetic
+  // path below keeps the two from ever both applying to one rendered string.
+  const expiredWrap = (tu && tu.expired) ? expiredPlanWrap(thesis, label, nowMs) : null;
+  if (expiredWrap) label = expiredWrap;
   const frameShown = frameActive && token === 'HOLD — per thesis';
-  const diverges = (vp.displayVerdict !== raw) || vp.arming || vp.unreliableThisPass || frameShown || parkedShown;
+  const diverges = (vp.displayVerdict !== raw) || vp.arming || vp.unreliableThisPass || frameShown || parkedShown || expiredWrap != null;
   const mvDisplay = diverges
-    ? { synthetic: true, kind: frameShown ? 'frame' : parkedShown ? 'parked' : 'persist', verdict: label, raw }
+    ? { synthetic: true, kind: expiredWrap != null ? 'expired' : frameShown ? 'frame' : parkedShown ? 'parked' : 'persist', verdict: label, raw }
     : mv;
   return {
     raw, token, label, frame: frameShown, parked: parkedShown, arming: vp.arming, armedKey: vp.armedKey,
@@ -411,9 +472,13 @@ export function breakdownThesisAnnotation(mv, thesis, live) {
    (breakdownThesisAnnotation) instead of the bare "free capital" tag — verdict/gate/escalation unchanged. */
 function heldVerdictCompact(row, be, mv, thesis = null) {
   const instabuy = row ? row.quickSell : null;
+  // TF3 hard lapse (display-less call sites): full compact text, EXPIRED-wrapped; a lapsed plan
+  // also loses the VN-4 annotation — it cannot vouch for anything.
+  const lapsed = !!(thesis && (thesisUntil(thesis) || {}).expired);
+  const wrap = s => (thesis && expiredPlanWrap(thesis, s)) || s;
   if (mv) {
-    const ann = breakdownThesisAnnotation(mv, thesis, instabuy);
-    if (ann) return ann;
+    const ann = lapsed ? null : breakdownThesisAnnotation(mv, thesis, instabuy);
+    if (ann) return wrap(ann);
     const at = mv.listAt != null ? ` @ ${fmtP(mv.listAt)}` : '';
     const tag = mv.action === 'NO_READ'       ? ` (unreliable: ${row.reliableReason} — no action, keep ask ≥ break-even)`
               : mv.action === 'DIURNAL_WATCH' ? ' (quiet-hour trough; dipped+recovered yesterday — hold ≥ break-even, re-check at a liquid hour)'
@@ -423,19 +488,19 @@ function heldVerdictCompact(row, be, mv, thesis = null) {
               : mv.action === 'CLEAR'         ? (row.rising ? ` (2h breakdown vs uptrend; big-ticket ≥ ${BIG_TICKET_GP / 1e6}m → clearing)` : ' (2h breakdown — bank it, don’t hold for the premium)')
               : mv.action === 'HOLD_WATCH'    ? ` (2h pullback vs uptrend on a sub-${BIG_TICKET_GP / 1e6}m lot — may reabsorb)`
               : ' (2h breakup — patient on the sell, don’t sell into strength)';
-    return `${mv.verdict}${at}${tag}`;
+    return wrap(`${mv.verdict}${at}${tag}`);
   }
-  if (instabuy == null) return 'NO QUOTE';
+  if (instabuy == null) return wrap('NO QUOTE');
   if (row.falling) {
-    return instabuy >= be
+    return wrap(instabuy >= be
       ? `SELL @ ${fmtP(instabuy)} (falling — clear in profit)`
-      : `CUT @ ${fmtP(instabuy)} (falling & underwater — free capital)`;
+      : `CUT @ ${fmtP(instabuy)} (falling & underwater — free capital)`);
   }
   const listAt = (row.optSell != null && row.optSell >= be) ? row.optSell
                : (instabuy >= be ? instabuy : be);
-  if (listAt >= be && (row.optSell != null && row.optSell >= be)) return `HOLD — list @ ${fmtP(listAt)}`;
-  if (instabuy >= be) return `HOLD — list @ ${fmtP(instabuy)}`;
-  return `HOLD — underwater, list ≥ ${fmtP(be)} (break-even)`;
+  if (listAt >= be && (row.optSell != null && row.optSell >= be)) return wrap(`HOLD — list @ ${fmtP(listAt)}`);
+  if (instabuy >= be) return wrap(`HOLD — list @ ${fmtP(instabuy)}`);
+  return wrap(`HOLD — underwater, list ≥ ${fmtP(be)} (break-even)`);
 }
 
 /* VERBOSE — the watch-positions.mjs per-held action line. Body reproduced VERBATIM from the pre-P0 watch-positions.mjs
@@ -445,39 +510,45 @@ function heldVerdictCompact(row, be, mv, thesis = null) {
    headlines + escalates unchanged; the annotation only records that live is above the declared abort. */
 function heldActionVerbose(row, be, lotValue, ts5m, mv, thesis = null) {
   const instabuy = row ? row.quickSell : null;
+  // TF3 hard lapse, verbose twin: EXPIRED wrap + the what-now sentence; VN-4 annotation dropped too.
+  const lapsed = !!(thesis && (thesisUntil(thesis) || {}).expired);
+  const wrap = s => {
+    const w = thesis && expiredPlanWrap(thesis, s);
+    return w ? `${w}. The declared failure date has passed — re-declare (declare-thesis --until) to extend the plan, or act on the machinery verdict.` : s;
+  };
   if (mv) {
-    const ann = breakdownThesisAnnotation(mv, thesis, instabuy);
+    const ann = lapsed ? null : breakdownThesisAnnotation(mv, thesis, instabuy);
     if (ann)
-      return `${ann}. A real 2h breakdown still fired and still headlines/escalates — it is never thesis-silenced; the annotation only notes the live clear is above your declared abort, so the plan is not yet invalidated. Not out-running the drop; chasing the ask lower just sells cheaper.`;
+      return wrap(`${ann}. A real 2h breakdown still fired and still headlines/escalates — it is never thesis-silenced; the annotation only notes the live clear is above your declared abort, so the plan is not yet invalidated. Not out-running the drop; chasing the ask lower just sells cheaper.`);
     if (mv.action === 'NO_READ')
-      return `NO-READ (${row.reliableReason}) — the quote isn't a reliable price right now (Gate 0). No price action; keep any ask ≥ break-even ${fmtP(be)} and re-check at the next liquid window.`;
+      return wrap(`NO-READ (${row.reliableReason}) — the quote isn't a reliable price right now (Gate 0). No price action; keep any ask ≥ break-even ${fmtP(be)} and re-check at the next liquid window.`);
     if (mv.action === 'DIURNAL_WATCH')
-      return `DIURNAL-WATCH @ ${fmtP(mv.listAt)} — underwater at a quiet hour that dipped & recovered yesterday (Gate 1). Hold ≥ break-even; do NOT cut into the trough. If still underwater at a liquid hour, the defense is spent → re-assess.`;
+      return wrap(`DIURNAL-WATCH @ ${fmtP(mv.listAt)} — underwater at a quiet hour that dipped & recovered yesterday (Gate 1). Hold ≥ break-even; do NOT cut into the trough. If still underwater at a liquid hour, the defense is spent → re-assess.`);
     if (mv.action === 'SHOCK_WATCH')
-      return `SHOCK-WATCH @ ${fmtP(mv.listAt)} — a one-off volume-spike shock that stabilized, not a bleed, on a small lot with an intact regime (Gate 2). Hold one more cycle; a fresh low next tick = bleed → cut.`;
+      return wrap(`SHOCK-WATCH @ ${fmtP(mv.listAt)} — a one-off volume-spike shock that stabilized, not a bleed, on a small lot with an intact regime (Gate 2). Hold one more cycle; a fresh low next tick = bleed → cut.`);
     if (mv.action === 'HOLD_FILLING')
-      return `HOLD — ask filling @ ${fmtP(mv.listAt)} — your own ask is filling above the clear price (Gate D, V3); an ask transacting above the clear beats repricing down. Hold it; let it keep filling.`;
+      return wrap(`HOLD — ask filling @ ${fmtP(mv.listAt)} — your own ask is filling above the clear price (Gate D, V3); an ask transacting above the clear beats repricing down. Hold it; let it keep filling.`);
     if (mv.action === 'HOLD_FRESH')
-      return `WATCH — fresh entry @ ${fmtP(mv.listAt)} — a fresh (<${FRESH_HOURS}h) patient fill is definitionally underwater on the instant read (Gate D, V3). Hold the ask ≥ break-even and give the thesis its window; don't cut a brand-new lot.`;
+      return wrap(`WATCH — fresh entry @ ${fmtP(mv.listAt)} — a fresh (<${FRESH_HOURS}h) patient fill is definitionally underwater on the instant read (Gate D, V3). Hold the ask ≥ break-even and give the thesis its window; don't cut a brand-new lot.`);
     if (mv.action === 'CUT')
-      return `${mv.verdict} @ ${fmtP(mv.listAt)} — ${mv.gate === 'D' ? 'underwater through a liquid window: persistence, not the clock' : 'controlled loss-taking: stop the bleed, free the capital'}. This is NOT out-running the drop; chasing the ask lower just sells cheaper.`;
+      return wrap(`${mv.verdict} @ ${fmtP(mv.listAt)} — ${mv.gate === 'D' ? 'underwater through a liquid window: persistence, not the clock' : 'controlled loss-taking: stop the bleed, free the capital'}. This is NOT out-running the drop; chasing the ask lower just sells cheaper.`);
     if (mv.action === 'CLEAR')
-      return `LIST-TO-CLEAR @ ${fmtP(mv.listAt)} — bank it; a softening market won't pay the patient premium. Repricing down realizes the current price, it does not beat the market.`;
+      return wrap(`LIST-TO-CLEAR @ ${fmtP(mv.listAt)} — bank it; a softening market won't pay the patient premium. Repricing down realizes the current price, it does not beat the market.`);
     if (mv.action === 'HOLD_STRONG')
-      return `HOLD — list high @ ${fmtP(mv.listAt)} (2h top); don't sell into strength.`;
+      return wrap(`HOLD — list high @ ${fmtP(mv.listAt)} (2h top); don't sell into strength.`);
     if (mv.action === 'HOLD_WATCH')
-      return `HOLD — watch; a lone 2h dip vs an uptrend on a small lot is usually noise.`;
+      return wrap(`HOLD — watch; a lone 2h dip vs an uptrend on a small lot is usually noise.`);
   }
-  if (instabuy == null) return 'NO QUOTE — cannot price; do not act blind.';
+  if (instabuy == null) return wrap('NO QUOTE — cannot price; do not act blind.');
   if (row.falling) {
-    return instabuy >= be
+    return wrap(instabuy >= be
       ? `SELL @ ${fmtP(instabuy)} — falling regime, clear in profit. Not out-running the drop; taking the exit while it's still green.`
-      : `CUT @ ${fmtP(instabuy)} — falling & underwater; take the small loss to free capital before a bigger one.`;
+      : `CUT @ ${fmtP(instabuy)} — falling & underwater; take the small loss to free capital before a bigger one.`);
   }
   const listAt = (row.optSell != null && row.optSell >= be) ? row.optSell : Math.max(instabuy, be);
   const banded = row.optSell != null && row.optSell > instabuy;
-  return `HOLD — list @ ${fmtP(listAt)} (break-even-floored${banded ? ', band top' : ''}). ` +
-    `Only in THIS ranging case does listing at the band top earn a premium; if it flips to breakdown, momVerdict switches to clear-vs-hold — don't defend the ask down.`;
+  return wrap(`HOLD — list @ ${fmtP(listAt)} (break-even-floored${banded ? ', band top' : ''}). ` +
+    `Only in THIS ranging case does listing at the band top earn a premium; if it flips to breakdown, momVerdict switches to clear-vs-hold — don't defend the ask down.`);
 }
 
 /* renderHeldVerdict(ctx, { mode }) — the ONE entry point both surfaces call.
@@ -497,7 +568,11 @@ export function renderHeldVerdict(ctx, { mode = 'compact' } = {}) {
   if (mv && mv.synthetic) {
     if (mv.kind === 'frame')
       return mode === 'verbose'
-        ? `${mv.verdict} — the declared plan governs (raw band-flip read this pass: ${mv.raw}). Below the tripwire normal escalation resumes; a Gate-2 breakdown CUT always overrides the frame.`
+        ? `${mv.verdict} — the declared plan governs; the machinery's read shows beside it in parens whenever it disagrees (a bare expected-underwater is the one suppressed state — being underwater IS the plan). Below the tripwire normal escalation resumes; a Gate-2 breakdown CUT always overrides the frame.`
+        : mv.verdict;
+    if (mv.kind === 'expired')
+      return mode === 'verbose'
+        ? `${mv.verdict}. The declared failure date has passed — the frame no longer governs and normal escalation resumed. Re-declare (declare-thesis --until) to extend the plan, or act on the machinery verdict.`
         : mv.verdict;
     if (mv.kind === 'parked')
       return mode === 'verbose'

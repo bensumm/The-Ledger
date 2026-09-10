@@ -364,7 +364,12 @@ async function runItems() {
     const ph = phase(inp.ts6h);
     const std = stdCells(name, row);   // PLAN-OUTPUT-TABLE: the row is pushed AFTER the est pair is computed below (view-dependent cells)
     const limWin = limitWindow({ buys: buysByItemMap.get(id) || [], limit: map.byId[id]?.limit ?? null });
-    notes.push({ kind: 'regime', itemId: id, text: regimeLine(name, row, map.byId[id]?.limit ?? null, limWin) });
+    // TF2 (WPC §6 iv): a falling row's quotable dislocation cell renders DIRECTLY under the regime
+    // warning (+ pointer); row.falling IS the measured {crash-risk, cooling} set — mild-cooldown untouched.
+    const dTxt = formatDislocation(dislocationRead({ series1h: archH ? archiveSeries(archH, id, '1h', { days: 120 }) : null, name, limit: map.byId[id]?.limit ?? null }), { fmt });
+    const fallingAdj = !!(row.falling && dTxt);
+    notes.push({ kind: 'regime', itemId: id, text: regimeLine(name, row, map.byId[id]?.limit ?? null, limWin) + (fallingAdj ? ' → measured cell:' : '') });
+    if (fallingAdj) notes.push({ kind: 'dislocation', itemId: id, text: dTxt });
     { const s = staleLiveNote(name, id, row); if (s) notes.push(s); }
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, id)), guide[id] ?? null);
     if (gl) notes.push({ kind: 'guideAnchor', itemId: id, text: gl });
@@ -445,11 +450,7 @@ async function runItems() {
         else notes.push({ kind: 'forecast', itemId: id, text: `forecast: ${head} — NOT projected sellable within ${fc.horizonH}h on this model (provisional, n≈0)` });
       }
     }
-    {
-      const dSeries = archH ? archiveSeries(archH, id, '1h', { days: 120 }) : null;
-      const dTxt = formatDislocation(dislocationRead({ series1h: dSeries, name, limit: map.byId[id]?.limit ?? null }), { fmt });
-      if (dTxt) notes.push({ kind: 'dislocation', itemId: id, text: dTxt });
-    }
+    if (dTxt && !fallingAdj) notes.push({ kind: 'dislocation', itemId: id, text: dTxt });   // TF2: falling rows carry it beside the regime warning above
     // Bar E ask-headroom (inform-only): the robust p90 shaved a TRADED in-band top off the quoted ask —
     // ladder up, don't relist down (the GE better-price rule makes the ladder cheap). Null unless trusted.
     const ah = askHeadroomText(row);
@@ -755,7 +756,11 @@ async function runPositions() {
     ctx.limits = { window: limWin };
     const vres = runValidators(ctx);
     rows.push([...stdCells(name + ` ×${qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), v]);
-    notes.push({ kind: 'regime', itemId, text: regimeLine(name, row, map.byId[itemId]?.limit ?? null, limWin) });
+    // TF2 (WPC §6 iv): falling + quotable cell → measured line directly under the regime warning.
+    const dTxtHeld = formatDislocation(dislocationRead({ series1h: (snap && snap.archive) ? archiveSeries(snap.archive, itemId, '1h', { days: 120 }) : null, name, limit: map.byId[itemId]?.limit ?? null, nowMs }), { fmt });
+    const fallingAdjHeld = !!(row.falling && dTxtHeld);
+    notes.push({ kind: 'regime', itemId, text: regimeLine(name, row, map.byId[itemId]?.limit ?? null, limWin) + (fallingAdjHeld ? ' → measured cell:' : '') });
+    if (fallingAdjHeld) notes.push({ kind: 'dislocation', itemId, text: `${name}: ${dTxtHeld}` });
     { const s = staleLiveNote(name, itemId, row); if (s) notes.push(s); }
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, itemId)), guide[itemId] ?? null);
     if (gl) notes.push({ kind: 'guideAnchor', itemId, text: gl });
@@ -804,11 +809,7 @@ async function runPositions() {
         notes.push({ kind: 'staleExit', itemId, text: `${name}: declared exit ${fmtP(thesisEntry.exitPrice)} looks STALE on reach — printed ${se.recentHit}/${se.recentDays} recent nights (${se.fullHit}/${se.fullN} over ~14d, bar <${Math.round(STALE_EXIT_RECENT_FRAC * 3)}/3 recent)${reach}. Inform-only (PLACEHOLDER threshold, n≈0; touched ≠ filled) — verdict/thesis unchanged; re-declare via declare-thesis.mjs if you agree.` });
       }
     }
-    {
-      const dSeries = (snap && snap.archive) ? archiveSeries(snap.archive, itemId, '1h', { days: 120 }) : null;
-      const dTxt = formatDislocation(dislocationRead({ series1h: dSeries, name, limit: map.byId[itemId]?.limit ?? null, nowMs }), { fmt });
-      if (dTxt) notes.push({ kind: 'dislocation', itemId, text: `${name}: ${dTxt}` });
-    }
+    if (dTxtHeld && !fallingAdjHeld) notes.push({ kind: 'dislocation', itemId, text: `${name}: ${dTxtHeld}` });   // TF2: falling rows carry it beside the regime warning above
     const ahHeld = askHeadroomText(row);
     if (ahHeld) notes.push({ kind: 'askHeadroom', itemId, text: `${name}: ask headroom — ${ahHeld}` });
     else if (row.mom === 'breakup' && row.optSell != null) notes.push({ kind: 'askHeadroom', itemId, text: `${name}: list @ ${fmtP(row.optSell)} is a FLOOR, not a target — live broke +${(row.momPct * 100).toFixed(1)}% above the 2h band; step the ask above the live print (the GE better-price rule fills higher if depth is there). Inform-only, n=1.` });

@@ -17,9 +17,12 @@
    path-carrying plan. `--path` is what routes the flags into the latter. `clear` removes the id from
    BOTH stores — FIX 2, 2026-07-13 — so a cleared plan can't leave a gating exit/tripwire behind.)
 
+   TF1/TF3 — a `--path` declaration with no failure condition REFUSES exit 1 (`pathDeclGate`;
+   `--no-tripwire` overrides); `--until <YYYY-MM-DD>` → `horizon` (render-only; beyond-TTL warns).
+
    FD4 — `bid`/`bid-clear` declare/clear a DEEP/LONG resting-bid intent into TRACKED root bid-thesis.json (bidthesis.mjs): silences watch's stale-bid flag until TTL, gates nothing else.
 
-     node pipeline/commands/declare-thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--exit "<gp>"] [--window "<h-h>"] [--path <key>] [--entered-under <key>]
+     node pipeline/commands/declare-thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--exit "<gp>"] [--window "<h-h>"] [--until <YYYY-MM-DD>] [--path <key>] [--entered-under <key>] [--no-tripwire]
      node pipeline/commands/declare-thesis.mjs clear "<item|id>"
      node pipeline/commands/declare-thesis.mjs bid "<item|id>" ["<note>"] [--side buy|sell]
      node pipeline/commands/declare-thesis.mjs bid-clear "<item|id>" [--side buy|sell]
@@ -28,7 +31,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping } from '../lib/market/marketfetch.mjs';
 import { loadThesis, saveThesis, upsertThesis, clearThesis, pruneThesis, thesisLine } from '../lib/thesis/sessionthesis.mjs';
-import { loadHoldThesis, saveHoldThesis, pruneHoldThesis, thesisFor as holdThesisFor, upsertThesis as upsertHoldThesis, clearThesis as clearHoldThesis } from '../lib/thesis/holdthesis.mjs';
+import { loadHoldThesis, saveHoldThesis, pruneHoldThesis, thesisFor as holdThesisFor, upsertThesis as upsertHoldThesis, clearThesis as clearHoldThesis, parseHorizonDate, HOLD_THESIS_TTL_DAYS } from '../lib/thesis/holdthesis.mjs';
 import { loadBidThesis, saveBidThesis, pruneBidThesis, upsertBidThesis, clearBidThesis, BID_THESIS_TTL_DAYS } from '../lib/thesis/bidthesis.mjs';   // FD4 — declared deep/long-bid store
 import { parseGp } from '../lib/render/cli.mjs';   // VN-2 — numeric tripwire/exit for the hold-thesis write
 
@@ -37,9 +40,22 @@ const THESIS_PATH = path.join(HERE, '..', '.cache', 'session-thesis.json');
 const HOLD_THESIS_PATH = path.join(HERE, '..', '..', 'hold-thesis.json');   // TRACKED repo-root store (P4a path decl)
 const BID_THESIS_PATH = path.join(HERE, '..', '..', 'bid-thesis.json');     // TRACKED repo-root store (FD4 bid decl)
 
+/* TF1 — the PURE path-declaration gate: a failure condition (numeric tripwire / date horizon) or
+   the explicit `--no-tripwire` frame-only override, else { ok:false, reason }. */
+export function pathDeclGate({ tripwire = null, horizon = null, noTripwire = false } = {}) {
+  if (tripwire != null || noTripwire || parseHorizonDate(horizon) != null) return { ok: true };
+  return {
+    ok: false,
+    reason: 'a --path declaration with no numeric tripwire and no --until date would be DECLARED BUT NON-GATING: '
+      + 'the convictionGate thesis branch no-ops without a numeric tripwire, so the CUT/UNDERWATER headline keeps firing '
+      + 'and nothing tells you the plan is inert. Pass --tripwire "<level>" to arm it, --until <YYYY-MM-DD> to date the '
+      + 'failure condition, or --no-tripwire to declare display-frame-only intent deliberately.',
+  };
+}
+
 function usage() {
   console.log('Usage:\n' +
-    '  node pipeline/commands/declare-thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--window "<h-h>"] [--path <key>] [--entered-under <key>]\n' +
+    '  node pipeline/commands/declare-thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--window "<h-h>"] [--until <YYYY-MM-DD>] [--path <key>] [--entered-under <key>] [--no-tripwire]\n' +
     '  node pipeline/commands/declare-thesis.mjs clear "<item|id>"\n' +
     '  node pipeline/commands/declare-thesis.mjs bid "<item|id>" ["<note>"] [--side buy|sell]\n' +
     '  node pipeline/commands/declare-thesis.mjs bid-clear "<item|id>" [--side buy|sell]\n' +
@@ -77,9 +93,11 @@ async function main() {
     if (a === '--tripwire') flags.tripwire = argv[++i];
     else if (a === '--exit') flags.exit = argv[++i];
     else if (a === '--window') flags.window = argv[++i];
+    else if (a === '--until') flags.until = argv[++i];
     else if (a === '--path') flags.path = argv[++i];
     else if (a === '--entered-under') flags.enteredUnder = argv[++i];
     else if (a === '--side') flags.side = argv[++i];
+    else if (a === '--no-tripwire') flags.noTripwire = true;
     else pos.push(a);
   }
 
@@ -133,13 +151,28 @@ async function main() {
       const trip = flags.tripwire != null && Number.isFinite(parseGp(flags.tripwire)) ? parseGp(flags.tripwire) : (prev.tripwire ?? null);
       const exit = flags.exit != null && Number.isFinite(parseGp(flags.exit)) ? parseGp(flags.exit) : (prev.exitPrice ?? null);
       const win = flags.window != null ? flags.window : (prev.window ?? null);
+      // an explicit --until must parse (a silently-preserved typo would fake a failure condition)
+      if (flags.until != null && parseHorizonDate(flags.until) == null) {
+        console.error(`! --until "${flags.until}" is not a valid YYYY-MM-DD date`); process.exit(1);
+      }
+      const horizon = flags.until != null ? flags.until : (prev.horizon ?? null);
+      // TF1: refuse a declared-but-non-gating entry (no tripwire, no date, no explicit override).
+      const gate = pathDeclGate({ tripwire: trip, horizon, noTripwire: !!flags.noTripwire });
+      if (!gate.ok) { console.error(`! REFUSED — ${gate.reason}`); process.exit(1); }
+      const untilDate = parseHorizonDate(horizon);
+      const ttlEnd = new Date(Date.now() + HOLD_THESIS_TTL_DAYS * 86400000);
       const next = upsertHoldThesis(hstore, {
         id, exitPrice: exit, tripwire: trip,
-        horizon: prev.horizon ?? null, window: win, path: flags.path, enteredUnder,
+        horizon, window: win, path: flags.path, enteredUnder,
       });
       saveHoldThesis(HOLD_THESIS_PATH, next);
       console.log(`declared plan for ${name} (${id}): path=${flags.path} enteredUnder=${enteredUnder}`
-        + `${trip != null ? ` tripwire=${trip}` : ''}${exit != null ? ` exit=${exit}` : ''}${win != null ? ` window=${win}` : ''} (hold-thesis.json)`);
+        + `${trip != null ? ` tripwire=${trip}` : ''}${exit != null ? ` exit=${exit}` : ''}${win != null ? ` window=${win}` : ''}`
+        + `${untilDate != null ? ` until=${horizon} (frame lapses LOUDLY past it — render-only, never gates)` : ''} (hold-thesis.json)`);
+      if (trip == null)
+        console.log(`⚠ frame-only declaration: NO numeric tripwire — the convictionGate stays un-armed, so the CUT/UNDERWATER headline stays LIVE for this lot.`);
+      if (untilDate != null && untilDate.getTime() > ttlEnd.getTime())
+        console.log(`⚠ --until ${horizon} is beyond the ${HOLD_THESIS_TTL_DAYS}d hold-thesis TTL: this entry expires SILENTLY ~${ttlEnd.toLocaleDateString()} — before its own date can lapse loudly. Re-declare mid-hold to extend (a re-declare restamps the TTL clock).`);
     }
     return;
   }

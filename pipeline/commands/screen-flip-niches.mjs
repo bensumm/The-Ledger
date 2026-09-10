@@ -903,7 +903,8 @@ const digestCells = r => [
 //
 // INFORM ONLY — this never drops a row, never touches capEff/rankKey/sort order, and no longer alters a
 // displayed verdict at all. It appends a note when (and only when) the ask is sliding out of reach.
-function enrichDigestAskDecay(rows, series1h, decayLines) {
+// TF2: notes collect into the per-ITEM noteMap (id -> lines) — buildDigestBlock groups them by item.
+function enrichDigestAskDecay(rows, series1h, noteMap) {
   if (!series1h) return rows;
   return rows.map(r => {
     if (r.id == null) return r;
@@ -912,7 +913,8 @@ function enrichDigestAskDecay(rows, series1h, decayLines) {
     const decay = askReachDecay(series, { days: 3, ask: r.askLevel ?? null });
     const note = askReachDecayNote(decay, { ask: r.askLevel ?? null, fmt });
     if (!note) return r;
-    decayLines.push(`  ${r.name}: ${note}`);
+    if (!noteMap.has(r.id)) noteMap.set(r.id, []);
+    noteMap.get(r.id).push(`↕ ${note}`);
     return r;
   });
 }
@@ -962,23 +964,31 @@ export function buildDigestBlock(pool = DIGEST_ROWS, { series1h = null, disloc =
   // DT3: enrich ONLY the rows about to render (main + the guaranteed big-ticket slice) — never the full pool.
   // Absent series1h (a caller that doesn't pass it, e.g. every pre-existing test) ⇒ enrichDigestAskDecay is a
   // no-op passthrough, so this stays byte-identical whenever the option is omitted.
-  const decayLines = [];
-  main = enrichDigestAskDecay(main, series1h, decayLines);
-  bigExtra = enrichDigestAskDecay(bigExtra, series1h, decayLines);
+  // TF2 (the digest is THE decision surface): notes render GROUPED PER ITEM under one section —
+  // per-kind sections split an item's context. Line texts unchanged; zero notes → no section.
+  const noteMap = new Map();   // id -> note lines, kind order: ↕ decay, ◇ dislocation
+  main = enrichDigestAskDecay(main, series1h, noteMap);
+  bigExtra = enrichDigestAskDecay(bigExtra, series1h, noteMap);
   const tableRows = main.map(digestCells);
   if (bigExtra.length) {
     tableRows.push([{ t: '— big-ticket lane (guaranteed visibility) —' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }]);
     for (const r of bigExtra) tableRows.push(digestCells(r));
   }
   lines.push(mdTable(['Item', 'capEff', 'deploy', 'reach', 'trend', 'phase', 'soft-buy', 'grade', 'verdict'], tableRows));
-  if (decayLines.length) lines.push('', 'ask-reach decay (top-X only — inform-only, n≈0, never gates):', ...decayLines);
   if (disloc) {
-    const dislocLines = [];
     for (const r of [...main, ...bigExtra]) {
       let t = null; try { t = disloc(r.id, r.name); } catch { t = null; }
-      if (t) dislocLines.push(`  ◇ ${r.name}: ${t}`);
+      if (t) { if (!noteMap.has(r.id)) noteMap.set(r.id, []); noteMap.get(r.id).push(`◇ ${t}`); }
     }
-    if (dislocLines.length) lines.push('', 'dislocation (WK4 — class-conditional measured yield, inform-only, never gates):', ...dislocLines);
+  }
+  if (noteMap.size) {
+    lines.push('', 'per-item notes (inform-only, never gates — ↕ ask-reach decay (top-X only, n≈0) · ◇ dislocation (WK4 class-conditional measured yield)):');
+    for (const r of [...main, ...bigExtra]) {
+      const ns = noteMap.get(r.id);
+      if (!ns || !ns.length) continue;
+      lines.push(`  ${r.name}:`);
+      for (const t of ns) lines.push(`    ${t}`);
+    }
   }
   return lines.join('\n');
 }

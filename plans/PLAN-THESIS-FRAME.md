@@ -1,10 +1,11 @@
 # PLAN-THESIS-FRAME — the interpretation layer learns that a declared plan is the frame
 
-**Status:** OPEN (drafted 2026-09-09). Owner-directed: PLAN-WEEKDAY-PHASE-CONFOUND §9
+**Status:** BUILT 2026-09-09 (owner go + mock sign-off same day: "let's go build it and
+test it"; sign-off caveat "unless we're missing critical context or it looks ambiguous" —
+deviations recorded in §EXECUTION). Owner-directed: PLAN-WEEKDAY-PHASE-CONFOUND §9
 ("fix the interpretation layer that runs on scan to not only recommend to cut items like
 the crossbow which we are planning to flip over several days"), carrying §6(iv)'s ship
-shape along. TF1+TF2 are build-ready on owner go; TF3 builds only after the §TF3 mock is
-signed off.
+shape along.
 
 ## Doctrine ceiling (all chunks)
 
@@ -154,3 +155,46 @@ Adversarial review per the repo default on every chunk; render changes ship with
 fixtures pinning shape (the acceptance lists above), and no derived numbers go into
 prose. Chunk order TF1 → TF2 → TF3 (TF1/TF2 independent, TF3 depends on nothing but its
 sign-off). Fold into PLAN.md + delete when the last chunk ships, per lifecycle.
+
+## §EXECUTION (2026-09-09 — all three chunks built in one wave)
+
+Code: `declare-thesis.mjs` (TF1 `pathDeclGate` + `--until`/`--no-tripwire`),
+`holdthesis.mjs` (`parseHorizonDate`, the ONE horizon-date shape test + the TTL-interaction
+header doc), `item-context.mjs` (TF3 `thesisUntil`/`machineryShort`/`expiredPlanWrap` +
+the re-shaped frame label + the EXPIRED wrap at both the display layer and the display-less
+renderer path), `quote-items.mjs` (TF2 adjacency at the quote + positions note stacks),
+`screen-flip-niches.mjs` (TF2 digest per-item note grouping). Fixtures:
+`thesisframe.test.mjs` (new, 20 groups) + `verdictpersist.test.mjs` re-pinned to the new
+label. Skills `/positions` 1.70, `/scan` 3.11. Pipeline 1.5.0 (displayed verdict
+vocabulary changed). CHANGELOG entry `pipeline 1.5.0` is the narrative record.
+
+**Deviations from the registered spec, and why (owner sign-off caveat invoked):**
+1. **TF2 on the digest became per-item note GROUPING, not falling-warning deferral** —
+   measured before building: the digest renders NO falling warning at all (no Regime
+   column; band/churn exclude fallers upstream), so there was nothing to defer. Its
+   real context-split was the per-KIND note sections; those became one `per-item notes`
+   section grouped by item (identical line texts). This is the §DENSITY digest direction
+   pulled forward — justified by the owner's green-light framing (digest-first
+   context-together), not by §DENSITY itself; the falling-warning deferral shipped as
+   registered on the two quote-items surfaces (regime note + `→ measured cell:` pointer,
+   16 chars).
+2. **Mock refinements under the ambiguity caveat:** `abort < 33m` keeps the `<` (bare
+   `abort 33.0m` reads as "abort AT"); the declared `@ <window>h local` segment is kept
+   after the exit; `day k/n` counts from the DECLARATION day (`ts`, day 1 = declared),
+   not the position's entry day.
+3. **The machinery-parens suppression rule, decided in build:** a bare mv-null
+   UNDERWATER never renders in the parens (being underwater IS the plan — re-printing it
+   every pass rebuilds the noise the frame exists to silence); every fired momVerdict
+   and the mv-null FALLING fallback always render. Encoded in `machineryShort`.
+
+**Render-only limits, stated:** the alert-layer thesis silence (convictionGate 1b) has NO
+date awareness — an expired-but-unpruned entry still silences UNDERWATER/CUT-CANDIDATE/
+LIST-TO-CLEAR headlines above its tripwire until TTL or an explicit clear (bounded ≤14d
+by the untouched prune; making the gate date-aware would be a GATING change needing its
+own registration). `renderHeldVerdict` has no `nowMs` seam, so the display-less EXPIRED
+wrap reads the wall clock (fixture uses a permanently-past date).
+
+**Live verification:** TF1 refusal exercised on a clean item (exit 1, no hold-thesis
+write); the crossbow re-declared with `--until 2026-09-13` (tripwire/exit preserved); the
+positions read now renders `PLAN wpc-weekly-cycle · day 1/5 · exit 36.25m · abort < 33m ·
+until Sun 09-13` — the signed-off mock line, live. Full suite 137/137 green.

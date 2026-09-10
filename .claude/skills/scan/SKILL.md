@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 3.10
+version: 3.11
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -167,7 +167,11 @@ its dip window. It
 is an ADDITIVE VIEW, not a replacement: the digest sits ABOVE the per-niche tables and the footers, it
 never trims or supersedes them (the winners-only render above is what governs which rows the table you
 paste contains). Relay the digest AND the winners-only per-niche table — two different surfaces for two
-different reads (digest = cross-niche triage; the table = the per-niche detail). CONSOLE-ONLY (never
+different reads (digest = cross-niche triage; the table = the per-niche detail). The digest's notes
+render GROUPED PER ITEM under one `per-item notes` section (TF2, PLAN-THESIS-FRAME — `↕` ask-reach
+decay · `◇` dislocation): relay an item's notes WITH its row, never split across the reply — and a `◇`
+measured-yield line on a falling-labelled item is the measured read for that state, not something the
+label overrides (WPC §6 (iv): within cells the label moved nothing; `mild-cooldown` keeps its caution). CONSOLE-ONLY (never
 in `screen.json` / the app), and every column is INFORM-ONLY, PLACEHOLDER (n≈0) — the `verdict` word is a
 deterministic triage prompt (`fill-now` / `weak deploy` / `mirage top` / `starter /
 hold-to-next-peak` / `low-conviction`), NOT a calibrated order. **There is no reach-only verdict** —

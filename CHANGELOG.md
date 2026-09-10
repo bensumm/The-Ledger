@@ -8,6 +8,48 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## pipeline 1.5.0 — 2026-09-09 — the declared plan becomes the frame (PLAN-THESIS-FRAME TF1–TF3; no APP_VERSION bump — console/pipeline + skills)
+
+The interpretation layer stops leading with CUT on lots Ben is deliberately flipping over several
+days (WPC §9 — the crossbow rendered `CUT … free capital` one day into its registered five-day
+hold). Three chunks, all presentation/interpretation, nothing gates:
+
+- **TF1 — `declare-thesis` refuses a non-gating path declaration.** The trap that motivated the
+  plan: `set … --path` with no numeric tripwire printed "declared plan" while the convictionGate
+  thesis branch no-ops without one — declared-but-inert, invisible to the declarer. Now it REFUSES
+  (exit 1, `pathDeclGate`) unless the entry carries a numeric `--tripwire`, a dated `--until`, or
+  the explicit `--no-tripwire` frame-only override (which prints "CUT headline stays live").
+- **TF3 — thesis-as-frame verdict rendering** (`item-context.mjs`, the ONE shared renderer; mock
+  owner-signed 2026-09-09). A declared lot above its tripwire renders
+  `PLAN <path> · day k/n · exit X @ window · abort < Y · until <date>`, the machinery read in
+  parens WHENEVER it disagrees (show-both; the one suppressed state is a bare mv-null UNDERWATER —
+  being underwater IS the plan), and past the `--until` date the frame HARD-LAPSES to
+  `PLAN EXPIRED <date> — reassess; machinery: <full verdict>` — the moment the CUT frame should
+  come back loudly. `declare-thesis --until <YYYY-MM-DD>` writes the date into the previously
+  display-only `horizon` field (`parseHorizonDate` in holdthesis.mjs is the ONE shape test; legacy
+  free text renders as before). The 14d TTL prune is UNTOUCHED (owner-decided: cycles run ≤2wk, so
+  the date lapses loudly before the TTL can silently prune) — a beyond-TTL date warns at write
+  time instead. Render-only limits, stated: the alert-layer thesis silence and the ledger's raw
+  token are byte-unchanged, an expired-but-unpruned entry still silences headlines above its
+  tripwire until TTL/clear, and the internal persistence token stays `HOLD — per thesis` so
+  pre-TF3 watch-state never re-arms. The VN-4 breakdown annotation survives unexpired and is
+  DROPPED on a lapsed plan (a dead plan vouches for nothing).
+- **TF2 — the measured cell beside the falling warning** (WPC §6 branch (iv)'s ship — reorder,
+  don't rewrite). On a `{crash-risk, cooling}` row with a quotable WK4 dislocation cell,
+  `quote-items.mjs` (quote + positions) prints the existing `formatDislocation` line DIRECTLY
+  under the regime warning, which gains only `→ measured cell:`; mild-cooldown (unmeasured) is
+  untouched and non-falling rows keep their original note order. The digest — THE decision surface
+  (owner: "I just see the digest"), which carries no falling warning at all — instead gets its
+  context-together fix: the decay `↕` + dislocation `◇` lines now render in ONE `per-item notes`
+  section grouped by item, not per-kind sections that split one item's context across blocks.
+
+Skills: `/positions` 1.70 (the frame is the verdict cell — report in the plan's terms; falling
+label ≠ standalone veto) and `/scan` 3.11 (relay digest notes with their row). Fixtures:
+`thesisframe.test.mjs` (20 groups — the three mock lines, EOD expiry semantics, the display-less
+renderer path, the VN-4 kill, digest grouping) + the re-pinned `verdictpersist.test.mjs`. Bump
+rationale: the DISPLAYED verdict vocabulary changed (`PLAN …` / `PLAN EXPIRED …`); the raw ledger
+vocabulary did not.
+
 ## pipeline 2026-09-08 — the WK4 dislocation/yield surface (PLAN-WEEKLY-CYCLE WK4; no APP_VERSION bump — console/pipeline only)
 
 The inform-only surface the WK3 measurement earned, in the two owner-aligned homes: the scan's

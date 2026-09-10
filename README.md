@@ -767,7 +767,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `convictionGate` (`lib/watchstate.mjs`): while the live price holds ABOVE the declared tripwire,
   the EXPECTED signals — `UNDERWATER`/`CUT-CANDIDATE` and (VN-2) `LIST-TO-CLEAR` — are silenced to
   an armed note (the pre-peak trough is the plan, not news), and the shared display layer renders
-  the lot as the `HOLD — per thesis: exit … · abort < …` frame (MONITORING.md step 4); below the
+  the lot as the `PLAN <path> · day k/n · exit … · abort < … · until <date>` frame (TF3 re-shape of
+  VN-2 — MONITORING.md step 4; machinery read in parens on disagreement, hard `PLAN EXPIRED` lapse
+  past a `--until` date, `parseHorizonDate` the ONE date-shape test); below the
   tripwire the real-risk headline fires and normal escalation resumes.
   `momVerdict` is untouched (the raw verdict stays honest in the ledger). The Gate-2
   breakdown `CUT` is never silenced or frame-masked. Ships empty (`[]`); fixture-pinned in
@@ -1437,6 +1439,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     **VN-2** — with `--path`, a numeric `--tripwire`, `--exit <gp>` and `--window <h-h>` now ride the
     hold-thesis entry too (parseGp; omitted/unparseable flags preserve the existing values), making
     one command the full declared-plan writer the thesis render frame reads.
+    **TF1/TF3 (PLAN-THESIS-FRAME)** — `--until <YYYY-MM-DD>` writes a failure DATE into the entry's
+    `horizon` (render-only: the frame shows `until <date>`/day counts and hard-lapses `PLAN EXPIRED`
+    past it — never gates; a date beyond declaration+14d warns that the TTL prunes first, and a
+    malformed `--until` refuses rather than silently preserving). A `--path` declaration whose entry
+    would carry NO numeric tripwire and no date REFUSES exit 1 (`pathDeclGate` — such an entry looks
+    armed but the convictionGate thesis branch no-ops); `--no-tripwire` is the deliberate frame-only
+    override, and a tripwire-less write prints a "CUT headline stays live" notice either way.
     **FD4** — `bid "<item|id>" ["<note>"] [--side buy|sell]` / `bid-clear` declare/clear a deep/long
     resting-bid intent into the TRACKED root `bid-thesis.json` (silences watch's stale-bid flag for
     `BID_THESIS_TTL_DAYS`; gates nothing else); `list` shows both stores),
@@ -2614,9 +2623,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (raw conditional net → `waitSavesGp`'s after-tax inversion); `dislocationRead` composes daily
     mids off an archive-shaped 1h series (strictly-trailing 15d reference, ≥12/15 prior days, ≥3
     rows today, ≤6h fresh — else SILENCE, never a fabricated read) and `formatDislocation` renders
-    the one line. Consumers: `quote-items.mjs` (bare + positions, note kind `dislocation` ◇) and
-    `screen-flip-niches.mjs`'s decision digest (rendered rows only). Fixtures:
-    `dislocation.test.mjs`),
+    the one line. Consumers: `quote-items.mjs` (bare + positions, note kind `dislocation` ◇ — TF2,
+    PLAN-THESIS-FRAME: on a `{crash-risk, cooling}` row the line renders DIRECTLY under the regime
+    warning, which gains a `→ measured cell:` pointer; non-falling rows keep the original stack slot,
+    mild-cooldown untouched) and
+    `screen-flip-niches.mjs`'s decision digest (rendered rows only, grouped per item — TF2). Fixtures:
+    `dislocation.test.mjs` + `thesisframe.test.mjs`),
     `freed-capital.mjs` (V6 Companion — PURE `freedCapital`: detects capital freed by a booked SELL between
     passes off V1's prior-pass state and prompts a redeploy scan ≥ `FREED_CAPITAL_SCAN_GP` — surface-
     only, never auto-places/runs the scan; anchor-free, no startup/stale-gap misfire),
@@ -2704,8 +2716,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     held display token, formerly `watch-positions.mjs`'s heldVerdict) + `heldDisplay` (the persistence-gated display
     read — token/label/mvDisplay off `verdictPersistence`; computed in `positionStage`, consumed by
     `renderHeldVerdict` so the table cell and the note render ONE label; byte-identical when nothing
-    diverges); **VN-2** the thesis render frame (a declared plan above its tripwire renders
-    `HOLD — per thesis: exit <declared/diurnal> · abort < <tripwire>`); **VN-3** `parkedDeadband` +
+    diverges); **VN-2** the thesis render frame (a declared plan above its tripwire renders as the
+    plan — **TF3, PLAN-THESIS-FRAME re-shape:** `PLAN <path> · day k/n · exit <declared/diurnal> ·
+    abort < <tripwire> · until <date>`, with `thesisUntil`/`machineryShort`/`expiredPlanWrap` the
+    shared helpers: day/until segments only for a `YYYY-MM-DD` horizon, the machinery read in parens
+    on disagreement (a bare mv-null UNDERWATER deliberately suppressed — underwater IS the plan),
+    a hard `PLAN EXPIRED <date> — reassess; machinery: …` lapse past the date at BOTH the display
+    layer and the display-less renderer path, the VN-4 annotation dropped on a lapsed plan, and the
+    internal persistence token kept at `HOLD — per thesis` for state compat); **VN-3** `parkedDeadband` +
     the `PARKED — at break-even (±X)` dead-band state (`BE_DEADBAND_BAND_FRAC`/`BE_DEADBAND_MIN_PCT`
     placeholders) and one-decimal path-menu weights in `renderPathLine` (F4 — the ±0.12 placeholder
     steps stop reading as instability). No fetch/fs — every stage is node-importable +
@@ -3093,6 +3111,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     DISPLAYED verdict: severity-ranked arm-then-confirm on the label, the Gate-2 breakdown CUT
     immediate at both layers, NO-READ demoted to a note against an incumbent, the thesis render
     frame + PARKED dead-band fixtures, and the byte-identity pin for an all-quiet pass),
+    `thesisframe.test.mjs` (PLAN-THESIS-FRAME — TF1 `pathDeclGate` refusal/override/date acceptance,
+    `parseHorizonDate` shape, `thesisUntil` day-count + EOD-expiry semantics, `machineryShort`
+    agree/suppress/show cases, the three signed-off MOCK lines (frame alone / machinery parens /
+    hard EXPIRED lapse incl. the display-less renderer path and the VN-4-annotation kill), and the
+    TF2 digest per-item note grouping),
     `reconstruct.test.mjs` (FIFO/tombstone/
     snapshot-dedupe fixtures), `format.test.mjs` (money primitives), `lib/rating.test.mjs`
     (grade/score model), `ledgercore.test.mjs` (TD2 — `periodKey`/`groupTrades` local
