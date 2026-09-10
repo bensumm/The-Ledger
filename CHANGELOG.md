@@ -24,7 +24,7 @@ hold). Three chunks, all presentation/interpretation, nothing gates:
   `PLAN <path> · day k/n · exit X @ window · abort < Y · until <date>`, the machinery read in
   parens WHENEVER it disagrees (show-both; the one suppressed state is a bare mv-null UNDERWATER —
   being underwater IS the plan), and past the `--until` date the frame HARD-LAPSES to
-  `PLAN EXPIRED <date> — reassess; machinery: <full verdict>` — the moment the CUT frame should
+  `PLAN EXPIRED <date> — reassess · machinery: <full verdict>` — the moment the CUT frame should
   come back loudly. `declare-thesis --until <YYYY-MM-DD>` writes the date into the previously
   display-only `horizon` field (`parseHorizonDate` in holdthesis.mjs is the ONE shape test; legacy
   free text renders as before). The 14d TTL prune is UNTOUCHED (owner-decided: cycles run ≤2wk, so
@@ -54,7 +54,10 @@ Review round 1 (same release, follow-on commit): watch-positions now threads the
 into the shared verbose renderer (pre-existing gap — the VN-4 annotation never reached watch's
 action line, so the two surfaces could disagree on an annotated Gate-2 CUT); TF1's refusal moved
 BEFORE the session-thesis write (a refusal no longer prints partial success or keeps the display
-text); `--until` without `--path` warns instead of dropping silently.
+text); `--until` without `--path` warns instead of dropping silently. Round 2: the `;` in
+`— reassess; machinery:` and inside the VN-4 annotation read as a sentence end to watch's
+`firstSentence`, truncating the note line's machinery/deferral clause — both separators are now
+` · ` (render-only; masked in practice by the untruncated table cell).
 
 ## pipeline 2026-09-08 — the WK4 dislocation/yield surface (PLAN-WEEKLY-CYCLE WK4; no APP_VERSION bump — console/pipeline only)
 

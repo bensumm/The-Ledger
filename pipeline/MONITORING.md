@@ -148,7 +148,7 @@ Print-only — it never writes trade data. Each run emits:
      UNDERWATER headline is suppressed inside the band (dead-band = half the 2h raw band width,
      floored at ±0.5% of BE — `BE_DEADBAND_BAND_FRAC`/`BE_DEADBAND_MIN_PCT`, PLACEHOLDERS, n=1) —
      and **`PLAN <path> · day k/n · exit … · abort < … · until <date>`** (the VN-2 declared-plan
-     frame, re-shaped by TF3 — above; `PLAN EXPIRED … — reassess; machinery: …` past its date).
+     frame, re-shaped by TF3 — above; `PLAN EXPIRED … — reassess · machinery: …` past its date).
      Both are DISPLAY states: the raw momVerdict/fallback token is unchanged underneath and stays
      what the ledger logs; a falling regime, an escalated verdict, or a print outside the band
      exits PARKED. Home: `heldDisplay` (`lib/item-context.mjs`), pinned in `verdictpersist.test.mjs`.
@@ -562,7 +562,7 @@ of the numbered signals, in more detail:
        (`declare-thesis --until`; day 1 = the declaration day); the `(machinery: …)` parens show the
        raw read whenever it DISAGREES (a bare mv-null `UNDERWATER` is the one suppressed state — being
        underwater IS the plan; `machineryShort`, item-context.mjs). PAST the date the frame
-       hard-lapses: the cell leads `PLAN EXPIRED <date> (<path>) — reassess; machinery: <full verdict>`
+       hard-lapses: the cell leads `PLAN EXPIRED <date> (<path>) — reassess · machinery: <full verdict>`
        and normal machinery-led rendering resumes (render-only — the alert-layer thesis silence and
        the 14d TTL are UNTOUCHED, so an expired-but-unpruned entry still silences headlines above its
        tripwire until TTL/clear; the internal persistence token also stays `HOLD — per thesis`, so
@@ -583,7 +583,7 @@ of the numbered signals, in more detail:
        **VN-4 ANNOTATE, don't hide (render-only):** when that breakdown `CUT` fires on a declared-thesis
        lot whose live clear still sits **ABOVE** the declared tripwire, the two console surfaces
        *annotate* the CUT string with the tripwire context instead of the bare "free capital" tag —
-       `CUT (2h breakdown) — live <X> still ~<gap> ABOVE declared abort <tripwire>; within plan — your
+       `CUT (2h breakdown) — live <X> still ~<gap> ABOVE declared abort <tripwire> · within plan — your
        call` (`breakdownThesisAnnotation`, `lib/item-context.mjs`, applied in BOTH `heldVerdictCompact`
        and `heldActionVerbose`). This is NOT silencing: verdict/action/gate and the alert escalation are
        byte-unchanged (`immediate` stays true, `momVerdict` + the ledger token untouched); only the

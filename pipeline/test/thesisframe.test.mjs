@@ -104,7 +104,7 @@ ok('MOCK line 3: past the failure date the frame HARD-LAPSES — machinery back 
   const row = rowOf({ quickSell: 34_830_000 });
   const d = heldDisplay({ row, be: 34_800_000, mv: null, prior: null, nowMs: noon(2026, 9, 14), thesis: CROSSBOW });
   assert.equal(d.frame, false, 'the frame no longer governs');
-  assert.match(d.label, /^PLAN EXPIRED 09-13 \(wpc-weekly-cycle\) — reassess; machinery: /);
+  assert.match(d.label, /^PLAN EXPIRED 09-13 \(wpc-weekly-cycle\) — reassess · machinery: /);
   const ctx = { market: { row }, intraday: {}, position: { be: 34_800_000, mv: null, display: d, thesis: CROSSBOW } };
   assert.equal(renderHeldVerdict(ctx, { mode: 'compact' }), d.label);
   assert.match(renderHeldVerdict(ctx, { mode: 'verbose' }), /failure date has passed/);
@@ -118,7 +118,7 @@ ok('EXPIRED reaches the display-less call sites too (renderer-level wrap, full c
   const ctx = { market: { row }, intraday: {}, position: { be: 34_800_000, mv: null, thesis: LAPSED } };
   // no display object at all — the pre-VN-1 minimal-ctx shape
   const c = renderHeldVerdict(ctx, { mode: 'compact' });
-  assert.match(c, /^PLAN EXPIRED 01-02 \(wpc-weekly-cycle\) — reassess; machinery: HOLD — list @ 35m$/);
+  assert.match(c, /^PLAN EXPIRED 01-02 \(wpc-weekly-cycle\) — reassess · machinery: HOLD — list @ 35m$/);
 });
 ok('EXPIRED kills the VN-4 "within plan" annotation — a lapsed plan vouches for nothing', () => {
   const row = rowOf({ quickSell: 34_000_000 });

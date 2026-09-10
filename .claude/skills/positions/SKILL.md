@@ -377,7 +377,7 @@ machinery read as the parenthetical, and don't re-litigate the gate each pass (t
 "overrode cut, be terse" rule). `--until` is the declared failure DATE (render-only, never gates;
 a time-based plan can pass `--no-tripwire` instead of inventing a price stop — the tool now
 REFUSES a path declaration with neither, because it would gate nothing while looking armed).
-Past the date the cell hard-lapses to `PLAN EXPIRED — reassess; machinery: …` — that is the
+Past the date the cell hard-lapses to `PLAN EXPIRED — reassess · machinery: …` — that is the
 moment to actually re-decide, not a nag to silence. Note the ~14d hold-thesis TTL still prunes
 the entry from declaration; re-declare mid-hold to extend either clock.
 A declared exit is point-in-time: `quote-items.mjs --positions` now auto-flags one that has gone

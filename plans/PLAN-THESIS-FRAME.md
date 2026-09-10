@@ -212,3 +212,13 @@ refused declaration printed "set thesis for…" and kept the display-store text 
 runs before either store is written. (4) `--until` without `--path` was silently dropped
 — now warns. (5) two stale comments still named the old `HOLD — per thesis: exit` frame
 shape — reworded.
+
+**Adversarial review round 2:** one real finding — the `;` in `— reassess; machinery:`
+and inside the VN-4 annotation read as a sentence end to watch's `firstSentence`, so the
+note line truncated the machinery clause on an expired plan and the "within plan" tail on
+an annotated CUT (masked in practice: the table cell one row up shows the untruncated
+label). The `;` was an accidental separator choice, not semantic — both are now ` · `
+(`expiredPlanWrap` / `breakdownThesisAnnotation`), a mock deviation under the ambiguity
+caveat; fixture pins updated. A "lines gained kind sigils" overstatement (dislocation
+lines already carried `◇`; only decay lines gained one) was self-triaged LEAVE IT by the
+reviewer — the reader's takeaway is correct and a reword is the regressing-prose class.

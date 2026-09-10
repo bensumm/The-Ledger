@@ -2721,7 +2721,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     abort < <tripwire> · until <date>`, with `thesisUntil`/`machineryShort`/`expiredPlanWrap` the
     shared helpers: day/until segments only for a `YYYY-MM-DD` horizon, the machinery read in parens
     on disagreement (a bare mv-null UNDERWATER deliberately suppressed — underwater IS the plan),
-    a hard `PLAN EXPIRED <date> — reassess; machinery: …` lapse past the date at BOTH the display
+    a hard `PLAN EXPIRED <date> — reassess · machinery: …` lapse past the date at BOTH the display
     layer and the display-less renderer path, the VN-4 annotation dropped on a lapsed plan, and the
     internal persistence token kept at `HOLD — per thesis` for state compat); **VN-3** `parkedDeadband` +
     the `PARKED — at break-even (±X)` dead-band state (`BE_DEADBAND_BAND_FRAC`/`BE_DEADBAND_MIN_PCT`

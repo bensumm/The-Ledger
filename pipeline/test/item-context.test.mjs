@@ -230,7 +230,7 @@ const cutCtx = (quickSell, thesis) => ({
 
 ok('VN-4 pure: breakdownThesisAnnotation annotates a Gate-2 CUT above the tripwire; null otherwise', () => {
   const ann = breakdownThesisAnnotation(breakdownCutMv(), gswThesis, 39_990_000);
-  assert.equal(ann, 'CUT (2h breakdown) — live 39.99m still ~1.09m ABOVE declared abort 38.90m; within plan — your call');
+  assert.equal(ann, 'CUT (2h breakdown) — live 39.99m still ~1.09m ABOVE declared abort 38.90m · within plan — your call');
   // live ≤ tripwire → no softening (the thesis IS invalidating)
   assert.equal(breakdownThesisAnnotation(breakdownCutMv(), gswThesis, 38_900_000), null, 'live == tripwire → null');
   assert.equal(breakdownThesisAnnotation(breakdownCutMv(), gswThesis, 38_000_000), null, 'live < tripwire → null');
@@ -247,8 +247,8 @@ ok('VN-4: thesis + live > tripwire → BOTH surfaces render the tripwire annotat
   const ctx = cutCtx(39_990_000, gswThesis);
   const compact = renderHeldVerdict(ctx, { mode: 'compact' });
   const verbose = renderHeldVerdict(ctx, { mode: 'verbose' });
-  assert.equal(compact, 'CUT (2h breakdown) — live 39.99m still ~1.09m ABOVE declared abort 38.90m; within plan — your call');
-  assert.ok(verbose.startsWith('CUT (2h breakdown) — live 39.99m still ~1.09m ABOVE declared abort 38.90m; within plan — your call'),
+  assert.equal(compact, 'CUT (2h breakdown) — live 39.99m still ~1.09m ABOVE declared abort 38.90m · within plan — your call');
+  assert.ok(verbose.startsWith('CUT (2h breakdown) — live 39.99m still ~1.09m ABOVE declared abort 38.90m · within plan — your call'),
     `verbose leads with the same annotation (got: ${verbose})`);
   assert.match(verbose, /never thesis-silenced/);   // the invariant is spelled out, not silenced
   // the verdict object is byte-unchanged — this is a render-only annotation

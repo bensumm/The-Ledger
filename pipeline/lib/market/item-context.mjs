@@ -164,7 +164,7 @@ export function machineryShort(row, be, mv) {
 export function expiredPlanWrap(thesis, machineryText, nowMs = Date.now()) {
   const tu = thesisUntil(thesis, nowMs);
   if (!tu || !tu.expired) return null;
-  return `PLAN EXPIRED ${tu.mmdd}${thesis.path != null ? ` (${thesis.path})` : ''} — reassess; machinery: ${machineryText}`;
+  return `PLAN EXPIRED ${tu.mmdd}${thesis.path != null ? ` (${thesis.path})` : ''} — reassess · machinery: ${machineryText}`;
 }
 
 /* isParkedAtBE — PURE: a held lot counts as PARKED when no momVerdict fired (a clean read — any
@@ -462,7 +462,7 @@ export function breakdownThesisAnnotation(mv, thesis, live) {
   if (!(mv && mv.action === 'CUT' && mv.gate === 2)) return null;
   if (!thesis || thesis.tripwire == null || live == null || !(live > thesis.tripwire)) return null;
   const gap = live - thesis.tripwire;
-  return `CUT (2h breakdown) — live ${fmtP(live)} still ~${fmtP(Math.round(gap))} ABOVE declared abort ${fmtP(thesis.tripwire)}; within plan — your call`;
+  return `CUT (2h breakdown) — live ${fmtP(live)} still ~${fmtP(Math.round(gap))} ABOVE declared abort ${fmtP(thesis.tripwire)} · within plan — your call`;
 }
 
 /* COMPACT — the quote-items.mjs `--positions` table Verdict cell. Body reproduced VERBATIM from the pre-P0
