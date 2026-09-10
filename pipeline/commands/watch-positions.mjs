@@ -327,8 +327,8 @@ function recoveryReadFor(it) {
 // caller passes the ALREADY-computed mv (off lotCtxOf(it)) via a minimal ctx so nothing recomputes.
 // VN-1: the caller also passes the persistence-gated display read (it._display) so the note's
 // verdict line renders the SAME label as the table cell (RC4 — the two can never disagree).
-function heldAction(row, be, lotValue, ts5m, mv, display = null) {
-  return renderHeldVerdict({ market: { row }, intraday: { ts5m }, position: { be, lotValue, mv, display } }, { mode: 'verbose' });
+function heldAction(row, be, lotValue, ts5m, mv, display = null, thesis = null) {
+  return renderHeldVerdict({ market: { row }, intraday: { ts5m }, position: { be, lotValue, mv, display, thesis } }, { mode: 'verbose' });
 }
 
 // --- ACTION line for a WATCHED (not held) target. Buy-side, with the scalp entry gated.
@@ -816,7 +816,7 @@ async function main() {
           // PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the hourProfile+deriveDiurnalRange pair.
           // ⚠ `lap.ask` is NOT the plain nights:7 number: on a gate-PASSING item DT4b refits the lap over
           // windowReliability's 14-day window, so it can differ from a direct 7d derivation. This value
-          // becomes `diurnalAsk` → heldDisplay → the rendered "HOLD — per thesis: exit <price>", i.e. a
+          // becomes `diurnalAsk` → heldDisplay → the rendered `PLAN … · exit <price>` frame, i.e. a
           // HELD-LOT EXIT PRICE. Measured: it differs on 19 of 31 passers (max 11%). Intended — the exit
           // should read the same window the rest of the row does — but do not assume the two agree.
           const lap = diurnalTimedLap(it.ts1h, { nights: 7, liveLo: it.row.quickBuy ?? null, liveHi: it.row.quickSell ?? null });
@@ -1047,7 +1047,7 @@ async function main() {
     // fields (V1 delta / V2 tripwire / V4 conviction) are computed inside, defaulting to null.
     const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true, heldQty: it.qty, volDay: it.row.volDay });
     const mvHeld = momVerdict(row, be, lotValue, ts5m, undefined, lotCtxOf(it));
-    const verdictText = firstSentence(heldAction(row, be, lotValue, ts5m, mvHeld, it._display));
+    const verdictText = firstSentence(heldAction(row, be, lotValue, ts5m, mvHeld, it._display, it._thesis));
     let conviction = null, delta = null, tripwire = null, recovery = null;
     try {
       delta = it._deltas ? deltaLine(it._deltas) : null;

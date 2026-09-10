@@ -243,8 +243,9 @@ do I look closer at"), ADDITIVE and opt-in: it never trims or replaces the per-n
 footers, and the per-niche table's own sort is untouched (the digest's dedup + big-ticket lane are
 digest-only). Its note lines (the top-X ask-reach decay `↕` + the WK4 dislocation `◇`) render in ONE
 `per-item notes` section GROUPED BY ITEM (TF2, PLAN-THESIS-FRAME, owner 2026-09-09 — the digest is the
-decision surface, and per-kind sections split one item's context across blocks); line texts unchanged,
-zero notes → no section. The
+decision surface, and per-kind sections split one item's context across blocks); note BODY texts
+unchanged — the item name moved to a group header and each line gained its kind sigil; zero notes →
+no section. The
 `verdict` word is deterministic, first-match-wins over a rule table (`spread closed now` /
 `mirage top` / `weak deploy` / `starter · hold-to-next-peak` / `fill-now` / `low-conviction`) — deterministic is not
 calibrated. There is deliberately NO reach-only word: `sell unreliable` was DELETED (owner ruling

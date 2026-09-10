@@ -173,7 +173,8 @@ vocabulary changed). CHANGELOG entry `pipeline 1.5.0` is the narrative record.
    measured before building: the digest renders NO falling warning at all (no Regime
    column; band/churn exclude fallers upstream), so there was nothing to defer. Its
    real context-split was the per-KIND note sections; those became one `per-item notes`
-   section grouped by item (identical line texts). This is the §DENSITY digest direction
+   section grouped by item (note BODY texts identical; the name moved to a group header
+   and lines gained kind sigils). This is the §DENSITY digest direction
    pulled forward — justified by the owner's green-light framing (digest-first
    context-together), not by §DENSITY itself; the falling-warning deferral shipped as
    registered on the two quote-items surfaces (regime note + `→ measured cell:` pointer,
@@ -198,3 +199,16 @@ wrap reads the wall clock (fixture uses a permanently-past date).
 write); the crossbow re-declared with `--until 2026-09-13` (tripwire/exit preserved); the
 positions read now renders `PLAN wpc-weekly-cycle · day 1/5 · exit 36.25m · abort < 33m ·
 until Sun 09-13` — the signed-off mock line, live. Full suite 137/137 green.
+
+**Adversarial review round 1 (follow-on commit):** five findings, all taken. (1)
+watch-positions never threaded `thesis` into the shared verbose renderer (pre-existing —
+the VN-4 annotation and the display-less EXPIRED wrap were unreachable on watch's action
+line; the frame/EXPIRED synthetic still reached watch via the display path) — fixed by
+threading `it._thesis` through `heldAction`. (2) "identical line texts" on the digest
+grouping was false as worded (name moved to a group header, lines gained kind sigils —
+note BODY texts are what's unchanged) — reworded here, in MARKET-ANALYSIS, and in the
+screen-flip-niches comment. (3) TF1's refusal ran AFTER the session-thesis write, so a
+refused declaration printed "set thesis for…" and kept the display-store text — gate now
+runs before either store is written. (4) `--until` without `--path` was silently dropped
+— now warns. (5) two stale comments still named the old `HOLD — per thesis: exit` frame
+shape — reworded.

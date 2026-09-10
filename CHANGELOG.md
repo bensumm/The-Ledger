@@ -50,6 +50,12 @@ renderer path, the VN-4 kill, digest grouping) + the re-pinned `verdictpersist.t
 rationale: the DISPLAYED verdict vocabulary changed (`PLAN …` / `PLAN EXPIRED …`); the raw ledger
 vocabulary did not.
 
+Review round 1 (same release, follow-on commit): watch-positions now threads the declared thesis
+into the shared verbose renderer (pre-existing gap — the VN-4 annotation never reached watch's
+action line, so the two surfaces could disagree on an annotated Gate-2 CUT); TF1's refusal moved
+BEFORE the session-thesis write (a refusal no longer prints partial success or keeps the display
+text); `--until` without `--path` warns instead of dropping silently.
+
 ## pipeline 2026-09-08 — the WK4 dislocation/yield surface (PLAN-WEEKLY-CYCLE WK4; no APP_VERSION bump — console/pipeline only)
 
 The inform-only surface the WK3 measurement earned, in the two owner-aligned homes: the scan's

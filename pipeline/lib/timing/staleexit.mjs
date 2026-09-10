@@ -3,7 +3,7 @@
  * THE MISS IT ENCODES. A hold-thesis exit (`declare-thesis.mjs set … --exit <gp>`, hold-thesis.json) is
  * declared ONCE, off the peaks visible at declaration time — and then the market moves. The
  * 2026-07-12 case: declared exits 44.34m (Masori) / 3.24m (Berserker) were set off old peaks that
- * recent nights no longer print, so the rendered `HOLD — per thesis: exit <X>` frame kept naming an
+ * recent nights no longer print, so the rendered `PLAN … · exit <X>` frame kept naming an
  * ask the market had stopped reaching. This module answers ONE question, inform-only: "does the
  * recent reach history still support the DECLARED exit level, and if not, what level DOES it
  * support?"

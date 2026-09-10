@@ -137,11 +137,9 @@ async function main() {
     if (pos.length < 2) { usage(); process.exit(1); }
     const { id, name } = await resolveId(pos[0]);
     const thesis = pos.slice(1).join(' ');
-    const store = upsertThesis(pruneThesis(loadThesis(THESIS_PATH)), id, { thesis, tripwire: flags.tripwire, window: flags.window });
-    saveThesis(THESIS_PATH, store);
-    console.log(`set thesis for ${name} (${id}): ${thesisLine(store[id])}`);
-    // P4a: `--path` ALSO declares the path-engine entry path into the tracked hold-thesis store
-    // (the ONLY store js/held-item-strategy.mjs reads enteredUnder off), preserving existing fields.
+    // P4a: `--path` ALSO declares the path-engine entry path into the tracked hold-thesis store (the
+    // ONLY store js/held-item-strategy.mjs reads enteredUnder off); TF1 refusals run BEFORE either store is written.
+    let hold = null;
     if (flags.path) {
       const hstore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));
       const prev = holdThesisFor(hstore, id) || {};
@@ -159,6 +157,15 @@ async function main() {
       // TF1: refuse a declared-but-non-gating entry (no tripwire, no date, no explicit override).
       const gate = pathDeclGate({ tripwire: trip, horizon, noTripwire: !!flags.noTripwire });
       if (!gate.ok) { console.error(`! REFUSED — ${gate.reason}`); process.exit(1); }
+      hold = { hstore, enteredUnder, trip, exit, win, horizon };
+    } else if (flags.until != null) {
+      console.log(`⚠ --until is IGNORED without --path — a date only rides a hold-thesis declaration. Re-run with --path to declare the plan.`);
+    }
+    const store = upsertThesis(pruneThesis(loadThesis(THESIS_PATH)), id, { thesis, tripwire: flags.tripwire, window: flags.window });
+    saveThesis(THESIS_PATH, store);
+    console.log(`set thesis for ${name} (${id}): ${thesisLine(store[id])}`);
+    if (hold) {
+      const { hstore, enteredUnder, trip, exit, win, horizon } = hold;
       const untilDate = parseHorizonDate(horizon);
       const ttlEnd = new Date(Date.now() + HOLD_THESIS_TTL_DAYS * 86400000);
       const next = upsertHoldThesis(hstore, {

@@ -965,7 +965,7 @@ export function buildDigestBlock(pool = DIGEST_ROWS, { series1h = null, disloc =
   // Absent series1h (a caller that doesn't pass it, e.g. every pre-existing test) ⇒ enrichDigestAskDecay is a
   // no-op passthrough, so this stays byte-identical whenever the option is omitted.
   // TF2 (the digest is THE decision surface): notes render GROUPED PER ITEM under one section —
-  // per-kind sections split an item's context. Line texts unchanged; zero notes → no section.
+  // per-kind sections split an item's context. Note bodies unchanged (name → group header, kind sigils added); zero notes → no section.
   const noteMap = new Map();   // id -> note lines, kind order: ↕ decay, ◇ dislocation
   main = enrichDigestAskDecay(main, series1h, noteMap);
   bigExtra = enrichDigestAskDecay(bigExtra, series1h, noteMap);
