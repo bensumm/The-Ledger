@@ -63,6 +63,12 @@ Elevated (sell-side) cells keep full ⚠ semantics — deferral applies to the l
 to a negative measured number. A falling item whose deviation is neutral (no quotable
 cell) renders exactly as today: nothing is invented for it.
 
+**Surface priority (owner, 2026-09-09): the DIGEST is the decision surface** ("I don't
+read the scan table hardly ever, I just see the digest") — buy decisions are made there,
+so the digest adjacency is the load-bearing half of this chunk and gets the fixture
+first. The quote/positions sites follow the same pattern for consistency; positions
+context arrives post-entry (exit-decision support only).
+
 **TF2b (WPC §9.3, rides along):** one sentence each in `/scan` + `/positions` SKILL.md
 (version bump): on a `{crash-risk, cooling}` item with a rendered dislocation cell or a
 declared hold-thesis plan, the label describes the path — read the measured line / the
@@ -84,13 +90,16 @@ read visible beside it, never hidden.
 **Piece 1 — `--until <YYYY-MM-DD>`:** `declare-thesis` writes the date into the existing
 `horizon` field (today free-text display-only, e.g. "multi-day" — additive back-compat:
 render layer duck-types the ISO shape; legacy free text keeps rendering as-is).
-**TTL interaction, decided here or not at all:** `pruneHoldThesis` expires entries at
-`HOLD_THESIS_TTL_DAYS` (14d) from declaration — a dated plan must not be SILENTLY pruned
-before its own failure date lapses LOUDLY. Proposal: an entry with an unexpired parseable
-horizon date survives prune until that date (cap: date ≤ ts + 45d, so a typo'd year can't
-pin an entry forever); past the date it renders EXPIRED (below) and then ages out
-normally. This touches the gating store's prune — it needs its own review pass and a
-fixture, and it is the one part of TF3 that is not purely render.
+**TTL interaction (owner-decided 2026-09-09): the 14d prune stays UNTOUCHED.** Trades
+here run ≤2-week cycles, so a horizon date normally lapses LOUDLY (line 3 below) well
+before `pruneHoldThesis` (`HOLD_THESIS_TTL_DAYS`, 14d from declaration) could silently
+eat the entry — the gating store's prune is not modified, removing what would have been
+this chunk's only non-render change. The rare >TTL date is the TF1 trap in a new coat (a
+plan that looks armed until its date but dies silently at day 14), so it is guarded at
+WRITE time instead: `--until` beyond declaration+14d prints a loud warning naming the
+silent-expiry date and the remedy (re-declare mid-hold to extend — a re-declare restamps
+`ts`). The constraint is documented in the holdthesis.mjs header alongside the TTL it
+belongs to.
 
 **Piece 2 — the frame line (ONE home: `item-context.mjs`, beside VN-4's annotation, so
 compact/verbose/watch surfaces cannot disagree).** For a lot whose hold-thesis entry
@@ -126,12 +135,18 @@ before any TF3 code; amendments edit this section first, then the build follows 
 
 The per-item note stack now carries several long self-contained sentences (dislocation,
 window-read, reach, thesis) plus table cells, and context split across them has caused
-real misses. Candidate directions, named so the future plan starts somewhere: a per-item
-CARD layout on verbose surfaces (all context in one bordered block); a note-line budget
-with priority ordering; a once-per-table footer legend absorbing the repeated
-methodology boilerplate ("inform-only, one era, class-conditional") out of every line.
-Nothing here decides among them. Needs its own per-topic plan; no chunk in THIS plan may
-cite §DENSITY as license to add or lengthen lines.
+real misses. Owner direction shaping the future plan (2026-09-09): **the scan DIGEST is
+the surface where decisions are made** — the scan table is hardly read — so
+context-together work targets the digest first; positions is post-entry (exit support
+only, "not necessarily harmful" but lower value). Candidate directions, in that
+priority: a once-per-digest footer legend absorbing the repeated methodology boilerplate
+("inform-only, one era, class-conditional") out of every line, a short sigil keeping the
+caveat attached; per-item grouped context ON THE DIGEST (each rendered pick's cells +
+notes as one visual unit); a positions card layout, optional/later. A note-line budget
+was considered and REJECTED — the measured failure mode is fragmentation, not volume,
+and a static drop-priority is a machine for recreating missed context. Needs its own
+per-topic plan; no chunk in THIS plan may cite §DENSITY as license to add or lengthen
+lines.
 
 ## Process
 
