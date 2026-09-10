@@ -1112,6 +1112,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `quote-items.mjs` default stdout view with `--raw` as the model-free escape hatch; console-only, no
   `screen.json`/app change). Folds into `PLAN.md` and is deleted when its last chunk ships (the
   plan-file rule).
+- `plans/PLAN-THESIS-FRAME.md` — in-flight per-topic plan (2026-09-09, owner-directed via
+  PLAN-WEEKDAY-PHASE-CONFOUND §9): the interpretation layer learns that a declared hold-thesis plan is
+  the FRAME. TF1 `declare-thesis` refuses non-gating (tripwire-less) path declarations; TF2 renders the
+  measured dislocation cell ADJACENT to the `{crash-risk, cooling}` falling warning (WPC §6 branch (iv)'s
+  ship; mild-cooldown untouched); TF3 (mock-gated on owner sign-off) renders declared-plan lots as a
+  `PLAN <path> · day k/n · exit · abort · until <date>` frame with the machinery verdict shown beside,
+  never hidden, plus `--until` writing a lapse DATE into the `horizon` field. Presentation-only — gates
+  nothing; also registers the render-density problem (§DENSITY) as out-of-scope future work.
 - `plans/PLAN-DIGEST-SIGNAL-AND-SCAN-PERF.md` — in-flight per-topic plan (2026-08-07, **PARTLY SHIPPED —
   SP1 landed**; corrected 2026-08-09, this entry said PLANNING ONLY / no code changed): two workstreams that share one file (`pipeline/commands/screen-flip-niches.mjs`)
   and therefore one parallel-safety contract. **A — digest SIGNAL:** as of that plan's writing

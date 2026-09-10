@@ -481,6 +481,10 @@ unchanged (failure stays time-based).
 
 Nothing here changes gates or doctrine by itself; it is presentation/interpretation
 work, and per the process it needs its own per-topic plan before any of it is built.
+**That plan now exists (drafted 2026-09-09): `plans/PLAN-THESIS-FRAME.md`** — TF1 = item
+1 (refuse, with `--no-tripwire` override), TF2 = item 3 (+ the skill-prose sentence from
+item 2), TF3 = item 2's frame rendering, mock-gated on owner sign-off. Execution and
+results live there, not here.
 
 ## §3+§6 RESULTS (chunk WPC — registered run 2026-09-08, confirming rerun 2026-09-09)
 
