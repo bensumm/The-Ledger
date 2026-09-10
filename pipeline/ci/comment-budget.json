@@ -398,7 +398,7 @@
     "pipeline/commands/quote-items.mjs": {
       "dated": 0,
       "block": 40,
-      "comments": 511
+      "comments": 520
     },
     "pipeline/commands/read-book.mjs": {
       "dated": 3,
@@ -463,7 +463,7 @@
     "pipeline/commands/screen-flip-niches.mjs": {
       "dated": 0,
       "block": 60,
-      "comments": 1684
+      "comments": 1686
     },
     "pipeline/commands/set-scan-analysis.mjs": {
       "dated": 0,
@@ -666,9 +666,9 @@
       "comments": 47
     },
     "pipeline/lib/render/emit.mjs": {
-      "dated": 11,
-      "block": 45,
-      "comments": 226
+      "dated": 9,
+      "block": 40,
+      "comments": 227
     },
     "pipeline/lib/render/reachability.mjs": {
       "dated": 1,
@@ -678,7 +678,7 @@
     "pipeline/lib/render/render.mjs": {
       "dated": 1,
       "block": 54,
-      "comments": 129
+      "comments": 130
     },
     "pipeline/lib/render/replay.mjs": {
       "dated": 3,
@@ -692,8 +692,8 @@
     },
     "pipeline/lib/render/suggestlog.mjs": {
       "dated": 0,
-      "block": 141,
-      "comments": 408
+      "block": 142,
+      "comments": 409
     },
     "pipeline/lib/signal/admission.mjs": {
       "dated": 9,

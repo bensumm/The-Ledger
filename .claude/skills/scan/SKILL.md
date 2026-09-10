@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 3.11
+version: 3.12
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -442,16 +442,29 @@ This is the tribal layer the script can't do — apply ALL of these:
     over the round million but under the real peak-demand prints — reaches NEITHER side and stalls. Anchor:
     blowpipe units at 11.098m stalled (over the 11.000m wall, under the ~11.14m+ daily highs); moving to
     just-under-11.0m cleared, with the real upside at ~11.19m+.
-- **Entry aggression follows posture (Ben, 2026-07-05).** _(judgment: posture call)_ When Ben is ACTIVELY flipping
-  (at the client, watch loop running), price entries to FILL: recommend bids at or near
-  the live instasell — or the upper half of the band — accepting a thinner per-unit edge
-  so long as the exit still clears break-even meaningfully (the validated half-chase:
-  bludgeon 2026-07-05, +292k). A band-floor bid watching a riser run away costs more in
-  missed cycles than the floor discount saves — that day's chin/ring/jaw floor bids never
-  filled. When Ben is PASSIVE (walking away / overnight), invert: deep optimistic /
-  band-floor bids only, sized for the good payout if hit (`/overnight`'s fill-realism
-  check governs), and never leave a near-live chase bid resting unattended — it fills
-  into the first dip with nobody watching. State which posture a recommendation assumes.
+- **Entry AND exit aggression follow the DWELL HORIZON (Ben, 2026-07-05; generalized from the
+  ACTIVE/overnight binary + given a SELL side 2026-09-10 — the bludgeon-buy/Marlin-ask anchor: two
+  rest-all-day legs priced at the live edges because "daytime, away ~8h" fell between the old
+  cases and no rule covered a resting ask at all).** _(judgment: horizon call; the comparison
+  itself is CODE — quote-items' `⇄ dwell` line, `formatDwell` in `pipeline/lib/render/emit.mjs`)_
+  Every offer has a stated DWELL — how long it will rest unattended — and BOTH legs price off it.
+  Three horizons:
+  - **attended** (at the client, watch loop running): price to FILL — bids at/near the live
+    instasell, asks at/near the live instabuy, accepting a thinner per-unit edge so long as the
+    exit still clears break-even meaningfully (the validated half-chase: bludgeon 2026-07-05,
+    +292k). A band-floor bid watching a riser run away costs more in missed cycles than the floor
+    discount saves — that day's chin/ring/jaw floor bids never filled.
+  - **away-hours** (~2–8h) and **overnight**: BOTH legs price off the **REST-DAY column of the
+    `⇄ dwell` line** — the full-day distribution levels with their touch tallies — never the live
+    edges. A resting ask at the live instabuy gives away the day's distribution for free (the
+    Marlin 3,885 miss), exactly as a near-live chase bid left resting fills into the first dip
+    with nobody watching. Size for the good payout if hit (`/overnight`'s fill-realism check
+    governs the overnight case; a dwell-line level that carries a ⚠ reality clause goes to Ben
+    WITH the clause, or priced at the typical).
+  State which horizon a recommendation assumes, and pass it to the read
+  (`quote-items.mjs --dwell=attended|away|overnight`) so the ledger's lean `dwell` field records
+  the basis for the retro. Fill-now vs rest-day is per-TIME vs per-FLIP profit — neither is wrong;
+  UNDECLARED is wrong (`docs/MARKET-ANALYSIS.md` "Two objectives, two prices").
   **New-lane exception — the FIRST entry into a NEW/unproven item is cautious even when
   actively flipping (Ben, 2026-07-06).** Fill-aggression is *earned* by knowing the lane —
   you've watched its fills and band behavior. On a brand-new item you're buying information
@@ -507,7 +520,8 @@ This is the tribal layer the script can't do — apply ALL of these:
   **Allocate by ATTENTION + CRASH-TOLERANCE, keyed on Ben's away-horizon:** "back in 1h" vs "back in 8h"
   vs "overnight" weights the churn↔big-ticket mix (short/present → more churn is fine; long/hands-off →
   big-ticket set-and-forget); if he hasn't stated it, ASK the horizon before sizing a big-ticket tilt.
-  Rides the existing "Entry aggression follows posture" rule.
+  The SAME stated horizon also selects the pricing basis — it is the dwell of the "Entry AND exit
+  aggression follow the DWELL HORIZON" rule above, so pass it as `--dwell` on the reads.
   **Honesty (rule 4):** the ~equal-%-return and the ~150–200m churn ceiling are ESTIMATES, and the
   big-ticket realized sample is n=1 (one godsword) — the crossover is UNMEASURED. When the RC co-log
   accrues enough closed big-ticket round-trips, compare realized %/day directly instead of estimating.
@@ -1008,12 +1022,15 @@ never the scan. Anchor (2026-07-07): several watch-loop passes reported only "no
 while band big-tickets (bludgeon/sang/tassets class) went unmentioned for an hour — Ben had
 to ask "are we looking at other flip-niches?"; the miss was omission, not a bad call.
 
-**Every recommended price states its timing target (Ben, 2026-07-05):** a pick's bid and
-sell are each "X, targeting Y" — bind the number to the window/mechanism expected to fill
-it (e.g. "bid 17.00m — tonight's 18:00–23:00 trough, projected 16.8–17.0m" / "sell 17.55m —
-the 23:00–03:00 UK-morning lift, reached 7/7d"; a churn item's target can simply be "normal
-daily churn"). Run the time-of-day `read-window-range.mjs` read the CLAUDE.md doctrine already
-requires and quote it — never a bare number.
+**Every recommended price states its timing target AND its basis (Ben, 2026-07-05; basis token
+2026-09-10):** a pick's bid and sell are each "X **(basis)**, targeting Y" — the basis is the
+`⇄ dwell` line's own token, `(fill-now)` or `(rest-day, touched k/Nd)`, QUOTED never recomputed —
+and the number is bound to the window/mechanism expected to fill it (e.g. "bid 17.00m (rest-day,
+touched 4/14d) — tonight's 18:00–23:00 trough" / "sell 17.55m (rest-day, reached 7/7d) — the
+23:00–03:00 UK-morning lift"; a churn item's target can simply be "(fill-now) normal daily
+churn"). A fill-now price is not wrong — it is wrong UNDECLARED on a leg that will rest; the
+dwell-horizon rule (§2) picks the basis. Run the time-of-day `read-window-range.mjs` read the
+CLAUDE.md doctrine already requires and quote it — never a bare number.
 
 ## 5. Position-context pass (Ben, 2026-07-05) — read the shortlist against the current book
 

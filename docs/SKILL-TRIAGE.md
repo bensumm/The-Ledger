@@ -63,7 +63,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | Tax dominates thin flips | KEEP-AS-JUDGMENT | The >~0.5% after-tax bar is a taste threshold. |
 | Band-is-the-edge pricing | KEEP-AS-JUDGMENT | Pricing call. |
 | Anchor pricing — fillable side of a round number | KEEP-AS-JUDGMENT | n=2; the `anchor.mjs` probe is output-only, never a gate. |
-| Entry aggression follows posture (+ new-lane, liquidity-scaling exceptions) | KEEP-AS-JUDGMENT | Posture call; `--posture` tunes screens but the entry-price taste is the LLM's. |
+| Entry AND exit aggression follow the DWELL HORIZON (+ new-lane, liquidity-scaling exceptions; was "Entry aggression follows posture" until 2026-09-10) | PARTIAL-ENCODE | The fill-now-vs-rest-day COMPARISON is code (`formatDwell`, `pipeline/lib/render/emit.mjs` — the `⇄ dwell` line); choosing the horizon + the entry-price taste stay the LLM's; `--posture` tunes screens, `--dwell` records the stated horizon. |
 | Parked-capital leak (HYPOTHESIS) | KEEP-AS-JUDGMENT | Unproven lean off ~116 concentrated lots; F1-gated. Revisit at F1. |
 | Velocity beats magnitude (HYPOTHESIS) | KEEP-AS-JUDGMENT | Unproven lean; crossover unmeasured. Revisit at F1. |
 | Band-top artifact detection | KEEP-AS-JUDGMENT | `--min-active` supports; spotting the lone print is judgment. |
@@ -80,7 +80,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | Thin CURRENT 2h band ≠ no edge | KEEP-AS-JUDGMENT | Read via `pipeline/commands/read-window-range.mjs`; the "proven lane" call is judgment. |
 | Hard rules §3 (falling exclusion / watchlist section / preserve columns) | ENCODE | Falling doctrine per-spec in `js/flip-niches.mjs`; watchlist section + Note in `pipeline/commands/screen-flip-niches.mjs` (S3); columns pinned in `js/quotecore.js`. |
 | Cover every niche each pass | KEEP-AS-JUDGMENT | Output-coverage discipline (memory `salient-subtask-crowds-out-mandate`). |
-| Every recommended price states its timing target | KEEP-AS-JUDGMENT | Tool `pipeline/commands/read-window-range.mjs`; binding a number to a window is judgment. |
+| Every recommended price states its timing target AND its basis | KEEP-AS-JUDGMENT | Tool `pipeline/commands/read-window-range.mjs`; binding a number to a window is judgment; the basis token is QUOTED off the coded `⇄ dwell` line, never recomputed. |
 | Position-context pass §5 (stale-bid / overlap / held-ask) | KEEP-AS-JUDGMENT | Cross-check over `pipeline/commands/watch-positions.mjs`. |
 | Encode-learnings boilerplate (Timing/Prompt/Routing/Execution/Honesty) | KEEP-AS-JUDGMENT | Shared self-improvement process across all four skills (see note below). |
 
@@ -102,7 +102,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | --- | --- | --- |
 | Overnight ASKS favored / DEEP BIDS disfavored (time-geography) | KEEP-AS-JUDGMENT | Volume asymmetry measured, behavioral sample small (1 win / 2 fails). |
 | Weekend→weekday calendar shift (v1.11) | **RETIRED** (Ben, 2026-07-09) | Collapsed to a one-line weekday-basis check pointing at the full-day read (`--window 0-23 --nights 21`); the narrow-slice fade is folded in as an UNCONFIRMED judgment note. `/overnight` v1.15. |
-| Phase 1 chase-bid sweep / STOP-and-wait / measurement-spine refresh | ENCODE | `pipeline/commands/watch-positions.mjs`, `pipeline/commands/join-outcomes.mjs`; the pause-for-capital is the interactive boundary (process). |
+| Phase 1 chase-offer sweep (two-sided since 2026-09-10: chase bids down, live-edge asks up to their rest-day rung) / STOP-and-wait / measurement-spine refresh | ENCODE | `pipeline/commands/watch-positions.mjs`, `pipeline/commands/join-outcomes.mjs`; the pause-for-capital is the interactive boundary (process). |
 | Phase 2 posture screen (what it does / does not decide) | ENCODE | `pipeline/commands/screen-flip-niches.mjs --posture overnight` (S2) does the structural filtering; the sizing/retrace judgment stays. |
 | Nightly-low trend / decay-trough projection / fill-realism checks | KEEP-AS-JUDGMENT | Read `pipeline/commands/read-window-range.mjs`'s per-day low column; projecting the trough is judgment (small sample). |
 | Accumulation-and-capital table | ENCODE | Formula aligned with `pipeline/commands/screen-flip-niches.mjs`'s `expUnits`; the prioritization is judgment. |

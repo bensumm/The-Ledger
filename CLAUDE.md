@@ -66,7 +66,8 @@ missing.
 ## Market judgment layer — lives in the project skills (moved by PLAN-5)
 The screen/positions judgment layer (250k gp/d floor, 24h-drift-is-a-pre-filter-only,
 two-sided liquidity / ghost-spread discipline, tax-dominates-thin-flips, band-is-the-edge
-pricing, band-top artifacts, fresh-repricer flag, overnight/morning posture) lives in the
+pricing, band-top artifacts, fresh-repricer flag, dwell-horizon pricing — fill-now vs
+rest-day, `/scan` §2 — and overnight/morning posture) lives in the
 committed project skills `/scan`, `/positions`, `/overnight`, `/morning`
 (`.claude/skills/*/SKILL.md`) — *moved* there, not copied, so it loads only when the
 workflow runs. The ask→command table below still routes bare asks.

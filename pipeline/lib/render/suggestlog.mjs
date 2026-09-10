@@ -50,6 +50,7 @@
  *   pathA?     Path-A intraday-flip record { gpDay, marginU, captureFrac, cyclesDay, units, price,
  *              intradayRange, lane, rankInLane } off pipeline/lib/patha.mjs pathAGpDay. captureFrac is a
  *              PLACEHOLDER (n=13/12, own-book-biased) even though Path-A drives the console primary sort.
+ *   dwell?     'attended'|'away'|'overnight' — the STATED dwell horizon (quote-items --dwell=…; absent = not stated). DISTINCT from posture?, a clock heuristic — never merged.
  *   posture?, tripwire?, fillWindowHrs?, thesis?, validators?, path?  YS2 forward context a backfill cannot
  *              invent: the posture the read was made under, the named structural level watched, predicted
  *              time-to-fill, one-line intent (NO PII), the compact validator record — non-pass results plus
@@ -535,7 +536,7 @@ export function timedLapShadow(lap) {
 // the prediction is just the item's dominant class from buildVelocityIndex(outcomes.json), which the join
 // recomputes for free. The MEASURED velocityClass (velocity.mjs, off a real round-trip) is a different
 // thing and is still live.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, admitSkip, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDay, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap, pathA, via, preRank, prePool, askPlacement, repriced, exemptionBounded, rankPre } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, dwell, tripwire, fillWindowHrs, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, admitSkip, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDay, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap, pathA, via, preRank, prePool, askPlacement, repriced, exemptionBounded, rankPre } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -555,6 +556,7 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // watch-positions.mjs supplies none (it passes its own classify() label instead).
   if (volSrc != null)        e.volSrc = volSrc;
   if (posture != null)       e.posture = posture;
+  if (dwell != null)         e.dwell = dwell;
   if (tripwire != null)      e.tripwire = tripwire;
   if (fillWindowHrs != null) e.fillWindowHrs = fillWindowHrs;
   if (thesis != null)        e.thesis = thesis;

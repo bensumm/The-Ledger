@@ -697,7 +697,8 @@ Sells by (estimated): <window, with its quantile — "01–09 UK-day window (~75
 print Y+ within 8h)">
 
 Context:
-<the action plan: exact prices with timing targets ("X, targeting Y"), tripwires /
+<the action plan: exact prices with timing targets AND their dwell basis ("X (fill-now |
+rest-day, touched k/Nd), targeting Y" — the `⇄ dwell` line's token), tripwires /
 step-down triggers named, override reason if the dot disagrees with the script>
 
 ────────────────────────────────────────  (separator between items)

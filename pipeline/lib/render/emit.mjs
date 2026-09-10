@@ -131,19 +131,11 @@ export function formatReachMargin(rm) {
  *                      Deliberately distinct from `false`: not-checked is not the same claim as
  *                      checked-and-failed, and collapsing them would assert one of them falsely.
  *
- * THIS REPLACED A `lap.clean` BRANCH, and the replacement is the point rather than a refactor.
- * Until 2026-08-10 the render keyed on `hourConcentration`'s `clean` verdict: clean===false printed
- * "range-churn — no timing edge" and dropped the dip/peak hours AND the BID/ASK levels with them.
- * `clean` was then measured against held-out days over the 1h archive and does not discriminate —
- * clean=true (n=60) dip +5.0pp / peak +4.4pp versus clean=false (n=1919) dip +3.6pp / peak +4.7pp, no
- * gap and marginally backwards on the peak side — while the split-half gate separates strongly inside
- * both strata. So the levels were being withheld from ~97% of items on the strength of a statistic
- * that selects nothing. `clean` is still computed and shadow-logged (suggestlog) for calibration, but it
- * no longer decides what ANY surface shows. (This block said it "still drives the app's Trends ★ badge
- * (js/trends.js — NOT re-verdicted here, flagged as follow-up)" until 2026-08-10; DT4c re-verdicted that
- * badge onto `windowReliability` and REMOVED `hourConcentration` from js/trends.js entirely, which made
- * this sentence false the moment it shipped — caught by adversarial review, not by the doc pass that
- * should have swept it.) See DT4-WINDOW-GATE-FINDINGS.md.
+ * DON'T REBUILD a `lap.clean`/`hourConcentration` gate here: `clean` was measured against held-out
+ * days and does not discriminate (it withheld levels from ~97% of items while selecting nothing —
+ * the split-half gate above is the one that separates). `clean` is still computed and shadow-logged
+ * (suggestlog) for calibration, but it decides what NO surface shows. Full measurement + the
+ * Trends-badge re-verdict story: DT4-WINDOW-GATE-FINDINGS.md.
  * A second liquidity/sizing segment (vol/d, dip/peak pool depth, tranche comfort/ceiling) appends
  * when the caller supplied `volDay`; the §4 caveat appends when `buyLimit` exceeds `trancheCeiling`.
  */
@@ -298,11 +290,19 @@ export function formatBasePosition(bp) {
  * printed 12/14d"), the same resolution bug d37e818 fixed for offer prices. Null-degrades like the
  * rest of this module (no pair / no days ⇒ null ⇒ the caller prints nothing, never a fabricated count).
  */
+/* tallyCounts — the ONE home for the in-sample tally arithmetic (formatAsymFill + formatDwell):
+ * p-fractions × their OWN denominators (nAsk/nBid, never bare nDays — see the header above). */
+export function tallyCounts({ pAsk, pBid, nAsk, nBid, nDays } = {}) {
+  const nA = nAsk ?? nDays, nB = nBid ?? nDays;
+  if (!nA || !nB) return null;
+  return { hA: Math.round((pAsk ?? 0) * nA), nA, hB: Math.round((pBid ?? 0) * nB), nB };
+}
+
 export function formatAsymFill(ae, ap, { fmt: fmtFn = fmtP } = {}) {
   if (!ae || !ap || ae.bid == null || ae.ask == null) return null;
-  const nA = ap.nAsk ?? ap.nDays, nB = ap.nBid ?? ap.nDays;
-  if (!nA || !nB) return null;                                  // no denominator ⇒ no honest tally
-  const hB = Math.round((ae.pBid ?? 0) * nB), hA = Math.round((ae.pAsk ?? 0) * nA);
+  const t = tallyCounts({ pAsk: ae.pAsk, pBid: ae.pBid, nAsk: ap.nAsk, nBid: ap.nBid, nDays: ap.nDays });
+  if (!t) return null;                                          // no denominator ⇒ no honest tally
+  const { hB, nB, hA, nA } = t;
   // A guard only gets NAMED when the two prices actually RENDER differently. fmtP is full-gp under
   // 100k but falls back to fmt's 0.1k buckets above it, so a big-ticket guard binding by a few gp
   // would otherwise print "ask 219.9k (= live instabuy, above the 219.9k level …)" — nonsense. When
@@ -320,6 +320,44 @@ export function formatAsymFill(ae, ap, { fmt: fmtFn = fmtP } = {}) {
     ? `ask ${a.p} (= live instabuy, above the ${a.named} level that printed ${hA}/${nA}d)`
     : `ask ${a.p} (printed ${hA}/${nA}d)`;
   return { bidTxt, askTxt };
+}
+
+/* formatDwell({ fillNow, restDay, side }, { fmt }) → string | null — the ⇄ dwell line: FILL-NOW
+ * (live edges, per-TIME) vs REST-DAY (full-day distribution levels + in-sample tallies, per-FLIP).
+ * PURE; no execution verb (formatAsymFill's rule binds); a DECLARED exit is labelled, never claused;
+ * side 'ask' = held sell leg, nets vs the LOT's cost. Null on a missing basis. → CHANGELOG.md */
+export function formatDwell({ fillNow, restDay, side = 'both' }, { fmt: fmtFn = fmtP } = {}) {
+  if (!fillNow || !restDay) return null;
+  const netTxt = n => n == null ? 'net n/a' : `net ${n >= 0 ? '+' : '−'}${fmt(Math.abs(n))}/u`;   // nets via compact fmt = the ◆ asym note's resolution; prices stay fmtFn
+  const rc = (r, level) => {
+    if (r && r.typicalLevel != null && level != null && fmtFn(r.typicalLevel) === fmtFn(level)) return '';
+
+    const c = realityClause(r, { fmt: fmtFn, style: 'short' }); return c ? ` ${c}` : '';
+  };
+  if (side === 'ask') {
+    if (fillNow.sell == null || restDay.ask == null) return null;
+    const tok = restDay.askN ? `${restDay.askLabel ? restDay.askLabel + ' — ' : ''}printed ${restDay.askHit}/${restDay.askN}d` : (restDay.askLabel || '');
+    const tailAsk = (restDay.net != null && restDay.net < 0)
+      ? ` — rest-day rung sits BELOW break-even; the BE floor governs (touched ≠ filled, in-sample)`
+      : (restDay.net == null)
+        ? ` — no cost basis on this lot: verify vs break-even before resting (touched ≠ filled, in-sample)`
+        : ` — resting all day? price the REST-DAY rung (touched ≠ filled, in-sample)`;
+    return `dwell (sell): FILL-NOW @${fmtFn(fillNow.sell)}${fillNow.sellTag || ''} ${netTxt(fillNow.net)} vs cost`
+      + ` | REST-DAY @${fmtFn(restDay.ask)}${tok ? ` (${tok})` : ''}${rc(restDay.askReality, restDay.ask)} ${netTxt(restDay.net)} vs cost`
+      + tailAsk;
+  }
+  if (fillNow.buy == null || fillNow.sell == null || restDay.bid == null || restDay.ask == null) return null;
+  if (restDay.hB == null || restDay.hA == null) return null;    // no honest tally ⇒ no line
+  const pools = (restDay.poolLo != null || restDay.poolHi != null)
+    ? ` · pools ~${fmt(restDay.poolLo ?? 0)}/~${fmt(restDay.poolHi ?? 0)} u/d` : '';
+  const tail = (restDay.net != null && restDay.net < 0)
+    ? ` — rest-day pair nets NEGATIVE — no resting edge here`
+    : ` — resting away-hours/overnight? price off REST-DAY`;
+  return `dwell: FILL-NOW ${fmtFn(fillNow.buy)}${fillNow.buyTag || ''}→${fmtFn(fillNow.sell)}${fillNow.sellTag || ''} ${netTxt(fillNow.net)} (live edges — pays per-TIME)`
+    + ` | REST-DAY bid ${fmtFn(restDay.bid)} (touched ${restDay.hB}/${restDay.nB}d)${rc(restDay.bidReality, restDay.bid)}`
+    + ` → ask ${fmtFn(restDay.ask)} (printed ${restDay.hA}/${restDay.nA}d)${rc(restDay.askReality, restDay.ask)}`
+    + ` ${netTxt(restDay.net)}${pools} (pays per-FLIP; touched ≠ filled, in-sample)`
+    + tail;
 }
 
 /* THE MEASURED CLASS RATE — join-asym-outcomes.mjs (PLAN-PATIENT-PAIR §7).
@@ -351,5 +389,15 @@ export function asymClassRateNote() {
     + `big-ticket) over ~${Math.round(ASYM_MEASURED_ROWS / 1000)}k rows / ~${Math.round(ASYM_MEASURED_ITEMS / 10) * 10} items. `
     + `A CLASS rate, not this row's; touched/reached ≠ filled, so it bounds a real offer from above. `
     + `Re-derive: join-asym-outcomes.mjs`;
+}
+
+/* SELL-LEG footer for a dwell-only surface — a held lot's resting ask has no round trip to quote (the ~4% rate would overstate pessimism ~6x there). Same source and rules. */
+const ASYM_ASK_24H_PCT = 24.2, ASYM_ASK_24H_BIG_PCT = 6.4;
+export function dwellSellClassRateNote() {
+  return `dwell (sell) — the printed k/Nd counts are IN-SAMPLE reach tallies at the printed level, NOT `
+    + `fill rates. The nearest measured class rate is CONDITIONAL: given the paired deep bid touched `
+    + `first, the ask leg is reached within 24h of that touch in ~${ASYM_ASK_24H_PCT}% of cases `
+    + `(~${ASYM_ASK_24H_BIG_PCT}% on big-ticket). A CLASS rate under that conditioning, not this row's `
+    + `odds; touched/reached ≠ filled, so it bounds a resting ask from above. Re-derive: join-asym-outcomes.mjs`;
 }
 

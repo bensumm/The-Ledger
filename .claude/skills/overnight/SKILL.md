@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.30
+version: 1.31
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -74,15 +74,19 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    `/overnight` is the daily session boundary where the day's completed fills + suggestion→fill
    joins get folded into it. It's EXTEND-never-rebuild, so it's safe to run any time; do it here so
    the F1-calibration accrual and the weekly `/morning` descriptive-outcomes read stay current.
-2. **Chase-bid sweep (Ben, 2026-07-05 — the entry-aggression posture flip).** Active
-   sessions price bids near the live instasell to fill; overnight inverts that. Before the
-   pause, list every RESTING BUY offer (`node pipeline/commands/watch-positions.mjs` shows them with verdicts)
-   and flag any bid priced at/near the live instasell or in the upper half of its band —
-   each must be **cancelled or dropped to the band floor / a `read-window-range.mjs`-supported
-   level** before Ben walks away. A chase-priced bid left unattended fills into the first
-   quiet-hours dip with nobody watching the exit — the exact adverse selection the active
-   posture accepts only because someone is at the keyboard. Canonical posture doctrine:
-   `/scan` §2 "Entry aggression follows posture"; this step is its overnight enforcement.
+2. **Chase-offer sweep — TWO-SIDED (Ben, 2026-07-05; sell side added 2026-09-10 — the Marlin
+   ask-at-live-instabuy miss).** Attended sessions price offers at the live edges to fill;
+   overnight inverts BOTH legs. Before the pause, list every RESTING offer
+   (`node pipeline/commands/watch-positions.mjs` shows them with verdicts) and flag:
+   - any BID priced at/near the live instasell or in the upper half of its band — cancel it or
+     drop it to the band floor / a `read-window-range.mjs`-supported level. A chase-priced bid
+     left unattended fills into the first quiet-hours dip with nobody watching the exit.
+   - any ASK priced at/near the live instabuy — raise it to its REST-DAY rung (the `⇄ dwell`
+     line's rest-day ask, or the windowExit typical-exit ladder), never below break-even. An
+     ask parked at the live edge through the UK-day lift gives away the night's distribution
+     for free — the mirror error of the chase bid.
+   Canonical doctrine: `/scan` §2 "Entry AND exit aggression follow the DWELL HORIZON"; this
+   step is its overnight enforcement.
 3. **STOP and wait.** Ben executes the cuts/re-lists in-game, then states **how much
    capital he has free to commit overnight**. Resolving current positions is what
    determines free capital + free GE slots, so the capital statement is the phase
@@ -158,8 +162,10 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    cache-only since the winners-only render).** Ben's exact
    ask ("how many can I accumulate in 8h and how much capital does that require") is an
    ENCODED output of `screen-flip-niches.mjs --posture overnight`: an **Overnight accumulation & capital**
-   table under each flip-niche, top-down by the overnight sort, with per line `Bid → Ask (sell) ·
-   up-to units/8h · Capital · Cum capital · Net/u · Total if cycled`. The up-to-units figure is
+   table under each flip-niche, top-down by the overnight sort, with per line `Bid · Day-low bid ·
+   Ask (sell) · up-to units/8h · Capital · Cum capital · Net/u · Total if cycled` (`Day-low bid` =
+   the REST-DAY deep level + its touch tally — the unattended overnight bid's honest home; the
+   Capital math still keys the `Bid` column, annotate-not-swap by decision, Ben 2026-09-10). The up-to-units figure is
    the shared `expUnitsOvernight` (`= min(buyLimit×2, 8/24×0.10×volDay)`; this line also claimed
    `= expUnits × 8/24` until 2026-08-10 — that identity is FALSE and `expunitsovernight.test.mjs`
    asserts its negation, because `expUnits` now takes the haircut 2 windows/day while this keeps the
@@ -171,10 +177,12 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    so take the table from `pipeline/.cache/last-report/screen.json` (step 4 already runs the script
    quiet, which is the same read), or re-run with `--full` when you want it printed. Your remaining
    judgment on top of it:
-   - **Timing target on every line (Ben, 2026-07-05):** bind the bid + sell to the window
-     expected to fill them (the bid to the fill-realism / **Diurnal timing** read — also cache-only,
-     same file, `--full` to print it — the sell to tomorrow's morning-lift / next-day churn).
-     "X, targeting Y" — never a bare number. Sell never below break-even.
+   - **Timing target + basis on every line (Ben, 2026-07-05; basis token 2026-09-10):** bind the
+     bid + sell to the window expected to fill them (the bid to the fill-realism / **Diurnal
+     timing** read — also cache-only, same file, `--full` to print it — the sell to tomorrow's
+     morning-lift / next-day churn). "X (basis), targeting Y" — basis is the `⇄ dwell` line's
+     token (overnight lines are normally `(rest-day, touched k/Nd)`; a `(fill-now)` leg here needs
+     saying out loud). Never a bare number. Sell never below break-even.
    - **Take lines top-down against the Phase-1 stated capital** using the running `Cum capital`
      column — stop when it exceeds what Ben freed; **flag retrace risk** on any big-ticket line.
    - **Pair every up-to-units figure with the fill-realism read** (§5 windowrange) — it is a

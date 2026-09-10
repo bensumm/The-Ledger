@@ -76,7 +76,7 @@ import { resolve, loadPipelineConfig, refusePublishIfNonNeutral, shadowModelsOf 
 import { open as openArchive } from '../lib/market/archive.mjs';   // AF5b — READONLY handle for --archive-regime's 6h read (open() runs schema DDL unless readonly; never take that path on the live DB)
 import { sixHourReader, archiveSeries, LIVE_TS6H_BUCKETS, REGIME_MIN_6H_BUCKETS } from '../lib/market/archive-series.mjs';   // archiveSeries (DT1b) = the ts→timestamp adapter the amplitude walk-forward reads long 1h history through; AF5b — the ONE 6h seam, its 365-bucket pin (phase() depth stability) and the depth floor below which it serves live.
 import { renderReport, renderHtmlTable } from '../lib/render/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer: a niche's table + footer notes build a screen-report printed via renderReport. renderHtmlTable = the Stage-2 HTML twin published into screen.json for the app's Scan tab.
-import { formatTimedLap, formatBasePosition, formatAsymFill, asymClassRateNote } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT2 — the ONE shared diurnalTimedLap renderer (also DT3's future quote/watch call site); DT6 — the base-position note renderer; formatAsymFill — the shared ◆ asym fill clause pair (quote emits the same line)
+import { formatTimedLap, formatBasePosition, formatAsymFill, asymClassRateNote, tallyCounts } from '../lib/render/emit.mjs';   // tallyCounts — the accumulation table's Day-low-bid tally   // PLAN-DIURNAL-TIMING DT2 — the ONE shared diurnalTimedLap renderer (also DT3's future quote/watch call site); DT6 — the base-position note renderer; formatAsymFill — the shared ◆ asym fill clause pair (quote emits the same line)
 // P1: the pure candidate-selection + survival doctrine lives in lib/gatecandidates.mjs —
 // gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice plus renderMode's post-fetch surviveMode.
 // screen-flip-niches.mjs passes its CLI THRESHOLDS / sizing explicitly; fixtures drive them in
@@ -1927,19 +1927,29 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // stdout-only (never in screen.json). Up-to units is an UPPER BOUND (assumes fills at your price;
   // prorates daily volume flat across the quiet hours, no fill probability) — labeled "up to" + the note.
   if (POSTURE === 'overnight' && useRows.length) {
-    const accHeaders = ['#', 'Item', 'Bid', 'Ask (sell)', 'Up-to units/8h', 'Capital', 'Cum capital', 'Net/u', 'Total if cycled'];
+    // Day-low bid — the REST-DAY deep level (asymPair deepBid, in-hand 1h series) BESIDE the 2h-band
+    // Bid. ANNOTATE-ONLY: Capital/Cum math still keys Bid — a swap is retro-gated. No series → '—'.
+    const accHeaders = ['#', 'Item', 'Bid', 'Day-low bid', 'Ask (sell)', 'Up-to units/8h', 'Capital', 'Cum capital', 'Net/u', 'Total if cycled'];
     const accCells = [];
-    let cum = 0;
+    let cum = 0, anyDayLow = false;
     useRows.forEach((r, i) => {
       const bid = r.row.optBuy, ask = r.row.optSell, netU = r.row.optNet;
       const units = bid != null ? Math.floor(expUnitsOvernight(r.row.limit, r.row.volDay)) : null;
       const capital = (units != null && bid != null) ? units * bid : null;
       if (capital != null) cum += capital;
       const total = (units != null && netU != null) ? units * netU : null;
+      let dayLow = '—';
+      const tsAcc = series1h && series1h.get(r.id);
+      if (tsAcc) {
+        const apAcc = asymPair(windowStats(tsAcc, { nights: 14, wStart: 0, wEnd: 0 }));
+        const tAcc = apAcc ? tallyCounts(apAcc) : null;
+        if (apAcc && apAcc.deepBid != null && tAcc) { dayLow = `${fmtP(apAcc.deepBid)} (touched ${tAcc.hB}/${tAcc.nB}d)`; anyDayLow = true; }
+      }
       accCells.push([
         { t: String(i + 1) },
         { t: map.byId[r.id]?.name || ('#' + r.id) },
         { t: bid != null ? fmtP(bid) : '—' },
+        { t: dayLow, c: 'mini' },
         { t: ask != null ? fmtP(ask) : '—' },
         { t: units != null ? `up to ${fmt(units)}` : '—', c: 'mini' },
         { t: capital != null ? fmtP(capital) : '—' },
@@ -1950,7 +1960,9 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     });
     stanza.push({ type: 'lines', blank: false, lines: [`Overnight accumulation & capital (~${OVERNIGHT_SPAN_H}h span; bid→sell + up-to units + running capital — take lines top-down until your stated capital runs out):`] });
     stanza.push({ type: 'table', blank: false, headers: accHeaders, rows: accCells });
-    stanza.push({ type: 'lines', blank: false, lines: [`(Up-to units = min(buy limit × 2, 8/24 × 10% × Vol/d) — an UPPER BOUND: assumes fills at your bid, prorates daily volume flat across the quiet hours, prices in no fill probability. Pair it with the fill-realism / Diurnal read above. Sell never below break-even.)`] });
+    const accFootLines = [`(Up-to units = min(buy limit × 2, 8/24 × 10% × Vol/d) — an UPPER BOUND: assumes fills at your bid, prorates daily volume flat across the quiet hours, prices in no fill probability. Pair it with the fill-realism / Diurnal read above. Sell never below break-even. Day-low bid = the REST-DAY deep level (in-sample touch tally, not a fill rate) — an unattended overnight bid's honest home; the Capital math still keys the Bid column.)`];
+    if (anyDayLow) accFootLines.push(`(Day-low tallies — ${asymClassRateNote()})`);
+    stanza.push({ type: 'lines', blank: false, lines: accFootLines });
   }
   // Build 2 — per-row velocity tag: descriptive per-item velocity (fast/slow · median fill · % unfilled)
   // from the gitignored outcomes.json for rows in THIS niche with enough trade history. Never in the

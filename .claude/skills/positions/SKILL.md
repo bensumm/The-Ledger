@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.70
+version: 1.71
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -290,7 +290,7 @@ depth) cells the label moved nothing BH-significant, so read that line (and any 
 frame) before recommending CUT off the label alone. Applies to those two labels ONLY —
 `mild-cooldown` was outside the measured set and keeps its full ceiling-slope caution.
 
-**Sell-velocity preference (Ben, 2026-07-04) — the sell-side voice of `/scan`'s WINDOW-CLEAR PRICING step (days-reach ≠ within-window clear; name the exit window, price to it):** when a held item's ask sits ABOVE the current 2h band top and isn't filling, don't let it ride — recommend stepping the ask down to just under the band top (the price the market is actually printing), and if it still doesn't move within ~an hour or momentum flips ↓, step again to just above the live instabuy to clear. Moving the item and freeing the capital generally beats the patient premium. The floor is unchanged — never below break-even (the shared tax-capped `breakEven()`; see CLAUDE.md "Break-even") — the CUT/CUT-CANDIDATE verdicts remain the only exceptions. Present the rungs with net-per-unit and lot P/L so the velocity/premium trade-off is explicit.
+**Sell-velocity preference (Ben, 2026-07-04) — the sell-side voice of `/scan`'s WINDOW-CLEAR PRICING step (days-reach ≠ within-window clear; name the exit window, price to it):** when a held item's ask sits ABOVE the current 2h band top and isn't filling, don't let it ride — recommend stepping the ask down to just under the band top (the price the market is actually printing), and if it still doesn't move within ~an hour or momentum flips ↓, step again to just above the live instabuy to clear. Moving the item and freeing the capital generally beats the patient premium. **The ladder assumes ATTENDED re-checks (~hourly) — it is an attended-dwell play.** On an away-hours/overnight dwell don't start a ladder nobody will walk: place the single REST-DAY rung from the `⇄ dwell` line instead (`/scan` §2 "Entry AND exit aggression follow the DWELL HORIZON"). The floor is unchanged — never below break-even (the shared tax-capped `breakEven()`; see CLAUDE.md "Break-even") — the CUT/CUT-CANDIDATE verdicts remain the only exceptions. Present the rungs with net-per-unit and lot P/L so the velocity/premium trade-off is explicit.
 
 **HOLD defaults to the band-TOP premium — step a NEW/test lane down to a reachable level
 (Ben, 2026-07-06):** `momVerdict`'s HOLD emits "list @ <band top>" (the Optimistic 2h high)
@@ -464,13 +464,17 @@ verdict the script emits.
 Grouped by urgency: **cuts → list-to-clear → holds/watches**. One line each:
 `item · held@ · break-even · verdict · exact action price`.
 
-**Every action price states its timing target (Ben, 2026-07-05):** a recommended price is
-"X, targeting Y" — bind the number to the window/mechanism expected to fill it, e.g.
-"17.55m — targets the 23:00–03:00 UK-morning lift (reached 7/7d)" or "10.70m — velocity
-clear, fills on current prints". The data is already in hand (the `read-window-range.mjs`/
-window-line read the doctrine above requires); this rule just forbids a bare number. It
-also sets the re-check expectation: a price whose window hasn't arrived yet isn't "not
-filling".
+**Every action price states its timing target AND its basis (Ben, 2026-07-05; basis token
+2026-09-10 — the rule's one home is `/scan` §4, this restates only the token):** a recommended
+price is "X **(basis)**, targeting Y" — basis = the `⇄ dwell` line's own token, `(fill-now)` or
+`(rest-day, printed k/Nd)`, quoted never recomputed — and the number is bound to the
+window/mechanism expected to fill it, e.g. "17.55m (rest-day, reached 7/7d) — targets the
+23:00–03:00 UK-morning lift" or "10.70m (fill-now) — velocity clear, fills on current prints".
+A fill-now basis on an ask that will rest unattended is the Marlin miss — declare it and the
+dwell rule (`/scan` §2) will catch the mismatch. The data is already in hand (the
+`read-window-range.mjs`/window-line read the doctrine above requires); this rule just forbids a
+bare number. It also sets the re-check expectation: a price whose window hasn't arrived yet
+isn't "not filling".
 
 **Verify the SELL leg before quoting a profit — MANDATORY, not judgment (Ben, 2026-07-07, the
 DHCB overpitch).** Whenever you pitch a dip-bid's or a hold's expected profit off a band top /

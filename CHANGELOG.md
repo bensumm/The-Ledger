@@ -8,6 +8,38 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## pipeline 1.6.0 — 2026-09-10 — dwell-aware pricing: the ⇄ dwell line (no APP_VERSION bump — console/pipeline + skills)
+
+Born of a live miss the same day: two legs meant to REST ALL DAY were recommended at the live
+fill-now edges (the bludgeon buy at the live instasell 17,835,594; the Marlin ask at the live
+instabuy 3,885). Root causes, per the plan's exploration: the posture doctrine was BINARY
+(active vs overnight — "daytime, away ~8h" fell into active), BID-side only (no rule anywhere
+priced a resting ASK off the day distribution), and the output contract accepted "fills on
+current prints" as a timing target, so a fill-now price passed every check undeclared. The fix
+is a printed COMPARISON, never a silent swap (gate-on-error-cost):
+
+- **`formatDwell` + `tallyCounts` (`pipeline/lib/render/emit.mjs`)** — the one renderer for the
+  new core-tier `⇄ dwell` note: FILL-NOW pair (live edges, pays per-TIME) vs REST-DAY pair (the
+  full-day `asymPair` quantile levels — the RAW levels, not `asymEstimate`'s live-clamped guards —
+  with in-sample touch tallies, reality clauses, volume pools; pays per-FLIP), nets at each pair.
+  `tallyCounts` extracts the nAsk/nBid tally arithmetic `formatAsymFill` used, one home. On
+  `quote-items.mjs` runItems (both legs) and runPositions (sell leg, ALL lots; a declared thesis
+  exit is labelled and never silently replaced or claused; nets vs the lot's cost via
+  `netMargin(avgCost, level)` — not the pair's own deep-bid net, the reverted held-asym confusion).
+  Pinned by `pipeline/test/dwell.test.mjs`.
+- **`quote-items.mjs --dwell=attended|away|overnight`** — the stated dwell horizon, logged as the
+  lean `dwell` ledger field (suggestions.jsonl; absent = not stated; DISTINCT from `posture`, a
+  clock heuristic) so a retro can score fill-now vs rest-day recommendations against realized fills.
+- **Overnight accumulation table gains a `Day-low bid` column** (`screen-flip-niches.mjs`) — the
+  rest-day deep level + tally beside the 2h-band `Bid`. ANNOTATE-ONLY by owner decision: the
+  Capital/Cum math still keys `Bid`; the swap is retro-gated on /analyze data.
+- **Doctrine** (skills scan 3.12 / positions 1.71 / overnight 1.31 + `docs/MARKET-ANALYSIS.md`
+  "Two objectives, two prices"): the posture rule generalizes to "Entry AND exit aggression follow
+  the DWELL HORIZON" (attended / away-hours / overnight, BOTH legs); every relayed price carries a
+  basis token (`(fill-now)` / `(rest-day, touched k/Nd)`) beside its timing target; the positions
+  step-down ladder is explicitly an attended play; /overnight's chase sweep is two-sided (asks at
+  the live instabuy raised to their rest-day rung before walking away).
+
 ## pipeline 1.5.0 — 2026-09-09 — the declared plan becomes the frame (PLAN-THESIS-FRAME TF1–TF3; no APP_VERSION bump — console/pipeline + skills)
 
 The interpretation layer stops leading with CUT on lots Ben is deliberately flipping over several

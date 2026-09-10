@@ -32,9 +32,9 @@ import { runLocalSync } from '../lib/reconstruct/sync-invoke.mjs';   // AR1 — 
 import { ensure as ensureDaemons } from '../daemons/manager.mjs';   // PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice, maxBuyForExit, BIG_TICKET_GP, QUICK_FRESH_MIN } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-POSITIONS-WINDOW-READ) — the ≥10m whole-lot bar that gates the auto ask-side window-clear read
 import { diurnalForecast, whenBuyable, whenSellable, fmtEta, driftExitFrom } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile; driftExitFrom (PLAN-OSCILLATION-CYCLE Chunk 5) — the drift-adjusted exit LEVEL folded into the trajectory note
-import { tax } from '../../js/money-math.js';
+import { tax, netMargin } from '../../js/money-math.js';   // netMargin — the dwell line's rest-day/per-lot nets (the ONE tax impl, bond-aware)
 import { fmtP, fmt, fmtHour, fmtHourRange } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, diurnalTimedLap, softBuyRead, formatSoftBuy, displayFitNights, windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement, askExitRead, realityClause, askReachDecayNote, liveAgeTag } from '../../js/windowread.mjs';   // softBuyRead/formatSoftBuy — per-held-lot ⏳ soft-buy timing (ADD-while-holding); PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read folded under the trajectory line (both quote surfaces); COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch); PLAN-DIURNAL-TIMING DT3 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal NOTE computation (prof/dr themselves stay — they still feed extraEst.diurnal, windowClear's peak window, pushTrajectory, and the forward E4 inputs); PLAN-DIURNAL-TRIAGE DT3 — askReachDecayNote, the shared compact ask-reach-decay note (replaced the deleted hourly-drift note)
+import { hourProfile, deriveDiurnalRange, diurnalTimedLap, softBuyRead, formatSoftBuy, displayFitNights, windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement, askExitRead, realityClause, computeReality, askReachDecayNote, liveAgeTag } from '../../js/windowread.mjs';   // softBuyRead/formatSoftBuy — per-held-lot ⏳ soft-buy timing (ADD-while-holding); PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read folded under the trajectory line (both quote surfaces); COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch); PLAN-DIURNAL-TIMING DT3 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal NOTE computation (prof/dr themselves stay — they still feed extraEst.diurnal, windowClear's peak window, pushTrajectory, and the forward E4 inputs); PLAN-DIURNAL-TRIAGE DT3 — askReachDecayNote, the shared compact ask-reach-decay note (replaced the deleted hourly-drift note)
 import { askReachDecay } from '../lib/market/hourly-lmh.mjs';   // DT3 — the ask-reach decay read (is the intended ask sliding out of reach?), folded onto every price-recommendation surface (bare quote + held/watched positions), reusing the already-fetched 1h series. Replaced the deleted hourlyDrift slope read — see hourly-lmh.mjs's tombstone.
 import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/signal/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic); PC3 — SELL_TOP_MODELS validates --est-sell
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
@@ -58,7 +58,7 @@ import { buysByItem, limitWindow } from '../lib/capital/limits.mjs';   // LM1 �
 import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/market/guideanchor.mjs';   // YP1 advisory
 import { buildItemContext, renderHeldVerdict, renderPathLine, staleBookBanner } from '../lib/market/item-context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line; COD-4 — the shared positions.json-age banner
-import { formatTimedLap, formatAsymFill, asymClassRateNote, formatReachMargin } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site); formatAsymFill — the shared ◆ asym fill clause pair (screen emits the same line)
+import { formatTimedLap, formatAsymFill, asymClassRateNote, dwellSellClassRateNote, formatReachMargin, formatDwell, tallyCounts } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site); formatAsymFill — the shared ◆ asym fill clause pair (screen emits the same line)
 import { loadState, ALERT_PERSIST_MS } from '../lib/thesis/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/thesis/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 additive reverse-flip pending block (read-only)
@@ -101,6 +101,13 @@ const SELL_MODEL = resolve('sellModel', {
   config: loadPipelineConfig().sellModel, fallback: 'reach-fold',
 }).active;
 if (!SELL_TOP_MODELS[SELL_MODEL]) { console.error(`! unknown --est-sell. Use one of: ${Object.keys(SELL_TOP_MODELS).join(', ')}. ('pressure' was retired from exit pricing 2026-08-30 — join-exit-ev.mjs.)`); process.exit(1); }
+// --dwell=attended|away|overnight — the STATED dwell horizon (→ the ledger's lean `dwell` field;
+// absent = not stated). `=` form only. DISTINCT from `posture`, a clock heuristic — never merged.
+const DWELL_HORIZONS = ['attended', 'away', 'overnight'];
+if (args.includes('--dwell')) { console.error(`! --dwell takes the =value form (--dwell=away); a space-separated value is swallowed as an item target.`); process.exit(1); }
+const dwellArg = args.find(a => a.startsWith('--dwell='));
+const DWELL = dwellArg ? dwellArg.slice('--dwell='.length).toLowerCase() : null;
+if (DWELL && !DWELL_HORIZONS.includes(DWELL)) { console.error(`! unknown --dwell. Use one of: ${DWELL_HORIZONS.join(', ')}.`); process.exit(1); }
 const tokens = args.filter(a => !a.startsWith('--'));
 // AO1 (PLAN-REACH-CALIBRATION Part 2; default flipped post-review — Ben: an agent running the quiet
 // path must read the JSON dump, not the summary line, so quiet has to be the DEFAULT or that habit
@@ -277,14 +284,17 @@ export function buildQuoteReport({
   // Homed here rather than at the push site because `notes` is the single flat array both modes render
   // from, and the wording is emit.mjs's (never restated). Non-mutating: the caller's array is not
   // appended to in place.
-  // MEASURED, not assumed: --positions emits ZERO asym notes today (the asym block lives in runItems()
-  // only, and the positions estimatePair call passes no asymEst/asymFill), so this is live on the ITEMS
-  // path and correctly silent on positions. The gate is what makes that honest rather than a bug — no
-  // asym row, no class rate. A held-lot version was BUILT and REVERTED: on a surface that prints a
-  // Break-even column, asymEstimate's net is computed against the asym deep bid, not the lot's basis,
-  // so it rendered a positive net at a price BELOW the break-even two cells to its left.
+  // The gate covers BOTH kinds that print asym-quantile tallies: 'asym' (runItems only — the
+  // held-lot asym note was BUILT and REVERTED: on a surface with a Break-even column its net is
+  // computed against the asym deep bid, not the lot's basis) and 'dwell' (BOTH surfaces — its
+  // REST-DAY half prints the same in-sample tallies, so positions must carry a class-rate footer
+  // too; a tallies-without-footer surface is the misread the footer exists to kill). A dwell-ONLY
+  // surface (positions) gets the SELL-LEG variant — the round-trip rate has no held-lot meaning.
   const noteItems = notes.some(n => n && n.kind === 'asym')
-    ? [...notes, { kind: 'asym', text: `asym fill — ${asymClassRateNote()}` }] : notes;
+    ? [...notes, { kind: 'asym', text: `asym fill — ${asymClassRateNote()}` }]
+    : notes.some(n => n && n.kind === 'dwell')
+      ? [...notes, { kind: 'dwell', text: dwellSellClassRateNote() }]
+      : notes;
   if (mode === 'positions') {
     if (header) sections.push({ type: 'lines', lines: [header], blank: false });
     if (staleBanner) sections.push({ type: 'lines', lines: [staleBanner + '\n'], blank: false });
@@ -469,6 +479,28 @@ async function runItems() {
       const roi = ae.bid > 0 ? (ae.net / ae.bid * 100).toFixed(1) : null;
       if (af) notes.push({ kind: 'asym', itemId: id, text: `asym fill: ${af.bidTxt} → ${af.askTxt} · net ${fmt(ae.net)}/u${roi != null ? ` (${roi}%)` : ''} (in-sample quantiles, n≈${ap.nDays})` });
     }
+    // ⇄ DWELL — FILL-NOW vs REST-DAY. REST-DAY prints the RAW quantile levels (NOT asymEstimate's
+    // guarded pair — its guards pull toward live, the very basis this line separates), net AT them.
+    if (ap) {
+      const bopt = row.bond ? { bond: true, guide: row.guide } : undefined;
+      const dwellText = formatDwell({
+        fillNow: {
+          buy: row.quickBuy, sell: row.quickSell, net: row.quickNet,
+          // age tag ONLY on a stale /latest print — a stale edge must not read as a live tick.
+          buyTag: row.quickStale?.buy ? liveAgeTag(row.quoteAgeMin?.buy, { freshMin: QUICK_FRESH_MIN }) : '',
+          sellTag: row.quickStale?.sell ? liveAgeTag(row.quoteAgeMin?.sell, { freshMin: QUICK_FRESH_MIN }) : '',
+        },
+        restDay: {
+          bid: ap.deepBid, ask: ap.highReachAsk,
+          net: (ap.deepBid != null && ap.highReachAsk != null) ? netMargin(ap.deepBid, ap.highReachAsk, bopt) : null,
+          ...(tallyCounts(ap) ?? {}),
+          bidReality: ast?.days ? computeReality(ast.days, ap.deepBid, 'bid') : null,
+          askReality: ast?.days ? computeReality(ast.days, ap.highReachAsk, 'ask') : null,
+          poolLo: ast?.medVolLo ?? null, poolHi: ast?.medVolHi ?? null,
+        },
+      });
+      if (dwellText) notes.push({ kind: 'dwell', itemId: id, text: dwellText });
+    }
     // PLAN-OUTPUT-TABLE: the reconciliation estimate off the SAME in-hand reads (windowStats touch/
     // reach at the patient pair, the diurnal dip/peak levels, the asym high-reach ask) — zero new
     // fetch. Rendered as the DEFAULT table columns (--raw restores Quick/Optimistic) and logged as
@@ -596,7 +628,7 @@ async function runItems() {
     }
     rows.push(RAW ? std : [std[0], std[1], ...estPairCells(estShown), std[4], std[5], std[6]]);
     const cs = classAndSource(row, id, warm24h);   // SF-3: class + volSrc ('bulk' when warm24h had it, else 'peritem')
-    sugg.push(suggestionEntry(row, { itemId: id, cls: cs.cls, volDay: cs.volDay, volSrc: cs.volSrc, verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres),
+    sugg.push(suggestionEntry(row, { itemId: id, cls: cs.cls, volDay: cs.volDay, volSrc: cs.volSrc, verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', dwell: DWELL, validators: leanValidators(vres),
       estBuy: est ? est.estBuy : null, estSell: est ? est.estSell : null, estConfidence: estConfLean(est), winClear,
       reachable: reachableShadow(reachable), depthExit: depthExitShadow(depthExit, { qty: heldQty.get(id), volDay: row.volDay }), asym: asymShadow(ae) }));  // per-item read has no verdict; PLAN-OUTPUT-TABLE shadow pair + PLAN-WINDOW-CLEAR winClear + RC-S2 reachable/depthExit/asym ride the row
     // PM1: probes over this per-item read (OUTPUT-ONLY — no verdict/gate/rating input). ctx carries the
@@ -920,7 +952,7 @@ async function runPositions() {
     // WC1: the deferred O1 suggestion push (moved down from above so the big-ticket `windowExit` rung shadow
     // rides this row). windowExitShadowVal is null for a non-big-ticket lot → byte-identical to the prior row.
     const cs = classAndSource(row, itemId, warm24h);   // SF-3: class + volSrc ('bulk' via snap.v24 on the normal path)
-    sugg.push(suggestionEntry(row, { itemId, cls: cs.cls, volDay: cs.volDay, volSrc: cs.volSrc, verdict: v, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres), windowExit: windowExitShadowVal }));  // the emitted per-position verdict string
+    sugg.push(suggestionEntry(row, { itemId, cls: cs.cls, volDay: cs.volDay, volSrc: cs.volSrc, verdict: v, posture: isOvernightNow() ? 'overnight' : 'active', dwell: DWELL, validators: leanValidators(vres), windowExit: windowExitShadowVal }));  // the emitted per-position verdict string
     // reachPlacement — the existing bid+ask percentile note. For a big-ticket lot the ASK clause is now
     // carried by the richer windowExit note above, so keep only the BID clause here (no redundancy); a
     // non-big-ticket lot keeps both, unchanged.
@@ -929,6 +961,31 @@ async function runPositions() {
       if (bidPlaceHeld != null) parts.push(`bid ${fmt(row.optBuy)} touched ${bidReachHeld.reachedDays}/${bidReachHeld.nDays}d (recent ${bidReachHeld.recentHit ?? '—'}/${bidReachHeld.recentDays ?? '—'}) · placement ${pct(bidPlaceHeld)} of the ${bidReachHeld.nDays}-day daily-LOW distribution`);
       if (!windowExitDone && askPlaceHeld != null) parts.push(`ask ${fmt(row.optSell)} reached ${askReachHeld.reachedDays}/${askReachHeld.nDays}d (recent ${askReachHeld.recentHit ?? '—'}/${askReachHeld.recentDays ?? '—'}) · placement ${pct(askPlaceHeld)} of the ${askReachHeld.nDays}-day daily-HIGH distribution`);
       if (parts.length) notes.push({ kind: 'reachPlacement', itemId, text: `${name}: reach/placement — ${parts.join(' — ')}` });
+    }
+    // ⇄ DWELL, held-lot SELL leg. REST-DAY = the DECLARED thesis exit when set (labelled, counted at
+    // ITS level, never claused), else the asym high-reach ask; both legs net vs the LOT
+    // (netMargin(avgCost, level)). ALL lots — the basis choice exists on every resting ask.
+    {
+      const apHeld = astHeld ? asymPair(astHeld) : null;
+      const declaredHeld = (thesisEntry && typeof thesisEntry.exitPrice === 'number' && Number.isFinite(thesisEntry.exitPrice)) ? thesisEntry.exitPrice : null;
+      const restAsk = declaredHeld ?? (apHeld ? apHeld.highReachAsk : null);
+      if (restAsk != null && row.quickSell != null && astHeld && astHeld.his && astHeld.his.length) {
+        const boptHeld = row.bond ? { bond: true, guide: row.guide } : undefined;
+        const dwellHeldText = formatDwell({
+          fillNow: {
+            sell: row.quickSell, net: netMargin(avgCost, row.quickSell, boptHeld),
+            sellTag: row.quickStale?.sell ? liveAgeTag(row.quoteAgeMin?.sell, { freshMin: QUICK_FRESH_MIN }) : '',
+          },
+          restDay: {
+            ask: restAsk, askHit: reachedDays(astHeld.his, restAsk), askN: astHeld.his.length,
+            askReality: declaredHeld != null ? null : computeReality(astHeld.days, restAsk, 'ask'),
+            askLabel: declaredHeld != null ? 'declared exit' : null,
+            net: netMargin(avgCost, restAsk, boptHeld),
+          },
+          side: 'ask',
+        });
+        if (dwellHeldText) notes.push({ kind: 'dwell', itemId, text: `${name}: ${dwellHeldText}` });
+      }
     }
     // multi-day trajectory (shape + floor/ceiling + live position) — the fang under-read fix; zero fetch.
     // Chunk 5: the drift-adjusted exit level off the in-hand ts1h (the profile is computed from the series

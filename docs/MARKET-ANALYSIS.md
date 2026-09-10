@@ -800,6 +800,23 @@ that's already behind you today. So price every entry backward from the exit:
    over-states the sell, so pick a lower one.
 4. **Project today** — is the window ahead or already printed? (the forecast eta, §5.)
 
+### Two objectives, two prices — gp/hour vs gp/flip (the dwell basis)
+
+Every offer price has one of two bases, and they optimize DIFFERENT objectives: **fill-now** (the
+live edges — more cycles, thinner edge, maximizes gp per unit of TIME) and **rest-day** (the
+full-day distribution levels with their touch tallies — fewer, fatter fills, maximizes gp per
+FLIP). Neither is wrong; quoting one where the other applies, undeclared, is the failure (the
+2026-09-10 bludgeon-buy/Marlin-ask anchor: two rest-all-day legs priced at the live edges). The
+comparison is CODE, not judgment: `quote-items.mjs` prints a core-tier `⇄ dwell` line on both its
+surfaces (`formatDwell`, `pipeline/lib/render/emit.mjs` — the one renderer), and the overnight
+accumulation table carries a `Day-low bid` column beside its 2h-band `Bid`. Which basis applies is
+the DWELL HORIZON — how long the offer rests unattended (attended / away-hours / overnight) — per
+`/scan` §2 "Entry AND exit aggression follow the DWELL HORIZON", and every relayed price carries
+its basis token (`/scan` §4's output contract). State the horizon with `--dwell=…` so the ledger's
+`dwell` field accrues the fill-now-vs-rest-day retro. The rest-day tallies are in-sample day
+counts, never fill rates (§ the asym honesty rules above); `read-window-range.mjs --window 0-23`
+stays the full expansion surface behind the one-line comparison.
+
 When the dip/peak summary isn't enough — sizing a large position, or a break-even that looks stranded —
 `read-window-range.mjs "<item>" --hourly [--days N]` prints the RAW per-LOCAL-hour LOW/MID/HIGH grid (a
 7d-avg median block + the last N dates individually). It's the hour-by-hour detail the two-window summary

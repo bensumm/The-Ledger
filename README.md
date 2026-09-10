@@ -968,7 +968,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   overwritten in place, and `pipeline/.guide-history.jsonl` records only re-anchor *changes*. The live side
   needs no new field — `quickBuy` IS the live instasell and `quickSell` IS the live instabuy — so this one
   field makes **both** depth-vs-guide and depth-vs-live computable from a single row, which matters because
-  the two anchors disagree on whether an offer is "past −5%" for 52 of 428 measured offers. Rows also carry a lean **`volSrc`** tag (SF-3, `'bulk'`|`'peritem'`)
+  the two anchors disagree on whether an offer is "past −5%" for 52 of 428 measured offers. Rows may
+  carry a lean **`dwell`** field (`'attended'|'away'|'overnight'`, 2026-09-10) — the STATED dwell
+  horizon a `quote-items.mjs --dwell=…` read was made under (absent = not stated; DISTINCT from
+  `posture`, a clock heuristic), the non-derivable half of the fill-now-vs-rest-day basis choice the
+  `⇄ dwell` line surfaces — logged so a future retro can score the two bases against realized fills
+  (the printed pairs themselves are derivable from `quickBuy`/`quickSell` + the `asym` shadow, so no
+  numeric twin fields ride). Rows also carry a lean **`volSrc`** tag (SF-3, `'bulk'`|`'peritem'`)
   recording which `/24h` endpoint the liquidity `class` volume came from (screen = bulk; quote = bulk
   when `all24h.json` was warm, else per-item) so F1 can normalize the two snapshot sources. A row may also
   carry a lean **`askHeadroom`** object (PLAN Bar-E-signal) when the robust p90 shaved a TRADED in-band top
@@ -2582,7 +2588,21 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `basePosition()`'s already-computed `{pct,days,n,label}`: `"base pXX of the <N>d range · <label>"`,
     or null on a degraded read (never a fabricated percentile). `screen-flip-niches.mjs` calls it for
     every band/churn/amplitude survivor off the SAME `termStructure()` result already computed for
-    `floorValidator`),
+    `floorValidator`.
+    **`formatDwell({fillNow, restDay, side}, {fmt})` + `tallyCounts` (dwell-aware pricing, 2026-09-10)** —
+    the ONE renderer for the core-tier `⇄ dwell` line: FILL-NOW (live edges, per-TIME) vs REST-DAY (the
+    full-day distribution levels + in-sample touch tallies, per-FLIP) side by side, born of two
+    rest-all-day legs priced at the live edges (the bludgeon/Marlin miss). Consumers: `quote-items.mjs`
+    runItems (`side:'both'` — REST-DAY = `asymPair`'s RAW quantile levels, never `asymEstimate`'s
+    guarded pair, net computed AT those levels) and runPositions (`side:'ask'`, ALL lots — REST-DAY =
+    the declared thesis exit when set (labelled, never claused) else the asym high-reach ask, nets vs
+    the LOT via `netMargin(avgCost, level)`); `screen-flip-niches.mjs` uses `tallyCounts` for the
+    overnight accumulation table's `Day-low bid` column. `tallyCounts` is the extracted one-home tally
+    arithmetic (`formatAsymFill` now calls it too): p-fractions × their OWN `nAsk`/`nBid` denominators.
+    Same honesty rules as `formatAsymFill` (no execution verb, tallies never fill rates, reality
+    clauses ride with their level, null-degrade on a missing basis). Pinned by
+    `pipeline/test/dwell.test.mjs`. Doctrine: `/scan` §2's dwell-horizon rule +
+    `docs/MARKET-ANALYSIS.md` "Two objectives, two prices"),
     `recovery.mjs` (V6 — PURE `recoveryRead`/`recoveryLine`/`recoveryTrigger`: the ADVISORY
     recover-vs-drop LEAN that COMPOSES momVerdict's existing signals (diurnal · regime/phase ·
     underwater-persistence · vs structural support) + the trigger gating that surfaces it only on a

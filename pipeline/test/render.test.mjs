@@ -197,12 +197,13 @@ const ITEMS_NOTE_PAIRS = [
     '  ↥ reach relief: liquid book (8.01m/d, buy limit ~0.2% of flow) softens the ask-reach fold 75% (PLACEHOLDER, n=1)'],
 ];
 
-/* buildQuoteReport appends the class-rate footer ONCE whenever any note is kind:'asym' (PLAN-PATIENT-PAIR
-   §7 — the per-row counts are in-sample tallies; the measured round trip is a CLASS rate and belongs in a
-   footer, not on a row). It is DERIVED from emit.mjs here rather than pasted, so a wording change moves
-   the golden with it instead of turning this into a byte-string maintenance chore. The POS_NOTE_PAIRS
-   fixtures carry no asym note, which is why the positions goldens below are untouched — that asymmetry is
-   real: --positions emits no asym notes today. */
+/* buildQuoteReport appends a class-rate footer ONCE whenever any note is kind:'asym' OR kind:'dwell'
+   (PLAN-PATIENT-PAIR §7; dwell added by the dwell-aware-pricing change — its REST-DAY half prints the
+   same in-sample tallies, and runPositions DOES emit dwell notes, so positions carries the footer live).
+   It is DERIVED from emit.mjs here rather than pasted, so a wording change moves the golden with it
+   instead of turning this into a byte-string maintenance chore. The POS_NOTE_PAIRS fixtures carry
+   NEITHER kind, which is the only reason the positions goldens below have no footer line — do not read
+   that as "positions never carries the footer". */
 const ASYM_CLASS_LINE = '  ◆ asym fill — ' + asymClassRateNote();
 
 const itemsHeaders = ['Item', 'Guide', 'Est. buy', 'Est. sell', 'Net/u (ROI)', 'BE', 'Vol/d', 'Momentum', 'Regime', 'Probes'];
@@ -266,7 +267,7 @@ ok('VZ3: formatNote prepends the exact pre-VZ3 sigil per kind; a plain string pa
 });
 
 ok('VZ3: every note kind quote-items emits is registered in NOTE_KINDS (kinds-vs-registry)', () => {
-  const emitted = ['regime', 'guideAnchor', 'validator', 'staleExit', 'diurnal', 'forecast', 'windowClear', 'askHeadroom', 'asym', 'reachRelief'];
+  const emitted = ['regime', 'guideAnchor', 'validator', 'staleExit', 'diurnal', 'forecast', 'windowClear', 'askHeadroom', 'asym', 'reachRelief', 'dwell'];
   for (const k of emitted) assert.ok(NOTE_KINDS[k], `NOTE_KINDS missing kind '${k}'`);
 });
 
