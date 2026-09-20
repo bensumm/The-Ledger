@@ -1251,7 +1251,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   tools the `/cleanup` skill reads (lint-plan-lifecycle, report-branches — never wired into
   `checks.yml`); **`pipeline/lib/`** = the imported-only
   shared libraries — **being regrouped into concept subdirectories one cluster at a time**
-  (PLAN-LIB-SUBDIRS, COMPLETE — folded into PLAN.md). The seven clusters: **`pipeline/lib/render/`** = output/reporting (render, emit,
+  (PLAN-LIB-SUBDIRS, COMPLETE — folded into PLAN.md). The clusters: **`pipeline/lib/render/`** = output/reporting (render, emit,
   cli, suggestlog, retrojoin, replay, analyze); **`pipeline/lib/thesis/`** = the declared-state stores
   (holdthesis, sessionthesis, watchstate, reverseflipstate); **`pipeline/lib/reconstruct/`** = the
   FIFO book reconstruction (reconstruct, campaigns, offers, positions, fill-placement, sync-invoke,
@@ -1259,7 +1259,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   staleexit, statetransition); **`pipeline/lib/market/`** = market data acquisition (marketfetch,
   archive, warm-term-structure, compose, guideanchor, item-context, probes, hourly-lmh);
   **`pipeline/lib/signal/`** = scoring/admission (estimators, rating, gatecandidates, admission,
-  structural-admission, patha, recovery, range-position, levels, watchlist-report).
+  structural-admission, patha, recovery, range-position, levels, watchlist-report);
+  **`pipeline/lib/loop/`** = adaptive-loop pacing (PLAN-ADAPTIVE-LOOP AL1, 2026-09-19):
+  `pace.mjs`, the ONE pacing decision for the monitoring loop — pure `pace(bookState)` →
+  `{tier, nextWakeMin, stop, startable, reasons, idleTicks}` over the `ACTIVE/GLANCE/DEEP/DRY/IDLE` ladder
+  (tightening is instant, loosening moves one tier per quiet tick, and an empty book recommends
+  STOP only behind the `PACE_IDLE_TICKS` debounce; every cadence value is a NAMED PLACEHOLDER
+  pricing attention cost, never P(fill)), plus `loopPresumedDead` — the R-AL-7 "is the loop
+  running" test that auto-start reads. `startable` (real exposure on the book) is the auto-start
+  predicate, never the tier — an empty book paces `DRY` and a dip-armed empty book `GLANCE`, and
+  neither may start a loop. It RECOMMENDS only (R-AL-2: the script recommends, the
+  agent drives) and imports NOTHING by design; consumer is `run-loop.mjs` (AL2). Fixture-pinned
+  `pipeline/test/pace.test.mjs` (the tier ladder, the debounce, the one-tier-per-tick loosening,
+  R-AL-4 `awaitingRebuy` never holds the loop open, the dead-boundary ±ε, and the import-free
+  purity pin).
   `watchlist-report.mjs` (SEP16b) is the ONE watchlist row builder: `buildWatchlistReport` does the
   bounded prefetch + the per-entry quote→`estimateRank`→`rateItem`→cells/`suggestionEntry` loop and
   returns `{headers, rows, sugg}`; it COMPUTES only — rendering and `logSuggestions` stay with its

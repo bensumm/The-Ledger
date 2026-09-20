@@ -94,6 +94,7 @@ Needs-a-Ben-decision lists. The planning process itself is documented in `docs/P
 | **V2** | Pipeline v2 (ACTIVE): D0 (snapshot+SQLite archive) → P0 (context chain) → P1 (surface extraction + replay harness) → P2/P3 (validators, every surface) → P4a/b/c (path engine → persistence → declarative specs) → P5 (scalp/value + path-aware bids) → P6 (evidence viability) → P7 (docs/skills triage + skill-lint) → P8 (desk orchestrator). D0 ∥ P1-mechanical parallel-safe (disjoint primaries). |
 | **SLT** | Sale-log tax fix (folded from `plans/PLAN-SALE-LOG-TAX.md`, shipped 2026-09-01): C1 (worthNet flag at ingest — `.json`-era sell `worth` is NET of GE tax) → C2 (net-primary matchTrades + `sellNetEach`, `grossFromNet` display inverse in quotecore) → C3 (warn-only per-file convention audit) → C4 (real-book acceptance + docs) → C5 (the §3a amendment, shipped 2026-09-02: the `.json` format RECORDS the tax — carried as `taxAmt`, gross becomes a read with `grossFromNet` as fallback, and the audit reads the field). Design home: `pipeline/FILLS-PIPELINE.md` §5.1 + the reconstruct.mjs header; full §1–§12 text `git show d1a6516:plans/PLAN-SALE-LOG-TAX.md` (the §3a amendment arrived uncommitted after the fold — its content is re-homed in §5.1 and CHANGELOG pipeline 1.2.0). |
 | **BSH** | Book self-heal (folded from `plans/PLAN-BOOK-SELF-HEAL.md`, all shipped 2026-09-03): H1 (rebuy time/price gate `SHORT_MAX_AGE_DAYS` ∧ ≤`beRebuy`, hold-thesis `reverseFlip` override; breakeven closeout of undeclared aged shorts into positions.json `settled` — no closed row, lifetime unmoved; `REVIVE` exemption directive; AMENDS the "open measurement, no deadline" doctrine for undeclared shorts, Ben 2026-09-02) → H2 (money-math bond opt-in threaded through amplitude/band/churn screens) → H3 (`activeOffers` per-slot winner by wall-clock — kills the mtime-race phantom-slot class) → H4 (personal-use is per-TRADE withdraw, never item-level ignore unasked). Design homes: FILLS-PIPELINE §5.1a + reconstruct.mjs/offers.mjs headers; full text `git show 9fe4787:plans/PLAN-BOOK-SELF-HEAL.md`. |
+| **AL** | Adaptive loop (ACTIVE, registered 2026-09-19 — spec + rulings `plans/PLAN-ADAPTIVE-LOOP.md`): AL1 (pure `pace()` tier engine + `loopPresumedDead`, fixture-pinned) → AL2 (`run-loop.mjs` consumes it: `# pace:` line, `recommend` state, `--mute`/`--unmute`) → AL3 (driver doctrine: `/loop` DYNAMIC mode, docs reconciliation) → AL5 (auto-start hooks in `/scan`/`/positions`/`/morning`, non-start note in `/overnight`); AL4 (event tighteners) optional, gated on AL2's measured tick log. |
 | gated | **F1** (algorithm feedback) — opens only when O1's sample thresholds clear |
 
 ## Status
@@ -102,6 +103,11 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 
 | Chunk | What | Primary files | State |
 | --- | --- | --- | --- |
+| AL1 | Adaptive-loop pacing: pure `pace()` tier engine (`ACTIVE/GLANCE/DEEP/DRY/IDLE`) + `startable` + `loopPresumedDead` | `pipeline/lib/loop/pace.mjs`, `pipeline/test/pace.test.mjs` | ✅ 2026-09-19 (spec `plans/PLAN-ADAPTIVE-LOOP.md`; review-hardened — `startable` encoded as the auto-start predicate) |
+| AL2 | `run-loop.mjs` consumes `pace()` — `# pace:` line, `loop-state.recommend`, `--mute`/`--unmute` | `pipeline/commands/run-loop.mjs` | OPEN |
+| AL3 | Driver doctrine — `/loop` DYNAMIC mode paste lines, docs reconciliation | `CLAUDE.md`, `pipeline/MONITORING.md`, `README.md` | OPEN |
+| AL4 | Event tighteners beyond the watch pass | `pipeline/commands/run-loop.mjs` | OPEN (optional — gated on AL2's tick log showing late fills) |
+| AL5 | Auto-start doctrine + skill hooks (offer-on-picks, overnight non-start) | `.claude/skills/{scan,positions,morning,overnight}/SKILL.md`, `pipeline/MONITORING.md` | OPEN |
 | BSH H1+H4 | Rebuy gate + breakeven closeout + `settled` + REVIVE + deterministic settledTs; personal-use per-trade docs | `pipeline/lib/reconstruct/reconstruct.mjs`, `pipeline/commands/sync-fills.mjs`, `pipeline/commands/add-manual-fill.mjs`, `pipeline/lib/thesis/holdthesis.mjs`, `.claude/skills/positions/SKILL.md`, tests | ✅ 2026-09-03 (CHANGELOG pipeline 1.3.0) |
 | BSH H2+H3 | Bond costed as a bond on the screens (opt-in threaded + sweep); offers per-slot wall-clock winner | `js/amplitudescreen.mjs`, `js/flip-niches.mjs`, `pipeline/lib/signal/gatecandidates.mjs`, `pipeline/lib/reconstruct/offers.mjs`, tests | ✅ `bddf12f`+`08ebb20` (CHANGELOG 0.76.1) |
 | SLT C1–C4 | Sale-log worth-convention fix: `worthNet` flag (SELL events, outside the eventId hash so fills.json auto-migrates), net-primary money paths incl. deriveCash sellIn, `grossFromNet`, `auditWorthConvention` guard, real-book acceptance | `pipeline/lib/reconstruct/reconstruct.mjs`, `pipeline/lib/reconstruct/offers.mjs`, `pipeline/commands/sync-fills.mjs`, `pipeline/lib/capital/derive-cash-tiers.mjs`, `js/quotecore.js`, tests | ✅ `dc07707` |
@@ -608,6 +614,18 @@ the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the co
    characterised now and its round trip is 1.5%. Revisit only against these numbers.
 
 ## Discovered
+
+- **Manual-entry attribution — the retro-join cannot tell an owner pick from a scan pick (OPEN,
+  found 2026-09-19).** `pipeline/lib/render/retrojoin.mjs` joins every logged suggestion FORWARD to
+  the next BUY fill of that item inside a horizon window, so a lot the owner placed on his own
+  judgment is credited to (or blamed on) whichever scan row happened to log the item first. Live
+  instance: the 2026-09-17 Armadyl crossbow 3× @34.111m — owner's decision, called a bust, exiting at
+  breakeven — sits ~1h after a `band` B/A- row and a watchlist row, so `/analyze` will book its
+  loss against the band niche. There is no opt-out: `hold-thesis.json` carries the note in prose
+  only, which the join does not read. Candidate remedy (not built): a `manual-entries.json`
+  (or a `manual:true` flag on the `coffer-manual.log` buy line) that the join honours as
+  "not-attributed", surfaced in the `fills⇆ledger` audit line as its own count. Cheap; do it before
+  the next `/analyze` retro quotes a per-niche number, or the number is wrong by this lot.
 
 - **PLAN-WEEKDAY-PHASE-CONFOUND — is the fitted trend read confounded with weekly phase? (OPEN,
   pre-registered 2026-09-08, `plans/PLAN-WEEKDAY-PHASE-CONFOUND.md`).** Owner challenge, twice, in one
