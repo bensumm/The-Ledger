@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 3.12
+version: 3.13
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -9,15 +9,18 @@ description: Screen the GE market for flip opportunities and apply Ben's judgmen
 Skills-versioning note: `version` here bumps on material behavior change; skills never bump
 `APP_VERSION`.
 
-**Paste the raw markdown table verbatim, unfenced (Ben, 2026-07-16).** Include the script's own
-printed table(s) in the reply as PLAIN markdown, not just a prose rollup of what changed — and
-NOT wrapped in a fenced code block (a code fence forces the client to show literal `|`/`-`
-characters instead of rendering an actual table — confirmed live, 2026-07-16). Ben reads the
-actual numbers/columns directly. This applies to `screen-flip-niches.mjs` and to
-`watch-positions.mjs --dip` when it's driving this skill. The judgment pass (§2) supplements
-the table, it doesn't replace it. On a repeated/looped scan where nothing material changed,
-it's fine to note that and skip re-pasting — but when there IS something to report, paste the
-table, don't just describe it.
+**What the reply contains — DIGEST + SHORTLIST, nothing else pasted (Ben, 2026-09-15: "it should
+generate and dump info to a file + digest, you can pull from the file if you need more info").**
+The common run is QUIET + `--digest`: the script prints one summary line and the DECISION DIGEST
+block, and dumps every row/note of every lane to `pipeline/.cache/last-report/screen.json`. The
+reply pastes (a) the digest block verbatim, unfenced (plain markdown — a code fence shows literal
+`|`/`-`; confirmed live 2026-07-16), and (b) the judgment shortlist (§4) — a compact
+DECISION-DIGEST-style table with exact numbers, then one rec line. **The per-lane band / churn /
+amplitude / watchlist tables are NEVER pasted on a common pass** — they live in the cache; read
+them there for the §2 judgment, and paste a lane table only when Ben names an item or a lane
+(then `--verbose` that one lane, or quote the cache row). Anchor: 2026-09-15, a `--verbose` pass
+relayed 61 band rows + 60 watchlist rows for a three-item answer. On a repeated/looped scan where
+nothing material changed, say so and skip the digest too.
 
 **WINNERS ONLY — and the trim is the SCRIPT's job now, not yours (Ben, 2026-09-02: "still run the
 full both-leg verification, but report only the surviving picks; drop the 'what failed and why'
@@ -40,11 +43,10 @@ names `drop accounting` whenever the pass dropped anything — where it lives, n
 (amplitude folds its variant into the doctrine pointer). Only the compact one-line `ℹ`/`⚠` notes
 still print, and those for surviving rows only. **A missing Diurnal/Base-position read therefore
 means "it is in the cache", never "there was no data"** — say so if Ben asks, and go read the cache
-rather than re-running the scan. So
-**paste the `--verbose` table AS PRINTED**: no row-count trim in your head, no re-adding rows out of
-the cache, and no re-narrating what the script removed. "Verbatim" still means the NUMBERS aren't
-altered. Losers and gate chatter are never retold in prose — and never relayed out of the cache
-either. **How a wrong removal is caught now (the check MOVED, it didn't disappear):** when a row you
+rather than re-running the scan. When a lane table IS
+pasted (Ben asked for it), **paste it AS PRINTED**: no row-count trim in your head, no re-adding rows
+out of the cache, no re-narrating what the script removed, numbers unaltered. Losers and gate
+chatter are never retold in prose — and never relayed out of the cache either. **How a wrong removal is caught now (the check MOVED, it didn't disappear):** when a row you
 expected is missing — Ben names an item, a watched edge vanishes, a flip-niche looks implausibly thin —
 read the cache's `drops` before concluding it has no edge
 (`node -e "const d=require('./pipeline/.cache/last-report/screen.json');for(const r of d.reports) if(r.drops) console.log(JSON.stringify(r.drops))"`)
@@ -63,15 +65,15 @@ scoring heuristic for elevating candidates, not a verdict on whether a trade mak
 positive is hidden from stdout — it survives in the cache (named with its net in the flip-niche report's
 `drops.winnersFiltered`) and the digest. Held/watchlist rows are not dropped at all.
 
-**The `--digest` block (§1) is a SEPARATE surface, not a replacement** — a narrower cross-niche
-triage VIEW that sits ABOVE the per-niche tables. Relay both; two surfaces, two reads.
+**The `--digest` block (§1) is the ONE stdout surface on a common pass** — a cross-niche triage VIEW
+over the per-niche lanes; the lanes themselves are read from the cache, not stdout.
 
 **Quiet is the DEFAULT (AO1, default flipped post-review — Ben: an agent must read the JSON dump
 for the data, not lean on a stdout summary line, so quiet can't be optional).** A bare
 `screen-flip-niches.mjs` run prints one summary line + writes `pipeline/.cache/last-report/screen.json`
-(the render-object dump). **Pass `--verbose` whenever this skill's job is to paste the table to Ben**
-(the "paste the raw markdown table" rule above) — without it there is no table to paste; bare/quiet is
-for the agent's own reasoning passes. **`--full` restores the complete render** (every row, every
+(the render-object dump); `--digest` prints its block REGARDLESS of `--verbose`. **Do NOT pass
+`--verbose` on a common pass** — it is the winners-only lane render, used only when Ben asks for a
+specific lane's table. **`--full` restores the complete render** (every row, every
 prose family) and is a DEBUGGING / ANALYSIS tool only — named here so you know it exists, never run
 on a common pass.
 
@@ -118,12 +120,12 @@ in §2. Reach for `--full` only when you are debugging the renderer itself.
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/commands/screen-flip-niches.mjs --verbose --digest [--mode band|churn|scalp|value|invest|amplitude|all] [--max-price …] [--hold-days 4|7] [--amp-ask-q 0.5 --amp-bid-q 0.5] [--capital <gp> --slots N]
+node pipeline/commands/screen-flip-niches.mjs --digest [--mode band|churn|scalp|value|invest|amplitude|all] [--max-price …] [--hold-days 4|7] [--amp-ask-q 0.5 --amp-bid-q 0.5] [--capital <gp> --slots N]
 ```
 
-`--verbose` is required here since this skill's job is to paste the table to Ben (§ above) — quiet
-is the default (AO1) and without `--verbose` there is no table in stdout to paste. `--verbose` IS
-the winners view; `--full` is the debugging render and is not part of this invocation.
+Quiet is the default (AO1): stdout = one summary line + the digest block; everything else is in
+`screen.json`. `--verbose` (the winners-only lane render) is added only when Ben asks for a lane's
+table; `--full` is the debugging render and is never part of this invocation.
 
 **`--digest` is part of the STANDARD invocation (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST, Workstream C).**
 _(judgment: triage-read discipline; mechanic in `screen-flip-niches.mjs` `buildDigestBlock`)_ It prints
@@ -164,10 +166,9 @@ a forming day already under the prior trough joins this branch — the break is 
 digest excludes held items but still shows FRESH candidates, so the caution guard matters here too: don't
 relay a `@floor` pick as a buy without checking its cue. Relay it when a pick reads `@floor` or is deep into
 its dip window. It
-is an ADDITIVE VIEW, not a replacement: the digest sits ABOVE the per-niche tables and the footers, it
-never trims or supersedes them (the winners-only render above is what governs which rows the table you
-paste contains). Relay the digest AND the winners-only per-niche table — two different surfaces for two
-different reads (digest = cross-niche triage; the table = the per-niche detail). The digest's notes
+is the cross-niche triage VIEW over the per-niche lanes (which live in the cache on a common pass —
+the reply-shape rule at the top governs: digest + shortlist pasted, a lane table only when Ben names
+that lane or item). The digest's notes
 render GROUPED PER ITEM under one `per-item notes` section (TF2, PLAN-THESIS-FRAME — `↕` ask-reach
 decay · `◇` dislocation): relay an item's notes WITH its row, never split across the reply — and a `◇`
 measured-yield line on a falling-labelled item is the measured read for that state, not something the

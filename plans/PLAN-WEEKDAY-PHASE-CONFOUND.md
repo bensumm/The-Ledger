@@ -166,6 +166,21 @@ Logged HERE, before the outcome, so it can be scored honestly later.
   be quoted as evidence for H1 or for the weekend effect. It is logged to prevent
   hindsight reconstruction, not to accumulate a record.
 
+- **SCORED 2026-09-19 — FAILURE, at both the original and the amended level.** The lot sold
+  2026-09-10 (a Thursday) at **34,300,000**, realised **−487,000** after tax
+  (`positions.json` closed row, buy 34,101,000 → sell 34,300,000). Neither 35.30m nor 36.25m was
+  listed into the weekend; the pre-registered failure condition ("a fill on Mon–Fri at a lower
+  relist") fired as written. n=1, an anecdote — it says nothing about H1 either way.
+- **Second owner-placed entry, logged 2026-09-19 AFTER the fill (not pre-registered — a
+  weaker record than the row above, stated plainly):** 3 units @ **34,111,000**, filled
+  2026-09-17 ~19:21 PDT (Wednesday), break-even **34.81m**. **This was the owner's own
+  decision, not a scan pick** — the scan had logged the item as a watchlist row and a `band`
+  B/A- row that morning, so the forward retro-join (`retrojoin.mjs`) WILL attribute it to the
+  scan; see PLAN.md Discovered "Manual-entry attribution". Owner called it a bust on 2026-09-19
+  and declared a breakeven exit (list 34.81m, path `list-to-clear`, tripwire 32.50m); the
+  regime read at that point was falling · crash-risk, floor broke the 13-day low. Score the
+  outcome here when it closes; a fill under 34.81m is a loss, not a scratch.
+
 ## §5. Honest standing limits
 
 One era, one season, one owner's book. The weekend effect is a basket property with no
