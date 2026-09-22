@@ -832,6 +832,18 @@ export function reachMargin(days, side, level, { recentN = RECENT_NIGHTS, margin
   }
 }
 
+// reachMarginTrigger(rm) → boolean|null — the ONE home of the ⚠⚠ price-to-sell-EARLY composite (HF2):
+// (trend 'fading' OR cushionNow<0) AND a live, non-stale, LAGGING pace. null = unevaluable (no read /
+// no live pace — a stale print is not a pace), distinct from "did not fire". The AND is load-bearing
+// (either-half-alone fire-rate rejected — PLAN-DIURNAL-RECENCY-GUARD 2b §3); side-aware wording is the
+// caller's job (bid side = a FILL warning, see logReachMargin). Inform-only.
+export function reachMarginTrigger(rm) {
+  if (!rm) return null;
+  if (!rm.pace || rm.pace.stale) return null;            // no live pace read → composite unevaluable
+  const cushionBad = rm.trend === 'fading' || (rm.cushionNow != null && rm.cushionNow < 0);
+  return cushionBad && rm.pace.onPace === false;
+}
+
 // --- asymmetric realizable pair (PART II, PLAN-GRADE-REACH — deep-buy / reliable-sell) ---------
 // Ben's mandate: "I'd much rather hit a 2/14 buy and a 12/14 sell than 50/50 both sides." The ideal
 // flip is a RARE DEEP entry (a bid that fills only on a genuine flush) paired with a NEAR-CERTAIN
@@ -1515,7 +1527,11 @@ function softBuyFloorCue(fc, durable = null) {
 // only ever receives a computed profile, so it cannot derive it here (and re-deriving it would be a
 // second home for the same number). Omitted ⇒ null ⇒ the render says the hours are unverified, which is
 // the honest degrade: the LEVEL and the cue are byte-unchanged either way, only the hours clause moves.
-export function softBuyRead(profile, { live = null, fc = null, durable = null, reliable = null } = {}) {
+// `fade` (HF4): a caller-computed fadeEntryRead result (pipeline/lib/market/hourly-lmh.mjs), handed
+// DOWN like `fc`/`reliable` (the read needs the raw series + a candidate ask). Either half true ⇒ an
+// @floor 'buy now'/'favorable' downgrades to 'fading-day'; stronger cautions and the above-floor
+// 'wait' are never overridden. Omitted/null ⇒ byte-identical.
+export function softBuyRead(profile, { live = null, fc = null, durable = null, reliable = null, fade = null } = {}) {
   if (!profile || !profile.dip || profile.dip.level == null) return null;
   const floor = profile.dip.level;
   const dipWindow = { startH: profile.dip.startH, endH: profile.dip.endH };
@@ -1523,10 +1539,11 @@ export function softBuyRead(profile, { live = null, fc = null, durable = null, r
   if (live != null && floor > 0) {
     overPct = (live - floor) / floor * 100;
     buyNow = overPct <= SOFT_BUY_AT_FLOOR_PCT;                // at/below the floor, or within the threshold over it
-    marker = buyNow ? '@floor' : `+${overPct.toFixed(1)}%`;
     cue = buyNow ? softBuyFloorCue(fc, durable) : 'wait';             // @floor → floor-aware cue; above the dip → wait
+    if ((cue === 'buy now' || cue === 'favorable') && fade && (fade.trigger === true || fade.hours != null)) cue = 'fading-day';
+    marker = buyNow ? '@floor' : `+${overPct.toFixed(1)}%`;
   }
-  return { dipWindow, floor, live, marker, overPct, buyNow, cue, durable, reliable };
+  return { dipWindow, floor, live, marker, overPct, buyNow, cue, durable, reliable, fade };
 }
 
 // DT4 — the ONE wording for the dip-hours clause, shared so every surface says the same thing about the
@@ -1568,6 +1585,8 @@ export const SOFT_BUY_CUE_TEXT = {
   // not claim. It says elevated-over-the-floor, which is what is actually measured.
   'unproven-base': '▽ caution — dip into an UNPROVEN base, still elevated over the durable floor',
   'stale-uptrend': '▽ caution — uptrend label STALE: today already printed under yesterday\'s low (cheaper entry likely)',
+  // HF4: @floor on a day whose EXIT side is sliding (fadeEntryRead) — the floor of a fading day is not a discount.
+  'fading-day': '▽ caution — exit side fading today (cushion + pace)',
 };
 
 // formatSoftBuy(read, opts) — the ONE one-line render off a softBuyRead result, shared so both surfaces
@@ -1589,6 +1608,10 @@ export function formatSoftBuy(read, { fmtHour = h => String(h).padStart(2, '0') 
   // makes the caution actionable; the adjective alone is what got scrolled past fourteen times a pass.
   if (read.cue === 'unproven-base' && read.durable && read.durable.ranges != null) {
     cueText += ` (${read.durable.ranges}× swing over the ${read.durable.lookback ?? 28}d floor)`;
+  }
+  // HF4: the under-print magnitude, when the caller's read carried alert-grade hours (bar lives pipeline-side).
+  if (read.cue === 'fading-day' && read.fade && read.fade.hours != null) {
+    cueText += ` — highs under 7d profile ${read.fade.hours}h (−${fmt(Math.round(read.fade.maxDeficit ?? 0))} gp)`;
   }
   return `soft-buy: ${floorTxt ?? 'floor n/a'} · live ${read.marker} · ${cueText} (${win})`;
 }

@@ -232,7 +232,12 @@ discount — the fang anchor; EC2 2026-09-08: a forming day already under the pr
 the break is certain by monotonicity), or `▽ caution — uptrend label STALE: today already printed under
 yesterday's low (cheaper entry likely)` (EC2 — a rising label whose forming day has already undercut the last
 completed low; measured 88.5% print below the current floor within 3d vs 53.1%, so `favorable` would argue
-exactly backwards — the Avernic-hilt post-mortem, `js/windowread.mjs` `floorCeilingTrack` header), or `▽ caution — dip into an UNPROVEN base, still elevated over the durable floor` (2026-08-06 — the SHAPE read says rising while floorValidator's 28d LEVEL read still cautions; a COMPOSITION of the two existing checks, not a new one. **Narrowed 2026-08-08** when `FLOOR_CAUTION_RANGES` moved 1.0 → 1.5: a buy 1.0–1.5 swings over the floor no longer trips it — intended, that band measured P(drawdown ≥ 1 swing) 12.0% vs 29.8% above it; the Snape grass anchor at 1.68× still fires). Inform-only PLACEHOLDER (n≈0), stdout-only — never gates/drops/regrades and never enters
+exactly backwards — the Avernic-hilt post-mortem, `js/windowread.mjs` `floorCeilingTrack` header), or `▽ caution — dip into an UNPROVEN base, still elevated over the durable floor` (2026-08-06 — the SHAPE read says rising while floorValidator's 28d LEVEL read still cautions; a COMPOSITION of the two existing checks, not a new one. **Narrowed 2026-08-08** when `FLOOR_CAUTION_RANGES` moved 1.0 → 1.5: a buy 1.0–1.5 swings over the floor no longer trips it — intended, that band measured P(drawdown ≥ 1 swing) 12.0% vs 29.8% above it; the Snape grass anchor at 1.68× still fires), or `▽ caution — exit side fading today (cushion + pace)` (HF4,
+PLAN-HOLD-FADE-ALERT 2026-09-22 — @floor on a day whose EXIT side is sliding is the floor of a fading day, not a
+discount, the Diamond-bolts entry; fires on the shared `reachMarginTrigger` ⚠⚠ composite at the row's candidate
+exit ask OR an alert-grade `hoursUnderProfile` run ≥ `FADE_MIN_HOURS` — measured by `join-fade-outcomes.mjs`,
+which beats the shipped 2h breakdown only at miss-cost ratio ≈3; the positions note carries the
+`highs under 7d profile Nh (−X gp)` magnitude). Inform-only (the fade caution carries HF1's measurement; the rest n≈0), stdout-only — never gates/drops/regrades and never enters
 `screen.json`; it exists so a buy decision can see WHEN the item is soft instead of buying into a peak (the
 blowpipe-at-10.67m-into-a-10.40m-dip miss). When a row's sell-side live print is stale (`row.quickStale`, the same QUICK_FRESH_MIN
 freshness flags `quote-items.mjs`'s `staleLive` note reads), a quoted `optSell` pinned to that stale

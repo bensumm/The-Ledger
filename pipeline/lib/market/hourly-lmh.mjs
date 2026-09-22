@@ -1,5 +1,6 @@
 // hourly-lmh.mjs — the PURE per-local-hour LOW/MID/HIGH detail read behind
 // `read-window-range.mjs --hourly` (the raw diurnal-detail diagnostic).
+import { windowStats, hourProfile, reachMargin, reachMarginTrigger } from '../../../js/windowread.mjs';   // fadeEntryRead's composite half (HF4) — one-way edge, windowread never imports back
 //
 // The dip/peak SUMMARY (hourProfile) distills the day into two windows — which HIDES the exact
 // hour-by-hour shape a placement decision sometimes needs. This helper is the productionised form of a
@@ -95,6 +96,35 @@ export function hourlyLMH(series1h, { days = 3 } = {}) {
   return { avgDates, perDayDates, hours };
 }
 
+// --- fadeEntryRead — the ENTRY-surface fade composition (PLAN-HOLD-FADE-ALERT HF4) ---------------
+// The one read both soft-buy callers hand DOWN to softBuyRead's `fade` opt (which never sees the raw
+// series/ask): trigger = reachMarginTrigger at the CANDIDATE exit ask (nights-14 windowStats +
+// hourProfile, zero fetch; null = unevaluable), hours/maxDeficit = hoursUnderProfile NULLED below
+// FADE_MIN_HOURS (the bar lives beside its constant; js/windowread stays dependency-free). Pass real
+// staleLo/staleHi — defaulting false fakes freshness past the pace guard. Inform-only; null when
+// neither half is evaluable.
+export function fadeEntryRead(series1h, { ask = null, liveLo = null, liveHi = null,
+  staleLo = false, staleHi = false, now = new Date() } = {}) {
+  const ref = liveHi ?? ask;
+  const hup = hoursUnderProfile(series1h, { minGp: fadeMinGp(ref), now });
+  let trigger = null;
+  if (ask != null) {
+    try {
+      const stats = windowStats(series1h, { nights: 14, wStart: 0, wEnd: 0, now });
+      const prof = hourProfile(series1h, { nights: 14, now });
+      if (stats && prof) {
+        const rm = reachMargin(stats.days, 'ask', ask,
+          { profile: prof, live: { lo: liveLo, hi: liveHi, staleLo, staleHi }, now });
+        trigger = reachMarginTrigger(rm);
+      }
+    } catch { trigger = null; }
+  }
+  if (!hup && trigger == null) return null;
+  const alertGrade = hup && hup.hours >= FADE_MIN_HOURS;
+  return { trigger, hours: alertGrade ? hup.hours : null, maxDeficit: alertGrade ? hup.maxDeficit : null,
+           minGp: hup ? hup.minGp : null };
+}
+
 // --- askReachDecay — the ask-reachability-decay read ---------------------------------------------
 //
 // DON'T-REBUILD TOMBSTONE (PLAN-DIURNAL-TRIAGE DT3, 2026-08-09). This module used to export
@@ -136,6 +166,55 @@ export function hourlyLMH(series1h, { days = 3 } = {}) {
  *              strictly below the oldest.
  *   null when `ask` is absent, or fewer than 2 local dates are available — degrade, never a fake read.
  */
+// --- hoursUnderProfile — the hours-under-profile fade count (PLAN-HOLD-FADE-ALERT HF1) ----------
+// Longest run of CONSECUTIVE completed local hours TODAY whose HIGH sits ≥ minGp under the ≤7-date
+// median HIGH for that hour (the avg7 convention, today included) → { hours, maxDeficit, firstHour,
+// lastHour, minGp, today }; null when today has no logged hours. The in-progress hour never counts;
+// an unlogged / thin-profile (< FADE_PROFILE_MIN_DAYS) / not-under hour BREAKS the run; longest run
+// wins (later on tie). Semantics + threshold measurement: fixtures + README's join-fade-outcomes.mjs
+// entry (FADE_MIN_HOURS = the largest CI-supported k; earns its alert only at miss-cost ratio ≈3).
+// Inform-only — alert/caution input, never a gate/price/rank.
+export const FADE_MIN_HOURS = 4;         // alert bar: run ≥ this fires (measured — see above)
+export const FADE_MIN_GP_FRAC = 0.01;    // deficit bar fraction (max(1 tick, 1%) via fadeMinGp)
+export const FADE_PROFILE_MIN_DAYS = 3;  // hours with a thinner profile than this are unevaluable
+
+export function fadeMinGp(price) {
+  return (price != null && Number.isFinite(price) && price > 0) ? Math.max(1, Math.round(price * FADE_MIN_GP_FRAC)) : 1;
+}
+
+export function hoursUnderProfile(series1h, { minGp = 1, now = new Date() } = {}) {
+  const nowD = now instanceof Date ? now : new Date(now * 1000);
+  const nowS = Math.floor(nowD.getTime() / 1000);
+  const pts = Array.isArray(series1h) ? series1h.filter(p => p && p.timestamp != null && p.timestamp <= nowS) : null;
+  const { byKey, allDates } = bucketSeries1h(pts);
+  if (!allDates.length) return null;
+  const today = localDateKey(nowD);
+  if (!allDates.includes(today)) return null;            // nothing logged today → no read
+  const profDates = allDates.filter(d => d <= today).slice(-7);   // last ≤7 local dates incl. today (avg7 convention)
+  const capH = nowD.getHours();                          // hours [0, capH) are completed
+  let best = null, run = null;
+  const closeRun = () => { if (run && (!best || run.hours >= best.hours)) best = run; run = null; };
+  for (let h = 0; h < capH && h < 24; h++) {
+    const highs = [];
+    for (const date of profDates) {
+      const p = byKey.get(`${date} ${h}`);
+      if (p && p.high != null) highs.push(p.high);
+    }
+    const p = byKey.get(`${today} ${h}`);
+    const prof = highs.length >= FADE_PROFILE_MIN_DAYS ? median(highs) : null;
+    const deficit = (prof != null && p && p.high != null) ? prof - p.high : null;
+    if (deficit != null && deficit >= minGp) {
+      if (!run) run = { hours: 0, maxDeficit: deficit, firstHour: h, lastHour: h };
+      run.hours++; run.lastHour = h;
+      if (deficit > run.maxDeficit) run.maxDeficit = deficit;
+    } else closeRun();                                   // unlogged / unevaluable / not-under all break the run
+  }
+  closeRun();
+  return best
+    ? { hours: best.hours, maxDeficit: best.maxDeficit, firstHour: best.firstHour, lastHour: best.lastHour, minGp, today }
+    : { hours: 0, maxDeficit: null, firstHour: null, lastHour: null, minGp, today };
+}
+
 export function askReachDecay(series1h, { days = 3, ask = null } = {}) {
   if (ask == null) return null;
   const { byKey, allDates } = bucketSeries1h(series1h);

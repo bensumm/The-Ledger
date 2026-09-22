@@ -64,7 +64,7 @@ import { tax, isBond } from '../../js/money-math.js';
 import { loadWatchlistEntries, loadWatchlistIds } from '../lib/config/watchlist.mjs';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
 import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, reachedDays, RECENCY_DIVERGE, RECENT_NIGHTS, askReachDecayNote, softBuyRead, softBuyHoursClause, displayFitNights, phaseFromLap, SOFT_BUY_CUE_TEXT, floorCeilingTrack } from '../../js/windowread.mjs';   // diurnal/timed-lap (DT2), window-clear (PLAN-WINDOW-CLEAR B2), asym pair, reachable band (RC-S2), placement (AC1, PLAN-ESTIMATOR-POSTURE), weekdayProfile (A3, PLAN-AMPLITUDE-SCAN), reachedDays (RF6) — all off the in-hand 1h series, no fetch. askReachDecayNote (DT3, PLAN-HOURLY-3DAY-TREND) is the shared compact note renderer for the top-X digest picks; there is NO per-hour drift-slope renderer (measured a non-signal), and no demandRegime read (PLAN-REMOVE-DEPTH-PRESSURE-READS).
-import { askReachDecay } from '../lib/market/hourly-lmh.mjs';   // DT3 — ask-reach decay, top-X digest picks ONLY (bounded, not the full candidate universe). No hourlyDrift slope read — see hourly-lmh.mjs's tombstone.
+import { askReachDecay, fadeEntryRead } from '../lib/market/hourly-lmh.mjs';   // DT3 — ask-reach decay, top-X digest picks ONLY (bounded, not the full candidate universe). No hourlyDrift slope read — see hourly-lmh.mjs's tombstone. HF4 — fadeEntryRead feeds the soft-buy 'fading-day' cue.
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (owner ruling: gp/d is out as the ranking metric). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
@@ -800,7 +800,10 @@ function digestSoftBuy(ts1h, row, fc = null, durable = null, lap = null) {
     : (({ fitNights, reliability }) => ({ fitNights, reliable: reliability.reliable }))(displayFitNights(ts1h, { nights: DIURNAL_NIGHTS }));
   const prof = hourProfile(ts1h, { nights: fit.fitNights });
   const live = row ? (row.quickBuy ?? null) : null;
-  const read = softBuyRead(prof, { live, fc, durable, reliable: fit.reliable });
+  // HF4: the entry fade read at the candidate exit ask (see fadeEntryRead) → the 'fading-day' cue.
+  const fade = row ? fadeEntryRead(ts1h, { ask: row.optSell ?? null, liveLo: row.quickBuy ?? null,
+    liveHi: row.quickSell ?? null, staleLo: !!row.quickStale?.buy, staleHi: !!row.quickStale?.sell }) : null;
+  const read = softBuyRead(prof, { live, fc, durable, reliable: fit.reliable, fade });
   if (!read) return null;
   const win = softBuyHoursClause(read.reliable, read.dipWindow, fmtHour, { style: 'compact' });
   if (read.marker == null) return win;                            // window known, live-vs-floor unavailable
@@ -810,7 +813,7 @@ function digestSoftBuy(ts1h, row, fc = null, durable = null, lap = null) {
   // triage surface by construction), but read the marker correctly — `+X%` states WHERE LIVE SITS relative
   // to the dip floor, it is NOT an instruction to wait. A resting bid goes in at the floor level regardless
   // of the hour; the window is where an attended TAKE is cheapest. See softBuyRead's header for why.
-  const cueTag = (read.cue === 'favorable' || read.cue === 'caution' || read.cue === 'unproven-base' || read.cue === 'stale-uptrend') ? ` · ${SOFT_BUY_CUE_TEXT[read.cue]}` : '';
+  const cueTag = (read.cue === 'favorable' || read.cue === 'caution' || read.cue === 'unproven-base' || read.cue === 'stale-uptrend' || read.cue === 'fading-day') ? ` · ${SOFT_BUY_CUE_TEXT[read.cue]}` : '';
   return `${win} · ${read.marker}${cueTag}`;
 }
 // DT4b-fix: the `phase` column reads off the LAP's peak window, NOT the `prof` fit — diurnalPhase is a

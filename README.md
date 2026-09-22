@@ -212,7 +212,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   surfaces: the cushion TREND `fading|stable|extending` over the recent `MARGIN_NIGHTS` days at
   `MARGIN_FADE_FRAC`, the current-day cushion, and today's `pace` — live-now vs the reaching-day median at
   this hour-of-day off the in-hand `hourProfile`; symmetric ask/bid, inform-only, placeholders pending F1;
-  the lean summary rides `suggestions.jsonl` via `windowExitShadow`) + **`avgBoundRead`/`formatAvgBound`**
+  the lean summary rides `suggestions.jsonl` via `windowExitShadow`) + **`reachMarginTrigger`** (HF2,
+  PLAN-HOLD-FADE-ALERT 2026-09-22 — the ⚠⚠ "price-to-sell-EARLY" composite's ONE home, extracted from
+  `read-window-range.mjs`'s renderer with an exhaustive-matrix equivalence pin: (fading OR negative
+  cushion) AND a live lagging pace → true; no read / no live pace / stale ⇒ null, never false. Consumers:
+  `read-window-range.mjs`'s ⚠⚠ line, `watch-positions.mjs`'s `FADE` alert, `fadeEntryRead`→`softBuyRead`'s
+  `fading-day` cue, `join-fade-outcomes.mjs`'s secondary arm) + **`avgBoundRead`/`formatAvgBound`**
   (2026-08-05 — the DEEP-BOOK reach-misread guard: `touchedDays`/`reachedDays` count days the per-day
   extremum of 1h-bucket AVERAGES crossed a level, a bias that is strict IN PROPORTION TO LIQUIDITY, so a
   low N/M on a deep book means "below every hourly average", not "never fills". Fires only when the
@@ -1404,7 +1409,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `watch-positions.mjs` (adaptive live position/offer monitor — the V1–V6 cross-pass memory surface: per-pass
     Δ/structural-support lines (`lib/watchstate.mjs`/`levels.mjs`, persisting `.cache/watch-state.json`),
     the V5 EMIT-CONTRACT note block (`lib/emit.mjs`), and the shared held-verdict + dominant-path lines
-    (`renderHeldVerdict`/`pathsStage`, `lib/item-context.mjs`). DE3 (PLAN-DEPTH-EXIT, 2026-07-15): each
+    (`renderHeldVerdict`/`pathsStage`, `lib/item-context.mjs`). HF2/HF3 (PLAN-HOLD-FADE-ALERT,
+    2026-09-22): the `FADE` alert — the reach-margin fade read PROMOTED from the per-held notes into
+    `alerts[]` (level `'FADE'`, additive beside any CUT; fires on `reachMarginTrigger` where the
+    big-ticket/watchlist reach read runs OR `hoursUnderProfile ≥ FADE_MIN_HOURS` on every held lot —
+    the measured bar, see `join-fade-outcomes.mjs`) — and the CUT/CUT-CANDIDATE magnitude clause
+    (`cutGapClause`: signed quick-sell gap vs cost/BE, `[flicker]` at ≤ `FLICKER_GP`, `through
+    cut-trigger` when breached; the /positions override rule keys on the tag). Both fixture-pinned
+    in `pipeline/test/fade-alert.test.mjs`; the app never reads `watch.json` (grep-verified). DE3 (PLAN-DEPTH-EXIT, 2026-07-15): each
     held lot still computes the whole-day depth FLOOR (`clearableAsk`) + the pressure band
     (`reachableBand`) and shadow-logs them as the lean `depthExit`/`reachable` ledger fields
     (inform-only; `reachable` is bid/band-only since the retirement). The DE3 two-lens render clause
@@ -1983,6 +1995,31 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `blastRadius` fixture-pinned. NOTE `bootstrapM` is a deliberate sibling of, NOT a reuse of,
     `clusterBootstrapCI` — that one takes a `median()` per arm and the median of a {0,1} outcome is
     degenerate),
+    **`join-fade-outcomes.mjs`** (2026-09-22, PLAN-HOLD-FADE-ALERT HF1 — the pre-registered
+    measurement that gated the FADE alert's hours-under-profile half. QUESTION (locked in the
+    header before the run): does `hoursUnderProfile ≥ k` at an archive origin predict a 4h instabuy
+    drop ≥ max(1gp, 1%) cheaper — paired cost, r = cost(miss)/cost(falseAlarm) — than a stated
+    REPLAY of the shipped 2h-momentum breakdown, at some r ∈ {1, 1.5, 2, 3}, CI-supported
+    (item-clustered bootstrap excluding 0)? Origins: local hours 12–22 every 2h on dates with ≥14
+    prior 1h dates, over a SEEDED 400-item sample (the composite secondary needs per-origin
+    `windowStats`+`hourProfile`); origins where the 5m band replay is unevaluable are DROPPED from
+    every arm. **DECISIVE RUN (400 items, 114,070 origins, base rate 26.1%): R-HF-2 STOOD —
+    k ∈ {2,3,4} beat the breakdown replay at r=3 (k=4: M +1.56pp, CI [0.12, 3.07]) and LOSE
+    decisively at every r ≤ 2 (k=4 at r=1: M −13.3pp), with r\* ≈ 2.6–3.0 — the hours trigger earns
+    its alert ONLY where a missed fade costs ≳3× a false alarm, and BOTH signals lose to never-alert
+    below r ≈ 2.5. Per-class honesty: the big-ticket stratum's r\* is ~7.3–8.1, i.e. the hours half
+    is WEAKEST exactly on big lots (DT1's pattern again) — the composite + CUT machinery carry
+    those. `FADE_MIN_HOURS` was set to 4, the LARGEST CI-supported k (fewest false alarms).
+    Secondaries on their own evaluable subpools: `askReachDecay.decaying` r\* 3.88; the
+    `reachMarginTrigger` composite r\* 8.87 as a 4h-drop predictor — the composite ships on
+    DOCTRINE (the already-shipped ⚠⚠ promoted, R-HF-6), not on this number.** Caveats that travel
+    with any quote: predictor AND outcome live on smoothed archive 1h highs (a live 5m dump leads
+    by up to an hour — day-level early warning, never a tick stop); the baseline is a replay
+    approximation with its divergences named in the header; one era, the 5m archive's ~30-day
+    window; quote M(r)/r\*, never a raw rate. Pure core `breakdownAt`/`pairedCost`/`bootstrapM`/
+    `beats`/`scoreItem` fixture-pinned in `pipeline/test/fade-outcomes.test.mjs` (incl. the
+    Diamond-bolts 12h shape end-to-end). `--json`, `--items N`, `--horizon H`, `--cost-ratio r`,
+    `--item <name|id>`),
     `join-window-clears.mjs` (WC2, PLAN-WINDOW-CLEAR-OUTCOMES — the window-clear ask-RUNG fill-attribution
     join, read-only. PRODUCER: the WC1 `windowExit` shadow rows on `suggestions.jsonl` (the surfaced list
     level + peak window + the daily-HIGH vs 5m-grain reach pair, logged on `quote-items.mjs --positions` /
@@ -2765,8 +2802,18 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     — a 7d-avg median block + the last N dates broken out; the raw diurnal detail the dip/peak summary
     hides. PLUS (PLAN-DIURNAL-TRIAGE DT3) the sibling PURE `askReachDecay(series1h,{days,ask})` — for a
     candidate ask, the per-day RATE of hours whose HIGH reached it and whether that rate is sliding
-    (judged on the RATE, so a partial newest day can't false-trigger); both functions share ONE internal
-    bucketing helper. Consumers: `read-window-range.mjs --hourly` (the summary line via
+    (judged on the RATE, so a partial newest day can't false-trigger); PLUS (PLAN-HOLD-FADE-ALERT HF1)
+    the sibling PURE `hoursUnderProfile(series1h,{minGp,now})` — the longest run of consecutive
+    COMPLETED local hours TODAY whose HIGH sits ≥ minGp under the ≤7-date median HIGH for that hour
+    (the avg7 convention; the in-progress hour never counts; an unlogged/thin-profile/not-under hour
+    breaks the run) → `{hours,maxDeficit,firstHour,lastHour}`, with `fadeMinGp(price)` =
+    max(1 tick, `FADE_MIN_GP_FRAC`×price) and the `FADE_MIN_HOURS` alert bar — MEASURED by
+    `join-fade-outcomes.mjs`'s decisive run (see its entry): a trigger half of the watch `FADE`
+    alert and of `softBuyRead`'s `fading-day` cue. PLUS `fadeEntryRead(series1h,{ask,liveLo,liveHi,
+    staleLo,staleHi,now})` — the ENTRY-surface composition both soft-buy callers hand down to
+    `softBuyRead` as its `fade` opt ({trigger: `reachMarginTrigger` at the candidate exit ask,
+    hours/maxDeficit: nulled below `FADE_MIN_HOURS`}); it imports `js/windowread.mjs` (one-way edge).
+    The three pure folds share ONE internal bucketing helper. Consumers: `read-window-range.mjs --hourly` (the summary line via
     `js/windowread.mjs`'s `askReachDecayNote`), `quote-items.mjs` (an `askReachDecay` note on a bare quote
     + held/watched positions), `screen-flip-niches.mjs --digest` (a bounded top-X enrichment), `--mode reverse`'s thin rows, and
     `watch-positions.mjs` (the held-lot `reachRead` line). **This module's header carries the DON'T-REBUILD TOMBSTONE for

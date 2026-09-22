@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.71
+version: 1.72
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -400,14 +400,22 @@ wrath — all correctly overridden). On a lot held under ~an hour whose ENTRY TH
 (the multi-day floor/base that justified the buy hasn't printed through), treat
 CUT/CUT-CANDIDATE/UNDERWATER as noise and judge against the thesis, not the verdict.
 
-**Override discipline — name a tripwire, then obey it (2026-07-05):** every verdict override
-must come with a CONCRETE structural level, named at override time (e.g. "below 16.50m = the
-7-day window floor is broken"), not an open-ended "hold anyway." While overriding, also track
-the DECAYING COST OF THE CUT (the instabuy you'd clear at falls while you hold — option-value
-bleed): if the clear price decays materially even without the tripwire printing, step the ask
-down rather than binary hold-vs-cut. When the tripwire prints, EXECUTE without re-litigating —
-the jaw 16.49m print (7-day floor break) is the anchor; the discipline only protects you if
-the named level is obeyed both ways.
+**Override discipline — name a tripwire, then obey it (2026-07-05; HARDENED 2026-09-21, HF3):**
+every verdict override must come with a CONCRETE structural level, named at override time (e.g.
+"below 16.50m = the 7-day window floor is broken"), not an open-ended "hold anyway." _(judgment,
+with the two bounds now ENCODED in the alert text — PLAN-HOLD-FADE-ALERT HF3:)_ **an override is
+permitted ONLY on a `[flicker]`-tagged CUT/CUT-CANDIDATE** (the tag prints when |quick-sell − BE|
+≤ `FLICKER_GP` = 6 gp — the band actually overridden on 2026-09-21, a description not a
+measurement); an untagged alert's gap is real money and the override frame does not apply. **A
+named tripwire that PRINTS THROUGH ends the override that same pass** — the alert now prints
+`through cut-trigger <t>` itself, so obeying the level is reading the line, not remembering the
+number (the Diamond-bolts anchor: cut-trigger 2,624 named at 17:43, instasell 2,612 at 18:50
+relayed as flicker — the sell side was 40–80 gp through cost). While overriding, also track the
+DECAYING COST OF THE CUT (the instabuy you'd clear at falls while you hold — option-value bleed):
+if the clear price decays materially even without the tripwire printing, step the ask down rather
+than binary hold-vs-cut. When the tripwire prints, EXECUTE without re-litigating — the jaw 16.49m
+print (7-day floor break) is the anchor; the discipline only protects you if the named level is
+obeyed both ways.
 
 **Cut-and-rebid friction bar (2026-07-05, Ben-endorsed; ENCODED COD-3, 2026-07-10):** a cut
 paired with a deeper re-entry bid is a legitimate two-leg (the jaw anchor: cut 16.87m, rebid
@@ -589,7 +597,14 @@ price-to-sell-EARLY trigger, not an inform note (Ben, 2026-07-21 — the godswor
 reach-margin block above DETECTS the fade; the repeated failure is UNDER-ACTING on it (this session the
 `cushion ⚠ fading +979k→+384k` flag was reported, then the fix was framed as a reactive "step down to
 ~40.15m" while a rising-floor read got called a near-lock — the signal was on the page and got
-under-weighted). The daily-HIGHS trajectory is the LEADING tell that demand is cooling: the highs step
+under-weighted). **PROMOTED (2026-09-21, PLAN-HOLD-FADE-ALERT HF2): the trigger is now a `FADE` alert** —
+`watch-positions.mjs` fires it into the `alerts` section the loop relay reads, beside (never instead
+of) any CUT, on EITHER half: the ONE shared `reachMarginTrigger` (cushion fading-or-negative AND pace
+lagging, the same ⚠⚠ composite `read-window-range.mjs` prints; computed on big-ticket/watchlist lots)
+OR `hoursUnderProfile` ≥ `FADE_MIN_HOURS` (every held lot; measured by `join-fade-outcomes.mjs` —
+beats the shipped 2h breakdown only at miss-cost ratio ≈3, which is the held-lot shape, and is
+weakest on big-ticket where the composite carries). When a FADE alert prints, this section IS the
+playbook: price the reachable early exit it names, don't re-derive. The daily-HIGHS trajectory is the LEADING tell that demand is cooling: the highs step
 down BEFORE the reactive "not filling" shows up, and BEFORE a rising-floor frame catches up. On the
 godsword the highs stepped **42.14m → 40.19m over 7 days (−5%)** while the rising floor (+298k/day) masked
 it; by the time the cushion had already collapsed, the reachable-and-profitable ask was gone. The rule:

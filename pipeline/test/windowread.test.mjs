@@ -17,6 +17,7 @@
  */
 import assert from 'node:assert/strict';
 import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, placement, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, softBuyRead, formatSoftBuy, windowReliability, softBuyHoursClause, WINDOW_RELIABLE_R, SOFT_BUY_AT_FLOOR_PCT, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS, reachMargin, MARGIN_MIN_DAYS } from '../../js/windowread.mjs';
+import { reachMarginTrigger } from '../../js/windowread.mjs';   // PLAN-HOLD-FADE-ALERT — the ⚠⚠ composite's one home
 import { projectTrajectory } from '../../js/windowread.mjs';   // PLAN-SIGNAL-RECENCY R1 — the shared trajectory primitive
 import { SECOND_PROMINENCE_FRAC } from '../../js/windowread.mjs';   // PLAN-MULTI-PEAK-WINDOWS — the secondary-window prominence gate
 import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-WINDOW-CLEAR B1
@@ -280,6 +281,73 @@ ok('reachMargin: fewer than MARGIN_MIN_DAYS recent days ⇒ trend null (no false
   assert.equal(rm.cushionNow, 21, 'but the current cushion still reports');
   assert.equal(reachMargin([], 'ask', 100), null, 'empty days ⇒ null (degrade, never a fake read)');
   assert.equal(reachMargin([day('d1', 90, 120)], 'ask', null), null, 'null level ⇒ null');
+});
+
+// --- reachMarginTrigger: the ⚠⚠ price-to-sell-EARLY composite, ONE home (PLAN-HOLD-FADE-ALERT) ---
+// BUSINESS REQUIREMENTS pinned here (the predicate logReachMargin rendered before the extraction):
+//   trigger ⇔ (trend==='fading' OR cushionNow<0) AND a LIVE pace read that is lagging;
+//   null (unevaluable) when there is no reachMargin read or no live pace (stale included) — a caller
+//   must be able to tell "did not fire" from "could not be evaluated".
+ok('reachMarginTrigger: fading cushion + lagging pace ⇒ true (fed by a REAL reachMargin read)', () => {
+  const fadingDays = [day('d1', 90, 160), day('d2', 90, 150), day('d3', 90, 130), day('d4', 90, 112)];
+  const profile = { hours: [{ h: 16, lowRecent: 90, hiRecent: 130, n: 15 }] };
+  const now = new Date(2026, 0, 20, 16, 0, 0);
+  const rm = reachMargin(fadingDays, 'ask', 100, { marginN: 6, profile, live: { lo: 85, hi: 120 }, now });
+  assert.equal(rm.trend, 'fading', 'fixture sanity: the cushion is collapsing');
+  assert.equal(rm.pace.onPace, false, 'fixture sanity: live runs under the hour median');
+  assert.equal(reachMarginTrigger(rm), true);
+});
+ok('reachMarginTrigger: a NEGATIVE cushion also arms the cushion half (stable trend, live lagging)', () => {
+  const under = [day('d1', 90, 95), day('d2', 90, 95), day('d3', 90, 95), day('d4', 90, 95)];
+  const profile = { hours: [{ h: 16, lowRecent: 90, hiRecent: 130, n: 15 }] };
+  const now = new Date(2026, 0, 20, 16, 0, 0);
+  const rm = reachMargin(under, 'ask', 100, { marginN: 6, profile, live: { lo: 85, hi: 120 }, now });
+  assert.ok(rm.cushionNow < 0, 'fixture sanity: the level sits above every daily high');
+  assert.equal(reachMarginTrigger(rm), true);
+});
+ok('reachMarginTrigger: either half alone does NOT fire (the AND is load-bearing — 2b §3)', () => {
+  const profile = { hours: [{ h: 16, lowRecent: 90, hiRecent: 130, n: 15 }] };
+  const now = new Date(2026, 0, 20, 16, 0, 0);
+  // fading but ON pace (live at the hour median) ⇒ false
+  const fadingDays = [day('d1', 90, 160), day('d2', 90, 150), day('d3', 90, 130), day('d4', 90, 112)];
+  const onPace = reachMargin(fadingDays, 'ask', 100, { marginN: 6, profile, live: { lo: 85, hi: 130 }, now });
+  assert.equal(reachMarginTrigger(onPace), false);
+  // healthy cushion but lagging pace ⇒ false
+  const flat = [day('d1', 90, 120), day('d2', 90, 120), day('d3', 90, 120), day('d4', 90, 120)];
+  const lagging = reachMargin(flat, 'ask', 100, { marginN: 6, profile, live: { lo: 85, hi: 120 }, now });
+  assert.equal(lagging.trend, 'stable');
+  assert.equal(reachMarginTrigger(lagging), false);
+});
+ok('reachMarginTrigger ≡ the inline predicate it replaced (exhaustive shape matrix — the HF2 byte-identical pin)', () => {
+  // read-window-range.mjs's logReachMargin fired the ⚠⚠ on exactly this inline predicate before the
+  // extraction. Live stdout can't be golden-diffed (every run fetches fresh data), so the equivalence
+  // is pinned HERE, exhaustively, instead: over every combination of the fields the predicate reads,
+  // `old(rm) ⇔ reachMarginTrigger(rm) === true`. A future edit to the trigger that shifts any case
+  // breaks this loudly.
+  const old = rm => {
+    const paceBad = rm.pace && !rm.pace.stale && !rm.pace.onPace;
+    return !!((rm.trend === 'fading' || (rm.cushionNow != null && rm.cushionNow < 0)) && paceBad);
+  };
+  const trends = ['fading', 'stable', 'extending', null];
+  const cushions = [-5, 0, 5, null];
+  const paces = [null, { stale: true, ageMin: 64 }, { stale: false, onPace: true }, { stale: false, onPace: false }];
+  let checked = 0;
+  for (const trend of trends) for (const cushionNow of cushions) for (const pace of paces) {
+    const rm = { trend, cushionNow, pace };
+    assert.equal(reachMarginTrigger(rm) === true, old(rm),
+      `diverged at trend=${trend} cushionNow=${cushionNow} pace=${JSON.stringify(pace)}`);
+    checked++;
+  }
+  assert.equal(checked, trends.length * cushions.length * paces.length);
+});
+ok('reachMarginTrigger: unevaluable ⇒ null, never false (no read / no pace / stale pace)', () => {
+  assert.equal(reachMarginTrigger(null), null);
+  const days = [day('d1', 90, 120), day('d2', 90, 121), day('d3', 90, 122), day('d4', 90, 123)];
+  assert.equal(reachMarginTrigger(reachMargin(days, 'ask', 100, { marginN: 6 })), null, 'no profile/live ⇒ no pace ⇒ null');
+  const profile = { hours: [{ h: 16, lowRecent: 90, hiRecent: 130, n: 15 }] };
+  const now = new Date(2026, 0, 20, 16, 0, 0);
+  const stale = reachMargin(days, 'ask', 100, { marginN: 6, profile, live: { lo: 85, hi: 120, staleHi: true, hiAgeMin: 64 }, now });
+  assert.equal(reachMarginTrigger(stale), null, 'a stale print is not a pace — unevaluable, not "did not fire"');
 });
 
 // --- 5. hourProfile: locate + CLUSTER the daily dip and peak windows -------------------------
@@ -581,6 +649,38 @@ ok('softBuyRead: fc NEVER overrides the wait cue when live sits above the dip', 
   const sb = softBuyRead(prof(1000, 1080, false), { live: 1027, fc: { classification: 'crash-risk', floorBreak: { broke: true } } });
   assert.equal(sb.cue, 'wait');
   assert.ok(!/floor breaking/.test(formatSoftBuy(sb)), 'the floor-aware cue does not leak into the above-floor render');
+});
+
+// --- HF4 (PLAN-HOLD-FADE-ALERT): the fading-day @floor cue — the caller's fade read hands down ----
+// BUSINESS REQUIREMENTS pinned here:
+//   - @floor 'buy now'/'favorable' downgrade to 'fading-day' on EITHER half (composite trigger true,
+//     or an alert-grade hours count — fadeEntryRead nulls hours below FADE_MIN_HOURS, so non-null
+//     hours IS alert-grade here);
+//   - stronger cautions and the above-floor 'wait' are NEVER overridden;
+//   - formatSoftBuy appends the under-print magnitude only when the hours rode in;
+//   - fade absent/null ⇒ byte-identical (the honest degrade, same as fc/durable/reliable).
+ok('HF4: @floor + a firing fade COMPOSITE ⇒ fading-day (buy-now and favorable both downgrade)', () => {
+  const f = { trigger: true, hours: null, maxDeficit: null };
+  assert.equal(softBuyRead(prof(1000, 1080, false), { live: 1000, fade: f }).cue, 'fading-day');
+  assert.equal(softBuyRead(prof(1000, 1080, false), { live: 1000, fc: { classification: 'healthy-trend' }, fade: f }).cue, 'fading-day');
+  const txt = formatSoftBuy(softBuyRead(prof(1000, 1080, false), { live: 1000, fade: f }));
+  assert.ok(txt.includes('▽ caution — exit side fading today'), txt);
+  assert.ok(!txt.includes('under 7d profile'), 'no hours rode in ⇒ no magnitude clause: ' + txt);
+});
+ok('HF4: an alert-grade HOURS half alone downgrades too, and the magnitude renders', () => {
+  const f = { trigger: null, hours: 12, maxDeficit: 40 };
+  const sb = softBuyRead(prof(1000, 1080, false), { live: 1000, fade: f });
+  assert.equal(sb.cue, 'fading-day');
+  const txt = formatSoftBuy(sb);
+  assert.ok(txt.includes('highs under 7d profile 12h (−40 gp)'), txt);
+});
+ok('HF4: stronger cautions and the wait cue are never overridden; null fade is byte-identical', () => {
+  const f = { trigger: true, hours: 12, maxDeficit: 40 };
+  const broke = softBuyRead(prof(1000, 1080, false), { live: 1000, fc: { classification: 'cooling', floorBreak: { broke: true } }, fade: f });
+  assert.equal(broke.cue, 'caution', 'a breaking floor outranks the fade');
+  assert.equal(softBuyRead(prof(1000, 1080, false), { live: 1027, fade: f }).cue, 'wait', 'above the dip stays wait');
+  const bare = softBuyRead(prof(1000, 1080, false), { live: 1000, fade: { trigger: false, hours: null, maxDeficit: null } });
+  assert.equal(bare.cue, 'buy now', 'a quiet fade read changes nothing');
 });
 
 // --- PART II (PLAN-GRADE-REACH): asymPair — deep-buy / reliable-sell realizable pair ----------

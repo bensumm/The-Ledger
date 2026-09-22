@@ -63,7 +63,7 @@ import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs 
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readExchangeLog, activeOffers, restartBlindSuspects, restingAge } from '../lib/reconstruct/offers.mjs';
 import { logSuggestions, suggestionEntry, reachableShadow, depthExitShadow, asymShadow, windowExitShadow } from '../lib/render/suggestlog.mjs';   // DE3/RC-S1: shared reachable/depthExit/asym ledger-shadow reshapers (one home, no drift across watch/screen/quote); WC1: windowExitShadow (the window-clear ask-rung forward record)
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, diurnalTimedLap, clearableAsk, reachableBand, asymPair, askExitRead, askReachDecayNote } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots; RC-S1: asymPair for the head-to-head co-log; WC1: askExitRead for the window-clear ask-rung shadow; PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the two direct hourProfile+deriveDiurnalRange call sites below (the shadow-log bid/ask + the diurnalAsk fallback) — same bid/ask/peakWindow values, one shared composition
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, diurnalTimedLap, clearableAsk, reachableBand, asymPair, askExitRead, askReachDecayNote, reachMarginTrigger } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots; RC-S1: asymPair for the head-to-head co-log; WC1: askExitRead for the window-clear ask-rung shadow; PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the two direct hourProfile+deriveDiurnalRange call sites below (the shadow-log bid/ask + the diurnalAsk fallback) — same bid/ask/peakWindow values, one shared composition
 import { estimatePair, asymEstimate, estConfLean, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/signal/estimators.mjs';   // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION): the reachRelief-family estSell + asym pair, co-logged beside depthExit/reachable for the head-to-head; PC3 — SELL_TOP_MODELS validates --est-sell
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // RC-S1: the neutral band thesis for the held-lot est/asym shadow (same convention as quote-items --positions)
 import { blindWarningLine } from '../lib/reconstruct/logblind.mjs'; // LH2 restart-blindness header line
@@ -74,7 +74,7 @@ import { cycleTick, cycleNoteLines } from '../lib/timing/cyclewatch.mjs'; // PLA
 import { driftExitFrom } from '../../js/forecast.mjs'; // Chunk 1/2 — the drift-adjusted trough/peak prior the cycle loop tracks (REUSED, not forked)
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from '../lib/signal/levels.mjs';   // V2 support/cut-trigger
 import { heldNoteBlock, heldListAt, formatReachMargin } from '../lib/render/emit.mjs';   // V5 standardized per-held emit contract
-import { askReachDecay } from '../lib/market/hourly-lmh.mjs';
+import { askReachDecay, hoursUnderProfile, fadeMinGp, FADE_MIN_HOURS } from '../lib/market/hourly-lmh.mjs';   // HF2 (PLAN-HOLD-FADE-ALERT) — the hours-under-profile half of the FADE read
 import { recoveryRead, recoveryLine, recoveryTrigger } from '../lib/signal/recovery.mjs';   // V6 advisory recover-vs-drop forecast
 import { freedCapital } from '../lib/capital/freed-capital.mjs';   // V6 companion — freed-capital redeploy prompt
 import { bookUtilization, totalCapital } from '../lib/capital/capital-utilization.mjs';   // YV1 (#3) — working-vs-parked capital line
@@ -440,6 +440,24 @@ const lotCtxOf = it => ({ buyTs: it.buyTs, askFilling: it.askFilling });
 // are ARM-THEN-CONFIRM (they become a headline alert only once convictionGate — computed in main
 // and stored on `it.gate` — says escalate; until then they are visible armed NOTES, not headlines).
 // The Gate-2 breakdown CUT is EXEMPT: immediate on pass 1, byte-identically as before (the invariant).
+// HF3 (PLAN-HOLD-FADE-ALERT): the CUT magnitude clause — a −3 gp flicker and a −76 gp break must not
+// print the same word. Signed quick-sell gap vs cost/BE; |gap to BE| ≤ FLICKER_GP tags [flicker]
+// (a DESCRIPTION of the band actually overridden, not a measurement — the /positions override rule
+// keys on the tag); `through cut-trigger` prints when breached, so obeying the tripwire is reading.
+export const FLICKER_GP = 6;
+export function cutGapClause(it) {
+  const qs = it.row && it.row.quickSell;
+  if (qs == null) return '';
+  const sg = v => (v >= 0 ? '+' : '−') + fmt(Math.abs(Math.round(v)));
+  const parts = [];
+  if (it.avgCost != null) parts.push(`${sg(qs - it.avgCost)} vs cost`);
+  if (it.be != null) parts.push(`${sg(qs - it.be)} vs BE`);
+  if (!parts.length) return '';
+  const flick = (it.be != null && Math.abs(qs - it.be) <= FLICKER_GP) ? ' [flicker]' : '';
+  const through = (it._cutTrigger != null && qs < it._cutTrigger) ? ` · through cut-trigger ${fmtP(Math.round(it._cutTrigger))}` : '';
+  return ` · quick-sell ${fmtP(qs)} is ${parts.join(' / ')}${flick}${through}`;
+}
+
 function heldAlert(it) {
   const { row, be, lotValue, ts5m, name, gate } = it;
   const instabuy = row.quickSell;
@@ -448,13 +466,13 @@ function heldAlert(it) {
     if (mv.action === 'CUT') {
       if (mv.gate === 2)
         // Gate-2 breakdown CUT — EXEMPT from conviction gating: escalate immediately (the invariant).
-        return { level: mv.verdict, msg: `${mv.verdict} ${name} @ ${fmtP(mv.listAt)} — 2h breakdown & underwater; free the capital.` };
+        return { level: mv.verdict, msg: `${mv.verdict} ${name} @ ${fmtP(mv.listAt)} — 2h breakdown & underwater${cutGapClause(it)}; free the capital.` };
       // Gate-D CUT-CANDIDATE — headline only once conviction confirms (ALERT_PERSIST_MS of
       // underwater time, not a pass count). Until then it is armed: fall through so no headline fires
       // (the armed note is emitted in the table loop).
       if (gate && gate.escalate && gate.reason === 'cut-candidate') {
         const um = Math.max(0, Math.round(((it._deltas && it._deltas.underwaterMs) || 0) / 60000));
-        return { level: mv.verdict, msg: `${mv.verdict} ${name} @ ${fmtP(mv.listAt)} — underwater through a liquid window, sustained ~${um}m; free the capital.` };
+        return { level: mv.verdict, msg: `${mv.verdict} ${name} @ ${fmtP(mv.listAt)} — underwater through a liquid window, sustained ~${um}m${cutGapClause(it)}; free the capital.` };
       }
       // armed Gate-D (or masked by a structural escalation handled just below) — no headline here.
     } else {
@@ -505,6 +523,32 @@ function heldAlert(it) {
   if (row.falling)
     return { level: 'FALLING', msg: `FALLING ${name} — multi-day regime ${row.regime.classification || row.regimeLabel}${Number.isFinite(row.regime.driftPct) && Math.round(row.regime.driftPct) !== 0 ? ` (${Math.round(Math.abs(row.regime.driftPct))}% ${row.regime.driftPct < 0 ? 'below' : 'above'} 2wk)` : ''}. Price to clear at the instabuy ${fmtP(instabuy)}; don't defend the ask down.` };
   return null;
+}
+
+// --- HF2 (PLAN-HOLD-FADE-ALERT) FADE alert: the fade read PROMOTED from notes into `alerts` (the
+// section the loop relay reads — R-HF-7), ADDITIVE beside heldAlert (an item can carry CUT and FADE
+// the same pass). Fires on EITHER half (R-HF-3): hoursUnderProfile ≥ FADE_MIN_HOURS (measured —
+// README's join-fade-outcomes.mjs entry; weakest on big-ticket, where the composite carries) OR
+// reachMarginTrigger (the ⚠⚠ doctrine, computed where the big-ticket/watchlist reach read runs).
+// Inform-level: never changes momVerdict, never gates/places; unfired halves are omitted, never "ok".
+export function fadeAlert(it) {
+  const f = it._fade;
+  if (!f) return null;
+  const hoursFired = f.hours != null && f.hours >= FADE_MIN_HOURS;
+  if (f.trigger !== true && !hoursFired) return null;
+  const sg = v => (v >= 0 ? '+' : '−') + fmt(Math.abs(Math.round(v)));
+  const parts = [];
+  if (f.hours != null && f.hours >= FADE_MIN_HOURS && f.maxDeficit != null)
+    parts.push(`today's highs under the 7d profile ${f.hours}h (−${fmt(Math.round(f.maxDeficit))} gp)`);
+  const rm = f.rm || {};
+  if (rm.trend === 'fading' && rm.cushionFrom != null && rm.cushionTo != null)
+    parts.push(`cushion ${sg(rm.cushionFrom)}→${sg(rm.cushionTo)} fading`);
+  else if (rm.cushionNow != null && rm.cushionNow < 0)
+    parts.push(`cushion ${sg(rm.cushionNow)} NEGATIVE`);
+  if (rm.pace && rm.pace.gap != null) parts.push(`pace ${sg(rm.pace.gap)} lagging`);
+  if (f.listAt != null && it.be != null)
+    parts.push(`price-to-sell-EARLY: list @ ${fmtP(f.listAt)} (BE ${fmtP(it.be)})`);
+  return { level: 'FADE', msg: `FADE ${it.name} — ${parts.join(' · ')}` };
 }
 
 // VZ1 (PLAN-VIZ-LAYER) — assemble the watch output pass into ONE plain report object (R4), rendered by
@@ -723,6 +767,7 @@ async function main() {
     it.gate = { escalate: false, armed: false, reason: null };
     it._deltas = null; it._support = null; it._cutTrigger = null; it._thesis = null; it._pathCtx = null; it._display = null;
     it._depthExit = null; it._reachable = null; it._estShadow = null; it._asymShadow = null; it._windowExit = null; it._reachRead = null;
+    it._fade = null;   // HF2 (PLAN-HOLD-FADE-ALERT) — the per-lot FADE read {hours, maxDeficit, minGp, trigger, rm}
     it._cycle = null;   // Chunk 4 (--cycle): the per-item cycle-expectation tick result (null unless --cycle)
     // DE3 (PLAN-DEPTH-EXIT): the held lot's WHOLE-DAY depth floor (clearableAsk — what this qty can
     // book at, the plan's v1 whole-day decision) + pressure-driven reachable band (reachableBand),
@@ -737,6 +782,10 @@ async function main() {
     // separately via the thesis. Zero new fetch (reuses ts1h/ts5m). Inform-only — nothing rendered.
     try {
       const dayStats = windowStats(it.ts1h, { nights: 14, wStart: 0, wEnd: 0 });
+      // HF2: the hours-under-profile half of the FADE read — every held lot, off the in-hand ts1h.
+      const fadeRef = it.row.quickSell ?? it.avgCost ?? null;
+      const hup = hoursUnderProfile(it.ts1h, { minGp: fadeMinGp(fadeRef) });
+      it._fade = hup ? { hours: hup.hours, maxDeficit: hup.maxDeficit, minGp: hup.minGp, trigger: null, rm: null } : null;
       it._depthExit = clearableAsk(it.ts1h, { qty: it.qty, wStart: 0, wEnd: 0, nights: 14 });
       it._reachable = dayStats ? reachableBand(dayStats) : null;
       if (dayStats) {
@@ -780,6 +829,13 @@ async function main() {
           const reachBits = [formatReachMargin(aer && aer.ask && aer.ask.reachMargin),
             askReachDecayNote(askReachDecay(it.ts1h, { days: 3, ask: list }), { ask: list, fmt })].filter(Boolean);
           it._reachRead = reachBits.length ? `reach: ${reachBits.join(' · ')}` : null;
+          // HF2: the composite half — the shared reachMarginTrigger, computed where aer exists.
+          const fadeRm = aer && aer.ask ? aer.ask.reachMargin : null;
+          const fadeTrig = reachMarginTrigger(fadeRm);
+          if (!it._fade) it._fade = { hours: null, maxDeficit: null, minGp: null, trigger: null, rm: null };
+          it._fade.trigger = fadeTrig; it._fade.rm = fadeRm || null;
+          it._fade.listAt = (it._estShadow && it._estShadow.estSell != null)
+            ? Math.max(it.be ?? 0, Math.round(it._estShadow.estSell)) : null;
         }
       }
     } catch { /* inform-only — never block a pass */ }
@@ -962,7 +1018,8 @@ async function main() {
     .sort((a, b) => (b.dipScore || 0) - (a.dipScore || 0));   // highest-priority flush first
 
   // ---- HEADLINE: the whole state in one line; alert details right under it ----
-  const alerts = [...flushAlerts, ...held.map(heldAlert), ...bidItems.map(bidAlert)].filter(Boolean);
+  // HF2: FADE rides BESIDE the held verdict alerts, never instead of them (additive — see fadeAlert).
+  const alerts = [...flushAlerts, ...held.map(heldAlert), ...held.map(fadeAlert), ...bidItems.map(bidAlert)].filter(Boolean);
   const bidCount = bidItems.reduce((n, it) => n + it.bids.length, 0);
   const orphanAsks = asks.filter(a => !held.some(h => h.id === a.item));
   const counts = [];

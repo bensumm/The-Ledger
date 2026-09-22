@@ -18,6 +18,7 @@
  */
 import assert from 'node:assert/strict';
 import { hourlyLMH, askReachDecay } from '../lib/market/hourly-lmh.mjs';
+import { hoursUnderProfile, fadeMinGp, FADE_MIN_HOURS, FADE_MIN_GP_FRAC, FADE_PROFILE_MIN_DAYS } from '../lib/market/hourly-lmh.mjs';   // PLAN-HOLD-FADE-ALERT HF1
 import * as MOD from '../lib/market/hourly-lmh.mjs';   // DT3 — namespace import for the stays-deleted pin below
 
 let pass = 0;
@@ -155,6 +156,78 @@ ok('degrade: fewer than 2 local dates → null (never a fake read)', () => {
   assert.equal(askReachDecay(oneDate, { days: 3, ask: 100 }), null);
   assert.equal(askReachDecay([], { ask: 100 }), null);
   assert.equal(askReachDecay(null, { ask: 100 }), null);
+});
+
+// --- hoursUnderProfile (PLAN-HOLD-FADE-ALERT HF1) acceptance -------------------------------------
+// BUSINESS REQUIREMENTS pinned here:
+//   - counts CONSECUTIVE completed local hours TODAY whose HIGH sits ≥ minGp under the ≤7-date
+//     median HIGH for that hour (the avg7 convention, today included).
+//   - the in-progress hour never counts (scan stops before now.getHours()).
+//   - an unlogged / not-under / thin-profile hour BREAKS the run (no chaining across gaps; a
+//     partial day caps at its logged hours and cannot fake "consecutive" across the unlogged tail).
+//   - null when today has no logged hours (degrade, never a fake read).
+console.log('\nhoursUnderProfile acceptance:');
+
+// The plan's pre-registered shape: a 3-day series where day 3's highs sit 40 under the profile for
+// 6 hours. Days 1–2: high 1000 at hours 0–11. Day 3: hours 0–5 high 960 (40 under), 6–11 high 1000.
+const fadeSeries = [];
+for (const d of [1, 2]) for (let h = 0; h < 12; h++) fadeSeries.push(pt(2026, 0, d, h, 950, 1000));
+for (let h = 0; h < 12; h++) fadeSeries.push(pt(2026, 0, 3, h, 950, h < 6 ? 960 : 1000));
+const NOON_D3 = new Date(2026, 0, 3, 12, 0, 0);
+
+ok('the 6-hour under-print run: hours=6, maxDeficit=40, bounds 0–5', () => {
+  const r = hoursUnderProfile(fadeSeries, { minGp: 10, now: NOON_D3 });
+  assert.deepEqual({ hours: r.hours, maxDeficit: r.maxDeficit, firstHour: r.firstHour, lastHour: r.lastHour },
+    { hours: 6, maxDeficit: 40, firstHour: 0, lastHour: 5 });
+});
+ok('deficit below minGp does not count (bar 50 > the 40 deficit → hours=0)', () => {
+  assert.equal(hoursUnderProfile(fadeSeries, { minGp: 50, now: NOON_D3 }).hours, 0);
+});
+ok('a partial day caps at its logged hours — no chaining across the unlogged tail', () => {
+  // today logs only hours 0–4 (all 40 under); asked at 20:00, the count is 5, not 20.
+  const partial = fadeSeries.filter(p => {
+    const d = new Date(p.timestamp * 1000);
+    return d.getDate() !== 3 || d.getHours() < 5;
+  });
+  const r = hoursUnderProfile(partial, { minGp: 10, now: new Date(2026, 0, 3, 20, 0, 0) });
+  assert.deepEqual({ hours: r.hours, lastHour: r.lastHour }, { hours: 5, lastHour: 4 });
+});
+ok('the in-progress hour never counts (asked AT 05:00, hour 5 is excluded → hours=5)', () => {
+  const r = hoursUnderProfile(fadeSeries, { minGp: 10, now: new Date(2026, 0, 3, 5, 0, 0) });
+  assert.deepEqual({ hours: r.hours, lastHour: r.lastHour }, { hours: 5, lastHour: 4 });
+});
+ok('a not-under hour BREAKS the run — two runs report the longest (later on tie)', () => {
+  // day 3: hours 0–1 under, hour 2 at profile, hours 3–6 under → longest run = 4 (hours 3–6).
+  const twoRuns = [];
+  for (const d of [1, 2]) for (let h = 0; h < 12; h++) twoRuns.push(pt(2026, 0, d, h, 950, 1000));
+  for (let h = 0; h < 12; h++) twoRuns.push(pt(2026, 0, 3, h, 950, (h <= 1 || (h >= 3 && h <= 6)) ? 960 : 1000));
+  const r = hoursUnderProfile(twoRuns, { minGp: 10, now: NOON_D3 });
+  assert.deepEqual({ hours: r.hours, firstHour: r.firstHour, lastHour: r.lastHour }, { hours: 4, firstHour: 3, lastHour: 6 });
+});
+ok('an unlogged mid-day hour BREAKS the run (no chaining across gaps)', () => {
+  const gap = fadeSeries.filter(p => {
+    const d = new Date(p.timestamp * 1000);
+    return d.getDate() !== 3 || d.getHours() !== 3;   // today's hour 3 missing
+  });
+  const r = hoursUnderProfile(gap, { minGp: 10, now: NOON_D3 });
+  assert.equal(r.hours, 3, 'runs are 0–2 and 4–5 → longest is 3');
+});
+ok('null when today has no logged hours yet (and on an empty series)', () => {
+  assert.equal(hoursUnderProfile(fadeSeries, { minGp: 10, now: new Date(2026, 0, 4, 12, 0, 0) }), null);
+  assert.equal(hoursUnderProfile([], { minGp: 10, now: NOON_D3 }), null);
+  assert.equal(hoursUnderProfile(null, { minGp: 10, now: NOON_D3 }), null);
+});
+ok('a thin profile (fewer than FADE_PROFILE_MIN_DAYS dates at that hour) is unevaluable → hours=0', () => {
+  // only 2 dates total (yesterday + today) < FADE_PROFILE_MIN_DAYS(3) → every hour unevaluable.
+  const thin = fadeSeries.filter(p => new Date(p.timestamp * 1000).getDate() >= 2);
+  assert.equal(FADE_PROFILE_MIN_DAYS, 3, 'fixture assumes the shipped floor');
+  assert.equal(hoursUnderProfile(thin, { minGp: 10, now: NOON_D3 }).hours, 0);
+});
+ok('fadeMinGp = max(1 tick, FADE_MIN_GP_FRAC × price); constants hold their shipped values', () => {
+  assert.equal(fadeMinGp(2700), Math.max(1, Math.round(2700 * FADE_MIN_GP_FRAC)));
+  assert.equal(fadeMinGp(50), 1);
+  assert.equal(fadeMinGp(null), 1);
+  assert.equal(FADE_MIN_HOURS, 4, 'the largest CI-supported k from join-fade-outcomes\' decisive run — the alert bar');
 });
 
 // --- STAYS-DELETED pin (PLAN-DIURNAL-TRIAGE DT3) -------------------------------------------------

@@ -35,7 +35,7 @@ import { diurnalForecast, whenBuyable, whenSellable, fmtEta, driftExitFrom } fro
 import { tax, netMargin } from '../../js/money-math.js';   // netMargin — the dwell line's rest-day/per-lot nets (the ONE tax impl, bond-aware)
 import { fmtP, fmt, fmtHour, fmtHourRange } from '../../js/money-format.js';
 import { hourProfile, deriveDiurnalRange, diurnalTimedLap, softBuyRead, formatSoftBuy, displayFitNights, windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement, askExitRead, realityClause, computeReality, askReachDecayNote, liveAgeTag } from '../../js/windowread.mjs';   // softBuyRead/formatSoftBuy — per-held-lot ⏳ soft-buy timing (ADD-while-holding); PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read folded under the trajectory line (both quote surfaces); COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch); PLAN-DIURNAL-TIMING DT3 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal NOTE computation (prof/dr themselves stay — they still feed extraEst.diurnal, windowClear's peak window, pushTrajectory, and the forward E4 inputs); PLAN-DIURNAL-TRIAGE DT3 — askReachDecayNote, the shared compact ask-reach-decay note (replaced the deleted hourly-drift note)
-import { askReachDecay } from '../lib/market/hourly-lmh.mjs';   // DT3 — the ask-reach decay read (is the intended ask sliding out of reach?), folded onto every price-recommendation surface (bare quote + held/watched positions), reusing the already-fetched 1h series. Replaced the deleted hourlyDrift slope read — see hourly-lmh.mjs's tombstone.
+import { askReachDecay, fadeEntryRead } from '../lib/market/hourly-lmh.mjs';   // DT3 — the ask-reach decay read (is the intended ask sliding out of reach?), folded onto every price-recommendation surface (bare quote + held/watched positions), reusing the already-fetched 1h series. Replaced the deleted hourlyDrift slope read — see hourly-lmh.mjs's tombstone. HF4 — fadeEntryRead feeds the soft-buy 'fading-day' cue.
 import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/signal/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic); PC3 — SELL_TOP_MODELS validates --est-sell
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
@@ -233,7 +233,7 @@ function localDayKey(d = new Date()) {
 // `fitNights`, which makes the mismatch unrepresentable rather than merely unlikely. Pass `lap` (the
 // already-built diurnalTimedLap) to reuse its resolved
 // basis at zero recompute; without one — the --positions site has no lap — it resolves its own.
-function pushSoftBuy(notes, { ts1h = null, live = null, itemId = null, fc = null, durable = null, lap = null } = {}) {
+function pushSoftBuy(notes, { ts1h = null, live = null, itemId = null, fc = null, durable = null, lap = null, row = null } = {}) {
   if (!ts1h) return;
   // PREFER the lap's already-computed values over re-deriving them — softBuyRead's header states that
   // re-deriving `reliable` is a second home for it, and the first version of this line broke that rule
@@ -243,7 +243,10 @@ function pushSoftBuy(notes, { ts1h = null, live = null, itemId = null, fc = null
     : (({ fitNights, reliability }) => ({ fitNights, reliable: reliability.reliable }))(displayFitNights(ts1h, { nights: 7 }));
   const p = hourProfile(ts1h, { nights: fit.fitNights });
   if (!p) return;
-  const sbTxt = formatSoftBuy(softBuyRead(p, { live, fc, durable, reliable: fit.reliable }), { fmtHour, fmt });
+  // HF4: the entry fade read at the candidate exit ask (see fadeEntryRead); no `row` ⇒ byte-identical.
+  const fade = row ? fadeEntryRead(ts1h, { ask: row.optSell ?? null, liveLo: row.quickBuy ?? null,
+    liveHi: row.quickSell ?? null, staleLo: !!row.quickStale?.buy, staleHi: !!row.quickStale?.sell }) : null;
+  const sbTxt = formatSoftBuy(softBuyRead(p, { live, fc, durable, reliable: fit.reliable, fade }), { fmtHour, fmt });
   if (sbTxt) notes.push({ kind: 'softBuy', itemId, text: sbTxt });
 }
 
@@ -541,7 +544,7 @@ async function runItems() {
       prof, ctx: { liveLo: row.quickBuy, liveHi: row.quickSell, phase: ph?.phase ?? null, mom: row.mom, reliable: row.reliable } });
     // The ADD-while-holding SOFT-BUY timing read — pushed AFTER pushTrajectory so its @floor cue reuses the
     // floorCeilingTrack fc just computed (bare-quote & --positions surfaces stay identical; zero new fetch).
-    pushSoftBuy(notes, { ts1h: inp.ts1h, lap: timedLap, live: row.quickBuy ?? null, itemId: id, fc: fcTraj, durable: durableFloorRead(vres) });
+    pushSoftBuy(notes, { ts1h: inp.ts1h, lap: timedLap, live: row.quickBuy ?? null, itemId: id, fc: fcTraj, durable: durableFloorRead(vres), row });
     // PLAN-WINDOW-CLEAR B2: the within-window CLEAR read — does the quoted ask actually PRINT inside its
     // diurnal PEAK window (not just on N/M days), and does that window's volume absorb a buy-limit tranche?
     // Inform-only (the ⤴ ask-headroom / ◆ asym pattern): a divergence — healthy all-day reach but the ask
@@ -1000,7 +1003,7 @@ async function runPositions() {
     // ADD-while-holding SOFT-BUY timing — the held-lot surface is exactly where the "should I add at the dip?"
     // decision lives. inp.ts1h is in hand (fetched at the vol24 parity step above), so this is zero new fetch.
     // fcHeld (the floorCeilingTrack just computed) drives the @floor floor-aware cue — caution on a breaking floor.
-    pushSoftBuy(notes, { ts1h: inp.ts1h, live: row.quickBuy ?? null, itemId, fc: fcHeld, durable: durableFloorRead(vres) });
+    pushSoftBuy(notes, { ts1h: inp.ts1h, live: row.quickBuy ?? null, itemId, fc: fcHeld, durable: durableFloorRead(vres), row });
     // COD-3: on a CUT-family verdict (CUT / CUT-CANDIDATE / LIST-TO-CLEAR), surface the cut-and-rebid
     // advisory so the agent stops re-deriving the friction arithmetic. TRAJECTORY-AWARE:
     // rebidAdvice reads the multi-week shape — a KNIFE says don't rebid; an OSCILLATING faller says rebid

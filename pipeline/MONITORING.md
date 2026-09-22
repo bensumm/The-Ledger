@@ -500,6 +500,11 @@ of the numbered signals, in more detail:
    lot escalates to CUT before the lagging multi-day regime confirms** (the bludgeon-exit
    lesson). An item also alerts if it's simply UNDERWATER (`instabuy < break-even`) or its
    multi-day regime is FALLING.
+   **CUT magnitude + `[flicker]` (HF3, PLAN-HOLD-FADE-ALERT):** CUT / CUT-CANDIDATE alert text
+   carries the quick-sell's signed gap vs cost and vs BE (`cutGapClause`, watch-positions.mjs), a
+   `[flicker]` tag when |gap to BE| ≤ `FLICKER_GP` (the /positions override rule permits an override
+   ONLY on that tag), and `through cut-trigger <t>` when the quick-sell has printed through the V2
+   trigger — a −3 gp flicker and a −76 gp break no longer print the same word.
    - **Conviction gating — arm-then-confirm, TIME-based (V4 + V7); the DISPLAYED label is gated
      too (VN-1).** Whether a verdict becomes a *headline* ⚠ ALERT is gated by the pure
      `convictionGate()` (`lib/watchstate.mjs`). The RAW verdict string (`momVerdict`, what the
@@ -610,6 +615,24 @@ of the numbered signals, in more detail:
      breakdowns / UNDERWATER / FALLING / CANCEL-BID (an UNDERWATER/CUT-CANDIDATE/LIST-TO-CLEAR is
      suppressed only when a declared hold thesis silences it above the tripwire — TG1/VN-2). Armed
      candidates (including thesis-armed) are visible in the notes, never the headline.
+   - **`FADE` (HF2, PLAN-HOLD-FADE-ALERT — held lots, ADDITIVE beside the verdict alerts).** The
+     reach-margin fade read PROMOTED from the per-held notes into `alerts` (the loop-tick relay reads
+     alerts + table and never the notes — the Diamond-bolts 09-21 miss, where `cushion fading · pace
+     lagging · ask-reach decay` sat in the notes through three overridden CUTs). Fires on the ONE
+     shared `reachMarginTrigger` (`js/windowread.mjs` — the same ⚠⚠ "price-to-sell-EARLY" composite
+     `read-window-range.mjs` renders: cushion fading-or-negative AND live pace lagging), computed
+     where the held reach read already runs (the big-ticket/watchlist branch), OR on an alert-grade
+     hours-under-profile run — `hoursUnderProfile` (`lib/market/hourly-lmh.mjs`) ≥ `FADE_MIN_HOURS`,
+     computed for EVERY held lot. HF1's decisive `join-fade-outcomes.mjs` run measured the hours
+     trigger: it beats the shipped 2h-breakdown replay at cost ratio r=3 (CI-supported, k ∈ {2,3,4})
+     and loses at r ≤ 2 — priced for the held-lot shape where a missed fade costs multiples of a
+     false alarm; on the big-ticket stratum the hours half is weakest (r\* ≈ 7–8), where the
+     composite + CUT machinery carry the load. Text is magnitude-first: `FADE <item> — today's highs
+     under the 7d profile <N>h (−<X> gp) · cushion <from>→<to> fading · pace −<p> lagging ·
+     price-to-sell-EARLY: list @ <fold sell, BE-floored> (BE <be>)`; any half that did not fire is
+     omitted. INFORM-level: it never changes `momVerdict`, never gates,
+     never places, and an item can carry `CUT` *and* `FADE` in the same pass — that pairing is the
+     point. Fixture-pinned in `pipeline/test/fade-alert.test.mjs`.
 2. **Live re-quoted buy-at / list-at**, `break-even`-floored — never list below the shared
    `breakEven()` (tax-capped; see CLAUDE.md "Break-even").
 3. **Per-item RISK read**: spread width, two-sided liquidity (limiting side), regime, unit

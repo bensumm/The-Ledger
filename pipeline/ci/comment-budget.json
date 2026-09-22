@@ -208,7 +208,7 @@
     "js/windowread.mjs": {
       "dated": 0,
       "block": 57,
-      "comments": 1153
+      "comments": 1165
     },
     "pipeline/ci/check-daemon-safety.mjs": {
       "dated": 0,
@@ -370,6 +370,11 @@
       "block": 40,
       "comments": 166
     },
+    "pipeline/commands/join-fade-outcomes.mjs": {
+      "dated": 0,
+      "block": 40,
+      "comments": 59
+    },
     "pipeline/commands/join-outcomes.mjs": {
       "dated": 5,
       "block": 40,
@@ -398,7 +403,7 @@
     "pipeline/commands/quote-items.mjs": {
       "dated": 0,
       "block": 40,
-      "comments": 520
+      "comments": 521
     },
     "pipeline/commands/read-book.mjs": {
       "dated": 3,
@@ -438,7 +443,7 @@
     "pipeline/commands/read-window-range.mjs": {
       "dated": 0,
       "block": 43,
-      "comments": 375
+      "comments": 376
     },
     "pipeline/commands/reconcile-reverse-flip.mjs": {
       "dated": 0,
@@ -463,7 +468,7 @@
     "pipeline/commands/screen-flip-niches.mjs": {
       "dated": 0,
       "block": 60,
-      "comments": 1686
+      "comments": 1687
     },
     "pipeline/commands/set-scan-analysis.mjs": {
       "dated": 0,
@@ -488,7 +493,7 @@
     "pipeline/commands/watch-positions.mjs": {
       "dated": 0,
       "block": 45,
-      "comments": 541
+      "comments": 556
     },
     "pipeline/daemons/cache-warm.mjs": {
       "dated": 3,
@@ -555,6 +560,11 @@
       "block": 40,
       "comments": 24
     },
+    "pipeline/lib/loop/pace.mjs": {
+      "dated": 0,
+      "block": 40,
+      "comments": 30
+    },
     "pipeline/lib/market/archive-series.mjs": {
       "dated": 9,
       "block": 66,
@@ -588,7 +598,7 @@
     "pipeline/lib/market/hourly-lmh.mjs": {
       "dated": 1,
       "block": 40,
-      "comments": 86
+      "comments": 109
     },
     "pipeline/lib/market/item-context.mjs": {
       "dated": 0,
