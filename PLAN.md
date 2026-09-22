@@ -627,15 +627,32 @@ the STARTING PRICE — 99.8% of the ask level on the null arm vs 93.8% on the co
   "not-attributed", surfaced in the `fills⇆ledger` audit line as its own count. Cheap; do it before
   the next `/analyze` retro quotes a per-niche number, or the number is wrong by this lot.
 
-- **PLAN-HOLD-FADE-ALERT — a held lot whose day under-prints its profile must ALERT, not annotate (DRAFT
-  2026-09-21, `plans/PLAN-HOLD-FADE-ALERT.md`, chunks `HF1–HF5`).** The Diamond dragon bolts 12-hour
-  under-print: today's highs sat 30–50 gp under the 7d profile from 05:00 to 16:00 before the sell side
-  broke at 17:00; watch printed the fade (`cushion fading · pace lagging · ask-reach decay 100→100→89%`)
-  in its NOTES every pass, the loop relay reads only `alerts` + `table`, and three CUT alerts were
-  overridden as "flicker" through a named tripwire. HF1 measures hours-under-profile vs the 2h breakdown
-  on the 1h archive (pre-registered, null branch named); HF2 promotes the composite to a `FADE` alert
-  via one shared `reachMarginTrigger`; HF3 puts the quick-sell gap + a `[flicker]` tag on CUT text and
-  amends the override rule in place; HF4 adds the under-printing caution to `softBuyRead`'s `@floor` cue.
+- **PLAN-HOLD-FADE-ALERT — SHIPPED 2026-09-22 (HF1–HF5, one day; plan folded + deleted, full text via
+  `git show 3852321:plans/PLAN-HOLD-FADE-ALERT.md`).** The Diamond dragon bolts 09-21 miss: a 12-hour
+  under-print (highs 30–50 gp under the 7d profile, 05:00–16:00) sat in watch's NOTES through three CUT
+  alerts overridden as "flicker" past a named 2,624 tripwire — the loop relay reads only `alerts` +
+  `table`. **HF1** (`join-fade-outcomes.mjs`, pre-registered, null branch named): hours-under-profile ≥ k
+  vs a stated replay of the shipped 2h breakdown, paired cost, item-clustered CIs. Decisive run (400
+  seeded items, 114,070 origins): **R-HF-2 STOOD** — k ∈ {2,3,4} beat the baseline at miss-cost ratio
+  r=3 (CI > 0), lose decisively at r ≤ 2, and both signals lose to never-alert below r ≈ 2.5; big-ticket
+  stratum r\* ≈ 7–8 (the hours half is weakest exactly there — DT1's pattern). `FADE_MIN_HOURS` = 4, the
+  LARGEST CI-supported k. The composite scored r\* 8.87 as a 4h-drop predictor — it ships on doctrine
+  (R-HF-6), not that number. An exploratory 40-item smoke showed the null branch; the decisive spec
+  reversed it — pre-registration governed, and the smoke-assumption code/docs were reconciled before
+  landing. **HF2**: the ⚠⚠ composite's ONE home (`reachMarginTrigger`, js/windowread.mjs; renderer swap
+  pinned by an exhaustive shape matrix) + the watch `FADE` alert (either half, additive beside CUT,
+  magnitude-first). **HF3**: `cutGapClause` on all THREE CUT-family emitters (the structural branch was
+  caught clause-less on a live pass by review round 1) + `[flicker]` at ≤ `FLICKER_GP` 6 (a description,
+  not a measurement) + `through cut-trigger`; /positions override rule amended in place (1.72): override
+  only on a [flicker] tag, a tripwire printing through ends it. **HF4**: `fadeEntryRead` →
+  `softBuyRead`'s `fading-day` cue on both entry surfaces (mechanism-neutral text; the render names the
+  FIRING half only); verified live — the bolts themselves printed the caution on a real quote, and a
+  real FADE fired on the first live watch pass. No APP_VERSION bump (additive js opts, app-byte-identical);
+  pipeline 1.7.0. Review: round 1 two parallel passes, 16 findings — 11 fixed (two live-proven: the
+  clause-less structural CUT, a fabricated "pace +N lagging" on an on-pace lot), 2 LEAVE IT, the rest
+  verification; round 2 (narrow, fixes-only) two one-line findings then the stopping signal. Story:
+  CHANGELOG "pipeline 1.7.0". Execution: 288b270 (pre-wave working-tree land) · 3852321 (HF1–HF4) ·
+  d51d3c5 (review rounds 1–2, pipeline 1.7.0) · the HF5 fold commit.
 - **PLAN-WEEKDAY-PHASE-CONFOUND — is the fitted trend read confounded with weekly phase? (OPEN,
   pre-registered 2026-09-08, `plans/PLAN-WEEKDAY-PHASE-CONFOUND.md`).** Owner challenge, twice, in one
   session: the falling-knife rule, and then the ceiling slope it fell back on. WK3 had already settled the
