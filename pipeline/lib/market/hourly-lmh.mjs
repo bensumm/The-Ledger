@@ -1,6 +1,5 @@
 // hourly-lmh.mjs — the PURE per-local-hour LOW/MID/HIGH detail read behind
 // `read-window-range.mjs --hourly` (the raw diurnal-detail diagnostic).
-import { windowStats, hourProfile, reachMargin, reachMarginTrigger } from '../../../js/windowread.mjs';   // fadeEntryRead's composite half (HF4) — one-way edge, windowread never imports back
 //
 // The dip/peak SUMMARY (hourProfile) distills the day into two windows — which HIDES the exact
 // hour-by-hour shape a placement decision sometimes needs. This helper is the productionised form of a
@@ -12,6 +11,7 @@ import { windowStats, hourProfile, reachMargin, reachMarginTrigger } from '../..
 // its diurnal profile — no second fetch). LOCAL hours everywhere (getHours()/getDate() — the repo's
 // displayed-times-are-LOCAL rule). INFORM-ONLY, n≈0 — it never gates, prices, or ranks; it's a
 // diagnostic. Consumer: read-window-range.mjs (--hourly). No fetching here.
+import { windowStats, hourProfile, reachMargin, reachMarginTrigger } from '../../../js/windowread.mjs';   // fadeEntryRead's composite half (HF4) — one-way edge, windowread never imports back
 
 // median of a numeric array (middle element of the ascending sort; upper-middle on an even count —
 // same convention as windowStats' medOf). null on empty.
@@ -106,7 +106,7 @@ export function hourlyLMH(series1h, { days = 3 } = {}) {
 export function fadeEntryRead(series1h, { ask = null, liveLo = null, liveHi = null,
   staleLo = false, staleHi = false, now = new Date() } = {}) {
   const ref = liveHi ?? ask;
-  const hup = hoursUnderProfile(series1h, { minGp: fadeMinGp(ref), now });
+  const hup = ref != null ? hoursUnderProfile(series1h, { minGp: fadeMinGp(ref), now }) : null;   // no ref ⇒ no 1-gp noise bar (fixture-pinned)
   let trigger = null;
   if (ask != null) {
     try {

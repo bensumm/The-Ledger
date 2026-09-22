@@ -8,6 +8,46 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## pipeline 1.7.0 — 2026-09-22 — the FADE promotion: a fading day must ALERT, not annotate (no APP_VERSION bump — console/pipeline + skills)
+
+PLAN-HOLD-FADE-ALERT HF1–HF5, born of the Diamond dragon bolts 09-21 miss: today's HIGH sat 30–50 gp
+under its 7d-profile HIGH for twelve consecutive hours before the sell side broke, the fade was in
+every watch pass's NOTES (`cushion fading · pace lagging · ask-reach decay`), the loop relay reads
+only `alerts` + `table`, and three CUT alerts were relayed as "the 1–6 gp flicker class" while the
+quick-sell was 40–80 gp through cost — through a named 2,624 tripwire.
+
+- **HF1 — `join-fade-outcomes.mjs`, the pre-registered measurement.** hoursUnderProfile ≥ k vs a
+  stated replay of the shipped 2h-momentum breakdown, paired cost (r = cost(miss)/cost(falseAlarm)),
+  item-clustered CIs, null branch named before the run. Decisive run (400 seeded items, 114,070
+  origins): **R-HF-2 stood** — k ∈ {2,3,4} beat the baseline at r=3 with CIs excluding 0, and lose
+  decisively at every r ≤ 2; both signals lose to never-alert below r ≈ 2.5; the big-ticket stratum
+  is where the hours trigger is weakest (r\* ≈ 7–8). `FADE_MIN_HOURS` = 4, the LARGEST CI-supported
+  k. The `reachMarginTrigger` composite scored r\* 8.87 as a 4h-drop predictor — it ships on
+  doctrine (the already-shipped ⚠⚠ promoted), not on that number. An exploratory 40-item smoke run
+  showed the null branch firing; the decisive spec reversed it — the pre-registration governs, and
+  mid-wave code/docs written under the smoke assumption were reconciled before landing.
+- **HF2 — the `FADE` alert + one shared trigger.** The ⚠⚠ price-to-sell-EARLY composite moved out of
+  `read-window-range.mjs`'s renderer into `js/windowread.mjs` `reachMarginTrigger` (equivalence
+  pinned by an exhaustive shape matrix — live fetches make a golden stdout diff unreproducible);
+  `watch-positions.mjs` promotes the fade into `alerts[]` (level `FADE`, additive beside CUT,
+  either half fires, magnitude-first text with the BE-floored fold list-at). The app never reads
+  `watch.json` (grep-verified), so the new level is console-only.
+- **HF3 — CUT magnitude + `[flicker]`.** `cutGapClause`: CUT/CUT-CANDIDATE text carries the signed
+  quick-sell gap vs cost and BE, `[flicker]` at |gap to BE| ≤ `FLICKER_GP` (6 — a description of
+  the band actually overridden, not a measurement), and `through cut-trigger <t>` when breached.
+  The `/positions` override rule amended in place (1.72): override ONLY on a `[flicker]` tag; a
+  tripwire printing through ends the override that pass.
+- **HF4 — the `fading-day` entry cue.** `softBuyRead` downgrades an @floor `buy now`/`favorable` to
+  `▽ caution — exit side fading today` when the caller's `fadeEntryRead` (hourly-lmh.mjs) fires
+  either half at the row's candidate exit ask; both entry surfaces wired (screen digest cell,
+  quote-items note — the note carries the `highs under 7d profile Nh (−X gp)` magnitude). Verified
+  live: the bolts themselves printed the new caution on a real quote the day the cue shipped.
+
+Fixtures: `fade-outcomes.test.mjs` (scorer core incl. the bolts 12h shape end-to-end),
+`fade-alert.test.mjs` (FADE + cutGapClause), new blocks in `hourly-lmh.test.mjs` /
+`windowread.test.mjs` (incl. the trigger-equivalence matrix). Full result + caveats: README's
+`join-fade-outcomes.mjs` entry. Execution shas: PLAN.md Discovered fold entry.
+
 ## pipeline 1.6.0 — 2026-09-10 — dwell-aware pricing: the ⇄ dwell line (no APP_VERSION bump — console/pipeline + skills)
 
 Born of a live miss the same day: two legs meant to REST ALL DAY were recommended at the live

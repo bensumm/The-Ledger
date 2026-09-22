@@ -506,7 +506,7 @@ function heldAlert(it) {
   // fallback to the raw mv token only matters if display computation itself failed.
   if (gate && gate.escalate && gate.reason === 'structural') {
     const label = (it._display && it._display.label) || (mv && mv.verdict) || 'WATCH';
-    return { level: label, msg: `${label} ${name} @ ${fmtP(instabuy)} — ⚠ also broke structural support ${fmtP(it._support)} (cut-trigger ${fmtP(Math.round(it._cutTrigger))}); verdict unchanged, watch closely.` };
+    return { level: label, msg: `${label} ${name} @ ${fmtP(instabuy)} — ⚠ also broke structural support ${fmtP(it._support)} (cut-trigger ${fmtP(Math.round(it._cutTrigger))})${cutGapClause(it)}; verdict unchanged, watch closely.` };
   }
   // An ARMED Gate-D candidate must NOT fall through to the immediate UNDERWATER alert — that would
   // defeat arm-then-confirm (an armed CUT-CANDIDATE is by definition underwater). A structural-armed
@@ -538,14 +538,15 @@ export function fadeAlert(it) {
   if (f.trigger !== true && !hoursFired) return null;
   const sg = v => (v >= 0 ? '+' : '−') + fmt(Math.abs(Math.round(v)));
   const parts = [];
-  if (f.hours != null && f.hours >= FADE_MIN_HOURS && f.maxDeficit != null)
+  if (hoursFired && f.maxDeficit != null)
     parts.push(`today's highs under the 7d profile ${f.hours}h (−${fmt(Math.round(f.maxDeficit))} gp)`);
-  const rm = f.rm || {};
+  const rm = (f.trigger === true && f.rm) || {};   // clauses only off a FIRING composite — never narrate a quiet one as lagging
+
   if (rm.trend === 'fading' && rm.cushionFrom != null && rm.cushionTo != null)
     parts.push(`cushion ${sg(rm.cushionFrom)}→${sg(rm.cushionTo)} fading`);
   else if (rm.cushionNow != null && rm.cushionNow < 0)
     parts.push(`cushion ${sg(rm.cushionNow)} NEGATIVE`);
-  if (rm.pace && rm.pace.gap != null) parts.push(`pace ${sg(rm.pace.gap)} lagging`);
+  if (rm.pace && rm.pace.onPace === false && rm.pace.gap != null) parts.push(`pace ${sg(rm.pace.gap)} lagging`);
   if (f.listAt != null && it.be != null)
     parts.push(`price-to-sell-EARLY: list @ ${fmtP(f.listAt)} (BE ${fmtP(it.be)})`);
   return { level: 'FADE', msg: `FADE ${it.name} — ${parts.join(' · ')}` };

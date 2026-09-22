@@ -493,7 +493,7 @@
     "pipeline/commands/watch-positions.mjs": {
       "dated": 0,
       "block": 45,
-      "comments": 556
+      "comments": 557
     },
     "pipeline/daemons/cache-warm.mjs": {
       "dated": 3,
@@ -598,7 +598,7 @@
     "pipeline/lib/market/hourly-lmh.mjs": {
       "dated": 1,
       "block": 40,
-      "comments": 109
+      "comments": 110
     },
     "pipeline/lib/market/item-context.mjs": {
       "dated": 0,

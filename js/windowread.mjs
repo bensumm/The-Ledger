@@ -1585,8 +1585,8 @@ export const SOFT_BUY_CUE_TEXT = {
   // not claim. It says elevated-over-the-floor, which is what is actually measured.
   'unproven-base': '▽ caution — dip into an UNPROVEN base, still elevated over the durable floor',
   'stale-uptrend': '▽ caution — uptrend label STALE: today already printed under yesterday\'s low (cheaper entry likely)',
-  // HF4: @floor on a day whose EXIT side is sliding (fadeEntryRead) — the floor of a fading day is not a discount.
-  'fading-day': '▽ caution — exit side fading today (cushion + pace)',
+  // HF4: @floor on a fading day is not a discount. Mechanism-neutral — formatSoftBuy names WHICH half fired.
+  'fading-day': '▽ caution — exit side fading today',
 };
 
 // formatSoftBuy(read, opts) — the ONE one-line render off a softBuyRead result, shared so both surfaces
@@ -1609,9 +1609,10 @@ export function formatSoftBuy(read, { fmtHour = h => String(h).padStart(2, '0') 
   if (read.cue === 'unproven-base' && read.durable && read.durable.ranges != null) {
     cueText += ` (${read.durable.ranges}× swing over the ${read.durable.lookback ?? 28}d floor)`;
   }
-  // HF4: the under-print magnitude, when the caller's read carried alert-grade hours (bar lives pipeline-side).
-  if (read.cue === 'fading-day' && read.fade && read.fade.hours != null) {
-    cueText += ` — highs under 7d profile ${read.fade.hours}h (−${fmt(Math.round(read.fade.maxDeficit ?? 0))} gp)`;
+  // HF4: name the FIRING half (composite and/or alert-grade hours) — never the one that stayed quiet.
+  if (read.cue === 'fading-day' && read.fade) {
+    if (read.fade.trigger === true) cueText += ' (cushion + pace)';
+    if (read.fade.hours != null) cueText += ` — highs under 7d profile ${read.fade.hours}h (−${fmt(Math.round(read.fade.maxDeficit ?? 0))} gp)`;
   }
   return `soft-buy: ${floorTxt ?? 'floor n/a'} · live ${read.marker} · ${cueText} (${win})`;
 }

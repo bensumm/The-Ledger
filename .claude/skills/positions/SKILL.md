@@ -130,6 +130,11 @@ sections plus your own prose:
       level) — it re-derives nothing. Treat it as: the dip is real, the base under it is not yet proven.
     - `@floor · buy now` — floor flat/ranging/cooling, or too few days to classify: the plain soft dip
       (unchanged behavior).
+    - `@floor · ▽ caution — exit side fading today` (HF4, PLAN-HOLD-FADE-ALERT 2026-09-22) — a would-be
+      `buy now`/`favorable` downgraded because the EXIT side is sliding: the same ⚠⚠ composite the watch
+      `FADE` alert fires (at the row's candidate exit ask), or an alert-grade `hoursUnderProfile` run.
+      The line names the FIRING half — `(cushion + pace)` and/or `highs under 7d profile Nh (−X gp)` —
+      the Diamond-bolts entry: @floor on a fading day is the floor of a fading day, not a discount.
     - `+X% · rest the bid at the floor now — windows don't time fills` — live sits above the dip. **Place the resting bid at the
       floor LEVEL now; do NOT delay it to the dip hours.** (The floor-aware cue applies only `@floor`.)
   **RESTING BID vs ATTENDED TAKE — the DT2 split (measured 2026-08-09, supersedes the old `+X% · wait`
@@ -145,7 +150,9 @@ sections plus your own prose:
   fills, so it bounds a real offer from above; item-day clustering ⇒ effective n well below nominal.*
   These cue words are their OWN vocabulary (a buy-TIMING cue) — do NOT conflate `▽ caution — floor
   breaking ↓` here with the separate `⇅` floor/ceiling TREND line or the reachMargin ask-CUSHION
-  extending/fading line. The doctrine (memory "buy-soft-while-holding-for-peak"): holding a position to
+  extending/fading line. (One deliberate exception since HF4: `▽ caution — exit side fading today`
+  IS the reachMargin composite / hours-under-profile read by construction — that cue is the
+  cross-reference, the others stay their own vocabulary.) The doctrine (memory "buy-soft-while-holding-for-peak"): holding a position to
   sell into a LATER peak is NOT a reason to sit idle on the BUY side — buy its diurnal dip when it's soft.
   That rule governs *whether* to add; DT2 governs *how* — as a resting bid at the level, not a timed wait.
   Real anchors: we bought Dragon boots into the daytime peak (~350k over) and blowpipe at 10.67m instead

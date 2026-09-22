@@ -15,12 +15,16 @@
  *   - fadeAlert is a pure read of it._fade — an unevaluable read never alerts.
  * SCOPE HONESTY: these fixtures drive fadeAlert + the SAME primitives the held-lot loop composes
  * (hoursUnderProfile / windowStats / hourProfile / askExitRead / reachMarginTrigger). The loop's
- * glue lines are exercised by a real `watch-positions.mjs` run (read-only), not fixturable without
- * a fetch mock — the commit notes that run.
+ * GLUE is not fixturable without a fetch mock: the HOURS-half glue is live-proven (a real FADE
+ * fired on the 2026-09-22 watch pass — last-report evidence in the review record); the COMPOSITE
+ * half's glue (aerLive construction, dr.profile threading, listAt off _estShadow) is verified by
+ * the replication below only, and composeFade diverges from the loop in three named ways
+ * (hourProfile direct vs lap.profile; hand-built live vs quickStale/quoteAgeMin; constant ask vs
+ * thesis??optSell) — a regression confined to that glue keeps this suite green.
  */
 import assert from 'node:assert/strict';
 import { fadeAlert, cutGapClause, FLICKER_GP } from '../commands/watch-positions.mjs';
-import { hoursUnderProfile, fadeMinGp, FADE_MIN_HOURS } from '../lib/market/hourly-lmh.mjs';
+import { hoursUnderProfile, fadeMinGp, fadeEntryRead, FADE_MIN_HOURS } from '../lib/market/hourly-lmh.mjs';
 import { windowStats, hourProfile, askExitRead, reachMarginTrigger } from '../../js/windowread.mjs';
 import { breakEven } from '../../js/quotecore.js';
 
@@ -52,7 +56,7 @@ for (let h = 0; h < 18; h++) {
 const NOW = new Date(2026, 0, 9, 17, 43, 0);
 const LIVE = { lo: 2612, hi: 2690, staleLo: false, staleHi: false };
 
-// compose _fade EXACTLY the way the held-lot loop does (same primitives, same arguments)
+// compose _fade with the loop's primitives (argument DIVERGENCES from the real loop: header above)
 function composeFade(ts1h, { ask = ASK, live = LIVE, now = NOW, quickSell = live.hi, estSell = null, be = null } = {}) {
   const hup = hoursUnderProfile(ts1h, { minGp: fadeMinGp(quickSell), now });
   const f = hup ? { hours: hup.hours, maxDeficit: hup.maxDeficit, minGp: hup.minGp, trigger: null, rm: null } : null;
@@ -108,6 +112,17 @@ ok('an alert-grade under-print ALONE fires (the hours half is a TRIGGER — R-HF
   assert.ok(a.msg.includes('under the 7d profile'), `the hours magnitude carries the alert: ${a.msg}`);
   assert.ok(!/cushion/.test(a.msg), `the quiet composite half is omitted, never printed as "ok": ${a.msg}`);
 });
+ok('an hours-only FADE never narrates the quiet composite — no fabricated "lagging"/cushion clause', () => {
+  // composite evaluated and NOT firing (live ON pace, gap +120) while the hours half fires: the
+  // review repro — the old builder printed `pace +120 lagging` and a cushion clause off this shape.
+  const rm = { trend: 'fading', cushionFrom: 45, cushionTo: 5, cushionNow: -12,
+               pace: { stale: false, onPace: true, gap: 120 } };
+  const a = fadeAlert({ name: 'x', be: BE, _fade: { hours: 12, maxDeficit: 55, minGp: 27, trigger: false, rm, listAt: null } });
+  assert.equal(a.level, 'FADE', 'the hours half still alerts');
+  assert.ok(a.msg.includes('12h'), a.msg);
+  assert.ok(!a.msg.includes('lagging'), `no fabricated pace clause: ${a.msg}`);
+  assert.ok(!a.msg.includes('cushion'), `no cushion clause off a non-firing composite: ${a.msg}`);
+});
 ok('unevaluable / sub-bar never alerts; a sub-FADE_MIN_HOURS hours clause is omitted on a composite fire', () => {
   assert.equal(fadeAlert({ name: 'x', be: BE, _fade: null }), null);
   assert.equal(fadeAlert({ name: 'x', be: BE, _fade: { hours: FADE_MIN_HOURS - 1, maxDeficit: 40, trigger: null, rm: null } }), null,
@@ -117,6 +132,38 @@ ok('unevaluable / sub-bar never alerts; a sub-FADE_MIN_HOURS hours clause is omi
   assert.equal(a.level, 'FADE');
   assert.ok(!a.msg.includes('under the 7d profile'), `a sub-bar run is not printed as magnitude: ${a.msg}`);
   assert.ok(/cushion \+45→\+5 fading/.test(a.msg), `cushion half still renders: ${a.msg}`);
+});
+
+// ── fadeEntryRead — the ENTRY composition executed DIRECTLY (review finding: it had no direct
+// test; the degrade paths are where the bugs live) ────────────────────────────────────────────
+console.log('\nfadeEntryRead acceptance:');
+
+ok('happy path on the bolts shape: trigger true + alert-grade hours', () => {
+  const f = fadeEntryRead(bolts, { ask: ASK, liveLo: LIVE.lo, liveHi: LIVE.hi, now: NOW });
+  assert.equal(f.trigger, true);
+  assert.equal(f.hours, 12);
+});
+ok('no price reference at all (liveHi and ask both null) ⇒ null — never a 1-gp hair-trigger bar', () => {
+  assert.equal(fadeEntryRead(bolts, { now: NOW }), null,
+    'fadeMinGp(null) would default the deficit bar to 1 gp and fire on noise (review finding)');
+});
+ok('ask null ⇒ composite unevaluable (trigger null); the hours half still reads off liveHi', () => {
+  const f = fadeEntryRead(bolts, { liveHi: LIVE.hi, now: NOW });
+  assert.equal(f.trigger, null);
+  assert.equal(f.hours, 12);
+});
+ok('a STALE sell side refuses the pace read ⇒ trigger null, hours unaffected', () => {
+  const f = fadeEntryRead(bolts, { ask: ASK, liveLo: LIVE.lo, liveHi: LIVE.hi, staleHi: true, now: NOW });
+  assert.equal(f.trigger, null, 'a stale print is not a pace');
+  assert.equal(f.hours, 12);
+});
+ok('a sub-bar run is NULLED (alert-grade only leaves this function)', () => {
+  // healthy prior days + today printing at profile ⇒ hours 0 < FADE_MIN_HOURS ⇒ null hours
+  const flat = [];
+  for (let i = 0; i < 7; i++) for (let h = 0; h < 24; h++) flat.push(pt(2026, 0, 2 + i, h, 2650, 2740));
+  for (let h = 0; h < 18; h++) flat.push(pt(2026, 0, 9, h, 2650, 2740));
+  const f = fadeEntryRead(flat, { ask: 2735, liveLo: 2650, liveHi: 2740, now: NOW });
+  assert.equal(f.hours, null);
 });
 
 // ── HF3: the CUT magnitude clause + [flicker] tag ─────────────────────────────────────────────

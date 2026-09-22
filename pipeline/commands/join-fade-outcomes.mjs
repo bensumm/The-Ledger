@@ -342,7 +342,7 @@ async function main() {
   } else {
     for (const w of winners)
       console.log(`  ✓ k=${w.k} beats the baseline at ${w.beat.map(b => `r=${b.r} (M ${pp(b.M)}, CI [${pp(b.ci.lo)},${pp(b.ci.hi)}])`).join(' · ')}`);
-    console.log(`    ⇒ R-HF-2 stands; FADE_MIN_HOURS should be set from the winning k set (smallest CI-supported k is the conservative pick).`);
+    console.log(`    ⇒ R-HF-2 stands; FADE_MIN_HOURS = the LARGEST CI-supported k (fewest false alarms — the shipped rule; see hourly-lmh.mjs).`);
   }
   console.log(`\n── CLASS STRATA (reported, never deciding; r=${rShow}) ──`);
   for (const c of classes) {

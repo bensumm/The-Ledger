@@ -659,20 +659,21 @@ ok('softBuyRead: fc NEVER overrides the wait cue when live sits above the dip', 
 //   - stronger cautions and the above-floor 'wait' are NEVER overridden;
 //   - formatSoftBuy appends the under-print magnitude only when the hours rode in;
 //   - fade absent/null ⇒ byte-identical (the honest degrade, same as fc/durable/reliable).
-ok('HF4: @floor + a firing fade COMPOSITE ⇒ fading-day (buy-now and favorable both downgrade)', () => {
+ok('HF4: @floor + a firing fade COMPOSITE ⇒ fading-day, and the render names THAT half', () => {
   const f = { trigger: true, hours: null, maxDeficit: null };
   assert.equal(softBuyRead(prof(1000, 1080, false), { live: 1000, fade: f }).cue, 'fading-day');
   assert.equal(softBuyRead(prof(1000, 1080, false), { live: 1000, fc: { classification: 'healthy-trend' }, fade: f }).cue, 'fading-day');
   const txt = formatSoftBuy(softBuyRead(prof(1000, 1080, false), { live: 1000, fade: f }));
-  assert.ok(txt.includes('▽ caution — exit side fading today'), txt);
+  assert.ok(txt.includes('▽ caution — exit side fading today (cushion + pace)'), txt);
   assert.ok(!txt.includes('under 7d profile'), 'no hours rode in ⇒ no magnitude clause: ' + txt);
 });
-ok('HF4: an alert-grade HOURS half alone downgrades too, and the magnitude renders', () => {
+ok('HF4: an alert-grade HOURS half alone downgrades too — and does NOT claim the quiet composite', () => {
   const f = { trigger: null, hours: 12, maxDeficit: 40 };
   const sb = softBuyRead(prof(1000, 1080, false), { live: 1000, fade: f });
   assert.equal(sb.cue, 'fading-day');
   const txt = formatSoftBuy(sb);
   assert.ok(txt.includes('highs under 7d profile 12h (−40 gp)'), txt);
+  assert.ok(!txt.includes('cushion + pace'), 'the half that did not fire is never named (review finding): ' + txt);
 });
 ok('HF4: stronger cautions and the wait cue are never overridden; null fade is byte-identical', () => {
   const f = { trigger: true, hours: 12, maxDeficit: 40 };
