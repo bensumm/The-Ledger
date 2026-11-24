@@ -785,7 +785,7 @@ async function runPositions() {
     const v = renderHeldVerdict(ctx, { mode: 'compact' });   // the shared held-verdict renderer (P0)
     {
       const P = ctx.position, dl = P.deltas, fresh = !dl || dl.firstSeen || dl.reset;
-      planLots.push({ name, qty, be, display: P.display, verdictText: v, listAt: heldListAt(row, be, P.mv), holdListAt: heldListAt(row, be, null),
+      planLots.push({ name, qty, be, display: P.display, verdictText: v, listAt: heldListAt(row, be, P.mv), holdListAt: heldListAt(row, be, null), live: row.quickSell,
         exitPrice: thesisEntry && thesisEntry.exitPrice, tripwire: thesisEntry && thesisEntry.tripwire,
         prev: fresh ? null : ((priorState['held:' + itemId] || {}).displayVerdict ?? null) });
     }
