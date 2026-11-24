@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @does Pre-registered scorer behind the watch FADE alert
+// @ask "does the fade alert measure anything?", "score hours-under-profile" => [--items N] [--cost-ratio r] [--item "<item>"]
+// @read wins only at miss-cost ratio 3, loses at 2 and under, weakest on big-ticket
 /* join-fade-outcomes.mjs — PLAN-HOLD-FADE-ALERT HF1: the pre-registered measurement gating R-HF-2
  * (the FADE alert's hours-under-profile half). RESULT + full caveats: README's entry, the ONE home.
  *

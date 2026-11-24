@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does F1 calibration proposals off outcomes.json; changes nothing
 /**
  * f1-calibrate.mjs — F1 (Algorithm feedback loop) CALIBRATION STUDY. Read-only over the DERIVED
  * outcomes.json (the join-outcomes.mjs artifact); mutates NOTHING and touches no live pricing/gating

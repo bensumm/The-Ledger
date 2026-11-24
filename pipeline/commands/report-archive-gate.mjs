@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Does the local archive reproduce the reach gate's verdicts?
 /**
  * report-archive-gate.mjs — AF5 (PLAN-ARCHIVE-FIRST-FUNNEL): does the LOCAL archive reproduce the
  * gate verdicts we currently pay a per-item `/timeseries` call for?

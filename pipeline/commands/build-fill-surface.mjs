@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Builds the offline fill-surface cache from the archive
 /**
  * build-fill-surface.mjs — AB2 (PLAN-ASK-BACKTEST §4). OFFLINE surface BUILDER.
  *

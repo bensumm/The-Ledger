@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Records a hold thesis; with --path it gates the held verdict
 /* declare-thesis.mjs — CLI to record / clear / list the #4 SESSION THESIS per item (PLAN-YIELD). The SOLE
    writer of .cache/session-thesis.json (gitignored); watch-positions.mjs is a read-only consumer that prints
    the reminder under each held lot. A thesis is INTENT — never a verdict/alert input, decides nothing.

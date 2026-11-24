@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Emits market alert events as JSON lines
 /**
  * trigger-alerts.mjs — the PUSH-NOTIFICATION TRIGGER ENGINE (PLAN chunk N1, design-first).
  *

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @does Capital dashboard and tranche sizer (the /book engine)
+// @ask "how much X can I buy right now?" => --size "<item>" [--capital gp]
+// @read free slots are an upper bound
 /**
  * read-book.mjs — the BOOK / CAPITAL DASHBOARD (/book skill; PLAN-DASHBOARD).
  *

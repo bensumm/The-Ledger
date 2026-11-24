@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @does Injects a trade the logger missed, a personal-use withdraw, a banked basis or a revive
+// @ask "I bought/sold X on mobile", "X is personal use", "log this trade" => --item "<item>" --type buy|sell|withdraw|banked --qty N --price gp [--time local]
+// @read a mention of personal use IS the instruction: --type withdraw, then sync
 /**
  * add-manual-fill.mjs — inject a trade the Exchange Logger never saw (mobile fills,
  * pre-logging buys) into the SOURCE the pipeline reconstructs from, so a re-sync makes

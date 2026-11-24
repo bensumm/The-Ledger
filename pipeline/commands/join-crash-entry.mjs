@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @does Replays the crash-entry rules on archived dump events
+// @ask "did buying the dump work?", "score the crash-entry rules" => [--items N]
+// @read read its verdict line and plans/PLAN-CRASH-REPLAY.md first; every fill is an upper bound
 /* join-crash-entry.mjs — CRX2 of plans/PLAN-CRASH-REPLAY.md: scores the crash-entry rules on per-item dump
  * events from the 1h archive (read-only, one bulk read). The spec, the win criterion and the null branch
  * are the plan's "Statistics and win criterion" section, registered before this ran:

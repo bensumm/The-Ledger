@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Open offers and recent fills straight from the live log
 /**
  * monitor-offers.mjs — live GE position monitor (read-only companion to sync-fills.mjs).
  *

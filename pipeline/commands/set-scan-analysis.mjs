@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Attaches a judgment blurb to the published screen.json
 /**
  * set-scan-analysis.mjs — attaches a short judgment blurb to the published repo-root screen.json,
  * rendered at the TOP of the app's Scan tab (js/ui.js `renderScan`, `#scanAnalysis`), separate from

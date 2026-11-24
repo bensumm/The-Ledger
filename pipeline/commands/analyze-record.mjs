@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Track-record audit, per-flip-niche retro and n-gated candidates (the /analyze engine)
 /**
  * analyze.mjs — the ANALYSIS ENGINE (PLAN-ANALYZE chunk AZ1). READ-ONLY. IO + print shell.
  *

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @does The watchlist's own table
+// @ask "how's my watchlist?", "the items I track/follow" => --verbose
+// @read rows are gate-exempt and the grade is always (thin): read the net, not the letter
 // read-watchlist.mjs — the watchlist's OWN surface (SEP16b). Fetches context and emits; rows come
 // from the ONE shared builder in lib/signal/watchlist-report.mjs.
 //

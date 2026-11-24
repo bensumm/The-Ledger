@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Records or advances a declared reverse-flip cycle
 /* declare-reverse-flip.mjs — RF0 CLI to record / advance / clear / list a declared reverse-flip CYCLE
    (reverse-flip-state.json, PLAN-REVERSE-FLIP). The SOLE agent-writer of the TRACKED repo-root store;
    /schedule, /book, /positions (RF4) are READ-ONLY consumers that keep the in-flight cycle visible

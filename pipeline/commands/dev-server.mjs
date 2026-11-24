@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Local dev server for the app
 /**
  * dev-server.mjs — the local dev HTTP server for The Coffer (LW4).
  *

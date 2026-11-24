@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @does Rebuilds outcomes.json: campaigns, fill times, bands
+// @ask "rebuild outcomes", "fill-time distributions" => [--report]
+// @read several minutes, networked
 /**
  * join-outcomes.mjs — THE JOIN (PLAN O1 step 3/4). Derived + rebuildable → GITIGNORED (never commit
  * outcomes.json or the .cache/outcomes-bands/ data). Rebuilds the full "story of every offer" from

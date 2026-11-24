@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @does Realised-gp backtest of every exit estimator
+// @ask "does askStar beat what we have?", "which exit ask makes the most gp?" => [--items N] [--horizon H]
+// @read the null branch fired: the reach surface only describes; retire nothing on a gap under the instrument's noise
 /* join-exit-ev.mjs — the decisive backtest for the reach surface (PLAN-REACH-SURFACE ch.4).
  *
  * Scores the POLICY, not the prediction: at each origin, list at the contender's ask for H hours; if

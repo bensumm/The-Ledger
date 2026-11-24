@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Maintains the owned-item registry (seed, classify, list)
 /* declare-owned.mjs — RF0 CLI to maintain the owned-item registry (owned-items.json, PLAN-REVERSE-FLIP).
    The SOLE agent-writer of the TRACKED repo-root owned-items.json; RF1/RF2's screen and the surfacing
    skills are READ-ONLY consumers. Ben states ownership intent in conversation, the agent writes here —

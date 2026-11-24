@@ -71,6 +71,9 @@ jobs:
       - name: budget (doc sizes and plan count only come down; provisional features expire)
         run: node pipeline/ci/lint-budget.mjs
 
+      - name: registry (command tags valid, generated ask table and command list current)
+        run: node pipeline/ci/build-registry.mjs
+
       - name: plan-refs (no plan deleted while live source still points at it — plans/ has no other existence guard)
         run: node pipeline/ci/lint-plan-refs.mjs
 

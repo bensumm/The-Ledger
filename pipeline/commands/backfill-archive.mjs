@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Repairs missing archive buckets (--dry-run first)
 /* backfill-archive.mjs — the DELIBERATE hole-repair job for the Tier-1 SQLite market archive.
  *
  * WHY THIS EXISTS (audit 2026-07-27). Every ROUTINE path that writes /1h buckets is capped:

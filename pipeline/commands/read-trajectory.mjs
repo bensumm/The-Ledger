@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @does Per-day low/high table, floor/ceiling slope and a projected next-day band
+// @ask "how's X trending?", "today vs prior days", "where's X likely tomorrow?" => "<item>" [...]
+// @read inform-only
 /**
  * read-trajectory.mjs — one-word preset for the recency-weighted forward trajectory read
  * (PLAN-SIGNAL-RECENCY R1). A THIN wrapper that re-execs read-window-range.mjs with the

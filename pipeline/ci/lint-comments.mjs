@@ -63,6 +63,7 @@ const SKIP_RE = /\.test\.mjs$/;
 // floor is the room a real contract header needs before the ratio is the binding term.
 const NEW_FILE_CAPS = { dated: 2, block: 40, ratio: 0.5, floorLines: 20 };
 
+const REGISTRY_TAG_RE = /^\/\/ @(does|ask|read) /;
 const COMMENT_LINE_RE = /^\s*(\/\/|\/\*|\*)/;
 const DATED_RE = /20[0-9]{2}-[0-9]{2}-[0-9]{2}/;
 // A date inside a QUOTED span in a comment is example data, not narrative — a guard documenting the
@@ -124,6 +125,7 @@ function measure(rel, root = ROOT) {
   const datedLines = [];
   lines.forEach((line, i) => {
     const t = line.trim();
+    if (REGISTRY_TAG_RE.test(line)) return;
     let isComment = false;
     if (inBlock) { isComment = true; if (t.includes('*/')) inBlock = false; }
     else if (t.startsWith('/*')) { isComment = true; if (!t.includes('*/')) inBlock = true; }

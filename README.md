@@ -40,6 +40,55 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   RuneLite to `fills.json` so the tool can eventually calibrate its predictions
   against actual fills.
 
+## Commands
+
+Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
+
+<!-- registry:commands -->
+- `add-manual-fill.mjs` — Injects a trade the logger missed, a personal-use withdraw, a banked basis or a revive
+- `analyze-fill-placement.mjs` — Where fills landed in the day's distribution (reach-calibration study)
+- `analyze-record.mjs` — Track-record audit, per-flip-niche retro and n-gated candidates (the /analyze engine)
+- `backfill-archive.mjs` — Repairs missing archive buckets (--dry-run first)
+- `backup-data.mjs` — Private off-repo backup of the trading record; runs itself when due
+- `build-fill-surface.mjs` — Builds the offline fill-surface cache from the archive
+- `declare-owned.mjs` — Maintains the owned-item registry (seed, classify, list)
+- `declare-reverse-flip.mjs` — Records or advances a declared reverse-flip cycle
+- `declare-thesis.mjs` — Records a hold thesis; with --path it gates the held verdict
+- `derive-cash.mjs` — Derives idle cash, or re-anchors it to a stated amount
+- `dev-server.mjs` — Local dev server for the app
+- `ensure-server.mjs` — Checks and starts the local live desk
+- `f1-calibrate.mjs` — F1 calibration proposals off outcomes.json; changes nothing
+- `join-amplitude-outcomes.mjs` — Shadow both-leg replay of every amplitude pick (an upper bound)
+- `join-asym-outcomes.mjs` — Forward-scores the patient (asym) pair's two legs
+- `join-crash-entry.mjs` — Replays the crash-entry rules on archived dump events
+- `join-exit-ev.mjs` — Realised-gp backtest of every exit estimator
+- `join-fade-outcomes.mjs` — Pre-registered scorer behind the watch FADE alert
+- `join-outcomes.mjs` — Rebuilds outcomes.json: campaigns, fill times, bands
+- `join-reach-basis.mjs` — Forward-scores the recent-3 and full-window reach bases
+- `join-reach-outcomes.mjs` — Forward-scores the co-logged exit estimators per side, class and regime
+- `join-window-clears.mjs` — Joins logged window-clear ask rungs to fills
+- `monitor-offers.mjs` — Open offers and recent fills straight from the live log
+- `quote-items.mjs` — Market read for named items, or for held positions
+- `read-book.mjs` — Capital dashboard and tranche sizer (the /book engine)
+- `read-buy-limits.mjs` — 4h buy limit used, left and reset time; no args = everything bought in the last 4h
+- `read-daemons.mjs` — Daemon health table
+- `read-exit-surface.mjs` — Reach surface p(ask, H) as an ask band or a time to clear
+- `read-schedule.mjs` — Time-sorted buy/sell window agenda (the /schedule engine)
+- `read-trajectory.mjs` — Per-day low/high table, floor/ceiling slope and a projected next-day band
+- `read-watchlist.mjs` — The watchlist's own table
+- `read-window-range.mjs` — Time-of-day range read: reach of a bid/ask in an hour window, exit pricing, hourly grid
+- `reconcile-reverse-flip.mjs` — Prints (never runs) the banked-backfill command for a keep sold first
+- `report-archive-gate.mjs` — Does the local archive reproduce the reach gate's verdicts?
+- `report-retro.mjs` — Suggestion-to-fill retro-join report per flip-niche and path
+- `run-loop.mjs` — Multiplexes the watch pass and the scan from one /loop; refreshes the book locally, never pushes
+- `screen-flip-niches.mjs` — Opportunity screen: rated tables per flip-niche (the /scan engine)
+- `set-scan-analysis.mjs` — Attaches a judgment blurb to the published screen.json
+- `sync-fills.mjs` — Rebuilds fills/positions/offers from the RuneLite logs; local and zero-git
+- `trigger-alerts.mjs` — Emits market alert events as JSON lines
+- `watch-log.mjs` — Local log-watcher daemon
+- `watch-positions.mjs` — Adaptive live monitor of positions and offers; --dip adds the flush loop
+<!-- /registry:commands -->
+
 ## Files
 
 - `index.html` — the app shell (markup only)
@@ -1114,56 +1163,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
 - `pipeline/commands/set-scan-analysis.mjs` — patches repo-root `screen.json`'s optional `analysis`
   field (or `--clear`s it) without re-running the scan. CLI-only, trusted-input (the app renders it as
   raw HTML) — never wire an untrusted input path to this.
-- `PLAN-DIGEST-SIGNAL-AND-SCAN-PERF` — FOLDED (2026-08-07, **PARTLY SHIPPED —
-  SP1 landed**; corrected 2026-08-09, this entry said PLANNING ONLY / no code changed): two workstreams that share one file (`pipeline/commands/screen-flip-niches.mjs`)
-  and therefore one parallel-safety contract. **A — digest SIGNAL:** as of that plan's writing
-  `buildDigestBlock`'s comparator ranked on `capEff × deployable` and never read the `reach` column it
-  prints, so its top slots went to rows its own `digestVerdict` calls `sell unreliable` (live anchor 2026-08-07: 9 of 11 rendered rows,
-  top four graded C/C/D/B-, the only `A- fill-now` row at #5). **BOTH HALVES OF THAT PREMISE ARE GONE:**
-  AF1 moved the comparator to `rank`, and SEP12 DELETED the `sell unreliable` verdict outright and
-  shipped DS2's honest reach cell. The plan carries a banner saying so; what remains open is DS0/DS1. Chunks DS0 (log the digest's computed
-  fields — `verdict`/`reachHit`/`reachDays`/`marginTrend`/`crossable`/`deployable`/`rankKey`/
-  `capEffRealizable`/`digestRank`, none of which survive a pass today) → DS1 (a read-only
-  market-counterfactual study, `report-digest.mjs`: *did the quoted ask actually print within
-  12/24/48h*, since a fills-joined study is structurally impossible at 92 filled / 88,272 not-taken)
-  — see also **`pipeline/commands/report-archive-gate.mjs`** (AF5, PLAN-ARCHIVE-FIRST-FUNNEL): READ-ONLY
-  evidence for whether the LOCAL archive reproduces the gate verdicts we currently pay a per-item
-  `/timeseries` call for. Runs `reachValidator` twice per item — once on the live 1h series, once on the
-  same span read from the archive — with the SAME candidate level (the live instabuy, external to both
-  series) and the same `now`, so only the series source varies. Measured 2026-08-07: **25/25 (100%)**
-  verdict AND hit/days agreement across the watchlist. ⚠ Read that number with its limit: 1h is
-  byte-identical archive-vs-live (AF4), so this run largely confirms identical inputs give identical
-  outputs — the test with real power is the DERIVED 6h grain at AF5b, not this one)
-  → DS2 (render the reach cell's raw counts — measured, `askRecDays === 3` on **100%** of logged rows,
-  so the ✓/✗ glyph is a 3-sample binomial and ✗ is 55% of every board) → DS3 (the LOW-placement /
-  crashed-regime trap — 11% of rows sit at `askPlacement ≤ 0.05` where 84% render a mechanically
-  meaningless reach ✓) → DS4 (a W3-1-shaped sort floor scoped to the unambiguous `0/3` cell,
-  **gated on DS1 — and ❌ SHELVED 2026-08-07 when that gate rejected it**) → DS5/DS6/DS7 (the inverted
-  `LAPS_PER_DAY_CEIL` asymmetry, an exit-pool column, the drift fold), plus DS8 (90-day retention on
-  the suggestions ledger). **DS1 was PILOT-RUN 2026-08-07** and is the wave's pivot: archive coverage
-  of the next-24h window is **99.9%**, and the quoted ask printed within 24h on **55.4% / 58.6% /
-  65.0% / 69.9%** of rows in the `0/3 → 3/3` recent-reach cells (n = 776/418/346/652, z ≈ 5.6). The
-  gradient is real but a `0/3` ask still prints more often than not — so the 3-day reach basis is a
-  *tilt*, not a *gate*: DS2 was promoted to the primary signal deliverable, DS6 became a **replacement**
-  of the saturating `deploy` column rather than a 10th, and **no chunk in this wave re-ranks the
-  board**. **B — scan PERFORMANCE:** SP1 parallelises `runWatchlist`'s strictly-serial fetch
-  loop (measured 6.0–9.5s of a 14–17s run; the survivor burst at peak concurrency 15 is already
-  optimal and is left alone), SP2 settles the FC1 cache scoping per-endpoint (`fetchTsCached` on the
-  bucketed 1h series in `read-window-range.mjs`/`read-schedule.mjs`; `COFFER_FETCH_CACHE` stays off
-  forever — and per Ben's 2026-08-07 ruling the served series must SURFACE its age, so SP2 is
-  "identical numbers + one visible age token", not a silent swap), SP3/SP4/SP5 cover the `loadBands`
-  cold backfill, `archive.append` batching (don't bother) and `cache-warm`'s wrong-grain health check.
-  **SP5's measured mechanics (2026-08-07):** the `TheCofferCacheWarm` task fires **every 4h** and
-  fetches only **BULK** `/1h?timestamp=` + `/5m?timestamp=` snapshots (one measured `/5m` call =
-  156KB / 1,799 items / ~124ms; ≤24 per grain) — it never fetches an item individually, so it does
-  NOT warm the per-item `/timeseries` calls that dominate a scan, and SP1's savings ADD to it rather
-  than overlap. Because `loadBands` looks back only 2h, the 4h tick is **lossy**: measured, only
-  **139 of 288 daily 5m buckets (48.3%)** are captured. **SP5 was APPROVED 2026-08-07** (tick 4h →
-  105 min, a `Set-ScheduledTask` edit with no code): head **5.5s → ~294ms**, 5m capture → ~100%, and
-  Ben explicitly accepted the measured archive-growth cost (**~13 → ~24MB/day, ~4.9 → ~8.8GB/yr**, at
-  ~45 bytes/row). Every chunk carries expected benefit, confidence,
-  risk-of-cutting-a-good-candidate, effort and rollback, plus an explicit
-  behaviour-preserving-vs-changes-what-surfaces label and a do-first/do-later/don't-bother split.
+- `pipeline/commands/report-archive-gate.mjs` — READ-ONLY: runs `reachValidator` per item on the live 1h series and on the
+  same span from the archive. Agreement was total on the watchlist, but 1h is byte-identical archive-vs-live, so the
+  powered test is the DERIVED 6h grain.
 - `plans/` — the per-topic `PLAN-*.md` working docs (moved off the repo root 2026-07-26). Each is a
   transient planning doc, deleted (leftovers to `docs/BACKLOG.md`)
   the moment its last chunk ships (`docs/PLANNING.md` lifecycle). `plans/PLAN-*.md` is scanned by
@@ -1655,6 +1657,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `~/The-Ledger-backup`; zero-git; stamps `.cache/last-backup`. Pinned by `process-guards.test.mjs`),
     **`pipeline/lib/config/chores.mjs`** (`dueChores`/`runChores` — runs the backup and announces stale
     outcomes from `runLocalSync`; `COFFER_NO_CHORES` opts out),
+    **`pipeline/ci/build-registry.mjs`** (generates the CLAUDE.md ask table and `## Commands` here from each command's
+    `@does`/`@ask`/`@read` tags; fails when stale; pinned by `build-registry.test.mjs`),
     **`pipeline/ci/lint-budget.mjs`** (doc-size and plan-count ceilings in `doc-budget.json`, expiry dates in
     `provisional.json`; gating),
     **`pipeline/lib/signal/digest.mjs`** (2026-08-25, PLAN-PIPELINE-SEPARATION) — the digest's ask-reach

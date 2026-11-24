@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Where fills landed in the day's distribution (reach-calibration study)
 /**
  * analyze-fill-placement.mjs — AC1/AC2 calibration study (PLAN-REACH-CALIBRATION). READ-ONLY.
  *

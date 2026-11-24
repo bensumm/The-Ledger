@@ -1,6 +1,6 @@
 ---
 name: cleanup
-version: 1.7
+version: 1.8
 description: A repeatable post-wave hygiene + architectural-integrity pass — run the CI guards, then a SESSION/WAVE-scoped judgment sweep for drift, duplication, dead code, doc-honesty, and worktree/branch staleness, and produce a proposed-fix list. Triggers — "clean up after this session/wave", "check the architecture", "did we leave a mess", "run a cleanup", "post-wave cleanup", "cleanup".
 ---
 
@@ -39,6 +39,7 @@ node pipeline/ci/lint-docs.mjs
 node pipeline/ci/lint-comments.mjs
 node pipeline/ci/lint-plan-refs.mjs
 node pipeline/ci/lint-budget.mjs
+node pipeline/ci/build-registry.mjs
 node pipeline/ci/lint-guard-lists.mjs
 ```
   ⚠ This list must stay BYTE-FOR-BYTE the gating set in `checks.yml`'s `checks` job — and
@@ -47,8 +48,8 @@ node pipeline/ci/lint-guard-lists.mjs
   and `lint-plan-refs` were gating in CI while missing here (and the same three were missing from
   `docs/FLOW.md`), so a `/cleanup` could report green and the very next push go red, which is the one
   outcome this step exists to prevent. When you add a guard to `checks.yml`, add it here in the same
-  commit. Note the guard checks NAMES, not order or prose — it cannot tell you this list is
-  byte-for-byte, only that nothing is missing. (The bare
+  commit. The guard checks NAMES only (it cannot tell you this list is
+  in order). (The bare
   `lint-plan-refs.mjs` above is the GATE; the `--collisions` run further down is a different, non-gating
   report and does not substitute for it.)
 - **Run the browser smoke ONLY if the session touched an app-imported module** — cross-check the

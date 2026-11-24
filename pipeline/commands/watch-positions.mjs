@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @does Adaptive live monitor of positions and offers; --dip adds the flush loop
+// @ask "watch/monitor my positions", "run a session", "keep an eye on X" (drive with /loop, pipeline/MONITORING.md) => ["<item>" ...]
+// @ask "watch for dips/flushes", "run the dip loop" => --dip ["<item>" ...]
 /**
  * watch-positions.mjs — ADAPTIVE, item-type-aware live-session monitor (chunk 7).
  *

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @does Forward-scores the patient (asym) pair's two legs
+// @ask "is the patient pair real?", "does the deep bid fill?" => [--entry H] [--horizon H] [--item "<item>"]
+// @read the pair rarely completes, worst on big-ticket; a random-offset null was rejected (header)
 /* join-asym-outcomes.mjs — PLAN-PATIENT-PAIR §7. Replaces the asym pair's READ-BACK QUANTILE
  * CONSTANTS with forward-measured rates: given the deep bid was ACTUALLY TOUCHED, was the high ask
  * reached within H hours? Every level comes from a LOGGED row and is scored forward only.

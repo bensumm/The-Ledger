@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Local log-watcher daemon
 /**
  * watch-log.mjs — the local log-watcher daemon (LW1).
  *

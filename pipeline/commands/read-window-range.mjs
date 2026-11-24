@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+// @does Time-of-day range read: reach of a bid/ask in an hour window, exit pricing, hourly grid
+// @ask "is X a falling knife?", "stepping down by the hour?", "does the ask clear midday?" => "<item>" --hourly --days 3 [--ask gp]
+// @ask "what clears X in this window?", "price my exit" => "<item>" --exit <gp> --window 0-8
+// @read hourly: read the raw per-day columns (the drift slope was a non-signal, deleted)
 /**
  * read-window-range.mjs — historical time-of-day RANGE read (lows AND highs) for price placement; the
  * standing time-of-day context CLAUDE.md's market-analysis contract requires on every price rec. A bid at

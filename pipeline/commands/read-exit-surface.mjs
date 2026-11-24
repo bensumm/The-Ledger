@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @does Reach surface p(ask, H) as an ask band or a time to clear
+// @ask "what should I ask if I'll wait H?", "how long to clear at price P?", "the EV-max ask?" => "<item>" [--horizon 6,24,48] [--price gp]
+// @read askStar LOST the backtest (join-exit-ev): description only, price nothing off it
 /* read-exit-surface.mjs — the reach surface as a PRICE (PLAN-REACH-SURFACE ch.3).
  *
  * Answers two different questions and never blends them: "what should I ask for X if I will wait H"

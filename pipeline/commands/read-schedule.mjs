@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Time-sorted buy/sell window agenda (the /schedule engine)
 /**
  * read-schedule.mjs — the buy/sell WINDOW AGENDA (PLAN-SCHEDULE).
  *

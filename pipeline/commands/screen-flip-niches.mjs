@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @does Opportunity screen: rated tables per flip-niche (the /scan engine)
+// @ask "what can I reverse-flip?", "sell a keep into the peak", "harvest a held item" => --mode reverse
+// @read reverse: the regime read is INVERTED (rising is bad), inform-only, owned keeps only
 /**
  * screen-flip-niches.mjs — opportunity screen. ONE command → a finished, RATED table per niche.
  *

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Checks and starts the local live desk
 /**
  * ensure-server.mjs — liveness check + auto-start nudge for the local live desk.
  *

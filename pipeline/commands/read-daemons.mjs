@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Daemon health table
 /* read-daemons.mjs — the fleet STATUS surface (PLAN-DAEMON-SUBSYSTEM Phase-2 Chunk 8).
  *
  * Prints manager.status()'s one-row-per-daemon health table: residents up/down, guards

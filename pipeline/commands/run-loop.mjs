@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @does Multiplexes the watch pass and the scan from one /loop; refreshes the book locally, never pushes
+// @ask "loop positions AND scan", "check positions every X and scan every Y" => [--watch min] [--scan min] [--min-idle gp] [--no-sync]
+// @read the scan runs only when deployable capital clears --min-idle; /loop at the gcd of the two cadences
 /**
  * run-loop.mjs — the MULTI-ACTION monitoring-loop driver (Ben, 2026-07-12).
  *

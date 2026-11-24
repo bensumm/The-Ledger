@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @does Private off-repo backup of the trading record; runs itself when due
+// @ask "back up my data", "is the backup current?" => [--status]
 /* backup-data.mjs — PRIVATE off-repo copy of the trading record. Zero-git, zero-network.
  *
  *   node pipeline/commands/backup-data.mjs [--dest <dir>] [--status]

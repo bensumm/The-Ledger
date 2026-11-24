@@ -220,7 +220,7 @@ this table is the flow view, not a second inventory.
 
 ## Control surfaces — who invokes what
 
-- **Ben's plain-language asks route to ONE command** via the ask→command table in `CLAUDE.md`,
+- **Ben's plain-language asks route to ONE command** via skill triggers, else the generated `CLAUDE.md` table,
   most wrapped in a **skill** (`/scan`, `/positions`, `/overnight`, `/morning`, `/analyze`) that
   adds the judgment layer the script can't encode.
 - **`run-loop.mjs`** is the multiplexer: one loop runs `watch-positions.mjs` + `screen-flip-niches.mjs
@@ -231,5 +231,5 @@ this table is the flow view, not a second inventory.
 - **CI** (`.github/workflows/checks.yml`) runs the `pipeline/ci/` guards on every push/PR: the
   cheap `checks` job (syntax, `run-tests`, `check-imports`, `check-dead-exports`, `check-daemon-safety`,
   `check-forecast-guards`, `check-verdict-guards`, `lint-arch`, `lint-docs`, `lint-skills`, `lint-comments`,
-  `lint-plan-refs`, `lint-budget`, `lint-guard-lists`, fills/positions parse) + the `smoke` job (headless-chromium app load).
-  This list is the whole `checks` job and `lint-guard-lists.mjs` fails if it drifts from `checks.yml`.
+  `lint-plan-refs`, `lint-budget`, `build-registry`, `lint-guard-lists`, fills/positions parse) + the `smoke` job (headless-chromium app load).
+  `lint-guard-lists.mjs` fails if this list drifts from `checks.yml`.

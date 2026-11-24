@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Suggestion-to-fill retro-join report per flip-niche and path
 /**
  * retrojoin.mjs — the RETRO-JOIN report (Pipeline v2, chunk P6a). The FOUNDATION slice of P6.
  *

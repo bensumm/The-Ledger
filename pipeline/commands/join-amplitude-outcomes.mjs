@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Shadow both-leg replay of every amplitude pick (an upper bound)
 /**
  * join-amplitude-outcomes.mjs — the AMPLITUDE lane's SHADOW BOTH-LEG REPLAY (PLAN-AMPLITUDE-SCAN §4/§A5).
  *

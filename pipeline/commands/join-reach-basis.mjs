@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @does Forward-scores the recent-3 and full-window reach bases
+// @ask "which reach basis is right?", "is the sell-unreliable tag any good?" => [--horizon H] [--item "<item>"]
+// @read settled for neither basis; quote the cost-regime map and r*, never the accuracy number
 /* join-reach-basis.mjs — PLAN-REACH-BASIS-DECISION. Scores the digest's RECENT-3 ask-reach basis
  * against the FULL-WINDOW basis at the production 0.5 threshold, by forward-replaying every logged
  * ask level against the 1h archive.

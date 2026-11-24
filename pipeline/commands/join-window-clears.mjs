@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @does Joins logged window-clear ask rungs to fills
 /**
  * join-window-clears.mjs — the WINDOW-CLEAR ASK-RUNG fill-attribution join (WC2, PLAN-WINDOW-CLEAR-OUTCOMES).
  *

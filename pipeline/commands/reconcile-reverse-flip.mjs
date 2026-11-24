@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @does Prints (never runs) the banked-backfill command for a keep sold first
+// @ask "reconcile my reverse-flip", "I sold a keep first", "backfill the banked basis" => ["<item>"]
 /* reconcile-reverse-flip.mjs — RF3 (PLAN-REVERSE-FLIP): the BANKED-backfill reconciliation ADVISORY.
  *
  * The Case-B artifact it reconciles. A reverse-flip on a PRE-LOG owned item (the Ancestral-hat shape:

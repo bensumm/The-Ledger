@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @does Market read for named items, or for held positions
+// @ask "how's X?", "quote X", "what's X doing?", "check X and Y" => "<item>" [...]
 /**
  * quote-items.mjs — the canonical market read for a Claude session. ONE command, finished table.
  * NEVER hand-write a `node -e` fetch for a market read again — this is the workflow.

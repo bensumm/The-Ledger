@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @does Rebuilds fills/positions/offers from the RuneLite logs; local and zero-git
+// @ask "sync", "refresh the book" (scan and positions already do it) =>
+// @read --publish pushes to main: only when Ben asks
 /**
  * sync-fills.mjs — The Coffer fill-data pipeline (Windows / RuneLite side)
  *

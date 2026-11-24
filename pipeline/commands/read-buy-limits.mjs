@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @does 4h buy limit used, left and reset time; no args = everything bought in the last 4h
+// @ask "can I buy more X?", "how much limit left?", "when does it reset?" => ["<item>" ...]
 /**
  * limits.mjs — the BUY-LIMIT read for a Claude session. "Can I buy more X? / how much limit left?"
  *
