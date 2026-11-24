@@ -647,7 +647,7 @@ const LAPS_PER_DAY_CEIL = Math.floor(86400 / LIMIT_WINDOW_SEC);   // = 6 — the
 // MIRAGE_PLACEMENT (the "mirage top" ask-side placement bar, PLACEHOLDER n≈0) MOVED to
 // js/estimators/families.mjs (EF1(b), PLAN-ESTIMATOR-FIDELITY) — it now also bounds the churn
 // ask-reach exemption there, so the digest rule and the rank/fold bound share ONE constant (imported above).
-import { buildDigestRows } from '../lib/render/digest-extras.mjs';
+import { buildDigestRows, sizeDigestRow, sizeLine } from '../lib/render/digest-extras.mjs';
 import { MIRAGE_REACH_FRAC, digestReachAndPlacement } from '../lib/signal/digest.mjs';
 
 // roiPct(er): after-tax per-TURN ROI% off the rank estimate — er.net (per-unit tax-net) ÷ er.pair.bid.
@@ -2968,7 +2968,9 @@ async function main() {
     const dislocFn = wfHd ? ((id, name) => formatDislocation(
       dislocationRead({ series1h: archiveSeries(wfHd, id, '1h', { days: 120 }), name, limit: map.byId[id]?.limit ?? null }), { fmt: fmtP })) : null;
     const sel = selectDigestRows(DIGEST_ROWS);
-    digestRows = buildDigestRows([...sel.main, ...sel.bigExtra]);
+    digestRows = buildDigestRows([...sel.main, ...sel.bigExtra], {
+      sizeOf: r => sizeDigestRow(r, { capital: VALUE_CAPITAL, bought: limitWindow({ buys: BUYS_BY_ITEM.get(r.id), limit: r.limit }).boughtInWindow }),
+    });
     const digestBlock = buildDigestBlock(DIGEST_ROWS, { series1h, disloc: dislocFn });
     REPORTS.push({ kind: 'screen', generatedAt: null, sections: [{ type: 'lines', lines: digestBlock.split('\n'), blank: false }] });
     realLog('\n' + digestBlock + '\n');
@@ -2985,6 +2987,14 @@ async function main() {
   // scan Ben runs (not a single-niche run), best-effort so a failure never breaks the scan output.
   if (MODE === 'all') { try { captureReport(() => runDipNominations(v24, bands, map, qcache, series5m)); } catch (err) { console.error('(dip-nominate: pass failed — ' + ((err && err.message) || err) + ')'); } }
   const watchlist = await captureReport(() => runWatchlist(map, ctx, guide, latest, qcache));   // S3: always-scanned watchlist
+
+  if (digestRows) {
+    const under = [sizeLine(digestRows)].filter(Boolean);
+    if (under.length) {
+      REPORTS.push({ kind: 'screen', generatedAt: null, sections: [{ type: 'lines', lines: under, blank: false }] });
+      realLog(under.join('\n') + '\n');
+    }
+  }
 
   // --publish: self-describing per-niche snapshot for the app's Scan tab. `headers` travels WITH the
   // rows so a stale published file can never mismatch app-side header code. Cells are the raw `r.cells`
