@@ -26,7 +26,7 @@ a third to a half of the realised edge.
    rest-day rung fails, the only other number on the page is the instabuy — so the agent stepped
    to it. On the longbow the rest-day rung (1,150) was BELOW break-even, so the dwell line itself
    said "the BE floor governs" and left only the fill-now number standing.
-2. The `/positions` step-down doctrine (SKILL.md `:245`, `:299–:331`: "sell velocity over premium",
+2. The `/positions` step-down doctrine (SKILL.md, step-down rules: "sell velocity over premium",
    "step down to the printing band", the decaying-band-top trigger) says WHEN to step and names
    the band as the destination, but not the GRANULARITY — it never says "in rungs, with a dwell
    per rung". A jump to the instabuy satisfies the prose.
@@ -68,7 +68,7 @@ a third to a half of the realised edge.
 | `--ask` per-day cushion + `fold:` line | `read-window-range.mjs` | the verification read per rung (unchanged) |
 | `⇄ dwell (sell)` renderer | `pipeline/lib/render/emit.mjs formatDwell` | grows a `↘ step:` clause between FILL-NOW and REST-DAY |
 | Held `sell: list @ X · break-even Y` line | `watch-positions.mjs` V5 emit contract | carries the next rung + its dwell |
-| Sell-side step-down doctrine | `.claude/skills/positions/SKILL.md :245, :299–:331` | gets the granularity rule (prose, tagged `judgment:`) |
+| Sell-side step-down doctrine | `.claude/skills/positions/SKILL.md` step-down rules | gets the granularity rule (prose, tagged `judgment:`) |
 | `placedTs` on offers, sell fill events with ts | `offers.json`, `fills.json` (FD3/FD4) | the fast-clear measurement input |
 | `join-outcomes.mjs --report` velocity section | `pipeline/commands/join-outcomes.mjs` | fast-clear count + gp-left-on-table per week |
 | `breakEven()` | `js/quotecore.js` | the last rung, the ONE definition |
@@ -115,8 +115,8 @@ watch fill-progress line; `join-outcomes.mjs --report` velocity section gains
 `suggestions.jsonl`'s outcome join so the retro accrues it.
 
 **SD4 — doctrine + docs reconciliation (prose).**
-Files: `.claude/skills/positions/SKILL.md` (granularity rule next to the step-down doctrine at
-`:299`, tagged `judgment:`, version bump), `/morning` SKILL.md §2 (a reprice-down is a LADDER on a
+Files: `.claude/skills/positions/SKILL.md` (granularity rule next to the step-down doctrine,
+ tagged `judgment:`, version bump), `/morning` SKILL.md §2 (a reprice-down is a LADDER on a
 liquid lot), `pipeline/MONITORING.md` sell-side framing, `docs/MARKET-ANALYSIS.md` "Two objectives,
 two prices" (a third row: the RUNG), README entries for the new functions. Grep-and-fix: any line
 that says "step down to the instabuy / live" becomes "step down a rung". `lint-skills`/`lint-docs`

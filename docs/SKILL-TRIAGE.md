@@ -68,7 +68,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | Velocity beats magnitude (HYPOTHESIS) | KEEP-AS-JUDGMENT | Unproven lean; crossover unmeasured. Revisit at F1. |
 | Band-top artifact detection | KEEP-AS-JUDGMENT | `--min-active` supports; spotting the lone print is judgment. |
 | Asymmetric ask-reach read + RC1 recency split | KEEP-AS-JUDGMENT | Method over `pipeline/commands/read-window-range.mjs` / `js/windowread.mjs`; the `⚠ stale` flag is coded, the read is judgment. ~~Partial-ENCODE candidate → reachValidator once screen/quote fetch ts1h.~~ **SHIPPED — quote DOES fetch ts1h and reachValidator fires.** |
-| MANDATORY verify SELL leg before quoting profit | KEEP-AS-JUDGMENT | ~~ENCODE candidate: reachValidator would enforce it, but screen/quote don't fetch ts1h yet.~~ **SHIPPED — ts1h IS fetched (`quote-items.mjs:333`) and `reachValidator` fires.** The checklist step remains as judgment, but it is no longer un-encodable. |
+| MANDATORY verify before quoting | ENCODE | `verify-pick.mjs` named FAIL rules; acting on a warning stays judgment. |
 | Fresh-repricer flag | KEEP-AS-JUDGMENT | Sizing call. |
 | Phase tag on the Regime cell | ENCODE | `phase()` in `js/quotecore.js`, folded by `pipeline/commands/screen-flip-niches.mjs`; the "spike ≠ retrace" reading is judgment. |
 | Froth entry — CLASSIFIER not PREDICTOR | KEEP-AS-JUDGMENT | `froth.mjs` probe classifies (output-only); n≈0 own trades. |
@@ -79,7 +79,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | Buy-limit-aware sizing | ENCODE | LM1 (2026-07-09): `pipeline/lib/capital/limits.mjs` `limitWindow` (rolling-4h math) → `js/validate.mjs` `limitValidator` (BUY-side: reject exhausted, caution near) on every suggesting surface (`screen-flip-niches.mjs`/`quote-items.mjs`); `quote-items.mjs` regime line shows bought/left/next-frees; `node pipeline/commands/read-buy-limits.mjs "<item>"` is the direct ask. The tranche-vs-multi-window framing stays judgment. Memory `buy-limit-caps-every-size`. |
 | Thin CURRENT 2h band ≠ no edge | KEEP-AS-JUDGMENT | Read via `pipeline/commands/read-window-range.mjs`; the "proven lane" call is judgment. |
 | Hard rules §3 (falling exclusion / watchlist section / preserve columns) | ENCODE | Falling doctrine per-spec in `js/flip-niches.mjs`; watchlist section + Note in `pipeline/commands/screen-flip-niches.mjs` (S3); columns pinned in `js/quotecore.js`. |
-| Cover every niche each pass | KEEP-AS-JUDGMENT | Output-coverage discipline (memory `salient-subtask-crowds-out-mandate`). |
+| Cover every flip-niche each pass | PARTIAL-ENCODE | Digest coverage line + `verify-pick.mjs --scan`; naming each lane in the reply is judgment. |
 | Every recommended price states its timing target AND its basis | KEEP-AS-JUDGMENT | Tool `pipeline/commands/read-window-range.mjs`; binding a number to a window is judgment; the basis token is QUOTED off the coded `⇄ dwell` line, never recomputed. |
 | Position-context pass §5 (stale-bid / overlap / held-ask) | KEEP-AS-JUDGMENT | Cross-check over `pipeline/commands/watch-positions.mjs`. |
 | Encode-learnings boilerplate (Timing/Prompt/Routing/Execution/Honesty) | KEEP-AS-JUDGMENT | Shared self-improvement process across all four skills (see note below). |
@@ -88,7 +88,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 
 | Rule-block | Disposition | Change / supersession |
 | --- | --- | --- |
-| Run the script / sync-first (SY1, SY1.2) / stale-book banner | ENCODE | `pipeline/commands/quote-items.mjs --positions`, `pipeline/commands/sync-fills.mjs`, `pipeline/commands/watch-positions.mjs` banner. |
+| Run the script / sync-first (SY1, SY1.2) | ENCODE | `quote-items.mjs --positions` (plan lines: `lib/render/plan.mjs`). |
 | Reading watch-positions.mjs per-held note block (V5 EMIT CONTRACT) | ENCODE | `pipeline/lib/render/emit.mjs` `heldNoteBlock()`; the block shape is the code's, the doc points at it (see MONITORING.md). |
 | Verdict-vocabulary table (interpret each verdict) | ENCODE | Verdicts emitted by `momVerdict()` (`js/quotecore.js`) / `renderHeldVerdict` (`pipeline/lib/market/item-context.mjs`); the skill translates them to actions (judgment). |
 | Sell-velocity / HOLD-band-top step-down / rising-item no-underprice / decaying-band-top / trajectory read / entry-age / override-discipline / cut-and-rebid friction / tripwire conviction / limit-blocked CROSSING / fill-progress | KEEP-AS-JUDGMENT | The interpretation layer over the verdicts; several have coded support (`convictionGate` in `lib/watchstate.mjs` for tripwire-conviction; `breakEven()` floor in `js/quotecore.js`), but the step-down/hold taste is the LLM's. **Override-discipline's two BOUNDS are encoded since HF3 (PLAN-HOLD-FADE-ALERT):** the `[flicker]` tag (`FLICKER_GP`, `watch-positions.mjs` `cutGapClause`) and the `through cut-trigger` fact print IN the CUT alert text; the override itself stays judgment, permitted only on a tagged flicker. |

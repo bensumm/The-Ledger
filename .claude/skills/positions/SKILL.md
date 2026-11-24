@@ -1,685 +1,257 @@
 ---
 name: positions
-version: 1.74
+version: 2.0
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
 # /positions — held-positions review, verdict interpretation, action plan
 
-Skills-versioning note: this file's `version` bumps on material behavior change; skills
-NEVER bump `APP_VERSION` (that marks the deployed app, which skills never touch).
+The scripts compute and print the read. This file holds the procedure and the judgment no script
+prints. `version` bumps on a behavior change; skills never bump `APP_VERSION`.
 
-**Display contract (Ben, 2026-07-17):**
-run the script QUIET (no `--verbose`, ever, for this skill) and read the JSON report dump
-(`pipeline/.cache/last-report/quote.json` or `watch.json`) — never re-derive the numbers, and
-never shell out with `--verbose` to get stdout text. The dump is a `{kind, generatedAt,
-reports:[{sections:[...]}]}` render object; each report's `sections` array is typed
-(`headline` / `alerts` / `table` / `notes` / `lines`). Build the reply from exactly ONE of those
-sections plus your own prose:
-- **`table` — paste it, reconstructed as real markdown.** _(judgment: display format, Ben-ruled)_
-  Headers+rows are already structured in the JSON; render them as a `| … |` table, unfenced — a
-  code fence forces literal `|`/`-` chars instead of an actual table, confirmed live 2026-07-16.
-  This is the one thing Ben wants verbatim; the numbers are his to read directly.
-- **`alerts` and `lines` (the `=== SUMMARY ===` capital-accounting block) — do NOT paste raw.**
-  _(judgment: display format, Ben-ruled)_ Read them for anything actionable (a live CUT, a broken
-  support level, an alert that changed since the last pass) and fold that into your prose — but
-  never as the script's own formatted alert/summary lines.
-- **ACTIONABLE FIRST, QUIET COLLAPSED — the winners-only shape on this surface (Ben, 2026-09-02).**
-  _(judgment: display format; the held set itself comes from `pipeline/commands/quote-items.mjs --positions`)_
-  Every held lot still gets READ in full — you never skip the note block — but the REPLY is
-  asymmetric: a lot with something to act on (a CUT/UNDERWATER verdict, a changed verdict, a broken
-  support, a reprice, a fill) is rendered fully; a quiet, unchanged, on-plan lot gets **ONE line** and
-  nothing more. Do not write a paragraph explaining why a quiet lot is fine. This does not relax the
-  two standing hard rules: ONE LINE PER ITEM always (never `·`-join several items onto one line, even
-  on a quiet pass), and every item line — held, fresh buy, resting bid, analyzed — carries its
-  `list @ X (BE Y)`.
-- **`notes` (the per-item verdict/support/cut-trigger/recovery-read/path/sell-line block) — read
-  it fully, fold the ACTIONABLE substance into your own prose, don't paste the bulleted block.**
-  _(judgment: display format, Ben-ruled)_ Read every tier so nothing decision-relevant is missed;
-  relay what changes a decision, in your own words, not the script's formatting — an inform-only note
-  on a quiet lot does not earn a line. The ask-side window-clear / "typical exit" read is now
-  **AUTO-SURFACED for big-ticket held lots** (lot value ≥ `BIG_TICKET_GP` = 10m, or a watchlist
-  member) as the `↗ windowExit` note — the list-price reach/placement, the daily-HIGH typical-exit
-  levels (~50%/~75%/every-day + recent-3), live-instabuy-vs-list, the grain-aware 5m reach, and which
-  diurnal peak window the level prints in — the same block a manual `read-window-range.mjs "<item>"
-  --ask <level>` printed, folded in with zero extra fetch (PLAN-POSITIONS-WINDOW-READ, 2026-07-18). Read
-  that note; a manual `read-window-range.mjs --ask` is only needed for a NON-big-ticket lot, a different
-  window/level, or the bid side. (A null 1h series this pass degrades the note to `window read
-  unavailable` — the table/verdict is unaffected.)
-- **The `◆ asym fill` clause and the BE-floored `Est. sell` patient half do NOT render on this
-  surface — read them on `/scan` or a per-item quote instead.** _(judgment: scope note; the cell is
-  rendered by `js/estimators/cells.mjs`, the wording by `pipeline/lib/render/emit.mjs` `formatAsymFill`)_
-  This table's headers are Quick/Optimistic + Held@/Break-even/Verdict: there is no `Est. sell` cell
-  for the patient clause to live in, and the class-rate footer gates on a `kind:'asym'` note this
-  surface never pushes. Two separate mechanisms — do not expect either here, and do not go hunting for
-  them (tracked in `docs/BACKLOG.md` Decisions). What to carry into any
-  read of the pair wherever it DOES render: the levels are in-sample quantiles, not fill rates,
-  and forward measurement puts the deep bid touched **17.8%** within 24h, the ask
-  reached **~24%** given that touch, and the round trip completing **4.3%** —
-  **1.5% on big-ticket** (`join-asym-outcomes.mjs`; touched/reached ≠ filled, so these bound a real
-  offer from ABOVE). **Check the book before choosing between those two columns:** with no open lot
-  whose UNIT price clears `BIG_TICKET_GP` the applicable figure is the pooled **4.3%** (lots by count),
-  which is the number that governs a held-lot read — and note that capital-share by unit-price
-  threshold (**60.1%**) and by whole-lot VALUE (**82.1%**, over 438 closed lots / 5.19b gp) are two
-  different thresholds; do not equate them.
-- **A diurnal level that carries a reality clause is relayed WITH it — the clause is not formatting.**
-  _(enforced: `js/windowread.mjs` `realityClause`, the ONE renderer across the `↗ windowExit` note, the
-  thesis-frame `exit` when it falls back to the derived diurnal peak, and the Diurnal timing bits)_ `⚠ spike-top …` / `⚠ stale …` always names a
-  the typical level (rendered `~X` in the compact `short` style the console bits use, and spelled out as `typical ~X` in the `exit`/`full` styles — do NOT grep relayed output for the word "typical") and leaves the level itself UNCHANGED, so relaying the price alone (in your own prose,
-  where the clause is easiest to lose) turns a flagged extreme into a plain list-at.
-
-- **Read the floor/ceiling trajectory note on EVERY held lot, not just the verdict (2026-07-21, the fang
-  under-read fix; R6 folded it into ONE note, 2026-07-22).** _(judgment: interpretation discipline)_ Each
-  lot auto-prints a `DAILY TRAJECTORY` block (per-day window low/high, oldest→newest) + a one-line
-  **floor/ceiling** synthesis: the floor and ceiling SLOPES (rising/flat/falling, independently) + the
-  drift-vs-crash `classification` (crash-risk / cooling / mild-cooldown / healthy-trend / compressing-up /
-  ranging, with a `ranging (oscillating floor↔ceiling)` qualifier when it's bouncing) · the 2-week `band
-  X→Y` · **where live sits in it** (at the FLOOR / mid-band / at the CEILING). _(R6 retired the older weaker
-  blended-mid `⌁ read:` shape line — its floor/ceiling/livePos folded into this note; the oscillation read
-  is now the `classification` qualifier.)_ This is the exact read that was getting missed: a fill-now-A-
-  reach/placement can hide an oscillator sitting at its 2-week floor (price to the swing, don't cut) or an
-  elevated item near its ceiling (don't chase the buy). Interpret the verdict AGAINST it — "at the FLOOR +
-  oscillating" is a hold-for-the-swing, "at the CEILING + cooling" is a clear. HEURISTIC (n≈0), inform-only
-  — it never gates, it frames. The SAME shared `floorCeilingTrack`/`trajectoryRead` note the manual
-  `read-window-range.mjs` trio prints, zero extra fetch.
-- **Read the `⏳ soft-buy:` line before deciding whether to ADD to a lot (2026-07-22, the
-  buy-soft-while-holding rule; **re-scoped 2026-08-09 by DT2 — see the resting-bid rule below**).**
-  _(judgment: entry-timing discipline)_ Format: `⏳ soft-buy: floor ~X · live @floor | +X% · <cue>
-  (<hours clause>)`. It puts the ADD-side timing right next to the
-  held lot: the **floor** = the dip-cluster level, the number you actually place at; the
-  **marker** = `@floor` (live sits ≤0.5% over the dip floor, or below) vs `+X%` (live sits X% above
-  the dip). **The hours clause is GATED as of DT4 (2026-08-10)** and has three forms: `attended dip
-  hours HH:00–HH:00 · MAY repeat most days` (the item's daily shape reproduces across a parity split,
-  `min(rLow,rHi) ≥ 0.6` — only ~0.8% of items), `no reliable dip hours` (measured fail), or `dip
-  hours unverified` (under ~14 days of history — we did not check, which is not the same claim).
-  **An absent window is now the normal case: the FLOOR and the CUE still render whatever the gate says,
-  and are what you act on.** (Corrected 2026-08-10 — this used to say the floor and cue are "unaffected
-  by the gate". On a PASSING row that is false: DT4b refits those rows over the gate's 14-day window and
-  the floor moves with it, on 23 of 31 measured passers — median 0.18%, max 55%. They are unaffected on
-  the ~99% that do NOT pass, which is the common case this sentence was describing.) When the hours DO appear they mark an item worth timing an attended TAKE on. The **cue** is
-  **FLOOR-AWARE** (2026-07-22, the fang under-read fix) — when the marker
-  is `@floor` it consults the SAME multi-day floor read the adjacent `⇅ floor/ceiling` (`fcTrack`) note
-  already prints, so a post-update dump sitting at its diurnal floor EVERY day no longer misreads as a
-  discount:
-    - `@floor · ▽ caution — floor breaking ↓` — the multi-day floor BROKE / is crash-risk. **@floor here
-      is a dump artifact, not a discount** — don't add on the dip alone; this is a falling knife (the fang
-      dumped ~32m while the old label stayed bullish). **EC2 (2026-09-08): a forming day already printed
-      under the prior trough joins this branch** — a day's low only falls, so the break is certain at day
-      end even though the completed-days statistic hasn't flipped yet.
-    - `@floor · ▽ caution — uptrend label STALE: today already printed under yesterday's low (cheaper
-      entry likely)` — **EC2 (2026-09-08, the Avernic-hilt post-mortem)**: the completed-days floor reads
-      RISING but TODAY has already printed under the last completed low, a monotone fact. Measured over
-      21,013 archive item-days: the next 3 days print below the current floor 88.5% when this fires vs
-      53.1% when it doesn't — so "the rung is walking away" is exactly backwards here; a cheaper entry is
-      the likely outcome, NOT a trend reversal (forward slope is unpredicted either way).
-    - `@floor · ▲ favorable — dip in uptrend (price-trend only)` — the multi-day floor is RISING
-      (healthy-trend / compressing-up) AND the 28-day durable-floor check passes: a dip WITHIN an uptrend.
-      **PRICE-TREND ONLY** — it is blind to game-update/regime breaks (a rising floor also describes a
-      PRE-update pump), so it is a prompt, NOT a green-light; overlay your own update knowledge.
-    - `@floor · ▽ caution — dip into an UNPROVEN base, still elevated over the durable floor (N× swing
-      over the 28d floor)` — the 5-day floor is RISING but `floorValidator`'s **28-day** check still
-      cautions/rejects the level. **These two disagree exactly when it matters most: on a young spike the
-      5-day window sits ENTIRELY INSIDE the spike, so the floor "rose" precisely BECAUSE the item spiked.**
-      Snape grass (2026-08-06) read `▲ favorable` at 1,051 while the floor check flagged it at 1.68×
-      typical swing above the 28d floor 960, three passes running; its pre-spike daily HIGHS were
-      976–1,038, so break-even (1,073) sat above the entire prior range and a full round-trip left no exit.
-      **Narrowed 2026-08-08** — `FLOOR_CAUTION_RANGES` moved 1.0 → 1.5 on a forward-scoring study, so a buy
-      1.0–1.5 swings over the floor no longer trips this cue (that band measured P(drawdown ≥ 1 swing) of
-      12.0% against 29.8% above it). The Snape grass case at 1.68× still fires.
-      This cue is a COMPOSITION of the two existing reads (`floorCeilingTrack` shape + `floorValidator`
-      level) — it re-derives nothing. Treat it as: the dip is real, the base under it is not yet proven.
-    - `@floor · buy now` — floor flat/ranging/cooling, or too few days to classify: the plain soft dip
-      (unchanged behavior).
-    - `@floor · ▽ caution — exit side fading today` (HF4, PLAN-HOLD-FADE-ALERT 2026-09-22) — a would-be
-      `buy now`/`favorable` downgraded because the EXIT side is sliding: the same ⚠⚠ composite the watch
-      `FADE` alert fires (at the row's candidate exit ask), or an alert-grade `hoursUnderProfile` run.
-      The line names the FIRING half — `(cushion + pace)` and/or `highs under 7d profile Nh (−X gp)` —
-      the Diamond-bolts entry: @floor on a fading day is the floor of a fading day, not a discount.
-    - `+X% · rest the bid at the floor now — windows don't time fills` — live sits above the dip. **Place the resting bid at the
-      floor LEVEL now; do NOT delay it to the dip hours.** (The floor-aware cue applies only `@floor`.)
-  **RESTING BID vs ATTENDED TAKE — the DT2 split (measured 2026-08-09, supersedes the old `+X% · wait`
-  advice).** _(judgment: the doctrine this cue exists to serve)_ The dip window tells you where the daily
-  extremes LAND, not when a resting offer FILLS. Measured at the production dip level: P(touch inside the
-  predicted window | touched at all) = **71.2% vs 70.5% for a random window of the same width** — i.e.
-  nothing. Independently confirmed by first-touch timing of a resting bid showing no window concentration
-  (14.6% vs 15.9%). So **waiting for the window forfeits ~29% of bid fill-days at an identical price.**
-  Read the line this way: a **resting bid** goes in at the floor level immediately and rests all day;
-  the **attended dip hours** matter only when you're at the desk about to TAKE (cross the spread). This
-  also reinforces the standing memory `name-the-window-not-a-chase-bid` — name the LEVEL, not a chase.
-  *Honesty limits: one 74-day era, one update cycle; touch measured from hourly aggregates, not executed
-  fills, so it bounds a real offer from above; item-day clustering ⇒ effective n well below nominal.*
-  These cue words are their OWN vocabulary (a buy-TIMING cue) — do NOT conflate `▽ caution — floor
-  breaking ↓` here with the separate `⇅` floor/ceiling TREND line or the reachMargin ask-CUSHION
-  extending/fading line. (One deliberate exception since HF4: `▽ caution — exit side fading today`
-  IS the reachMargin composite / hours-under-profile read by construction — that cue is the
-  cross-reference, the others stay their own vocabulary.) The doctrine (memory "buy-soft-while-holding-for-peak"): holding a position to
-  sell into a LATER peak is NOT a reason to sit idle on the BUY side — buy its diurnal dip when it's soft.
-  That rule governs *whether* to add; DT2 governs *how* — as a resting bid at the level, not a timed wait.
-  Real anchors: we bought Dragon boots into the daytime peak (~350k over) and blowpipe at 10.67m instead
-  of its 10.40m dip, both while already holding — this line would have flagged live sitting above the
-  floor on both, and the fix was a resting bid at the floor, not a wait. Same
-  `hourProfile` the `↳ diurnal:` note uses; the floor-aware cue reuses the in-hand `floorCeilingTrack`
-  fc (`softBuyRead`/`formatSoftBuy` in `js/windowread.mjs`), zero extra fetch; HEURISTIC (n≈0),
-  inform-only — never a gate/verdict. A null 1h series this pass degrades it to no line (like the diurnal note).
-  - **A SECOND diurnal window may flag** (PLAN-MULTI-PEAK-WINDOWS, inform-only n≈0): the `↳ diurnal:` note
-    can append a trailing `also ASK …/also BID … — second elevated/depressed window` clause when a held
-    item has a second genuinely-prominent peak (or dip), not just one — e.g. a reliable overnight exit
-    window PLUS a higher-ceiling afternoon window. It's Ben's call whether to list into one and relist for
-    the other, or split the lot; the tool only surfaces that both windows exist (never a forced re-plan).
-
-Anchor (2026-07-17, the format that got approved): a positions read that pasted just the table,
-then three short prose paragraphs each naming what changed/mattered per item (a resolved CUT, an
-ask's placement checking out fine on AC4a, a bid's finer-grain reach diverging from the smoothed
-read) — no alert lines, no summary block, nothing pasted verbatim except the table.
-
-## 1. Run the script — never hand-fetch
+## 1. Run the read — never hand-fetch
 
 ```
-node pipeline/commands/quote-items.mjs --positions
+node pipeline/commands/quote-items.mjs --positions --verbose
+node pipeline/commands/watch-positions.mjs --verbose
 ```
 
-Quiet (no `--verbose`) — read `pipeline/.cache/last-report/quote.json` per the display contract
-above. Do not pass `--verbose`; this skill builds its reply from the JSON dump's `table` section
-+ its own prose, never from raw stdout.
+Run each command alone: no pipe, no redirect, no `;`, and never `node -e` over
+`pipeline/.cache/last-report/*.json`. Stdout is the read; never re-derive a number or a verdict.
 
-**The PB4 pressure-exit trial is RETIRED (2026-08-30, join-exit-ev.mjs's pre-registered criterion).**
-_(encoded: the trial flag errors loudly; the pressure sell model is deleted from `SELL_TOP_MODELS`)_ Run
-the NEUTRAL read — it is the only sell model. Do not offer the retired trial as a comparison; its ask
-measured a deficit against the incumbents with a CI clear of zero at every sensitivity (the Water-orb
-1,672-vs-1,531 session divergence pointed the same way). The join commands keep scoring its logged
-history; the bid/band pressure reads survive.
+- **Call 1, always.** _(judgment: procedure)_ It prints the `sync ·` line, the 10-column table, a
+  note block per lot, the `Conviction` / `Paths` / `Rebid advisory` blocks, any `Reverse-flip
+  pending` block, and LAST the plan lines (one per lot, action-ordered).
+- **Call 2 whenever call 1 shows a held lot or the `sync ·` line an open offer.** _(judgment:
+  procedure)_ It adds what call 1 cannot print: the alerts (`FADE`, the `[flicker]` tag, `through
+  cut-trigger`, `CANCEL-BID`), `listed n/m` or `NOT LISTED` per lot, `support` / `cut-trigger`,
+  `recovery-read`, a row per resting offer, and the capital `SUMMARY`.
+- **Details on demand, one command each.** A row of the last saved report: `read-rows.mjs` with
+  `quote --item "<item>"` (its row and notes; or `watch`; re-run the read when it prints STALE). A lot's history:
+  `read-book.mjs --lots --item "<item>"`. Buy limit left: `read-buy-limits.mjs "<item>"`.
+- **Freshness is enforced, not remembered.** Both calls sync the book first (`runLocalSync` in
+  `pipeline/lib/reconstruct/sync-invoke.mjs`); do not run `sync-fills.mjs` yourself. `held basis
+  positions.json last changed Nm ago` is the time since a trade last changed the book. It is not a
+  staleness warning. Never infer freshness from elapsed time on a surface that does not sync.
+- **A trade Ben made is missing (a lot, an offer, `NOT LISTED`).** _(judgment: source first)_
+  Suspect Exchange Logger lag before the book: read the SUMMARY's `offer basis live log, newest
+  line Nm ago` (`monitor-offers.mjs` is the zero-lag log view). A relog or world-hop flushes
+  RuneLite; then re-run. A phone trade folds in only on
+  `sync-fills.mjs --publish`, which runs only when Ben asks.
+- **`⚠ stale live print`.** _(judgment: fresh read)_ Never quote a price or a profit off the
+  flagged side. Read the fresher side it names and re-run before naming a price.
 
-That command IS the market read (reads `positions.json` open lots, quotes each held item,
-prints the standard table + Held@/Break-even/Verdict). Never hand-write a fetch. The gates
-already ran inside `momVerdict()` — your job is to *interpret* the printed verdicts, never
-to re-derive them.
+## 2. What counts as a position
 
-**Sync is now CODE-ENFORCED, not just doctrine (SY1 2026-07-15; enforced 2026-07-16).**
-`quote-items.mjs --positions` and `watch-positions.mjs` both run `sync-fills.mjs` unconditionally as
-their first step now — local/zero-git, never blocks the read on failure, prints a one-line `sync ·`
-summary. This closed a real gap: the prose "run sync-fills before every read" was skippable and got
-skipped (an agent — this one — declared a real closed position "just a bug" mid-session because the
-book was stale and hadn't been re-synced first; the anglerfish anchor incident, CHANGELOG 2026-07-16).
-You no longer need to separately invoke `sync-fills.mjs` before these two commands — they do it
-themselves. **Still never infer freshness from elapsed time** for anything that ISN'T one of these two
-auto-synced commands (`monitor-offers.mjs` reads the live exchange log directly — zero git — if a
-just-made trade matters even more immediately than the synced book).
+- **Position = held inventory + active GE offers** _(judgment: Ben's definition)_, so with no held
+  lots the offer rows of call 2 are the review.
+- **Incidental inventory is filtered in code** (`pipeline/commands/quote-items.mjs`: lots under
+  `NOISE_OFFER_GP` unless watchlisted, collapsed to one `incidental inventory, ignored:` line). A
+  tiny loot lot that still draws a verdict is a bug to report, not a call to make.
+- **Personal use is per TRADE, never per item.** _(judgment: Ben-ruled)_ A mention is the
+  instruction: `add-manual-fill.mjs --item "<item>" --type withdraw --qty N --time <after the buy>`
+  the same turn, re-run call 1, never verdict the lot. Add to `ignored-items.json` only when Ben
+  asks for the ignore list by name.
+- **The first buy after a `(banked)` close is owned gear.** _(judgment: Ben-ruled, twice)_ Before
+  any verdict on a big-ticket open lot, run `read-book.mjs --lots 50 --item "<item>"`. If the lot
+  is the FIRST buy after a `(banked)` closed row, it is re-acquired gear: `--type withdraw` it, no
+  verdict. If a later row already closed that cycle, the lot is a normal position. Unclear: ask.
 
-- **Phone trades caveat:** the local default of `pipeline/commands/sync-fills.mjs` does NOT ff-pull
-  `origin/main`, so an un-pulled *phone* (`mobile-fills.log`) trade won't fold in until the next on-request
-  publish (that path runs it with `--publish`) or a manual `git fetch`. Desktop RuneLite
-  trades — the common case — are always captured locally.
-- **No worktree concern anymore:** the default is git-free, so the old "run from the main checkout / never a
-  worktree" caveat only applies to `--publish` (the publish that commits+pushes), not to the
-  in-session local read.
+## 3. Interpret — the plan lines ARE the action list
 
-**Act on the stale-book banner — re-sync, don't just note it (Ben, 2026-07-06).** When
-`watch-positions.mjs`'s summary prints `held basis positions.json Nm old ⚠ stale` and the age keeps
-CLIMBING across passes, the banner is a prompt to ACT: run `node pipeline/commands/sync-fills.mjs`
-(from the MAIN checkout) to refresh the book BEFORE trusting or reporting the held count —
-do not merely mention the banner and report off the stale file. Anchor (the failure this
-fixes): on 2026-07-06 the book sat frozen ~2+ hours (age climbed past 300m) while positions
-had actually changed; the held count was reported as ×2/×1 off a stale book when the real
-position had already half-closed. (This complements the LW3 heartbeat — the heartbeat is the
-localhost app's liveness signal; this is the operator's rule when reading `watch-positions.mjs` in a
-session.)
+Each plan line reads `WORD Item ×qty · list @ X (BE Y) · reason · was PREV`, printed cuts first,
+then list/sell, then watch, then holds (`pipeline/lib/render/plan.mjs`). Start from them. Keep the
+script's word and price unless a rule below or in §4 changes it. When you change either, write
+one line, `overriding: <script's> → <yours> — <rule>`, then how the plan plays out. Never rebuild the case on later passes. Read every lot's note block even when its line is quiet.
 
-**A stale LIVE PRINT ≠ a stale book — and it's now flagged in-code (Ben, 2026-07-21).** Distinct from
-the stale-book banner above (that's the reconstructed `positions.json` age): a single `/latest` SIDE can
-be an old print while the book is current, because the wiki serves the last actual instabuy/instasell
-trade — which on a thin big-ticket item can be an HOUR old even as the price moves. The quote now emits a
-`⚠ stale live print` note (and the windowExit/watch surfaces tag the age) whenever a displayed live
-instabuy/instasell is past `QUICK_FRESH_MIN` (~15m) but under the 90-min reliability floor, and the pace
-read prints `pace n/a (live stale)` instead of a false lagging read. **When you see it: do NOT quote or
-pitch a profit off the flagged number — read the fresher side it points at, and re-fetch before naming a
-price.** This is the code enforcement of the fresh-read rule for the exact failure this session hit: a
-64-min-old godsword instabuy (39.75m) was reported as live and drove a "lagging pace" read while the true
-price had already fallen ~500k to 39.25m. The number under the 90-min floor is still *reliable* (not a
-NO-READ) — it just isn't a live tick, so treat its age as the signal to re-quote.
+- **Vocabulary has one home: `pipeline/MONITORING.md` step 4.** `(X arming ~Nm)`, an `arming`
+  reason or a `Conviction … armed` line means X has not confirmed. Armed is not actionable: until confirmed, quote `list @ BE`, name the
+  armed price, and re-run after the stated minutes. If no rung clears BE, say so; do not invent
+  one. Timing is elapsed time
+  (`pipeline/lib/thesis/watchstate.mjs`), so never quote a pass count. A 2h-breakdown `CUT` is
+  never delayed. `was PREV` marks a verdict that changed: render that lot in full.
+- **A verdict is a prompt, not an order.** _(judgment: per-item dossier)_ Read it against what this
+  session already knows about the lot: entry intent, today's range, how the same alert resolved
+  before, whether the ask is filling.
+- **Override discipline.** _(judgment: the override rule)_ This binds undeclared lots. A declared
+  lot above its tripwire follows its plan line, and a 2h-breakdown CUT still prints CUT there.
+  Override a CUT or CUT-CANDIDATE only when its alert carries `[flicker]`; an untagged gap is real
+  money. Name a concrete structural level in the override line. `through cut-trigger` in the alert
+  ends the override that same pass: execute, do not re-argue. A level you named yourself breaks on
+  a print about 0.5% through it or one that persists, not on a graze. While overriding, watch the
+  clear price: if it decays, step the ask down instead of holding all-or-nothing.
+- **Fresh entry.** `WATCH — fresh entry` prints while a lot is under `FRESH_HOURS` old
+  (`js/quotecore.js`, CUT-CANDIDATE only). A bare `UNDERWATER` on a just-filled patient buy is
+  normal, not a cut signal. A CUT-CANDIDATE past that age is the gate working: overriding it is
+  your judgment and is labelled as one. A Gate-2 CUT under 1h old: say fresh, state the entry
+  floor; it still stands.
+- **Filling ask.** `HOLD — ask filling` prints when the lot's own ask is transacting above the
+  clear price (`js/quotecore.js`). Apply the same to a shallow `UNDERWATER`: an ask showing
+  `listed n/m` progress above the clear beats repricing down.
+- **Falling label is not a veto.** _(judgment: measured, TF2)_ On `crash-risk` or `cooling`, when
+  the regime line ends `→ measured cell:`, read the `◇` line under it and any declared plan before
+  recommending a cut off the label alone. `mild-cooldown` keeps its full ceiling-slope caution.
+- **Read the `⇅ floor/ceiling` line against the verdict.** _(judgment: heuristic, never gates)_
+  At the FLOOR and oscillating: price to the swing, do not cut. At the CEILING and cooling: clear.
+  Near the ceiling: do not add.
+- **Never cut for opportunity cost.** _(judgment: Ben-ruled)_ "Earns more elsewhere" is not a
+  reason to cut. A stuck lot is damage control: name the cheapest reliable exit.
+- **`recovery-read` ranks where to dig, nothing more.** _(judgment: a lean, not a probability)_ It
+  matters most when it conflicts with the verdict or reads `uncertain`: apply judgment then.
+- **Resting bids default to LEAVE.** _(judgment: Ben-ruled patience)_ A bid fills only at your
+  price. Relay `CANCEL-BID` as an action only on a structural break that held, a chase bid at or
+  above live filling into a confirmed fall, or a clearly better home plus a bid unlikely to fill.
+  Otherwise report it and wait a pass. Never pitch repricing a stranded bid up to fill: name the
+  next dip window and the peak it pairs with (`read-schedule.mjs -c`).
+- **A `CROSSING` bid that is not filling.** _(judgment: the gate cannot see limits)_ Run
+  `read-buy-limits.mjs "<item>"` before expecting fills or repricing; a spent 4h limit blocks it.
+- **Trajectory read for confidence.** _(judgment: diligence scales with size)_ For a big-ticket,
+  underwater or marginal hold-vs-cut call only: `read-window-range.mjs "<item>" --window 0-23
+  --nights 21`. Name the phase (base, spike, decay). Lows that stopped stepping down at the
+  pre-spike base are hold-supportive, and the tripwire becomes a convincing break below that base
+  low. A hypothesis from one item, not a pattern.
 
-**Position = held inventory + active GE offers** (Ben's definition, 2026-07-04). If
-`--positions` prints no open lots, the review isn't done: run `node pipeline/commands/watch-positions.mjs` —
-its default pass covers active bids/asks (BID-OK / BID-BEHIND / CROSSING / CANCEL-BID) —
-and report the offer set as the position set.
+### Thesis
 
-**Reading `watch-positions.mjs`'s per-held note block (the V5 EMIT CONTRACT).** Every held lot's note
-block is the same fixed, ordered shape: `verdict · conviction-state (V4 armed) · Δ-since-last
-(V1) · structural tripwire (V2) · sell/list-at (+ break-even) · fill-progress`. The
-**`sell: list @ X · break-even Y · <ask n/m or NOT LISTED>` line is ALWAYS present on a held
-lot** — that guaranteed field is where you read the current list-at + break-even for every held
-item without re-deriving it (Ben's rule: a fill you didn't see may have happened). Optional
-fields drop out when N/A; the sell line never does. Full contract: `MONITORING.md` "What each
-tick surfaces". (This is the SCRIPT's list-at; the step-down doctrine below can still override
-it for a new/test lane.)
+- **Declare the thesis AT ENTRY.** _(judgment: operating rule)_ Every deliberate diurnal or value
+  hold: `declare-thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h>
+  --until <YYYY-MM-DD> --path <key>`. `--path` with a numeric `--tripwire` is what gates; `--until` alone only
+  dates the plan, and the tool refuses a path with neither (`--no-tripwire` to say so on purpose). When a hold you have
+  judged keeps drawing a flip-flopping verdict for lack of one, declare it and report in one line.
+- **A declared lot is reported in the plan's terms.** _(judgment: Ben-ruled terse)_ Relay the plan
+  line's word (`HOLD`, or `HOLD (overrode cut) · abort < Y`) and its price, which is the declared
+  exit. Do not re-litigate the gate. Exit, abort and date detail only when asked or changed.
+- **`plan expired — reassess` means decide now.** _(judgment: re-decide)_ Re-declare with a new
+  date, or drop the plan and follow the machinery verdict. The entry also prunes about 14 days
+  after declaration (`pipeline/lib/thesis/holdthesis.mjs`): re-declare mid-hold to extend.
+- **`⚠ declared exit X looks STALE`.** _(judgment: inform-only flag)_ Judge whether the premise
+  holds. If the peak has moved, re-declare with the new `--exit`.
+- **Cadence follows the thesis.** _(judgment: cadence)_ A declared multi-hour hold wants a check
+  near its exit window and two or three passes a day. The tight loop is for falling and thin
+  big-ticket lots.
 
-## 2. Separate flip targets from incidental inventory
+## 4. Price the exit and render the plan
 
-**Code-enforced (2026-07-16, was prose-only doctrine an agent had to remember every pass).**
-Three ×1 rune-drop loot lots (Steam/Sunfire/Aether rune) kept re-earning a full CUT-CANDIDATE/
-UNDERWATER headline every single watch pass because nothing in the pipeline actually applied
-this test — it was written down here but never checked in code, the same failure shape as the
-sync-enforcement and held-item-exception gaps found earlier the same session. Fixed: both
-`watch-positions.mjs` and `quote-items.mjs --positions` now filter a lot whose total value
-(`qty × avgCost`) is under `NOISE_OFFER_GP` (100,000 gp — same constant that already governed
-tiny offers) UNLESS it's on the watchlist, BEFORE it ever reaches the table/verdict loop — no
-row, no alert, just a collapsed `incidental inventory, ignored: X, Y` line in the summary/header.
-**Watchlist membership is still the exemption** — a deliberately-tracked item is never filtered
-by value alone, however small the lot. You should rarely need to apply this test yourself now;
-if you ever see an incidental-looking lot still drawing a verdict, that's a gap in the value
-threshold or the watchlist read, not a missing manual judgment call — flag it as a bug.
+### Exit pricing
 
-**Personal use is per-TRADE, never per-ITEM (Ben, 2026-09-02).** When Ben says a lot was bought for
-personal use (the fang, cannonballs, a Torva platebody), tombstone THAT TRADE the same turn —
-`add-manual-fill.mjs --type withdraw` + a sync — and never verdict the lot. Do **not** add the item to
-`ignored-items.json`: the ignore list is an item-wide MERCH-view quarantine and a separate deliberate
-act, so it also hides every future flip of an item Ben still trades. Add to it only when he asks for
-the ignore list by name.
+- **Break-even is the floor.** Never list below the printed BE (`breakEven()` in
+  `js/quotecore.js`). Only a CUT-family plan line may carry a lower price.
+- **Every price states its basis and its target.** _(judgment: Ben-ruled)_ Write `X (fill-now)` or
+  `X (rest-day)`, then the window or mechanism expected to fill it. Take both levels from the lot's
+  `⇄ dwell (sell): FILL-NOW @… | REST-DAY @…` line; never recompute them. A price whose window has
+  not arrived is not "not filling".
+- **Dwell horizon picks the basis.** _(judgment: `/scan` §2 dwell rule)_ Ben at the desk: the
+  FILL-NOW edge, and the step-down below. Away or overnight: one REST-DAY rung, when it clears BE.
+  Never start a ladder nobody will walk, and never leave a fill-now price to rest unattended.
+- **Sell-velocity step-down.** _(judgment: Ben-ruled)_ An ask above the 2h band top that is not
+  filling: step to just under the band top. Still not moving after about an hour, or momentum
+  flips ↓: step to just above the live instabuy. Show each rung with net per unit and lot P/L.
+- **A band top that decays across passes is a step-down trigger now.** _(judgment: bludgeon
+  retro)_ Do not wait out the hour. With a measured trough ahead, realize the printing price and
+  re-bid the trough.
+- **New or test lane: velocity over premium.** _(judgment: Ben-ruled)_ The HOLD default is the
+  band top. On an unproven lane list at a level reached most days, take less, and learn the lane.
+- **Rising item: do not under-price.** _(judgment: berserker retro)_ With momentum ↑ or a rising
+  regime, ask near the band top or hold. Do not step down to a mid-band clear or exit early to
+  book the trade; a rebuy pays the tax twice. This applies doubly overnight.
+- **`⤴ ask headroom` means ladder up.** The printed `list @` is a floor (`askHeadroomText` in
+  `js/quotecore.js`, inform-only): step the ask toward the raw top, never relist down.
+- **Fade means price the early exit now.** _(judgment: godsword retro)_ Triggers: a `FADE` alert,
+  or `⚠⚠` in the `read-window-range` output. `⚠ fading` with margin still comfortably positive, or
+  `⚠ lagging` alone, is a caution: read the daily HIGHS before acting. Highs stepping down toward
+  the ask is a trigger too (a rising floor lags and masks it). Price the highest rung recent days
+  still reach that clears BE. The alert's `list @` is the model's ask, often just BE, not a
+  verified level. Do not anchor at the tail and step down later: the ceiling descends onto the ask.
+- **Falling or cooling big-ticket: the certain clear beats the tail.** _(judgment: Ben-ruled,
+  falling and cooling only)_ Quote the `every-day` rung of `typical exit` (else `~75%`) that still
+  clears BE, not the `~50%` or recent-3 tail. State both nets and recommend the certain clear.
+- **An elective small-loss exit is laddered.** _(judgment: godsword retro)_ A cooling lot with no
+  confirmed CUT and no tripwire through: one unit near BE and one a rung higher, never the
+  instabuy. A single unit takes the near-BE level. A confirmed CUT follows its plan line.
+- **Placement tells how greedy a level is.** _(judgment: reading the `↗ window-clear` line)_ p50
+  and up is the top of the recent range: fine on an extending peak, wrong on a fader. p15 and
+  under clears nearly every day. `recent 0/3` beside a high full count is a stale level. `typical
+  exit ~50%` and `Optimistic` are candidates, not the number to quote.
+- **A reality clause travels with its level.** `⚠ spike-top …` / `⚠ stale … ~X` (`realityClause` in
+  `js/windowread.mjs`) names the typical level and leaves the flagged one unchanged. Relaying the
+  price without the clause turns a flagged extreme into a plain list-at.
+- **Two peak windows are both real.** _(judgment: Ben-ruled)_ The clause does not print on this
+  surface. When exit timing matters, `quote-items.mjs "<item>"` prints `↳ BID … · ASK …`; if it
+  appends `also ASK …`, name both windows. Listing into the first and relisting for the second, or
+  splitting the lot, is Ben's call.
+- **Rungs are levels, not fill rates.** _(judgment: honesty)_ Touched or reached is not filled. The
+  footer's class rate bounds a resting ask from above and is never this lot's odds.
 
-## 3. Interpret each verdict
+### Soft-buy line — adding to a held lot, or a rebid
 
-**Vocabulary — the ONE home is `pipeline/MONITORING.md` step 4** (the PLAN-3 gate tree + the
-momentum-up verdicts). The set is deliberately NOT listed here: a copy of it lived in this file and
-drifted, naming `CUT-CANDIDATE` for a branch that cannot produce it and omitting the falling-regime
-`SELL @ X` / `CUT @ X` pair and `NO QUOTE` entirely. An `(X arming ~Nm)` suffix on any of them means
-the change has not confirmed yet. Read the set there; don't re-derive it here. The script emitted the verdict; your job is to **render it as the action
-line in §4, against the per-item dossier** — a verdict is a prompt for judgment, not an order
-(the CANCEL-BID-on-a-thin-book and fresh-chase-entry examples in MONITORING step 4).
+- **Holding for a later peak is no reason to idle on the buy side.** _(judgment: Ben-ruled)_ Read
+  `⏳ soft-buy: floor ~X · live @floor | +X% · <cue>`. To add, rest a bid at the floor level now
+  and leave it all day. Dip hours only matter for an attended take; a resting bid is never timed
+  to them. `no reliable dip hours` was measured and failed; `dip hours unverified` was not checked.
+- **The cue words are a buy-timing vocabulary of their own.** _(judgment: reading
+  `SOFT_BUY_CUE_TEXT` in `js/windowread.mjs`)_ Any `▽ caution` (floor breaking, stale uptrend,
+  unproven base, exit side fading): do not add on the dip alone. `▲ favorable` is price-trend only
+  and blind to game updates. Gear pumps before an update and dumps after, so it is a prompt, never
+  a green light.
+- **Size inside the buy limit.** _(judgment: Ben-ruled)_ Never suggest more than the regime line's
+  `buy limit N/4h (… left)`. A bigger add is stated as windows. A missing limit is not unlimited.
+- **Cut-and-rebid.** Read the `Rebid advisory` line (`rebidAdvice` in `js/quotecore.js`), never
+  redo its arithmetic. The pair beats holding only when the rebid sits below the clear by more
+  than tax plus half the spread; a still-falling item gets no rebid. State both numbers.
+- **A deep bid does not fill.** _(judgment: reading reach)_ For an add or a rebid, a level whose
+  bid reach reads `recent 0/3` at a deep placement is too deep: name a level recent days touch.
 
-Interpretation that goes BEYOND the tree (this skill's value-add, not restated in MONITORING)
-lives below: the sell-velocity preference (how to step an unfilled ask down toward the clear)
-and the fill-progress check before acting on a CUT-CANDIDATE (an actively-filling ask may already
-be resolving the underwater flag).
+### Verify before you name a price
 
-**Falling label ≠ standalone veto (TF2, WPC §6 branch (iv), measured 2026-09-08):** on a
-`crash-risk`/`cooling` item, when the regime warning carries `→ measured cell:` the dislocation
-line directly under it is the measured forward-yield read for that state — within (class ×
-depth) cells the label moved nothing BH-significant, so read that line (and any declared plan
-frame) before recommending CUT off the label alone. Applies to those two labels ONLY —
-`mild-cooldown` was outside the measured set and keeps its full ceiling-slope caution.
+- **Every price you recommend acting on gets one call.** _(judgment: when to verify)_ A reprice,
+  a list, a cut-ladder rung, a rest-day rung: `read-window-range.mjs "<item>" --ask <P> --exit <P>
+  --window peak --profile`, this reply. Only an unchanged quiet lot is exempt. The `↗ window-clear`
+  line is all-day and scores the declared exit or Optimistic, not your price; `window read
+  unavailable` leaves the verdict intact. A skipped check, not a bad call, is the recorded failure.
+- **A buy you recommend gets `verify-pick.mjs`** `"<item>@<bid>:<ask>"` in the same turn (add,
+  rebid, redeploy). Pitch only a PASS. If nothing passes, say nothing clears.
+- **Reading the trio.** _(judgment: interpretation)_ Use the literals `--window peak` / `--window
+  dip`, never typed hours; `0-23` scores the whole day. Read the `↳ in-window:` line: an ask above
+  the peak's own level is not a window-clear price. Margin is `--exit`'s max buy minus Held@, never
+  ask minus cost. Low raw reach alone does not reject a level on a deep book (read `⊙ avg-bound
+  read`); on a thin book stay near the centre. `⚠⚠` on the ask is the price-early trigger above.
 
-**Sell-velocity preference (Ben, 2026-07-04) — the sell-side voice of `/scan`'s WINDOW-CLEAR PRICING step (days-reach ≠ within-window clear; name the exit window, price to it):** when a held item's ask sits ABOVE the current 2h band top and isn't filling, don't let it ride — recommend stepping the ask down to just under the band top (the price the market is actually printing), and if it still doesn't move within ~an hour or momentum flips ↓, step again to just above the live instabuy to clear. Moving the item and freeing the capital generally beats the patient premium. **The ladder assumes ATTENDED re-checks (~hourly) — it is an attended-dwell play.** On an away-hours/overnight dwell don't start a ladder nobody will walk: place the single REST-DAY rung from the `⇄ dwell` line instead (`/scan` §2 "Entry AND exit aggression follow the DWELL HORIZON"). The floor is unchanged — never below break-even (the shared tax-capped `breakEven()`; see CLAUDE.md "Break-even") — the CUT/CUT-CANDIDATE verdicts remain the only exceptions. Present the rungs with net-per-unit and lot P/L so the velocity/premium trade-off is explicit.
+### Output format
 
-**HOLD defaults to the band-TOP premium — step a NEW/test lane down to a reachable level
-(Ben, 2026-07-06):** `momVerdict`'s HOLD emits "list @ <band top>" (the Optimistic 2h high)
-as its default patient-premium ask. That default is right for a PROVEN lane you're happy to
-wait on, but WRONG for a NEW/test lane, where velocity > premium: don't parrot the verdict's
-band-top note — surface a step-down explicitly. Price the ask at a level the item actually
-REACHES often (run the `read-window-range.mjs --ask <level>` reach check the doctrine already
-requires), take a little less profit, and get a few real laps to learn the lane's fill
-behavior. Example (2026-07-06, one item — not a rule): a webweaver ask defaulted to 18.90m
-(reached only 2/7 in the next-8h window); stepping to 18.70m (+226k/lap, +1.25%, reached 4/5
-in the current regime) traded ~half the premium for a fillable ask. Break-even floor unchanged.
-
-**Rising-item asks — do NOT under-price to a mid-band clear (Ben, 2026-07-07 — the berserker
-overnight retro):** the step-down rules above are for a STALLED ask (not filling / decaying top).
-The opposite error is just as costly: on an item with momentum ↑ / a RISING regime, an ask parked
-at a mid-band *clear* price fills you out BEFORE the run finishes. When mom is ↑ or the regime is
-rising, price the ask nearer the band TOP (or hold the lot) — do NOT step it down to a level that
-clears mid-climb, and do NOT pre-emptively exit a rising held lot into a lower ask just to book the
-trade. Anchor (one costed sample): a berserker overnight ask left at the 3.04m mid-band clear filled
-at 3,039m while the ring kept running to 3,087m+ live instabuy — leaving ~+240k (≈+48k/ring ×5) on
-the table, and a rebuy to recapture it pays the 2% tax twice (worse than having held). Applies
-doubly overnight, where the UK-day lift is exactly the run you want the ask to ride (`/overnight`
-time-geography). This is the complement of the sell-velocity step-down, not a contradiction: step
-DOWN a stalled/decaying ask; price UP or hold a rising one. Break-even floor unchanged.
-
-**Ask-headroom note — a `⤴ ask headroom` line means LADDER UP, don't relist down (PLAN Bar-E-signal, Ben
-2026-07-11).** _(enforced: `js/quotecore.js` `computeQuote` `row.askHeadroom` + `askHeadroomText`; rendered
-on `quote-items.mjs --positions`)_ On a held lot, the verdict's "list @ X" is a FLOOR, not a ceiling. When
-`quote-items.mjs` prints `⤴ … ask headroom — raw top N traded above the quoted ask X` (Class 1: the robust p90
-shaved a TRADED in-band top) or `⤴ … list @ X is a FLOOR … live broke +N%` (Class 2: a live 2h breakup),
-step the ask UP toward the raw top rather than parroting the verdict's number — the GE better-price rule
-makes the ladder cheap (a list at X already fills at the best standing bid; a list a few ticks higher risks
-only time). This is the ENCODED form of the rising-item / don't-sell-into-strength doctrine above (it's the
-Soul-rune-393-sold-397 lesson) — but INFORM-ONLY: it never moves the quoted number, never a cut/alert
-input, and the break-even floor is unchanged. Honesty (rule 4): n=1, thresholds are PLACEHOLDERS pending F1
-retro calibration — treat the note as a prompt to ladder, not a validated target.
-
-**Decaying-band-top trigger (Ben, 2026-07-04 — the bludgeon retro):** the 2h band top falling across consecutive watch passes while a held item's ask sits above the printing range means the "top" is stale old prints, not live demand — that decay is a step-down trigger in its own right; do NOT wait out the usual hour. And when a measured intraday trough/bounce window lies ahead (per a `read-window-range.mjs` window read), prefer realizing the printing price early and re-bidding the trough over holding a stranded premium through it — two small legs beat one stale ask. Break-even floor unchanged.
-
-**Trajectory read for confidence on a marginal/big-ticket hold (Ben, 2026-07-06 — the DWH
-retro):** the stateless verdict and a narrow-window read can leave a big-ticket hold-vs-cut
-call genuinely uncertain; a detailed FULL-DAY multi-week trajectory read is what generated
-real decision confidence (the DWH verdict flipped to HOLD-list-high minutes after this read,
-which the market then confirmed). Run it as **diligence for a big-ticket / underwater /
-marginal hold-vs-cut decision** — NOT on every quote (this ties to memory "size scales
-diligence"). Method:
-
-1. **Use the FULL-DAY window, not the narrow demand slice:**
-   `node pipeline/commands/read-window-range.mjs "<item>" --window 0-23 --nights 21`. The narrow 00-08
-   demand slice OVERSTATED a weekend→weekday fade that the full-day lows did not show
-   (see the `/overnight` correction below) — read the whole day.
-2. **Pull enough history (2–3 weeks, `--nights 21`) to capture the PRE-SPIKE BASE** — so a
-   post-spike decay can be read against the floor it is returning toward. (Same family as
-   `/overnight`'s "decay-trend trough projection" — cross-reference it, don't duplicate: that
-   one projects tonight's trough from the low trend; this one names the base a decay returns to.)
-3. **Map days-of-week and NAME THE PHASE (base / spike / decay).** Then check whether the
-   per-day LOWS have STOPPED stepping down: a decay that has round-tripped to the pre-spike
-   base with lows that have stopped falling = BASING = hold-supportive. The cut tripwire
-   then becomes "a convincing break BELOW the pre-spike base low" (a concrete structural
-   level, per the override-discipline rule below).
-4. **Gate by size / marginality** (above) — this is expensive diligence, reserved for the
-   holds where the hold-vs-cut call is close and the lot is big.
-
-DWH anchor (full-day, 15 days): a stable pre-spike base ~15.2–15.6m low / 15.8–16.2m high
-(06-21→06-26), a spike to intraday 19.94m (06-30) / 18.80m (07-01), then a decay back to the
-base with lows basing at 15.0–15.2m over the last 3 days (07-04/05/06) — a completed
-spike-and-return; the named tripwire was sub-15.00m (a break below the base low). **Honesty
-guard (process rule 4):** the METHOD encodes freely, but the market findings here are a tiny
-sample — n=1 item, ~3 Sun→Mon transitions, one spike-and-return. Treat "basing = bottoming"
-as a hypothesis to keep testing, not an established pattern.
-
-**Declare the thesis AT ENTRY — every deliberate diurnal/value hold (VN-0, Ben 2026-07-11):**
-a position entered on a plan (buy the dip window, sell the diurnal peak; a value-hold toward a
-multi-week level) gets its plan DECLARED the moment the bid is placed/filled:
-`node pipeline/commands/declare-thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h> --until <YYYY-MM-DD> --path <key>`.
-The declared tripwire activates the TG1 headline silence and the thesis render frame
-(MONITORING.md step 4) — without it, the band-flip frame re-litigates the expected pre-peak
-trough as UNDERWATER/LIST-TO-CLEAR churn every pass (the 2026-07-11 Berserker/Masori session).
-An undeclared deliberate hold is an operating error, not a tooling gap.
-**The frame IS the verdict cell for a declared lot (TF3, PLAN-THESIS-FRAME):** it renders
-`PLAN <path> · day k/n · exit X · abort < Y · until <date>` with the machinery's read in parens
-whenever it disagrees — report the lot in the PLAN's terms (progress vs exit/abort/date), the
-machinery read as the parenthetical, and don't re-litigate the gate each pass (the standing
-"overrode cut, be terse" rule). `--until` is the declared failure DATE (render-only, never gates;
-a time-based plan can pass `--no-tripwire` instead of inventing a price stop — the tool now
-REFUSES a path declaration with neither, because it would gate nothing while looking armed).
-Past the date the cell hard-lapses to `PLAN EXPIRED — reassess · machinery: …` — that is the
-moment to actually re-decide, not a nag to silence. Note the ~14d hold-thesis TTL still prunes
-the entry from declaration; re-declare mid-hold to extend either clock.
-A declared exit is point-in-time: `quote-items.mjs --positions` now auto-flags one that has gone
-STALE on reach (`⚠ declared exit X looks STALE — printed N/3 recent nights; recent reachable
-peak ~Y`, Proposal C — inform-only, placeholder <2/3-recent bar, n≈0). On that flag, judge
-whether the thesis premise still holds; if you agree the peak has moved, re-declare the exit
-via `declare-thesis.mjs set … --exit` (the flag never edits the thesis or the verdict itself).
-
-**Thesis-appropriate cadence (VN-0):** a parked-at-break-even hold with a declared exit window
-wants a check NEAR ITS PEAK WINDOW plus ~2–3 passes/day — not the 3m hair-trigger class
-cadence. Nothing actionable happens in 3 minutes on a lot moving ~1%/hour; oversampling
-manufactures flip-flop reads (MONITORING.md "Cadence"). The tight cadence is for FALLING /
-thin-big-ticket hazard classes, not a declared multi-hour hold.
-
-**Entry-age check — fresh entries draw false CUTs (2026-07-05, three-for-three):** the gate
-tree has no concept of entry age, so a just-filled patient buy shows "underwater" on the
-instant-clear price (almost definitionally true minutes after any patient fill) and drew a
-CUT-flavored verdict within ~20 minutes on every fresh entry in one session (jaw, bludgeon,
-wrath — all correctly overridden). On a lot held under ~an hour whose ENTRY THESIS is intact
-(the multi-day floor/base that justified the buy hasn't printed through), treat
-CUT/CUT-CANDIDATE/UNDERWATER as noise and judge against the thesis, not the verdict.
-
-**Override discipline — name a tripwire, then obey it (2026-07-05; HARDENED 2026-09-21, HF3):**
-every verdict override must come with a CONCRETE structural level, named at override time (e.g.
-"below 16.50m = the 7-day window floor is broken"), not an open-ended "hold anyway." _(judgment,
-with the two bounds now ENCODED in the alert text — PLAN-HOLD-FADE-ALERT HF3:)_ **an override is
-permitted ONLY on a `[flicker]`-tagged CUT/CUT-CANDIDATE** (the tag prints when |quick-sell − BE|
-≤ `FLICKER_GP` = 6 gp — the band actually overridden on 2026-09-21, a description not a
-measurement); an untagged alert's gap is real money and the override frame does not apply. **A
-named tripwire that PRINTS THROUGH ends the override that same pass** — the alert now prints
-`through cut-trigger <t>` itself, so obeying the level is reading the line, not remembering the
-number (the Diamond-bolts anchor: cut-trigger 2,624 named at 17:43, instasell 2,612 at 18:50
-relayed as flicker — the sell side was 40–80 gp through cost). While overriding, also track the
-DECAYING COST OF THE CUT (the instabuy you'd clear at falls while you hold — option-value bleed):
-if the clear price decays materially even without the tripwire printing, step the ask down rather
-than binary hold-vs-cut. When the tripwire prints, EXECUTE without re-litigating — the jaw 16.49m
-print (7-day floor break) is the anchor; the discipline only protects you if the named level is
-obeyed both ways.
-
-**Cut-and-rebid friction bar (2026-07-05, Ben-endorsed; ENCODED COD-3, 2026-07-10):** a cut
-paired with a deeper re-entry bid is a legitimate two-leg (the jaw anchor: cut 16.87m, rebid
-16.42m) — but each sell pays 2% tax, so the pair only beats holding if the rebid sits **more
-than tax + half the spread below the clear price** (~2.5%+). This arithmetic is now the shared
-`rebidBar(clear, spread)` in `js/quotecore.js` (friction = tax + half the spread; threshold =
-the price the rebid must sit at/below), and `quote-items.mjs --positions` prints a **Rebid advisory**
-line on every CUT / CUT-CANDIDATE / LIST-TO-CLEAR verdict — don't re-derive the numbers, read
-that line. It is TRAJECTORY-AWARE (`rebidAdvice`): a **knife** (still falling) → advises AGAINST
-the rebid (the bar is moot, cut and redeploy); an **oscillating** faller (bounces back at the
-daily high) → rebid at the projected trough & sell the daily peak; else the friction bar governs.
-Honesty: the bar arithmetic is solid; the trajectory/diurnal awareness is inform-grade
-(placeholder classifier, n≈0) — it SUPPORTS the call, never auto-cancels/auto-rebids. (The
-trajectory reads the read-only daily archive on this surface, so it's `unknown` → friction-bar
-until the archive warms; the forecast upgrade to a quantitative projected-peak is PLAN-FORECAST
-PF1.) State the discount-vs-friction numbers explicitly when recommending the pair.
-
-**Tripwire conviction (2026-07-05, one-sample refinement — honesty rule applies):** the jaw
-tripwire fired on a 1-in-1000 overshoot (16.49m against a 16.50m line) that stabilized
-immediately — the floor "break" was 20k deep and the item recovered within the hour. A
-structural tripwire should require conviction of the break before executing: a print
-**meaningfully through** the level (~0.5%+) or below it for long enough to persist, not a
-grazing touch. This tightens WHEN the tripwire fires; it does not soften obeying it once
-fired (the override-discipline rule above stands). **`watch-positions.mjs` now enforces this
-mechanically (V4, arm-then-confirm):** its structural-break headline ALERT fires only when the
-live instabuy is `< cut-trigger` (≥ `CUT_TRIGGER_DELTA` below support) OR below support for
-`ALERT_PERSIST_MS`; a shorter graze *arms* (a visible note) instead of alerting. Likewise a
-Gate-D `CUT-CANDIDATE` needs `ALERT_PERSIST_MS` of underwater-liquid time to become a headline
-alert. **The bar is ELAPSED TIME, not a pass count** — this file said "two consecutive passes"
-for both, which reads as 60 minutes at `--watch 30` and 2 minutes at a 1m dip loop, wrong in
-both directions. Never quote a pass count when timing a cut; `watchstate.mjs` owns the value. The **Gate-2 breakdown `CUT` is exempt — it still alerts immediately** (a live breakdown
-is not a thing to sit on).
-
-**Limit-blocked CROSSING (2026-07-05):** a bid at/above the live instasell prints CROSSING
-("expect fills about now") even when the 4h buy limit makes fills impossible — the gate can't
-see limits. Before expecting fills or repricing a "not filling" bid, check the last buys in
-`fills.json`: limit re-arms 4h after the first fill of the consumed batch (the soul-rune bid
-sat CROSSING for ~50 minutes, correctly untouched, until the 23:17 re-arm).
-
-**Fill-progress check before CUT-CANDIDATE action (2026-07-05):** before acting on a
-CUT-CANDIDATE (or shallow UNDERWATER), check whether the current ask is actively filling
-(`monitor-offers.mjs` / the watch row's `listed n/m`). An ask that is transacting above the
-clear price beats repricing down to a lower clear — twice on 2026-07-04 the gate fired
-while the ask was filling (souls at 6k/25k) or 1gp under break-even; both were correctly
-held. Depth and fill progress are context the stateless gate can't see; judge with them.
-
-A feed-inverted row (regime line carries the "⚠ feed inversion — quote basis unreliable"
-footnote) now prints **NO-READ** on its own — Gate 0 in `momVerdict()` folds inversion into
-the reliability signal (Q1, quotecore 0.36.0). No interim override needed; just read the
-verdict the script emits.
-
-## 4. Render the action plan
-
-Grouped by urgency: **cuts → list-to-clear → holds/watches**. One line each:
-`item · held@ · break-even · verdict · exact action price`.
-
-**Every action price states its timing target AND its basis (Ben, 2026-07-05; basis token
-2026-09-10 — the rule's one home is `/scan` §4, this restates only the token):** a recommended
-price is "X **(basis)**, targeting Y" — basis = the `⇄ dwell` line's own token, `(fill-now)` or
-`(rest-day)`, quoted never recomputed — and the number is bound to the
-window/mechanism expected to fill it, e.g. "17.55m (rest-day, reached 7/7d) — targets the
-23:00–03:00 UK-morning lift" or "10.70m (fill-now) — velocity clear, fills on current prints".
-A fill-now basis on an ask that will rest unattended is the Marlin miss — declare it and the
-dwell rule (`/scan` §2) will catch the mismatch. The data is already in hand (the
-`read-window-range.mjs`/window-line read the doctrine above requires); this rule just forbids a
-bare number. It also sets the re-check expectation: a price whose window hasn't arrived yet
-isn't "not filling".
-
-**Verify the SELL leg before quoting a profit — MANDATORY, not judgment (Ben, 2026-07-07, the
-DHCB overpitch).** Whenever you pitch a dip-bid's or a hold's expected profit off a band top /
-optimistic sell, **run `read-window-range.mjs --ask <sell target>` first (the verification TRIO
-below) — running it stays mandatory; only the INTERPRETATION of the result is liquidity-conditioned.**
-A low raw reach count is NOT by itself grounds to reject a sell level: "reached" only means the 1h-bucket
-AVERAGE crossed it, and pricing an ask above that average is how a flip earns money (full doctrine
-`docs/MARKET-ANALYSIS.md` §4 — don't restate it here). Judge the level by LIQUIDITY and its placement
-percentile, not the raw N/14 — and on a DEEP book **read the `⊙ avg-bound read` clause the trio now
-prints** rather than conditioning by hand (encoded 2026-08-05, `avgBoundRead` in `js/windowread.mjs`;
-it fires only above `REACH_RELIEF_MIN_VOL` and is inform-only). On a thin book nothing prints and the
-full-strength guard still applies — stay near center there (an artifact print is easy to mistake for a
-real level); on a deep/liquid book the upper tail is fine, distrust only a level at/near the
-historical extreme (≈p100). This session the old "step
-down to the ~50–75%-day reach level, never above" framing produced TWO false "won't clear" reads on
-liquid items (soul rune, dragon bones) that then cleared at the higher price. The band top is a
-CANDIDATE (input), not the pitched number — on a thin + wide-band item it is an artifact that never
-reaches — but on a liquid book do not reflexively step it down. This is a hard checklist step (like
-`/overnight`'s fill-realism check), because the failure mode is a *skipped step*, not a bad call:
-DHCB's band-top sell 36.21m reached **0/7 days**, I quoted +690–810k off it without running `--ask`,
-and the reachable sell was ~35.6m (+80k, which then went underwater). No edge is real until BOTH legs
-are verified — the buy (trajectory / dip-vs-knife) AND the sell (`--ask` reach).
-
-**The verification TRIO — mandatory for every top pick/action price, ONE combined call, every time
-(Ben, 2026-07-18 — supersedes running these ad hoc/"on the handful you actually pitch"; revised
-same day once `--profile` was fixed to COMPOSE with `--ask`/`--bid`/`--exit` instead of
-short-circuiting the rest of the per-item read).** The sell-leg-only rule above is now the FLOOR,
-not the whole bundle. Before naming an action price on anything you're recommending (a new bid, a
-list-at, a rebid), run ONE `read-window-range.mjs` call bundling all three checks on it — cheap
-(zero new fetch beyond the archive) and each catches a different failure mode seen this session:
-```
-node pipeline/commands/read-window-range.mjs "<item>" --ask <sell> --bid <buy> --exit <ask> --window peak --profile --json --out pipeline/.cache/last-report/verify.json
-```
-0. **`--window peak` / `--window dip` — use the literals, never hand-typed hours (2026-07-26, the
-   all-day-vs-window incident).** _(enforced: `read-window-range.mjs` resolves them per-item off that
-   item's own `hourProfile`)_ **`--window 0-23` is a legal 24-hour window, NOT a "no window scoping"
-   sentinel** — every window-scoped figure it returns (reach, placement, cushion, AND the instabuy/
-   instasell pool) then describes the whole day. That is how a Divine super combat exit got verified at
-   `14/14 days, recent 3/3, p0` all-day while the 20:00–23:00 peak it was actually priced for read
-   `recent 0/3 ⚠ stale`, and how a 2,000-unit lot got sized against a 210,763-unit all-day pool when the
-   target window held 7,061 (≈30× off). Reading "PEAK window 20:00–23:00" off the profile and retyping
-   it as `--window 20-23` is the transcription step the literals remove. A full-day window now self-labels
-   `ALL-DAY`, and mixing an explicit `--window` with `--profile` prints a divergence warning when the two
-   disagree. The `--profile` block also now scores each derived window against **its own hours** — the
-   window's level reach, the pool competing there, and (when `--ask`/`--bid` is passed) **your** level's
-   in-window reach plus its signed gap to the window's own level. Read that `↳ in-window:` line: an ask
-   above the peak's own printed level is not a window-clear price.
-1. **`--ask <sell>` / `--bid <buy>` (percentile + reach, AC4a).** Read BOTH numbers it prints, not
-   just the day-count: `reached N/14d · recent M/3 · placement pXX of the 14-day daily-HIGH/LOW
-   distribution`. The placement percentile tells you WHERE in the distribution the level sits (p86
-   = near the top, rare; p7 = near the bottom, routine) — a level can have decent N/14 reach and
-   still be an aggressive ask if its placement is high. Never quote a level off Est./Optimistic
-   alone without pulling this.
-2. **`--exit <ask> [--window <hours>] [--margin <gp>]` (tax-exact back-solve).** This gives the
-   real breakeven BUY for that sell (`maxBuyForExit`, already tax-net) — margin is this value MINUS
-   the actual bid, never a raw ask-minus-bid subtraction (the Tormented synapse correction,
-   2026-07-17: naive subtraction on a value that was already tax-net produced a margin ~4x too
-   high, and part of the "safe" bid range actually crossed into a loss).
-3. **`--profile` (hour-by-hour diurnal sweep).** Don't trust the screen's/quote's auto diurnal note
-   as the final word on timing — pull the full 24-row hour-of-day table and read the printed DIP/
-   PEAK windows plus the amplitude/trend line yourself before naming a timing target. This is the
-   same data the auto-note derives from, at full resolution, and it's what lets you say "targets
-   the 20:00–21:00 dip" with the actual numbers behind it rather than a summarized guess.
-None of these change the verdict or the gate tree — they're the confirmation pass on the specific
-number you're about to say out loud. Skipping one is exactly the failure class the DHCB and
-Tormented-synapse anchors both are: a real tool existed, wasn't run, and the pitched number was
-wrong in a way the tool would have caught. **Dump it with `--out`** for the deep-dive candidates
-this pass singles out, so a later pass — this skill's own re-check, or `/scan`'s
-`set-scan-analysis.mjs` — can read `pipeline/.cache/last-report/verify.json` instead of re-running
-the checks by hand or re-deriving the numbers.
-
-**The REACH-MARGIN FADE check — price against where the recent distribution ACTUALLY reaches, not
-its tail (Ben, 2026-07-20 — the godsword/mask pair).** This is a named diligence read over the TRIO's
-`--ask`/`--bid` output that repeatedly catches us AIMING TOO HIGH (a sell parked at the greedy tail of
-a distribution the item is drifting away from). For any price you're about to set on a big-ticket/held
-lot, read the per-day extremes the window table already prints (`read-window-range.mjs … --window 0-23
---nights 21`, the per-day `high`/`low` column) plus the `--ask`/`--bid` placement percentile, and answer
-three questions:
-1. **Reached vs not — and the split's SHAPE.** Flag each recent day's high ≥ your ask (or low ≤ your
-   bid). A high `reachedDays` is not enough: check WHETHER the reaching days are a stable band or a
-   FADING one. On the godsword, 40.60m "reached 7/15, recent 3/3" — but the recent highs stepped
-   41.90m → 40.77m → 40.70m, so the cushion over the ask had collapsed from ~1.3m to ~100k: the peak
-   was settling ONTO the ask, and "rising +6.5%" (vs the 2-week base) masked a cooling recent peak.
-2. **Placement percentile = how greedy the level is.** The `--ask` line prints `placement pXX of the
-   14-day daily-HIGH distribution`. A high p (p50+) means you're pricing near the top of the recent
-   range — fine on a genuine riser with an EXTENDING peak, dangerous on a fader (the margin check in #1
-   is the tie-breaker). A low p (≤ ~p15, the mask's 20.59m was p7) is a conservative near-every-day
-   clear — the certain-clear level [[falling-item-exit-certain-clear]] wants on a cooling item.
-3. **Today's PACE vs the reaching-day median at THIS hour.** Compare the live instabuy/instasell now
-   against the hour-of-day median high/low (`--profile`) for the current hour. Running materially below
-   the reaching-day median for this hour (godsword: live 39.78m vs the 16:00 median high 40.58m, ~800k
-   light going into the peak window) is a same-day caution that today may fall short — don't treat
-   "recent 3/3" as a lock when today is already lagging pace.
-The rule this encodes: the tool's `Optimistic` / windowExit "typical exit ~50%/recent-50%" number is a
-CANDIDATE at the distribution's tail, not the number to quote — price to the level the recent (possibly
-fading) distribution still reliably reaches, and let the margin-trend + placement + today's-pace decide
-how far below the tail that is. Symmetric on the BID side (via `--bid`): a bid at a low-touch/deep
-placement (mask re-entry bid 19.57m touched 3/14, recent 0/3, p21) is aiming too DEEP to fill — the same
-"price to where it actually prints" discipline, mirrored. **Honesty (rule 4):** ~14–21 days is a small
-sample and the median profile blends reaching + non-reaching days; this is a read that TEMPERS a tail
-price toward a reachable one, not a fill model. **BUILT (2026-07-20):** this is now the `reachMargin`
-computation folded into `js/windowread.mjs`'s `askExitRead` — it prints automatically, no hand-read of the
-per-day table. On `read-window-range.mjs --ask/--bid` it's the full `reach-margin:` block (cushion
-`fading|stable|extending` trend + per-day cushion + today's pace vs the reaching-day median at this hour);
-on the `/positions` `↗ windowExit` note it's the compact `margin +X today · cushion <trend> A→B · pace ±Y
-vs HH:00 median` clause. Symmetric ask/bid, inform-only (tier `context`), placeholder thresholds
-(`MARGIN_FADE_FRAC` 0.3%, pace tol 0.1%) pending F1; a lean summary rides `suggestions.jsonl`. Read the
-clause/block; you no longer build this by hand.
-
-**ACT on the fade — a stepping-down daily-HIGH is a leading COOLING signal; treat `fading` as a
-price-to-sell-EARLY trigger, not an inform note (Ben, 2026-07-21 — the godsword exit retro).** The
-reach-margin block above DETECTS the fade; the repeated failure is UNDER-ACTING on it (this session the
-`cushion ⚠ fading +979k→+384k` flag was reported, then the fix was framed as a reactive "step down to
-~40.15m" while a rising-floor read got called a near-lock — the signal was on the page and got
-under-weighted). **PROMOTED (2026-09-21, PLAN-HOLD-FADE-ALERT HF2): the trigger is now a `FADE` alert** —
-`watch-positions.mjs` fires it into the `alerts` section the loop relay reads, beside (never instead
-of) any CUT, on EITHER half: the ONE shared `reachMarginTrigger` (cushion fading-or-negative AND pace
-lagging, the same ⚠⚠ composite `read-window-range.mjs` prints; computed on big-ticket/watchlist lots)
-OR `hoursUnderProfile` ≥ `FADE_MIN_HOURS` (every held lot; measured by `join-fade-outcomes.mjs` —
-beats the shipped 2h breakdown only at miss-cost ratio ≈3, which is the held-lot shape, and is
-weakest on big-ticket where the composite carries). When a FADE alert prints, this section IS the
-playbook: price the reachable early exit it names, don't re-derive. The daily-HIGHS trajectory is the LEADING tell that demand is cooling: the highs step
-down BEFORE the reactive "not filling" shows up, and BEFORE a rising-floor frame catches up. On the
-godsword the highs stepped **42.14m → 40.19m over 7 days (−5%)** while the rising floor (+298k/day) masked
-it; by the time the cushion had already collapsed, the reachable-and-profitable ask was gone. The rule:
-**when the daily highs are stepping down (or `reachMargin` prints `fading`), that is the trigger to price a
-reachable +profit ask NOW / at entry — do NOT anchor at the tail and step down reactively into fading
-demand.** In a cooling regime the profitable-exit window closes from ABOVE as the ceiling descends toward
-your ask — a level that is reachable-and-profitable today can sit ABOVE the daily high in 1–2 days, at
-which point the only exits left are sub-BE. So read the daily HIGHS explicitly (the `--window 0-23
---nights 21` per-day `high` column), not just the rising floor — the floor LAGS and can tell a falsely
-bullish story. Ties to [[falling-item-exit-certain-clear]]. **Honesty:** the *entry* can be fine (bought
-on the rising floor, low risk) — the miss is purely pricing/timing; and "demand faded faster than the
-floor rose" is a real read that went against us, not a dumb hold. When you do exit a cooling lot at a
-small loss, LADDER rather than dump: one unit at the near-BE reachable level (the committed small-loss
-exit) + one patient unit a rung higher, and never the instasell (the panic price — on the godsword the
-instasell was −1.46m/unit vs −59k at a 39.95m rested ask).
-
-Preserve the standard 10-column
-`--positions` table exactly as the script printed it —
-`Item | Guide | Quick | Optimistic | Vol/d | Momentum | Regime | Held@ | Break-even | Verdict`
-(that table is app-code canon — see CLAUDE.md "standard output format").
-
-Hard rules — cite, never recompute differently:
-- Never list below break-even (tax-capped; the shared `breakEven()` — see CLAUDE.md "Break-even").
-- Held fallers ARE shown here with price-to-clear (the screen-exclusion rule's exception).
-- Guide = real GE guide price, never the wiki mapping `value` field.
-
-**Reading the `recovery-read` line (V6, `watch-positions.mjs` notes) as decision SUPPORT.** On a non-clean
-held lot, `watch-positions.mjs` surfaces `recovery-read: likely recovers|drops|uncertain — <drivers>` — a
-COMPOSED lean from the same signals the verdict already used (diurnal · regime/phase · underwater-
-persistence · vs structural support). Use it to *prioritise your dig-in*, never as an order: it
-decides nothing and never overrides `momVerdict`. The highest-value case is a **conflict** — a green
-lot with a drop-lean, or a mechanical cut-trigger with a recover-lean (the 2026-07-06 webweaver:
-rising + at support leaned recover where the tripwire leaned cut). Honesty holds: it's a LEAN not a
-probability, structural not per-hour, and BLIND to shocks (a `spike` caps it to `uncertain`) — when
-it's `uncertain` or conflicts, that's your signal to apply judgment, not to defer to the line.
+- **Table first, exactly as printed.** _(judgment: Ben-ruled)_ Paste call 1's 10-column table as
+  plain markdown, unfenced. Never paste the note block, alert lines or SUMMARY raw: fold what
+  changes a decision into your own lines.
+- **Then the plan, actionable first.** _(judgment: Ben-ruled)_ Keep the plan lines' order. ONE LINE
+  PER ITEM, never two items joined on a line. EVERY line carries `list @ X (BE Y)`: held lots,
+  fresh buys, and resting bids (`bid B → if filled list X (BE Y)`).
+- **Quiet lots get one line.** _(judgment: Ben-ruled)_ An unchanged on-plan lot is its plan line
+  plus basis and target. Only a lot with something to act on (a cut, a changed verdict, a broken
+  level, a reprice, a fill, a fade) gets more, and then a few short lines, not paragraphs.
+- **End with one short rec line.** _(judgment: Ben-ruled)_ Prices are point-in-time: say so, and
+  re-run before Ben places anything minutes later.
 
 ## 5. Interactive tail (standalone invocations only)
 
-- Ask Ben's **available capital** → size next moves against the action plan (big-ticket
-  caution: `BIG_TICKET_GP` = 10m lot value is the whole-lot threshold).
-- If cuts free GE slots → **offer `/scan`** to redeploy the capital.
-- **Offer the watch loop:** print the ready-to-paste command per MONITORING.md, surfacing
-  `watch-positions.mjs`'s own cadence suggestion, e.g. `/loop 2m node pipeline/commands/watch-positions.mjs`.
+- Ask Ben's **available capital** and size next moves against the plan (quote the SUMMARY's
+  `deployable` figure when call 2 ran). Big-ticket caution applies at `BIG_TICKET_GP` of lot value.
+- If cuts free GE slots, offer `/scan` to redeploy.
+- Offer the watch loop: relay the SUMMARY's `loop /loop Nm node
+  pipeline/commands/watch-positions.mjs` line (cadence doctrine: `pipeline/MONITORING.md`).
 
-**Composition note:** when invoked from `/overnight`, SKIP this tail — `/overnight` owns
-the pause-for-capital as its phase boundary. The tail is for standalone use.
+**Composition note:** invoked from `/overnight`, skip this tail; its phase boundary owns the
+capital pause.
 
-## 6. Encode learnings (self-improvement — after the market work, never during)
+## 6. Encode learnings (after the market work, never during)
 
-Each run may teach something (a verdict that read wrong, an incidental-lot judgment that
-misfired, a threshold that misled). Capture it — but the market work comes first, always.
-
-- **Timing:** _(judgment: process)_ only AFTER the action plan is delivered and Ben's offers are placed/adjusted
-  (or he says he's done). Never interleave doc edits with live market work — offers first,
-  encoding after (Ben's explicit rule).
-- **Prompt:** _(judgment: process)_ at that point ask one short question — "anything from this run worth
-  encoding?" — and propose the candidates this run surfaced (a judgment call that
-  worked/failed, a threshold that misled, a verdict that read wrong, a workflow gap).
-- **Routing — one canonical home per fact, move never copy:** _(judgment: process)_ judgment-layer lessons → this
-  SKILL.md (bump its `version:`); table/app contracts → CLAUDE.md; user preferences →
-  Claude memory; monitoring doctrine → `pipeline/MONITORING.md`.
-- **Execution:** _(judgment: process)_ spawn a **background subagent** to make the edits + commit so this
-  conversation keeps flowing; report the diff summary when it lands.
-- **Honesty guard (process rule 4):** _(judgment: process)_ process learnings encode freely; a *market* claim (a
-  new threshold, a pattern) needs the usual evidence standard — one session is one sample.
+- **Offers first, encoding after.** _(judgment: process)_ Once the plan is delivered and Ben's
+  offers are placed, ask once whether anything from the run is worth encoding, and propose the
+  candidates. One home per fact, moved never copied: a lesson becomes a script output or a test
+  first, a line here only for real judgment (bump `version`), a preference goes to memory. Edits
+  run in a background subagent. A market claim from one session is one sample.
 
 ## Reverse-flip pending (RF4)
-`quote-items.mjs --positions` appends a "Reverse-flip pending" block AFTER the held-lots table when
-`reverse-flip-state.json` holds `awaiting-rebuy`/`rebuy-armed` cycles (sold · BE-rebuy · live ·
-days-pending + the shared drift/strand/stale notes). A sold-first reverse-flip owns no open lot, so this
-block is its only home here. INFORM-ONLY n≈0 — relay it when present; an empty store adds nothing.
+
+`quote-items.mjs --positions` appends a `Reverse-flip pending` block when
+`reverse-flip-state.json` holds an open cycle. A sold-first cycle owns no lot, so this block is its
+only home here. Relay the facts and stop: no verdict, no rebuy nudge, no timing prompt. Ben
+surfaces the rebuy himself. Relay a sync `⚖ short SETTLED` line once.

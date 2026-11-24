@@ -1,1065 +1,379 @@
 ---
 name: scan
-version: 3.16
+version: 4.0
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
 # /scan — opportunity screen + the judgment layer over it
 
-Skills-versioning note: `version` here bumps on material behavior change; skills never bump
-`APP_VERSION`.
+`version` bumps on a material behavior change; skills never bump `APP_VERSION`.
 
-**What the reply contains — DIGEST + SHORTLIST, nothing else pasted (Ben, 2026-09-15: "it should
-generate and dump info to a file + digest, you can pull from the file if you need more info").**
-The common run is QUIET + `--digest`: the script prints one summary line and the DECISION DIGEST
-block, and dumps every row/note of every lane to `pipeline/.cache/last-report/screen.json`. The
-reply pastes (a) the digest block verbatim, unfenced (plain markdown — a code fence shows literal
-`|`/`-`; confirmed live 2026-07-16), and (b) the judgment shortlist (§4) — a compact
-DECISION-DIGEST-style table with exact numbers, then one rec line. **The per-lane band / churn /
-amplitude / watchlist tables are NEVER pasted on a common pass** — they live in the cache; read
-them there for the §2 judgment, and paste a lane table only when Ben names an item or a lane
-(then `--verbose` that one lane, or quote the cache row). Anchor: 2026-09-15, a `--verbose` pass
-relayed 61 band rows + 60 watchlist rows for a three-item answer. On a repeated/looped scan where
-nothing material changed, say so and skip the digest too.
+## Procedure — follow top to bottom
 
-**WINNERS ONLY — and the trim is the SCRIPT's job now, not yours (Ben, 2026-09-02: "still run the
-full both-leg verification, but report only the surviving picks; drop the 'what failed and why'
-section").** _(judgment: relay discipline; the filter itself is encoded in
-`pipeline/commands/screen-flip-niches.mjs`)_ `--verbose` renders rows whose **displayed net is
-positive** and prints **NO drop accounting at all** (FD7, Ben 2026-09-08: "do not waste time
-explaining to me about the losers"): the `rejected:` / `skipped … unprofitable` / `crowded out:`
-footers and the winners-filter `Skipped:` line are gone from the common pass — they print under
-`--full` only, and every drop is recorded structurally in the cache on every run regardless (each
-flip-niche report in `pipeline/.cache/last-report/screen.json` carries a `drops` object: validator
-rejects + reasons, admitMinNet skips, winners-filtered rows with their nets, crowded-out count +
-best excluded). **HELD and WATCHLIST rows are
-EXEMPT** (the same sets `admitMinNet` exempts) and print regardless of net: a
-negative net on one of those is a POSITION or WATCH signal, not a surviving pick — read it, act on
-it as a position, and never shortlist it as a winner. The **per-row STANZA families
-do not print at all** under `--verbose` — Diurnal timing, Base position, Entry paths, velocity and
-the overnight accumulation table are replaced by ONE pointer line per flip-niche, `Diurnal timing ·
-Base position · Entry paths: pipeline/.cache/last-report/screen.json (--full to print)`, which also
-names `drop accounting` whenever the pass dropped anything — where it lives, never what it was
-(amplitude folds its variant into the doctrine pointer). Only the compact one-line `ℹ`/`⚠` notes
-still print, and those for surviving rows only. **A missing Diurnal/Base-position read therefore
-means "it is in the cache", never "there was no data"** — say so if Ben asks, and go read the cache
-rather than re-running the scan. When a lane table IS
-pasted (Ben asked for it), **paste it AS PRINTED**: no row-count trim in your head, no re-adding rows
-out of the cache, no re-narrating what the script removed, numbers unaltered. Losers and gate
-chatter are never retold in prose — and never relayed out of the cache either. **How a wrong removal is caught now (the check MOVED, it didn't disappear):** when a row you
-expected is missing — Ben names an item, a watched edge vanishes, a flip-niche looks implausibly thin —
-read the cache's `drops` before concluding it has no edge
-(`node -e "const d=require('./pipeline/.cache/last-report/screen.json');for(const r of d.reports) if(r.drops) console.log(JSON.stringify(r.drops))"`)
-or re-run with `--full`; `pipeline/test/drop-accounting.test.mjs` pins that the accounting itself
-can never thin with the render. The old rule here asked the agent to trim a full dump by
-grade AFTER it had already entered context; that cost is gone at the source.
+1. **Scan** (§1): one `screen-flip-niches.mjs --digest` call, output read whole.
+2. **Sweep** (§2 B): `verify-pick.mjs --scan`. It verifies the digest rows, every churn row and the
+   band rows at the screen's own pair. The digest is not the candidate list: its rows can all
+   fail while rows outside it pass.
+3. **Price** the survivors only, for the stated dwell horizon (§2 A): one `quote-items.mjs` call.
+4. **Re-verify** each survivor at the exact bid and ask you will quote, same turn (§2 B). Only a
+   PASS at the quoted pair is pitched.
+5. **Book** (§5): `quote-items.mjs --positions` every pass; `watch-positions.mjs` only when a pick passed.
+6. **Reply** (§4): digest, picks, one rec line, one line per flip-niche.
+7. **Learnings** (§6).
 
-**The filter keys on NET, never on grade — deliberately (Ben, 2026-09-03: "Don't implement a grade
-based filter; grade is notoriously inaccurate and will be tuned later. Positive net seems safe").**
-_(judgment: honesty over the grade column)_ Grade follows `rank`, built on the raw thesis pair, so a
-row can grade **S+ while the sell price the table PRINTS nets negative** (measured: three churn rows
-at S+/S+/S− on displayed nets of −6, −48, −23, all of which a ≥B− trim would have kept). Grades are a
-scoring heuristic for elevating candidates, not a verdict on whether a trade makes money (Ben,
-2026-08-18) — read `Net/u` for that, which is exactly what the render filter reads. Honest limit
-(rule 4): a NON-EXEMPT candidate whose displayed net is negative while its PATIENT economics are
-positive is hidden from stdout — it survives in the cache (named with its net in the flip-niche report's
-`drops.winnersFiltered`) and the digest. Held/watchlist rows are not dropped at all.
+`read-rows.mjs` answers anything else about the scan (§1). Never `node -e` over a dump.
 
-**The `--digest` block (§1) is the ONE stdout surface on a common pass** — a cross-niche triage VIEW
-over the per-niche lanes; the lanes themselves are read from the cache, not stdout.
-
-**Quiet is the DEFAULT (AO1, default flipped post-review — Ben: an agent must read the JSON dump
-for the data, not lean on a stdout summary line, so quiet can't be optional).** A bare
-`screen-flip-niches.mjs` run prints one summary line + writes `pipeline/.cache/last-report/screen.json`
-(the render-object dump); `--digest` prints its block REGARDLESS of `--verbose`. **Do NOT pass
-`--verbose` on a common pass** — it is the winners-only lane render, used only when Ben asks for a
-specific lane's table. **`--full` restores the complete render** (every row, every
-prose family) and is a DEBUGGING / ANALYSIS tool only — named here so you know it exists, never run
-on a common pass.
-
-**Common-run data contract — read the cache, never a bigger stdout (Ben, 2026-09-03: "we need to be
-able to reference the full set of data for debugging/analysis purposes but on the common run we
-should read cache json").** Anything the judgment pass (§2) needs BEYOND the pasted table comes from
-`pipeline/.cache/last-report/screen.json` — it carries every row and every note family and is
-identical under quiet / `--verbose` / `--full` (modulo `generatedAt`), because the winners filter is
-render-only — plus `pipeline/.cache/last-report/verify.json` for a candidate you dumped with `--out`
-in §2. Reach for `--full` only when you are debugging the renderer itself.
-
-- **The `◆ asym fill` levels are in-sample QUANTILES, not fill rates — relay the whole clause, never just the
-  price.** _(judgment: honesty discipline over an inform-only note; the wording is enforced in
-  `pipeline/lib/render/emit.mjs` `formatAsymFill`, the ONE home)_ The pair is the 25th-percentile daily low
-  (deep bid) and 80th-percentile daily high (ask) of the last ~14 days; the per-level hit tally was removed
-  because it scored each level against the array it was drawn from (12/14 and 4/14 by construction). The ask
-  ordering guard BINDS on ~70% of rows, which is why the clause splits `ask X (= live instabuy, above the Y
-  high-reach level)` — the price and the quantile level are DIFFERENT numbers and relaying one as the other
-  is the specific error this wording exists to prevent. **Relay the trailing `◆ asym fill —` footer, it is the
-  number Ben needs:** `join-asym-outcomes.mjs` forward-scored the pair off the 1h archive — deep bid touched
-  17.8% within 24h, ask reached ~24% given that touch, round trip **4.3%** (**1.5% on big-ticket**); a CLASS
-  rate, never this row's, and touched/reached ≠ filled so it bounds a real offer from ABOVE. The patient pair
-  is a level worth resting at, not a trade to plan a day around, least of all on a big-ticket item.
-- **A BE-floored `Est. sell` cell is not the whole verdict — read the `patient:` clause inside it
-  (PP2).** _(judgment: read-the-row discipline; rendered by `js/estimators/cells.mjs`)_ When the
-  reach-fold lands under break-even the cell says `reach-fold floored to BE X — nothing to price above
-  break-even` AND, when the patient pair is positive, appends `· patient: deep-bid … → ask … · net
-  +N/u — resting levels, in-sample counts, not a fill rate`. The two halves disagree on purpose: the
-  fold says the transact-now pair loses, the patient half says a resting bid into a patient ask does
-  not. Relay both. Taking the floored half alone as "no trade" is exactly the mistake that dismissed a
-  ~1.4m trade, and the caveats in the rule above apply in full to the patient number.
-
-**The deployable figure is SHOWN, not modelled — if it's wrong, correct it at the SOURCE (PLAN-CAPITAL-DEPLOYABILITY L3, Ben 2026-07-26).** _(judgment: capital-transparency doctrine; mechanic in `derive-cash-tiers.mjs` + the `suspectBidNote` flag on `read-book`/`run-loop`/`screen --capital`)_ The scan's default capital is the DERIVED `deployablePool` (free cash + reclaimable deep-bid escrow), and the surfaces now PRINT its composition (`free X · + reclaimable Y from N deep bids`) plus a `⚠ N restart-suspect bid(s) may be included — verify in-game` flag when a restart-blind bid may have inflated it. The tool does NOT model or auto-correct this number — that machinery was deliberately SHELVED (one reliable human-in-the-loop beats an unattended guard: `gate-on-error-cost-not-n`). So when the shown deployable is wrong, fix it at the SOURCE, never by patching a derived view (`fix-at-the-source-not-derived-view`): **re-anchor** (`node pipeline/commands/derive-cash.mjs <amount>`) when the free-cash baseline has drifted, or a **manual-log correction / phantom-bid clear** when a bid shown as reclaimable is actually gone. The conversational loop IS the override — Ben says the number's wrong, I route the correction to the anchor/log, and the next read is right.
+Scripts already do, so do not redo or restate: the local sync, every gate and floor, the winners
+filter, per-window sizing, crowded-out detection, the change line against the last scan, lane coverage.
 
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/commands/screen-flip-niches.mjs --digest [--mode band|churn|scalp|value|invest|amplitude|all] [--max-price …] [--hold-days 4|7] [--amp-ask-q 0.5 --amp-bid-q 0.5] [--capital <gp> --slots N]
+node pipeline/commands/screen-flip-niches.mjs --digest --mode all [--capital <gp> --slots N] [--posture overnight] [--max-price <gp>] [--min-gpd <gp>] [--hold-days 7]
 ```
 
-Quiet is the default (AO1): stdout = one summary line + the digest block; everything else is in
-`screen.json`. `--verbose` (the winners-only lane render) is added only when Ben asks for a lane's
-table; `--full` is the debugging render and is never part of this invocation.
+- Run it bare from the repo root with a long timeout. **No `| head`, no `| tail`, no `cd … &&`**:
+  the output is short and the size, lane and coverage lines print last. If you must keep it, redirect
+  to a scratch file and Read the file.
+- A general ask runs `--mode all` (band + churn + amplitude). A named lane runs `--mode
+  band|churn|amplitude|scalp|value` (`invest` = value). Scalp and value run only when named.
+- "Anything in herbs?" has no flag: scan, then `read-rows.mjs screen --item "<word>"`.
+- `--capital` is a session budget Ben states; without it the pool is the derived deployable figure.
+  `--max-price` only narrows; big tickets need no flag. `--posture overnight` comes from `/overnight`.
+- Not on a common pass: `--verbose` (one lane's table, only when Ben asks for that lane), `--full`
+  (debugging render), `--no-publish` (throwaway read that must not touch `screen.json`), and the
+  trial or rollback flags `--phase-rescue`, `--admission legacy`, `--vol-source legacy`, `--raw`.
+- Rows under the 250k gp/day attention floor are already dropped. `--min-gpd` only when Ben wants
+  another bar.
 
-**`--digest` is part of the STANDARD invocation (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST, Workstream C).**
-_(judgment: triage-read discipline; mechanic in `screen-flip-niches.mjs` `buildDigestBlock`)_ It prints
-ONE compact cross-niche block ABOVE the per-niche tables — `Item | capEff | deploy | reach | trend | phase | soft-buy |
-grade | verdict`, top ~8 ranked by **`rank` = net × P(fill) ÷ TTF** — the "which of these do I look closer
-at" triage pass. **The ordering is SCALE-AWARE and WALLET-FREE: it does NOT move with your cash, so do
-NOT read a row's position as a sizing or capital-throughput signal** — it ranks the opportunity's QUALITY.
-`capEff` and `deploy` remain SHOWN as sizing columns, and are explicitly not what the block sorts on
-(`rankKey` = capEff × deployable survives only as a tie-break). The block's own printed header states this
-— trust it over any prose. ⚠ An earlier version of this skill described the sort as "deployable
-throughput (`capEff × deployable capital`)"; that basis was measured unusable and REPLACED — on a fully
-deployed book `rankKey` collapses to 0 and the ordering fell through to scale-free `capEff`, reproducing
-the dust-sweep it was meant to prevent (all 8 main rows C/D dust, Black knife at 9907%/d, the only A−
-`fill-now` row buried in the appendix). `capEff` is a
-REALIZABLE sustained %/day — buy-limit-bounded at the deployed size, so a fast-churn cheap item reads
-~13%/d, not a ~198%/d fantasy you can't actually cycle. A `— big-ticket lane —` sub-section is APPENDED when
-fewer than 2 big-tickets (`mid ≥ BIG_TICKET_GP`) made the visible top-8, so the low-fuss big-ticket class
-(Magus/Osmumten/godsword) is ALWAYS visible for the away-horizon trade-off (see "Velocity vs magnitude") —
-additive visibility, never a re-rank of the main block. The reach ✓/✗ + mirage read is stale-live guarded:
-a quoted ask pinned to a STALE live instabuy print (the `staleLive` case `quote-items.mjs` flags) can't fake
-a reach ✓ — reach/placement recompute against the fresher instasell, digest-scoped. The `soft-buy` column is
-the BUY-timing complement of `phase` (which is the peak/sell-cycle window): the diurnal DIP window + where
-live sits vs the dip floor + a FLOOR-AWARE cue (`HH:00–HH:00 · @floor · <cue>` · `+X%`). **DT2 (2026-08-09):
-read `+X%` as WHERE LIVE SITS relative to the dip floor — it is NOT an instruction to delay placing.** The window predicts
-where the daily extremes land, not when a resting offer fills (71.2% in-window touch vs 70.5% for a random
-window of the same width), so waiting forfeits ~29% of bid fill-days at an identical price. A resting bid
-goes in at the floor LEVEL now; the dip hours are for an attended TAKE. Same measurement, fuller doctrine +
-honesty limits: the `/positions` skill's soft-buy section. It is the SAME
-shared `softBuyRead` helper the positions surface uses (ONE implementation), so the `@floor` cue reads the
-multi-day floor: `@floor · buy now` (soft dip) · `@floor · ▲ favorable — dip in uptrend (price-trend only)`
-(rising floor — a prompt, NOT a green-light; blind to game-update breaks) · `@floor · ▽ caution — uptrend
-label STALE: today already printed under yesterday's low (cheaper entry likely)` (EC2 2026-09-08, the
-Avernic-hilt post-mortem — the rising label is contradicted by what TODAY has already printed, a monotone
-fact; 88.5% of these print below the current floor within 3d vs 53.1%, so "the rung is walking away" is
-backwards — full doctrine: the `/positions` skill's soft-buy section) · `@floor · ▽ caution — floor
-breaking ↓` (a post-update dump sitting @floor is a falling knife, NOT a discount — the fang anchor; EC2:
-a forming day already under the prior trough joins this branch — the break is certain by monotonicity) · `@floor · ▽ caution — dip into an UNPROVEN base, still elevated over the durable floor (N× swing over the 28d floor)` (2026-08-06 — the 5d floor is RISING but floorValidator's 28d check still cautions the LEVEL; on a young spike the 5d window sits entirely inside the spike, so the floor rose BECAUSE it spiked — the Snape grass entry, bought 1,051 into a pre-spike high range of 976–1,038. **Narrowed 2026-08-08**: `FLOOR_CAUTION_RANGES` 1.0 → 1.5, so a buy 1.0–1.5 swings over the floor no longer trips it — intended; Snape grass at 1.68× still fires) · `@floor · ▽ caution — exit side fading today` (HF4, PLAN-HOLD-FADE-ALERT 2026-09-22 — the Diamond-bolts entry: @floor on a day whose EXIT side is sliding is the floor of a fading day, not a discount; fires on the same ⚠⚠ composite the watch `FADE` alert uses at the row's candidate exit ask, or an alert-grade hours-under-profile run — the full-line render names the firing half: `(cushion + pace)` and/or the `highs under 7d profile Nh (−X gp)` magnitude, never the half that stayed quiet). The
-digest excludes held items but still shows FRESH candidates, so the caution guard matters here too: don't
-relay a `@floor` pick as a buy without checking its cue. Relay it when a pick reads `@floor` or is deep into
-its dip window. It
-is the cross-niche triage VIEW over the per-niche lanes (which live in the cache on a common pass —
-the reply-shape rule at the top governs: digest + shortlist pasted, a lane table only when Ben names
-that lane or item). The digest's notes
-render GROUPED PER ITEM under one `per-item notes` section (TF2, PLAN-THESIS-FRAME — `↕` ask-reach
-decay · `◇` dislocation): relay an item's notes WITH its row, never split across the reply — and a `◇`
-measured-yield line on a falling-labelled item is the measured read for that state, not something the
-label overrides (WPC §6 (iv): within cells the label moved nothing; `mild-cooldown` keeps its caution). CONSOLE-ONLY (never
-in `screen.json` / the app), and every column is INFORM-ONLY, PLACEHOLDER (n≈0) — the `verdict` word is a
-deterministic triage prompt (`fill-now` / `weak deploy` / `mirage top` / `starter /
-hold-to-next-peak` / `low-conviction`), NOT a calibrated order. **There is no reach-only verdict** —
-`sell unreliable` was deleted (owner ruling 2026-08-25; it was measured to lose to not gating at all
-below cost ratio ~1.29, yet fired at priority 1 and got rows dismissed unread). The `reach` column
-prints the fraction plus its basis (`r3` / `14d` / `sg`); read the number, don't look for the word. Off by default for a bare/scripted run.
+**What prints, and how to read it**
 
-**Positions check every pass (Workstream B — mandatory, cheap).** _(judgment: session-local relay; no stored
-state)_ After syncing/scanning, run `node pipeline/commands/quote-items.mjs --positions` (bare/quiet — read
-`pipeline/.cache/last-report/quote.json`, don't re-paste the whole table) and surface ONLY lines whose
-verdict CHANGED since your last look THIS session: a new `BID-BEHIND` (a resting BUY sitting below
-`row.optBuy`, unlikely to fill), a stalled resting ASK (sitting well above where the item is actually
-printing), or a fill. "Changed since last look" is a comparison YOU make by eye across two consecutive
-`/scan` runs in one session — there is NO stored diff/snapshot (by design); it degrades silently to "nothing
-to compare against" on the FIRST scan of a session, which is correct (no false "nothing changed"). Don't
-re-paste `/positions`' whole table — that's its own ask's job. The DURABLE fix for "positions read every loop
-pass" is running `run-loop.mjs --watch <min> --scan <min>` together so `watch-positions.mjs` (the richer,
-alert-raising positions surface) rides its own cadence alongside the scan (the `run-loop.mjs` row) — prefer
-that for an unattended session; this manual step covers a one-shot `/scan`.
+| Line | Read it as |
+| --- | --- |
+| `## DECISION DIGEST` table | Triage order by `rank` = net × P(fill) ÷ TTF. Wallet-free: a row's position says nothing about size. Held items are left out. |
+| `capEff`, `deploy` | Sizing context only. `deploy` is a 2-day parkable figure and can span several buy-limit windows: never quote it as a buy size. |
+| `reach` | Recent ask-reach fraction and its basis (`r3`, `14d`, `sg`). `—` = not scored for this lane, not zero. |
+| `phase` | Sell-cycle clock. `post-peak` = the peak closed today: smaller entry, labelled hold-to-next-peak (blowpipe 8/8 bought into a closing peak, 5 stranded ~16h). |
+| `soft-buy` | Buy-side clock. `@floor` / `+X%` = where live sits against the dip floor, **not an instruction to delay**: a resting bid goes in at the floor level now; dip hours are for an attended take. `▲ favorable` is a prompt. Any `▽ caution` on an `@floor` row means it is not a discount until you have read why (floor breaking = knife; exit side fading = floor of a fading day). |
+| `verdict` | A triage word (`fill-now`, `mirage top`, `weak deploy`, `starter / hold-to-next-peak`, `spread closed now`, `low-conviction`), never an order and never a verification. Ignore `fill-now` on an amplitude row. |
+| `per-item notes` | `↕` ask-reach decay, `◇` dislocation. Relay an item's notes with its row. A `◇` measured-yield line stands even on a falling-labelled item. `◇ elevated` is a caution, never a credit. |
+| `size per 4h window` | The buy size: units and gp for ONE window, what binds (`limit` / `capital`), `xNw` windows to fill the deploy column, `~N clear` = a price-quality knee (bigger predicts a worse net, not a stuck offer). `limit unknown` and `PLACEHOLDER capital` are printed when true: say so. |
+| `<lane>: N shown · N rejected · N crowded out` | A `⚠ X beats digest row Y (… never fetched)` tail is a real edge that lost its fetch slot: name X on that lane's line and quote it if capital needs a home. |
+| `Δ vs Nm ago` | Change against the last same-scope scan. `no change` on a looped scan: say so and skip the digest. |
+| `coverage:` | Every lane has a slot (`NOT RUN` if it did not run). Source for the per-lane lines in §4. `Dips N added / M watched` is a count: the names are in repo-root `dip-watchlist.json`, watched live by `watch-positions.mjs --dip`. |
 
-**The PB4 pressure-exit trial is RETIRED (2026-08-30, join-exit-ev.mjs's pre-registered criterion).**
-_(encoded: the trial flag errors loudly; the pressure sell model is deleted from `SELL_TOP_MODELS`)_ Run
-the NEUTRAL screen — it is the only sell model. Do not offer the retired trial as a comparison; its ask
-measured a deficit against the incumbents with a CI clear of zero at every sensitivity (the Water-orb
-"~9% above neutral through a false CUT alert" session read pointed the same way). History stays scored
-by the join commands; the bid/band pressure reads survive.
+**Rows — `read-rows.mjs`, offline, reads the dump the scan just wrote**
 
-**Publishing (writing `screen.json`) is now the DEFAULT, every run (Ben, 2026-07-16 — was opt-in
-behind `--publish`).** Publishing here means the LOCAL FILE WRITE only — it is NOT a git commit;
-committing/pushing `screen.json` to `main` stays a wholly separate, deliberate step (the on-request
-`sync-fills.mjs --publish` is the only thing that commits it, unrelated to this flag).
-So a bare `screen-flip-niches.mjs` run now keeps the local app's Scan tab (and a future git commit,
-whenever one happens) current with zero extra step. Use `--no-publish` for a throwaway filtered
-console read you don't want left written to disk. Any non-neutral `--est-sell` model (`--asym` is retired)
-still keeps screen.json F1-gated on the neutral estimator — running one just silently skips the
-write that pass instead of erroring (only an EXPLICIT `--publish` alongside it still hard-refuses,
-since that's a real conflict, not an accidental default).
+```
+node pipeline/commands/read-rows.mjs screen --digest [--item "<name>"]     # numeric: bid, ask, netEach, be, limit, units, gp, windows, bound, clear, prev
+node pipeline/commands/read-rows.mjs screen --item "<name>" [--mode band]   # its row in any lane (amplitude and watchlist too) and its note lines
+node pipeline/commands/read-rows.mjs screen --drops [--item "<name>"]       # rejects by reason, winners-filtered, crowded out; with --item, why that item is gone
+node pipeline/commands/read-rows.mjs screen --list                          # lanes and exact column names
+```
 
-**After the judgment pass (§2), write a short analysis blurb for the app's Scan tab — ALWAYS,
-every publishing run (Ben, 2026-07-18 — supersedes the 2026-07-16 "when Ben wants the tab updated"
-gate).** `node pipeline/commands/set-scan-analysis.mjs "<html>"` patches repo-root `screen.json`'s
-`analysis` field (no re-scan, zero refetch) — it renders at the TOP of the Scan tab, separate from
-the tables below it (`#scanAnalysis`). Ben was missing this on the app almost every session because
-the step was conditional and kept getting skipped; it is now a mandatory last step of every `/scan`
-pass that publishes (i.e. every run except `--no-publish`), not something to remember to offer. This
-is the judgment READ over the scan you just ran, written in your own words — not a template, not
-auto-generated. Keep it short (a few sentences); `--clear` removes it if it goes stale, and a fresh
-`set-scan-analysis.mjs` call on the next pass simply overwrites it — no manual clear needed between
-runs. Because publishing is a local file write straight into repo-root `screen.json`, and
-`dev-server.mjs`/`serve.cmd` serve that same file same-origin, the analysis reaches the localhost
-app the moment it's written — no extra step to "push it to the local server." Skip this ONLY on an
-explicit `--no-publish` throwaway console read.
+- `--cols` takes the printed header names (`Est. buy`, `Net/u`, `Grade`), not field names. Check the
+  age line: `STALE` means re-run the scan, not the reader.
+- A read that is absent from stdout is in the dump, never "no data". An expected item that is missing:
+  `--drops --item "<name>"` before saying it has no edge.
 
-Map Ben's ask to args: flip-niche mode → `--mode` (default `band`); a price cap → `--max-price`
-(the DEFAULT is now DERIVED from the deployable pool — show anything Ben can afford ≥1 unit of — not the
-old arbitrary 45m literal, so pass it only for a deliberately NARROWER read, never to "enable" big tickets);
-a keyword/flip-niche ("anything in herbs?") → **no script flag exists** — run the screen and
-filter the output rows by flip-niche yourself. The script already gates (two-sided liquidity, price
-window, per-spec falling doctrine) and grades (`rating.mjs`); your job is the judgment pass over
-what it prints.
+**Cell tokens in a lane row**
 
-**Provisional flip-niches — scalp / value(invest) / amplitude (all PROVISIONAL, n≈0).** `--mode scalp`
-stays OFF-by-default. **THE SWAP (PLAN-AMPLITUDE-SCAN §3, 2026-07-19): `--mode all` now runs
-band + churn + AMPLITUDE — `value` is OUT of the default (took its slot); value is explicit-only via
-`--mode value` / `--mode invest` (relabelled Invest).** amplitude is console-only (excluded from
-`screen.json`, no app tab) + provisional, but it surfaces on every default scan now.
-- **`--mode scalp`** _(judgment: when to chase — desk-presence call)_ — a DELIBERATE intraday flip on a FALLING market (Ben's 2026-07-08 amendment: a
-  faller isn't auto-bad). It surfaces ONLY fallers (Step 5, Ben 2026-07-09: a scalp REQUIRES falling — a
-  non-falling row is a band flip band already owns → dropped `notFalling`). Flip-only/no-hold, HARD intraday
-  stop — an unsold lap is a CUT, not a hold. Judgment: only chase these when actively at the desk;
-  never leave a scalp bid unattended (a resting scalp bid keeps its stop only while you watch it).
-- **`--mode amplitude`** _(judgment: PROVISIONAL n≈0 — don't trade on it yet; patient, never act-now)_ —
-  the MULTI-DAY-cycle lane (THE SWAP put it in `--mode all`): buy the TROUGH, sell the PEAK, hold a few
-  DAYS, cycle. Its own cycle table (trough→peak swing · both-leg reach + **measured round-trip rate** ·
-  net/cycle · hold horizon · deploy units · grade). Surfaces the big-ticket-that-oscillates class band is
-  blind to (Masori-body class: Inquisitor's mace / Arcane sigil / Torva / Nightmare staff / Bellator ring
-  surfaced on the live trial).
-  **RE-HORIZONED 1d → 4d (DT1, 2026-08-09) — the 24h premise was REFUTED.** _(judgment: the single most
-  important thing to know about this lane)_ Over 92 items ≥5m and 4,881 item-days, running the production
-  gate: entry fires 56.9% of the time but **completion within 24h GIVEN entry is 4.8%** (≤48h 11.4%, ≤96h
-  22.6%, ≤7d 34.6%; median ~69h). EV per entered cycle measured **−813k**. The old `pFill2leg` two-leg
-  PRODUCT assumed the legs were independent — measured FALSE (entry is adverse selection), so rows it
-  predicted at ≥0.25 realized ~5%. The lane was mis-horizoned, not signal-free: the survivors are the
-  repeatable multi-DAY oscillator class (Masori chaps 12.9% at 24h but **71% at 7d**; fang ~6–8d), which
-  is the taxonomy gap the standing `multi-week-oscillator-class` memory already named. *Honesty limits:
-  one ~73-day archive era, one update cycle; completion measured on hourly aggregates, NOT executed fills, so
-  every rate is an UPPER BOUND; item-day clustering ⇒ effective n well below nominal.*
-  **Judgment layer:** (1) these are PATIENT multi-DAY plays — list them
-  under **deploy/accumulate**, NEVER as act-now rows (actionable-first discipline). (2) **The
-  `round-trip X/Y = Z% ≤4d` cell IS the make-or-break number — read it before anything else on the row,
-  including the grade.** _(DT1b, 2026-08-09)_ It is the MEASURED walk-forward rate: of Y past days where
-  the trough bid actually filled and a full horizon elapsed, the peak ask was reached on X. Levels are
-  fitted strictly BEFORE each scored day and entry/completion are scored at hour grain, which is what
-  makes it trustworthy where its predecessors weren't — the earlier `ask-reprints` figure was saturated
-  by construction (~94%) and is now withdrawn from the table entirely. It drives P(fill) in the rank
-  directly, so a low rate already shows up in the grade. **A `—` means too little history to measure,
-  never 0%** — that row's grade rests on the 0.5 prior and zero observations; the footer names how many
-  rows fell back and why, so check it rather than assuming every row is measured. It remains an UPPER
-  BOUND (1h aggregates, no queue position, no partial fills, no competition at the level) on one 73-day
-  era — so relay it as "this ask reprinted after entry X of Y times", not as a fill probability you can
-  size on. Anchor: Saturated heart graded A- at +5.88m/cycle under the old prior and fell to **D on a
-  measured 0 of 37** the moment this landed. The both-leg reach columns answer the weaker printability
-  question — and weaker even than that: at the default quantiles the level is the median of the days it is
-  counted over, so the columns are DESCRIPTIVE (a recent-vs-full divergence read), not a reachability gate.
-  Never relay them as evidence of a completed round trip; the round-trip cell is the only such evidence. (3) These are **thin-class by construction** (big tickets enter via
-  gp-flow, grade-capped A-): state the real unit reality (a few units/day, slow day-long fills) on every
-  row — never size like a liquid flip. **Thin-exit caveat (INFORM, not a gate):** thin BY CONSTRUCTION is
-  exactly why a large concentrated amplitude position CANNOT be exited fast if the thesis breaks — surface
-  that reality on every big-ticket row (the footer prints it), but don't block: Ben is risk-tolerant and
-  WILL concentrate. (4) **Sizing is a CONCENTRATION model, NOT value's ÷slots** (Ben 2026-07-19): amplitude
-  sizes against **TOTAL REALIZABLE capital** (`liquidCapital` — free cash + liquidation value of all holds,
-  the "if all lots sold" pool), used **UNDIVIDED**. **`--slots` is IGNORED** for `--mode amplitude`; pass
-  **`--capital <gp>`** to set the whole pool (absent a cash anchor it defaults to a 100m placeholder). The
-  one sizing gate is affordability — an item you can't afford ≥1 unit of at the current capital is **DROPPED
-  as `unaffordable`** (no phantom `~1u`), so a 345m item needs a ≥345m pool to appear. **NOTE deploy units
-  scale with the hold horizon, so the 1d → 4d re-horizon raised them ~4×** — size against the completion
-  column, not the units. (5) `--hold-days 7` runs the weekly-oscillator horizon (where Masori chaps hits
-  71%); 4d is the default because at AMP_NIGHTS=14 it leaves ~9–10 judgeable entry days per row where 7
-  leaves ~6 and halves an already-thin n. Every threshold is a PLACEHOLDER; the "does the round trip
-  actually CLOSE?" question is now measured per row by the completion column and, forward, by
-  `join-amplitude-outcomes.mjs` (an UPPER BOUND) + the retro-join in `/analyze`. Don't pitch an amplitude
-  buy off the table blind — verify the completion figure and quote fresh. (6) **`--amp-ask-q` / `--amp-bid-q`** (F-E, experiment-only) dial the
-  peak-ask / trough-bid reach quantiles (default `0.5`/`0.5` = the median peak/trough — the KEPT board; leave
-  them alone for a normal scan). They are REACH FRACTIONS, not price percentiles: a LOWER `--amp-ask-q` (e.g.
-  `0.25`) quotes a HIGHER, less-reachable ask (more margin, less round-trip reach). A non-default run is
-  flagged in the footer and logged to `suggestions.jsonl` (so F-G can later compare which quantile nets more);
-  it does NOT change the default board.
-- **`--mode value`** _(judgment: still PROVISIONAL — don't trade on it yet)_ — buy-hold near a multi-week
-  low, hold for the cycle (ONE tax-paid sell of a big move). Runnable via `--mode value` / `--mode invest`;
-  **no longer in `--mode all`** (THE SWAP handed its slot to amplitude). Its own term-structure table
-  (buy-now vs watch tiers, hold horizon stated). CONSOLE-ONLY (no app tab). Every pick is provisional; state the multi-week
-  hold horizon at entry. The daily archive is backfilled to ~20d, so this surfaces items now; a
-  newly-tracked item with a thin slice still degrades to no-data. **Artifact/liquidity hardening (Ben
-  2026-07-09):** `valueGate` rejects an **artifact-low** (live >15% below the durable q15 floor — a broken
-  instasell print or a crash mid-fall, the low-side analog of the band artifact-bid; the §F footer counts
-  the drops), and it carries its own unit-liquidity floor (`VALUE_LIQ_FLOOR` in
-  `pipeline/lib/signal/gatecandidates.mjs` — a value hold you can't exit isn't a hold). ⚠ Read that
-  constant, not a number quoted here: the floor was raised 20→50 long before the VOL24 recalibration
-  re-based every volume floor onto the composed rolling-24h source, and this line still said "50" while
-  the live value was 70× that (see the `50→3,500` note further down, which is the current one).
-  **RC1 recency anchor (same day):** the cycle range is now anchored to the recent 7d, so a stale HIGH from
-  a prior regime the item LEFT can't inflate amplitude or make a mid-recovery item read "near the low →
-  BUY-NOW" (Contract-of-sensory-clouding was #3 BUY-NOW off a month-old 365k ceiling → correctly WATCH now).
-  A `range recency-anchored — durable A→B … recent C→D` note flags it. **Deployable-capital rank (same
-  day):** `valueScore` now multiplies in a two-sided **deployable-capital multiplier** — REALIZABLE after-tax
-  gp/cycle on the capital you can actually park+exit (`min(capGp/buyLow, vol-share, buy-limit accumulation)`)
-  — because the pure-% amplitude score was sweeping the top-N with cheap high-% tabs and hiding the viable
-  class (which, per a Fable pool audit, is **mid-amp DEPLOYABLE sub-1m** items like Soiled page / Awakener's
-  orb, NOT the illiquid big tickets — there are no big-LIQUID items). The per-position cap is an INPUT: pass
-  **`--capital <gp>`** (your current bankroll) **`--slots N`** (concurrent value holds; cap = capital÷slots;
-  absent `--capital` the default is the DERIVED `deployablePool` from the cash anchor —
-  `lib/derive-cash-tiers.mjs` (free cash + reclaimable DEEP-bid escrow; a near-live flip bid you expect to fill is
-  NOT counted as freely redeployable, unlike the older looser `liquidCapital`) — falling back to a 100m
-  placeholder only when no anchor is set;
-  slots default 5; the footer names which source it used and prints `N buy-now surfaced — re-run --slots N`). The
-  default scan now surfaces a real MIX (big tickets + mid-deployable sub-1m + deployable cheap); if you
-  expect a specific item and don't see it, it's genuinely gated (illiquid) or out-deployed, not
-  blindly rank-buried. **A knife is DEMOTED, not dropped (Ben 2026-08-08 — supersedes the 2026-07-09
-  knife-GATE):** a would-reject trajectory moves the pick BUY-NOW → WATCH (named in the §F footer,
-  `demoted N trajectory-knife to WATCH: …`) instead of vanishing. _(judgment: the gate's premise measured
-  BACKWARDS — knives returned +4.08% excess at 28d vs `rising` −7.28%, and the hold-asymmetry it rested on
-  reversed. The signal is real; it predicts short-horizon reversal, and the gate rejected the favourable
-  end of it.)_ **So a knife CAN now appear on the value board — read the note, don't assume the board
-  pre-filtered it for you.** Relay the demotion line when it fires: the item is on the board precisely
-  because we no longer think dropping it was right, but it is in WATCH precisely because it is still a
-  knife. `elevated` still flags (timing), oscillating/based/rising pass. Two live caveats worth stating
-  when you relay one: the measurement is 71 days = ONE regime, and it says nothing about post-update GEAR
-  dumps (the fang/hydra/virtus class) — those are rare events the pooled average cannot see, so your own
-  update knowledge still overrides this. Still: DON'T pitch a value buy off this table blind —
-  **value-amplitude stays inform-only** (a would-caution "live is N% up the
-  week range — wait for the dip" is NOT a drop), and every threshold is a PLACEHOLDER (n≈0). Read the `ℹ
-  timing/trajectory` notes + the footer demotions, and verify the sell-leg reach by hand before quoting profit.
+- `Est. buy 17.30m (0/3 · 9/14 · p93)` = recent reach · full reach · placement in the 14-day daily-low
+  distribution. A low recent reach on a band-low bid is a patient bid, not a dead row; the rank
+  already discounts it.
+- `⚠ dip ~L prints r/n — buy +P above (≥ the whole net)`: the buy pays more over the dip than the flip earns.
+- `Est. sell … reach-fold floored to BE … · patient: deep-bid … → ask … net +N/u`: the two halves
+  disagree on purpose. Relay both; the floored half alone once dismissed a ~1.4m trade.
+- Churn Est. cells carry no reach token: read Rank and Grade for fill risk. `⚠ exemption dropped — …
+  rank X (was Y)`: relay both numbers.
+- `↻ repriced entry`: the quoted bid is dead and the row's honest form is a live-entry flip. An
+  option, not a pick; never quote its net without its reach token.
+- `P~0.00 (bid leg)` and `P(ask)~` answer different questions. `(thin)` = the fill call rests on few
+  observations. `C (sub-floor)` = not a qualified pick.
+- Regime phase tag: `spike`, `decay` (lows still stepping down = knife), `basing`. Probes: `⚓` = the
+  round-number nudge is already in the price.
+- `◆ asym fill` (quotes): quantile levels, not fill rates. Relay the whole clause and its class-rate
+  footer; a level worth resting at, not a trade to plan a day around, least of all on a big ticket.
 
-**Flip-niche set (Steps 3+4, 2026-07-09; THE SWAP, 2026-07-19).** `--mode all` runs **band +
-churn + amplitude** (THE SWAP, PLAN-AMPLITUDE-SCAN §3 — amplitude took value's default slot; value stays
-runnable via `--mode value`/`--mode invest`, console-only, provisional). **The
-`spread` and `rising` flip-niches were DELETED** (this supersedes NY2/NY3's "spread off-by-default,
-rising kept"): spread's 24h-*average* edge is structurally narrower than the intraday band and
-surfaced ≈0 clean flips once the render net>0 gate landed (its only exclusive lane — thin
-big-tickets with an untraded 2h band — is already caught by band's thin path); `rising` ⊆ `band`
-(a rising item clears band's gates), and its proxy-first fetch ordering is absorbed into the
-screen's small **rising reserve** so risers still aren't buried below flats. **Churn** — the
-high-volume commodity lane (the rune staples: soul/blood/death) earns default visibility even
-though its per-cycle edge is thin and buy-limit-throttled; judge each rune against its weekly
-range (buy the dip, not near the weekly high). Churn ranks the **LAP** (net/u × the exact buy
-limit × P ÷ TTF), not the unit — so its rank reflects "buy a whole limit's worth and flip it";
-the RANK number separates the runes even though the placeholder letter-cutoffs clump them at S+.
-In `--mode all`, churn is disjoint from band by margin (band shows the ROI ≥ min-roi rows; churn
-keeps the sub-min-roi high-volume ones). `--mode spread` / `--mode rising` now error cleanly.
+**Lanes that need a caveat every time** (their own header and footer lines carry the measurements)
 
-**Sync is now CODE-ENFORCED, not just doctrine (SY1 2026-07-15; enforced 2026-07-16).**
-`screen-flip-niches.mjs` runs `sync-fills.mjs` unconditionally as its first step now — local/zero-git,
-never blocks the screen on failure, prints a one-line `sync ·` summary — so the §5 position-context
-pass and the held-item exception both read Ben's current book without a separate manual step. This
-closed a real gap: the prose "sync first, always" was skippable and got skipped (an agent — this
-one — declared a real closed position "just a bug" mid-session off a stale book; the anglerfish
-anchor incident, CHANGELOG 2026-07-16). Phone-trade caveat unchanged: the local sync doesn't ff-pull,
-so an un-pulled *phone* trade only folds in at the on-request `sync-fills.mjs --publish`;
-desktop trades are always captured. When `/scan` runs inside `/overnight`, Phase 1 already synced (and
-now the screen syncs again itself regardless — redundant but harmless, both are local/zero-git).
+- **Amplitude is inform-only, never a pick.** _(judgment: lane handling; lane lines in `screen-flip-niches.mjs`)_
+  A multi-day lane: name its top row on the Amplitude line with its `round-trip X/Y = Z%` figure,
+  relayed as "the ask reprinted after entry X of Y times", an upper bound. `—` = unmeasured, not 0%.
+  State the unit reality (a few units a day, no fast exit). It sizes against the whole pool,
+  `--slots` ignored; `--hold-days 7` is the weekly-oscillator run. Leave `--amp-ask-q/--amp-bid-q`
+  alone. Anchor: Saturated heart A- on the prior, D on a measured 0 of 37.
+- **Scalp is desk-only.** _(judgment: desk-presence call)_ A deliberate intraday flip on a faller with
+  a hard intraday stop; an unsold lap is a cut. Never leave a scalp bid unattended.
+- **Value is provisional.** _(judgment: do not trade off it blind)_ State the multi-week hold at entry.
+  A knife is demoted to WATCH, not dropped: relay the `demoted … trajectory-knife` line. Your own
+  knowledge of a game update overrides the pooled read.
+- **Churn ranks the lap, not the unit.** _(judgment: read call)_ Judge each staple against its weekly
+  range: buy the dip, not near the weekly high.
+
+**Publish.** Every run writes repo-root `screen.json` (a local file, never a commit). The Scan-tab
+blurb (`set-scan-analysis.mjs`) is written only when Ben asks for it.
+
+**Sync.** The scan syncs the book itself (local, zero git) and prints nothing about it when quiet. A
+phone trade is not in the book until Ben asks for `sync-fills.mjs --publish`.
 
 ## 2. Judgment pass over the rated rows
 
-This is the tribal layer the script can't do — apply ALL of these:
+### A. Price the survivors
 
-- **250k gp/day attention floor** (was 500k until 2026-08-08 — paired with the expUnits 6→2 refill haircut; the 6 assumed re-buying every 4h around the clock) _(enforced: `pipeline/commands/screen-flip-niches.mjs` `--min-gpd`)_ (standing rule, memory `gpd-floor-500k`): NOW ENFORCED BY THE
-  SCRIPT — `screen-flip-niches.mjs --min-gpd` (default 250_000) drops sub-floor rows pre-rating (S1), so you no
-  longer post-filter. Just trust the printed rows and, if Ben wants a different bar, pass `--min-gpd
-  <N>`. Thin gp-flow big tickets and held/asked items are floor-exempt by design.
-- **SUB-FLOOR FALLBACK tables are NOT qualified picks (P6c).** _(judgment: relay discipline; mechanic in `pipeline/lib/signal/gatecandidates.mjs`)_ If a flip-niche prints `SUB-FLOOR
-  FALLBACK` (zero candidates cleared the floors → the script re-ran beneath them and shows the best
-  ≤5, grades `C (sub-floor)`-capped), relay it AS sub-floor: name the floor that emptied the flip-niche,
-  never present a sub-floor row as a normal recommendation, and default to "nothing qualified today"
-  unless Ben explicitly wants to fish below the bar. The bar itself was not lowered.
-- **24h-drift is a pre-filter only.** _(judgment: interpretation discipline)_ A current-vs-24h-avg read of "flat/slightly soft"
-  repeatedly masks multi-day fallers. The screen's displayed Regime column is the real
-  multi-day `regimeDrift` check — trust it, and never recommend off a 24h impression alone.
-- **Two-sided liquidity discipline.** _(enforced: `pipeline/lib/signal/gatecandidates.mjs` two-sided gate; the FLOOR is `judgment:`)_ Real liquidity = a two-sided daily market
-  (`lowPriceVolume>0 && highPriceVolume>0`), never the `/volumes` count (bursty/weekly, overstates
-  tradability). NOTE (PLAN-VOL24, 2026-07-13): Vol/d now comes from the CORRECTED rolling-24h source
-  (composed from the `/1h` grain — the raw `/24h` endpoint is unusable as a trailing-24h source; as
-  re-measured 2026-08-11 it serves a complete UTC-day aggregate whose newest data is ~24–48h old, and the ~10–27×
-  under-report recorded in 2026-07 now measures ~1.0×), and the gate `FLOOR` was recalibrated to that scale (50→3,500). So the
-  practical mental floor is a few-thousand limiting-side units/day, not the old deflated ~100; below it
-  the juicy "margins" are ghost-spreads (cosmetics, ornament kits — uncrossable). The `--vol-source
-  legacy` flag switches back to the raw bulk `/24h` map. It NO LONGER "restores the old broken
-  numbers": measured 2026-08-10 over 1,961 items, legacy/rolling `volDay` is median **1.151×** (not
-  the ~0.04–0.10× the old doctrine implies) and the two disagree on only **5.2%** of `FLOOR`
-  admissions — because bulk `/24h` is now a complete day that is merely 24–48h stale. Treat it as a
-  staleness A/B, NOT as a way to reproduce a pre-recal read.
-- **Tax dominates thin flips.** _(judgment: the >0.5% after-tax bar)_ The 2% tax eats most of a tight spread — need meaningfully
-  >~0.5% after-tax to bother. Stable/tight ≠ profitable.
-- **Band-is-the-edge pricing.** _(judgment: pricing call)_ For a liquid item with a stable *regime* but a wide
-  intraday band, the band IS the edge: ladder buys at band lows / sell at band tops (the
-  crystal-teleport-seed lesson — the band beat mid-spread flips ~4:1). Never list below
-  break-even; don't chase a softening item's buy.
-- **Anchor pricing — sit on the fillable side of a round number / guide (Ben, 2026-07-07).** _(judgment: pricing nudge, n=2)_ A
-  shared PSYCHOLOGICAL ANCHOR — a round number (esp. a round million: 16.000m, 17.000m) or the
-  CURRENT guide price — clusters orders at it: buyers won't pay OVER it (resistance), sellers won't
-  sell UNDER it (support). That leaves a **dead zone just on the wrong side**. So when a
-  band/live-justified price lands next to an anchor, **nudge it across to the fillable side**: **asks
-  just UNDER** the anchor (10,699, not 10,700+), **bids just OVER** it (16.001m, never 15.997m —
-  you'd sit just beneath the seller cluster and catch nothing). Two guards: (1) **nudge, not
-  override** — the rule refines a price you already justified off the band/live read; it never sets
-  the price alone (if the band says bid 15.5m, bid 15.5m, don't jump to 16m to be "over a round").
-  (2) **guide is an anchor ONLY when guide ≈ live** — a STALE/diverged guide (post-reprice, guide
-  lagging the live market — Seeking arrow guide 2,832 vs live ~4,800) is NOT the anchor; there the
-  round numbers near the LIVE price are. (3) **The nudge only works on a WIDE band — never fill-now-
-  cross a TIGHT band (Ben, 2026-07-07, the bones miss).** Crossing to the fillable side means paying up
-  by a hair; that's free on a wide band but on a TIGHT band it pays up into your own edge and leaves
-  ~nothing. Before nudging a BID up over a round, check there is still meaningful margin from the
-  nudged price to the band top; if not, DON'T fill-now-cross — leave the patient band-low bid and wait
-  for the dip. (4) **On a LIQUID item a fill-priced bid fills the FULL size FAST** — so a thin-margin
-  fill-now bid doesn't leave a small position, it leaves a LARGE one you can't cancel before it fills,
-  parked at breakeven. Anchors weigh margin-per-unit AND how much size you're about to lock. Evidence
-  (2026-07-07): **sell-side CONFIRMED** — the super-restore ask stalled 5+ passes at 10,713 (above the
-  10,700 anchor), then filled promptly at 10,699 once dropped just under it (+108/u, ~+113k). **Buy-side
-  CONFIRMED but with the tight-band cost** — a bones bid bumped 2,957→3,001 (just over the 3,000 anchor)
-  filled where 2,957 sat dead (anchor logic holds), BUT 3,001 sat near the top of the tight 2,957–3,073
-  band so it ate ~26 of the 36gp/u edge, AND all 7,500 filled on 163k/d before it could be cancelled →
-  22.5m locked at breakeven. **Honesty (rule 4):** order-clustering microstructure is well-established;
-  our fills are n=2 (one each side) — the anchor DIRECTION holds both ways, the tight-band + liquid-
-  fills-fast guards are the cost side; keep scoring.
-  - **Ladder rungs STRADDLE the anchor — nothing in the dead zone just OVER it (Ben, 2026-07-21).** On
-    a big-ticket SELL ladder near a round-million anchor, place a base chunk just UNDER the round million
-    (the fillable side, where base buyers cross up) and jump the next chunk CLEAR OVER the resistance to
-    where real daily-high prints land (the `⚓`-probe q50 daily-high). A rung parked in the dead zone —
-    over the round million but under the real peak-demand prints — reaches NEITHER side and stalls. Anchor:
-    blowpipe units at 11.098m stalled (over the 11.000m wall, under the ~11.14m+ daily highs); moving to
-    just-under-11.0m cleared, with the real upside at ~11.19m+.
-- **Entry AND exit aggression follow the DWELL HORIZON (Ben, 2026-07-05; generalized from the
-  ACTIVE/overnight binary + given a SELL side 2026-09-10 — the bludgeon-buy/Marlin-ask anchor: two
-  rest-all-day legs priced at the live edges because "daytime, away ~8h" fell between the old
-  cases and no rule covered a resting ask at all).** _(judgment: horizon call; the comparison
-  itself is CODE — quote-items' `⇄ dwell` line, `formatDwell` in `pipeline/lib/render/emit.mjs`)_
-  Every offer has a stated DWELL — how long it will rest unattended — and BOTH legs price off it.
-  Three horizons:
-  - **attended** (at the client, watch loop running): price to FILL — bids at/near the live
-    instasell, asks at/near the live instabuy, accepting a thinner per-unit edge so long as the
-    exit still clears break-even meaningfully (the validated half-chase: bludgeon 2026-07-05,
-    +292k). A band-floor bid watching a riser run away costs more in missed cycles than the floor
-    discount saves — that day's chin/ring/jaw floor bids never filled.
-  - **away-hours** (~2–8h) and **overnight**: BOTH legs price off the **REST-DAY column of the
-    `⇄ dwell` line** — the full-day distribution levels — never the live
-    edges. A resting ask at the live instabuy gives away the day's distribution for free (the
-    Marlin 3,885 miss), exactly as a near-live chase bid left resting fills into the first dip
-    with nobody watching. Size for the good payout if hit (`/overnight`'s fill-realism check
-    governs the overnight case; a dwell-line level that carries a ⚠ reality clause goes to Ben
-    WITH the clause, or priced at the typical).
-  State which horizon a recommendation assumes, and pass it to the read
-  (`quote-items.mjs --dwell=attended|away|overnight`) so the ledger's lean `dwell` field records
-  the basis for the retro. Fill-now vs rest-day is per-TIME vs per-FLIP profit — neither is wrong;
-  UNDECLARED is wrong (`docs/MARKET-ANALYSIS.md` "Two objectives, two prices").
-  **New-lane exception — the FIRST entry into a NEW/unproven item is cautious even when
-  actively flipping (Ben, 2026-07-06).** Fill-aggression is *earned* by knowing the lane —
-  you've watched its fills and band behavior. On a brand-new item you're buying information
-  first, and an instant fill teaches you nothing about whether the price was good. So a first
-  entry gets a passive bid BELOW live (price improvement) and/or a smaller starter size, not a
-  fill-priced near-live bid. Frame it as a "test with an exit AND a cautious entry." Anchor
-  (2026-07-06): a webweaver-bow first entry priced at the band low (= live instasell) filled
-  near-instantly, and within ~5 minutes the instabuy dropped 18.51m→18.35m with momentum
-  flipping to a 2h breakdown — the adverse-selection cost of a fill-priced first entry,
-  materializing in real time.
-  **BUT the new-lane caution SCALES DOWN with liquidity (Ben, 2026-07-06 — "risk is just an
-  opportunity to learn").** On a HYPER-LIQUID item the deep two-sided pool IS the risk mitigant: a
-  fill-priced first entry that goes wrong exits straight back into hundreds of thousands of daily
-  units, so the downside is a little tax/spread, not being stranded — the adverse selection that
-  burned the *big-ticket* webweaver is cheap on a liquid commodity. So on a liquid lane, **price the
-  first entry to FILL (at/near live) and size it fully** rather than sitting at a band-floor bid
-  burning cycles — you learn the lane by trading it, and the liquidity is your exit. Reserve the
-  cautious below-live / half-size first entry for ILLIQUID or big-ticket lanes where you genuinely
-  can't exit cheaply. (Anchor: sitting a snape-grass bid 16 below live while it traded, 2026-07-06 —
-  the caution cost cycles the 107k/day liquidity already covered.) The break-even floor and
-  real-breakdown cuts are unchanged — this relaxes ENTRY timidity, not the floors. See Claude memory
-  `risk-tolerance-lean-in`.
-- **Parked-capital leak on mid-liquidity band-floor bids (HYPOTHESIS, 2026-07-06 — YV1
-  data, not yet a rule).** _(judgment: unproven lean, F1-gated)_ The first `join-outcomes.mjs --report` capital-efficiency read showed
-  **~24% of bids never filled** and that band-low (0–20 pct) **mid-liquidity** buys are the
-  slowest to fill (~24m median vs ~9m liquid) — i.e. mid-liquidity band-floor bids are where
-  capital gets stranded. So when *actively* flipping, lean toward pricing a mid-liquidity entry
-  nearer the live instasell rather than the deep band floor: the missed cycles + stranded gp
-  likely cost more than the floor discount saves (the measured-evidence companion to the
-  posture rule above). **Honesty (process rule 4):** this is descriptive off ~116 concentrated
-  lots (bludgeon 22% of closed), and F1 is still gated — it is a LEAN to test against the
-  accruing never-filled-bid count, NOT a hard gate. Liquid items and passive/overnight deep
-  band-floor bids are unaffected (there the deep bid is the intended play).
-- **Velocity vs magnitude — equal return, so it's a FUSS + RISK choice; Ben leans big-ticket long-term
-  (Ben's stance, 2026-07-20).** _(judgment: Ben's directional preference; crossover unmeasured)_
-  **At current capital the per-gp %-return of churn and big-ticket flips is roughly EQUAL** — ~1–2%/day
-  both (a mask/godsword lap is +1–2.2% over ~a day on a thin item; a churn lap is +0.4–0.8% × 2–3
-  laps/day). Because the returns tie, the pick is **not about efficiency — it's about FUSS (attention)
-  and RISK**:
-  - **Churn** — lower risk, liquid exit (you can walk away from the *downside*), **but more fuss**: run
-    ~10 lanes, re-cycle laps, stay present.
-  - **Big-ticket** — **low fuss** (park capital in one set-and-forget bid+ask), **but tail risk**: it
-    can't exit a crash (illiquid, no fast door), so you walk away from the *effort*, not the *downside*.
-  **Ben's lean: trending toward big-ticket flips as the long-term default — it's less fuss than the churn
-  lanes.** The tail-risk is the current reason to keep churn's liquidity around, and it is expected to
-  **shrink as the reads/data improve** (better entry/exit timing → fewer positions that get stuck
-  underwater). So **default toward the low-fuss big-ticket wherever a verified-reachable sell exists**
-  (recent-3 reach confirmed), sized to what can afford to sit if it crashes, and lean further that way as
-  the reachability data matures.
-  **Capacity backstop:** churn is buy-limit + tranche-knee capped (~150–200m/window across the ~10 liquid
-  lanes), so as capital grows past that the marginal gp has to go to big-tickets regardless — an
-  independent reason the tilt goes that way over time.
-  **Allocate by ATTENTION + CRASH-TOLERANCE, keyed on Ben's away-horizon:** "back in 1h" vs "back in 8h"
-  vs "overnight" weights the churn↔big-ticket mix (short/present → more churn is fine; long/hands-off →
-  big-ticket set-and-forget); if he hasn't stated it, ASK the horizon before sizing a big-ticket tilt.
-  The SAME stated horizon also selects the pricing basis — it is the dwell of the "Entry AND exit
-  aggression follow the DWELL HORIZON" rule above, so pass it as `--dwell` on the reads.
-  **Honesty (rule 4):** the ~equal-%-return and the ~150–200m churn ceiling are ESTIMATES, and the
-  big-ticket realized sample is n=1 (one godsword) — the crossover is UNMEASURED. When the RC co-log
-  accrues enough closed big-ticket round-trips, compare realized %/day directly instead of estimating.
-  Companion to the parked-capital-leak hypothesis above.
-- **Read the digest's `capEff`/`deploy` columns for SIZING — they are shown, not ranked on
-  (PLACEHOLDER, n≈0).** _(judgment: the NUMERIC companion to "Velocity vs magnitude" above — inform-only
-  sizing read; the sort basis itself is fixed in `screen-flip-niches.mjs` `buildDigestBlock`)_ ⚠ The digest
-  ranks by `rank` (net × P(fill) ÷ TTF), which is wallet-free — **it does NOT rank by `capEff × deployable
-  capital`**, and this bullet said it did until the code was checked. Use these two columns to decide HOW
-  MUCH to put in a row you have already picked off the ordering, never to infer why one row sits above
-  another. `capEff` = after-tax ROI%/day of capital tied up (`roiPct ÷ holdDays`;
-  a recycling churn lane's `holdDays` reflects its laps/day, so a fast small win can out-rank a slow big
-  one); the `deploy` column is the parkable capital (the value flip-niche's `deployUnits` × buy price, against
-  the full `--capital` pool) — a big-ticket you can park 40m into out-ranks a dust flip you can only put
-  100k into. A thin big-ticket clearing its
-  sell verification can still be a **weak deploy**: the digest's `⚠ weak deploy` verdict flags a BIG-TICKET
-  (mid ≥ `BIG_TICKET_GP`, 10m) single-turn (non-churn) pick under ~0.5% PER TURN — Magus (+160k/50m, ~0.3%,
-  cancelled) vs blowpipe (~+960k/~85m, ~1.1%, clears on margin alone) is the anchor. Churn is the ONLY lane
-  exempt from the flag (its recycling is rewarded in `capEff`'s ranking via `holdDays`, not by exempting the
-  per-turn flag); amplitude big-tickets DO flag. This is inform-only ordering/flagging — it NEVER gates or
-  drops a row, and every threshold is unvalidated until the retro-join measures real single-turn big-ticket
-  fills. This is a NEW numeric signal that FEEDS the "Velocity vs magnitude" decision above without replacing
-  its attention/risk framing — read them together (that bullet is Ben's directional preference; `capEff` is
-  the number).
-- **Band-top artifact detection.** _(judgment: artifact spotting; `--min-traded` supports; Bar E trims at source)_ A single outlier print inflating the band (one lone
-  100k print against a 59k mid) makes ROI look absurd. **Bar E (2026-07-10) now trims this at SOURCE on
-  BOTH surfacing paths:** `robustBand` takes the p90 high / p10 low on a DENSE band (≥8 prints/side), so a
-  lone flier no longer sets the Rank/edge (Scope A) NOR the app-facing Optimistic column (Scope B, 0.55.0
-  — the app's `optBuy`/`optSell` are clamped against the robust edges too now) — your manual check is now
-  CONFIRMATION, not the primary detector. The ONE residue: a SPARSE side (a thin big ticket, <8 prints)
-  keeps the raw extremum, so a flier can still inflate a thin item's edge — those are exactly where you
-  still eyeball it (the reach `ℹ` note is the backstop). (The momentum tell deliberately still keys off the
-  RAW band max, so a "fresh 2h high" fires on the real extreme, not the p90.)
-  Check `--min-traded` traded-windows plausibility when a
-  band ROI looks too good. (Bar D, 2026-07-09: the traded-band GATE splits density = `tradedWin` from
-  two-sidedness = `sawLow && sawHigh`, so it no longer culls big tickets that trade a few times an hour;
-  `--min-active` still works as a back-compat alias for `--min-traded`. Bar D gates the band's REALITY;
-  Bar E robustifies its EDGES.)
-- **The screen now DOES the windowrange analysis in-script (2026-07-09) — read its `ℹ trajectory/reach`
-  notes first.** _(enforced: `js/validate.mjs` trajectory + reach validators, `pipeline/commands/screen-flip-niches.mjs` Leg B)_
-  Each surfaced row now carries auto-computed INFORM notes (never a drop, n≈0 rollout): a **reach** note
-  covering **BOTH legs** (2026-07-09) — the sell-leg `--ask` reachability AND the buy-leg `bid` touch
-  (`reach bid X touched N/14d` — the 2h band min is artifact-prone, and an unreachable bid inflates the
-  grade; the Primordial/Nightmare-staff S- catch), each with the RC1 stale bump, off the 1h series
-  fetched per survivor — and a
-  **trajectory** note classifying the buy-leg shape — **knife** (spike + monotone-down lows → "not a dip",
-  the Nightmare-staff catch), **oscillating** (repeating local minima → "buyable at the local min", the
-  Hydra case), **based** (flat value-low), **elevated** (bought high). This is the encoded form of the
-  manual `windowrange` reads below — so the manual `--ask`/`--window 0-23 --nights 21` step is now a
-  CONFIRMATION on the handful you actually pitch, not the primary detector (a `would reject`/`would caution`
-  note is the screen telling you what a stricter thesis would have done). Still verify by hand before
-  quoting a profit — the notes are inform-only and thresholds are placeholders.
-- **The DIURNAL TIMING block auto-derives the timed-lap peak-timing bid/ask (2026-07-09; richened by
-  PLAN-DIURNAL-TIMING DT2, 2026-07-23) — READ IT; it supplies the spike-window exit for WINDOW-CLEAR
-  PRICING below.** _(enforced: `js/windowread.mjs` `diurnalTimedLap`, rendered via the ONE shared
-  `formatTimedLap` (`pipeline/lib/render/emit.mjs`), `pipeline/commands/screen-flip-niches.mjs` Diurnal timing
-  block)_ `screen-flip-niches.mjs` now prints a `Diurnal timing` line for EVERY flip-niche survivor (was
-  top-picks-only), FREE — off the in-hand 1h series, zero new fetch, blank-line-separated per item. Two
-  shapes off **`windowReliability`**'s split-half verdict (DT4, 2026-08-10 — this line said
-  "`hourConcentration`'s verdict" until then, which the bullets below already contradicted; that
-  predicate was measured NOT to discriminate and no longer picks the shape on any surface):
-  - **Clean cycle** (the daily shape reproduces across a parity split): `BID <x> (basis, dip HH–HH) · ASK
-    <y> (peak HH–HH) · timed +net/u (roi%) · same-hour ±net/u · range · reach bid N/M·ask N/M · hold
-    ~Xh · base ↑/↓`. `timed` = the trough→peak lap; `same-hour` = the SAME-HOUR/churn margin — the two
-    can DIVERGE hard on a big ticket (same-hour spread thinner than tax while the trough→peak clears it
-    easily; a live fang row showed `timed +964.5k/u` beside `same-hour -21k/u` on the SAME row) — both
-    always render, never averaged away.
-  - **Unreliable / unverified hours** (DT4, 2026-08-10 — SUPERSEDES the old `range-churn` shape): the
-    LEVELS and both nets ALWAYS render; only the dip/peak HOUR spans + the hold horizon are withheld
-    when the item fails the split-half reliability gate (`windowReliability`, `min(rLow,rHi) ≥ 0.6`).
-    The line closes with `hours MAY repeat most days` / `levels only — no reliable hours` / `levels only —
-    hours unverified`. Only ~0.8% of items pass, so an absent window is the NORMAL case now — read the
-    LEVEL and treat the hours as a bonus when they appear. `range-churn — no timing edge` is gone.
-  - All shapes append a liquidity/tranche segment (`vol/d · dip-pool · peak-pool · tranche ~X clean ·
-    ~Y price-knee`) and a `⚠ buy limit … exceeds the round-trip price-knee` caveat when the item's buy
-    limit sits past it. _(judgment: relay discipline — this segment is the most misread thing the lap
-    prints)_ **Never quote these as a quantity Ben cannot clear.** They are a PRICE-QUALITY knee off a
-    borrowed n≈6 study that measured how far the realized price degrades with lot size and never
-    measured whether the lot fills — so sizing past the knee predicts a worse net, not a stuck offer.
-    They are also a ROUND-TRIP bound (`volDay` = min(hpv,lpv), so the tighter leg governs); a one-leg
-    sell of stock already held is bounded by the sell side alone, which the printed `peak-pool` gives
-    and which on a lopsided book is several times larger. Anchor: two one-leg sapling sells cleared 146
-    and 200 units at 4.0%/4.5% of min-side `volDay` — 8x the `clean` number and 4x the knee — and the
-    read that told Ben not to scale past the knee was wrong for exactly this reason.
-  - **A SECOND window may also flag** (PLAN-MULTI-PEAK-WINDOWS) — a trailing `also ASK …/also BID … —
-    second elevated/depressed window (n≈0, inform)` clause on the SAME line when an item has a second
-    genuinely-prominent elevated (or depressed) diurnal window, not just one (e.g. a reliable overnight
-    peak PLUS a higher-ceiling afternoon peak). Inform-only — it's Ben's call whether to list into one
-    window then relist for the other, or split the stack; the tool only surfaces that both exist.
-  `⚠ trend-dominates → bid to live` still fires when a multi-day trend erases the intraday dip (the
-  Ghrazi lesson). This is the ENCODED form of the manual per-item windowrange dance below — read it
-  FIRST; then `windowrange --profile "<item>"` for the full hour-by-hour table on the handful you
-  actually pitch. Honesty: the reliability gate doesn't know froth (a spike item's amplitude
-  flatters the roi — cross-check the phase tag), and what it measures is within-day HOUR RANKING, not
-  that a resting offer fills better in the window (measured separately as ~nothing — DT2), every tranche/knee constant is a labeled PLACEHOLDER,
-  and the funnel-widening pass (running this on gate-EXCLUDED items to test "are we hiding winners?") is
-  a planned fast-follow, not yet built — so this reorders SURVIVORS, it doesn't yet surface the excluded
-  universe.
-- **A flagged diurnal level travels WITH its clause — never relay the bare number.** _(enforced:
-  `js/windowread.mjs` `realityClause`, the ONE renderer — it appends `⚠ spike-top …` / `⚠ stale …`,
-  always ending in the typical level (rendered `~X` in the compact `short` style the console bits use, and spelled out as `typical ~X` in the `exit`/`full` styles — do NOT grep relayed output for the word "typical"), to the Diurnal timing BID/ASK bits, the context notes and every
-  `read-window-range.mjs` read)_ The flag NEVER reprices the level, so an unrelayed clause hands Ben a
-  few-days-only print as a list price: quote the typical instead, or carry the clause beside the number.
-- **WINDOW-CLEAR PRICING — the canonical peak-timing step (Ben 2026-07-14; encodes memory
-  `peak-timing-default-for-pricing`).** _(judgment: the pricing method every churn/scalp bid+ask routes through; the reach/diurnal/asym reads below are its INPUTS)_
-  A churn/scalp lap is a WITHIN-WINDOW round trip — buy the tranche, sell it inside the same 4h
-  buy-limit window OR inside the diurnal spike window the ask targets. So **"reaches N/M DAYS" is the
-  daily GATE; whether the price prints INSIDE your target window is the FILL** — a level can reach
-  12/14 days yet only print in a 2h nightly spike that's already behind you today, at volume that clears
-  a tenth of your tranche (the days-reach ≠ lap-clear trap). Price every pick in three moves:
-  1. **Name the exit WINDOW.** *4h-lap* (ask at/just under the live instabuy → clears this window, the
-     churn default) OR *diurnal-spike* (ask at the peak-window level from the **Diurnal timing** read —
-     which under `--verbose` lives in `pipeline/.cache/last-report/screen.json`, not stdout (`--full` to
-     print it) — or from `read-window-range.mjs --profile` → clears in that window, better margin if you
-     can wait). State which.
-  2. **Quote the reachable-IN-WINDOW ask** (RC1 recency-honest; the Asymmetric ask-reach read below
-     verifies it) — NEVER the raw band top.
-  3. **BACK-SOLVE the buy from that ask** — bid ≤ the price that leaves break-even + your target margin
-     UNDER the reachable exit. Run `node pipeline/commands/read-window-range.mjs "<item>" --window <peak
-     hours> --exit <ask> [--margin <gp>]` (#9): it prints the tax-exact max profitable buy (`maxBuyForExit`,
-     the inverse of `breakEven()`) AND how often that exit actually prints in the window — a low reach means
-     the exit over-states the sell, so pick a lower one. The buy is priced BACKWARD from the exit, not
-     forward from the band low.
-  4. **Project TODAY** — is the window ahead or already printed? (`diurnalForecast` eta / the Hydra
-     stale-window rule). A spike window behind you today means price the 4h-lap exit or wait for the next.
-  - **Diurnal-phase entry sizing** — read the `⏲` phase token the Diurnal timing read carries. Under
-    `--verbose` that read is CACHE-ONLY: take the token from `pipeline/.cache/last-report/screen.json`
-    (or re-run with `--full` to print it), never from the `--verbose` stdout, where it does not appear
-    (`js/windowread.mjs` `diurnalPhase` — inform-only, n≈0, never gates). Entering `post-peak`/cooling
-    (peak already closed today, next peak ~Yh away) → REDUCE entry size + label it hold-to-next-peak, don't
-    max the buy limit into a fading window. Anchor: maxed the blowpipe limit 8/8 as its peak was CLOSING →
-    5 units stranded ~16h to the next peak. `pre-peak (opens ~Xh)`/`in-peak (closes ~Xh)` are the ramp/full
-    windows; the token computes the phase, don't re-derive it by hand.
-  Anchor (2026-07-14, anglerfish): bought 2,735, but to clear the volume you EITHER hold the ask for the
-  14:00–17:00 spike (~2,899, prints 3/3 recent) OR clear-in-4h just under live instabuy (~2,815); the
-  next rebuy back-solves to ~2,710 (BE ~2,760) so both exits carry real margin. This is the ONE home for
-  the peak-timing pricing method — the reach/diurnal/asym reads below FEED it; `/positions` points here
-  for the sell-side (step-down) voice. (The tax-exact back-solve is now `read-window-range.mjs --exit`
-  above; the mechanical within-window clear-RATE is the shadow-logged `winClear` on
-  `screen-flip-niches.mjs`/`quote-items.mjs` — this bullet is the judgment form that routes them.)
-- **Asymmetric ask-reach read — the verification gate (2026-07-07, method) — an INPUT to WINDOW-CLEAR PRICING above.** _(judgment: method; tool `pipeline/commands/read-window-range.mjs`)_ The screen's ROI is
-  computed off the 2h optimistic band edges, which are often extremes the market never actually
-  pays. Before recommending ANY pick, run the `read-window-range.mjs --ask <band-top>` reach check the
-  doctrine already requires and read it two ways: **band-top ask reached ~0/7 days = artifact, SKIP**
-  (the ROI is an illusion — realistic sells sit below break-even; anchor: Dharok's 4.85m and ruby
-  bolts' 3,098 both reached 0/7 while the screen showed +9%/+1.7%). **Band-top ask reached ~7/7 days
-  AND live instasell sitting BELOW the item's own recent bid-side window floor = a real dip-buy**
-  (you're buying an actual intraday dip at market, fills now, no chase — anchor: super restore, live
-  10,377 under the ~10,610 7-day floor with the 10,752 sell reaching 7/7). The tell that separates a
-  clean entry from a trap is not the grade or the ROI — it's **where live sits relative to the item's
-  own window** (below the floor = dip; at/above an unreachable top = illusion). Honesty (rule 4): the
-  METHOD (verify ask-reach before pitching) encodes freely; "dips below the window floor are buys" is
-  a hypothesis off one still-open trade, not a proven pattern — keep scoring it.
-  - **The reach count is REGIME-contaminated — trust the recency split, not the raw N/M (RC1,
-    2026-07-08).** A flat `reached 4/14` / `touched 14/14` count is dominated by stale, older-priced
-    days on any item that changed regime inside the window, so it lies in BOTH directions: an **ask**
-    on a crashed item reads reachable off pre-crash days (blood rune: 4/14 all pre-crash, recent 0/3);
-    a **bid** on a repriced-up item reads reachable off old cheap days the floor has left. `windowrange
-    --bid/--ask` now prints the **recent-3-night** hit rate beside the full one and flags **`⚠ stale`**
-    when the full count is rosier than recent — when you see `⚠ stale`, DISCOUNT the full count and
-    price off the `recent-3 ~50%` quantile instead. It is NOT a looser gate (the band-top-artifact SKIP
-    above still stands); it stops the count fooling you on a regime-change item. A stable item never
-    flags. Do NOT re-derive a reach number by hand — read the split the script prints.
-    - **Above-average is not a warning sign — the DEEP-BOOK half is now ENCODED; READ the `⊙ avg-bound
-      read` clause, don't re-derive it (Finding 3, 2026-07-17; encoded 2026-08-05; full guard:
-      `docs/MARKET-ANALYSIS.md` §4).** _(enforced: `avgBoundRead`/`formatAvgBound` in `js/windowread.mjs`,
-      rendered on every scored `--bid`/`--ask`/`--exit` + mirrored into `verify.json` as `avgBound`)_
-      RC1 above catches regime contamination on the reach COUNT; the separate failure is treating a low
-      raw count as alarming when the smoothing bias is depth-proportional. On a deep book the trio now
-      prints the clause itself — trust it over your own reading of the N/14, and note it fires ONLY
-      above `REACH_RELIEF_MIN_VOL`. **On a THIN book nothing prints and the full-strength reach guard
-      still applies** — that's the half still requiring judgment (stay near the centre of the
-      distribution; an artifact print is easy to mistake for a real level). Anchors: Soul rune
-      (397–399 filled routinely on ~20+ real lots against "reached 1/14, recent 0/3"), and the
-      2026-08-05 misread this encoding exists to prevent — Ruby dragon bolts (e) / Seeking dragon arrow /
-      Seeking amethyst arrow all skipped off bare `touched 0/14 · p0` on 349k–750k u/d books.
-    - **A `⚠ stale` flag on a BID means "don't assert the fill" — price to live instead (Ben,
-      2026-07-08, first live save).** The stale flag exists on the bid side precisely to stop you
-      claiming a fill the recent regime won't give. When `--bid X` shows `⚠ stale` (recent nights sat
-      ABOVE X — the floor repriced up), X is a band-floor extreme recent sellers don't cross down to;
-      do NOT pitch it as "fills the dip." Either **bid at/just under the live instasell** (the
-      fill-correct level — you give up the hoped-for entry to actually get filled) or call it an
-      explicit patient dip-catch that *probably misses* (a fine resting bid, no downside — just don't
-      size the plan around it). Anchor: I pitched Hydra leather at its 13.44m 2h-floor (recent 0/3,
-      ⚠ stale) as a dip-fill; live instasell was 13.53m, ~90k above the bid — it needed the pullback
-      to *deepen*, which recent history argued against. Repriced to 13.50m (near live) to actually
-      fill. The reachable-ASK side (3/3 recent) was genuine; it was the bid fill I got ahead of.
-    - **A low BAND buy-reach is "patient/deep," NOT "dead" — the Est. buy now PRICES the band low
-      (PLAN-ESTIMATOR-POSTURE AC1, 2026-07-18).** The band flip-niche's `Est. buy` no longer folds up toward
-      live when its recent touch-reach is low (that fold was collapsing real patient band flips to
-      "+1 BE-floored" and reading the board dead). It now prices the band low and CARRIES the fill-signal
-      in the cell: `17.30m (0/3 · 9/14 · p93)` = the reach token PLUS a **placement percentile** (`pXX` =
-      where that bid sits in the 14-day daily-LOW distribution; a **low pXX = below most daily lows = a
-      deep/patient entry**). So a band-low bid with a low recent reach is a rest-it-as-optionality patient
-      bid (it fills on the next real dip), NOT a dead row — the Est. net now shows its true patient edge.
-      The RANK still discounts it (low bid-reach → low P(fill) → it ranks BELOW an equal-net fill-now flip),
-      so a rarely-filling deep bid shows its real edge without out-ranking a printer. **CHURN now behaves
-      the SAME (PLAN-ESTIMATOR-POSTURE AC5/AC6, 2026-07-18)** — churn's `Est. buy` AND `Est. sell` are now
-      unfolded band-edge prices too (the day-level reach mismeasures a tight symmetric lap; the codebase
-      already skipped it for rank + grade). So a churn row's Est. cells carry no reach caution token —
-      **read the RANK/GRADE for churn fill risk, not the Est. cell**. This un-floored Super restore(4)-class
-      churn rows from `+1 (BE-floored)` to a real net. The reach-FOLD now lives in the VALIDATION step
-      (`read-window-range.mjs`'s `fold:` line — the trio below), not the churn discovery price.
-      **EF1(b) bound (PLAN-ESTIMATOR-FIDELITY, 2026-08-01):** churn's exemption now holds ONLY while the
-      ask sits inside the 14-day daily-high distribution (placement ≤ p85). An above-the-distribution
-      churn ask (the Sapphire-bolts mirage: churn #1 at P~1.00 with a 1/14 ask) takes the standard reach
-      discount/fold/grade-cap, its caution tokens return, and the row prints a
-      `⚠ exemption dropped — … rank X (was Y)` visible-swap line — RELAY both numbers when one of these is
-      a candidate you'd otherwise pitch off its old rank. Integer-tick tight laps (Ancient-essence class)
-      read p100 by construction and trip the bound, but their genuine reach makes the discount a no-op
-      (numbers unchanged, no note).
-    - **`↻ repriced entry` lines are the dead-bid alternative — an OPTION to reprice, not a new pick
-      (EF1(a), PLACEHOLDER n≈0).** _(judgment: relay + pricing discipline; mechanic in
-      `js/estimators/families.mjs` `estimateRank` `repriced` + the screen's `↻` footer line)_ When a row's
-      quoted band-low bid is DEAD (entry P below the 0.10 floor on a real reach read) while its sell leg is
-      scored, the screen prints the pair repriced at the LIVE crossable entry with the sell leg's reach
-      evidence inline (the neitiznot class: rank-0 row 79/83 while its ask printed 14/14). The headline
-      rank/sort are UNCHANGED (R-1) — treat the line as "this row's honest form is a live-entry flip";
-      verify the sell leg per WINDOW-CLEAR PRICING before pitching it, and never quote the repriced net
-      without its reach token. The rank cell also labels a collapsed leg (`P~0.00 (bid leg)`) and the Net
-      cell's probability is now labeled `P(ask)~` — two different questions, don't read them as a
-      contradiction.
-  **MANDATORY, both legs — this is a hard step, not a judgment call (Ben, 2026-07-07, the DHCB
-  overpitch).** A dip-bid has TWO legs to verify and it is easy to do only one: the BUY (trajectory /
-  dip-vs-knife) AND the SELL (the `--ask` reach). **Before quoting ANY dip-bid's expected profit, run
-  `read-window-range.mjs --ask <sell target>` (the verification TRIO below) — the RUN stays mandatory;
-  what changed is the INTERPRETATION of the result.** Read it the liquidity-conditioned, placement-informed
-  way — a low raw reach count is NOT by itself grounds to reject a level (see the "Above-average is not a
-  warning sign" bullet above; full doctrine `docs/MARKET-ANALYSIS.md` §4, don't restate it here). Judge the
-  sell level by LIQUIDITY and its placement percentile, not the raw N/14: on a deep/liquid book the upper
-  tail is fine — distrust only a level at/near the historical extreme (≈p100); on a thin book stay near
-  center. This session the old "step down to the ~50–75%-day reach level, never above" rule produced TWO
-  false "won't clear" reads on liquid items (soul rune, dragon bones) that then cleared at the higher price.
-  The raw `Optimistic`/`Rank` band top remains a CANDIDATE, not the pitched number — on a thin + wide-band
-  item it is an artifact that never reaches — but on a liquid book do not reflexively step it down. (PLAN-OUTPUT-TABLE 2026-07-13 + revisions: the
-  screen's DEFAULT table now renders the reach-folded `Est. sell` — the fold (on the FULL-WINDOW reach since 2026-08-09 — recent-3 shows beside it on divergence but no longer sets the number) already
-  collapses a mirage top and the cell carries its recent reach token (`0/3`, full window beside it on
-  divergence) — but it is a PLACEHOLDER model, so the `--ask` confirmation on what you actually pitch STAYS
-  mandatory; `--raw` shows the unfolded pair.) No pitch without the sell leg verified. Anchor: DHCB surfaced top-of-board (score 2.24m/d) and I verified the BUY (21-night
-  trajectory = a healthy recovery) but carried the band-top sell 36.21m forward UNVERIFIED and quoted
-  +690–810k; `--ask 36.21m` reached **0/7 days**, the reachable sell was ~35.6m, and the real trade was
-  +80k that then went underwater. The band top is a fine CANDIDATE (input); it is never the pitched
-  profit until `--ask` confirms the reach. (Decided against re-scoring the screen off a reachable sell:
-  the cheap ts6h proxy understates reach → false negatives that HIDE good sells, worse than the
-  problem; run `--ask` on the handful you actually pitch instead — accurate + cheap.)
-  - **The verification TRIO — mandatory for every top pick, ONE combined call, every time (Ben,
-    2026-07-18 — supersedes "run `--profile` on the handful you actually pitch" being optional;
-    revised same day once `--profile` was fixed to COMPOSE with `--ask`/`--bid`/`--exit`
-    instead of short-circuiting the rest of the per-item read).**
-    The sell-leg-only rule above is the FLOOR, not the whole bundle. Before naming a bid/ask on
-    anything you're about to recommend, run ONE `read-window-range.mjs` call bundling all three
-    checks — cheap (no new fetch beyond the archive), each catching a different failure mode
-    already seen this session:
-    ```
-    node pipeline/commands/read-window-range.mjs "<item>" --ask <sell> --bid <buy> --exit <ask> --window peak --profile --json --out pipeline/.cache/last-report/verify.json
-    ```
-    0. **`--window peak` / `--window dip` — the literals, never hand-typed hours (2026-07-26).**
-       _(enforced: `read-window-range.mjs` resolves them per-item off that item's own `hourProfile`)_
-       **`--window 0-23` is a legal 24-hour window, NOT a "no scoping" sentinel** — reach, placement,
-       cushion AND the competing volume pool all then describe the whole day. This is the WINDOW-CLEAR
-       PRICING step's "days-reach ≠ lap-clear" trap in its most literal form, and it cost a real trade:
-       a Divine super combat exit verified `14/14 days, recent 3/3, p0` all-day while its 20:00–23:00
-       peak read `recent 0/3 ⚠ stale`, sized against a 210,763-unit all-day pool when the window held
-       7,061 (≈30× off). A full-day window now self-labels `ALL-DAY`; an explicit `--window` that
-       disagrees with `--profile`'s peak/dip prints a divergence warning; and the `--profile` block
-       scores each window against **its own hours** (`↳ in-window:` — the window's reach, its pool,
-       and your `--ask`/`--bid`'s in-window reach + signed gap to the window's own level). **An ask
-       above the peak window's own printed level is not a window-clear price** — that gap is now
-       printed as a number, so quote it rather than eyeballing two separate lines.
-    1. **`--ask <sell>` / `--bid <buy>` (percentile + reach, AC4a).** Read both numbers printed,
-       not just the day-count: `reached N/14d · recent M/3 · placement pXX of the 14-day daily-
-       HIGH/LOW distribution`. A level can have solid N/14 reach and still be an aggressive ask if
-       its placement percentile is high (near the top of the distribution) — the percentile is
-       what the raw reach count hides.
-    2. **`--exit <ask> [--window <hours>] [--margin <gp>]` (tax-exact back-solve).** Gives the real
-       breakeven BUY for that sell (`maxBuyForExit`, already tax-net) — margin is this value MINUS
-       the actual bid, never a raw ask-minus-bid subtraction (the Tormented synapse correction,
-       2026-07-17: a naive subtraction on an already-tax-net value overstated margin ~4x, and part
-       of the "safe" bid range actually crossed into a loss).
-    3. **`--profile` (hour-by-hour diurnal sweep).** Don't stop at the auto Diurnal-timing line —
-       pull the full 24-row hour-of-day table and read the printed DIP/PEAK windows + amplitude/
-       trend yourself before stating a timing target. Same underlying data as the auto-note, full
-       resolution, so "targets the 20:00–21:00 dip" is backed by the actual numbers, not a
-       summarized guess.
-    4. **`DAILY TRAJECTORY` + the floor/ceiling note (the multi-day path — surfaced by DEFAULT since
-       2026-07-21; R6 folded it into ONE note, 2026-07-22).** The scored trio prints the per-day window
-       low/high trajectory and a one-line **floor/ceiling** note (the floor + ceiling SLOPES independently,
-       the drift-vs-crash `classification` — with a `ranging (oscillating floor↔ceiling)` qualifier when it's
-       bouncing — the 2-week `band X→Y`, and where LIVE sits: at the floor / ceiling / mid) plus a compact
-       `diurnal:` line. _(R6 retired the older weaker blended-mid `read:` shape line; its floor/ceiling/live
-       fields folded into this note.)_ You MUST read the trajectory (floor/ceiling/classification), not just
-       the reach/placement fields — the exact under-read this surfaces: a level can look fine on reach/
-       placement while the trajectory shows price falling into it or live already pinned at the ceiling. The
-       note is a HEURISTIC (n≈0, inform-only, never gates) — the raw per-day rows are the signal; the label
-       is a prompt.
-    Each scored `--ask`/`--bid`/`--exit` also prints a **`fold:` data-point line** (PLAN-ESTIMATOR-POSTURE
-    AC8): `best-case ask X → reach-folded Y (recent a/b · full c/d) · net at folded pair …`. This is where
-    the reach-fold moved — discovery shows best-case, validation shows what the estimator's fold makes of
-    the level you're about to pitch. Read both numbers: a big gap between best-case and folded = a
-    stale-top mirage. Inform-only, a PLACEHOLDER — never gates; `--niche churn` shows churn's exempt fold
-    (≈ best-case). None of these move the grade or the gate tree — they're the confirmation pass on the
-    specific number about to get said out loud. Skipping one is exactly the DHCB/Tormented-synapse failure
-    shape: the tool existed, wasn't run, and the pitched number was wrong in a way it would have
-    caught. **Dump it with `--out`** for any candidate `/scan` is elevating — a top pick per
-    flip-niche, or one specifically pitched in the analysis blurb — so `set-scan-analysis.mjs` and
-    `/positions`' deep-dive step can read `pipeline/.cache/last-report/verify.json` instead of
-    re-running the checks by hand or re-deriving the numbers.
-  - **Tranche-size-as-%-of-daily-volume is the variable that predicts when the reach-relief
-    premium collapses (2026-07-17, real-fill evidence, n≈6 items).** `reachRelief`
-    (`js/estimators.mjs`) softens the ask-reach fold on the theory that a position small vs daily
-    flow can clear at an elevated price — but it currently conditions on `sizeRatio` at the
-    THRESHOLDS already in that module (`REACH_RELIEF_SIZE_FULL`/`REACH_RELIEF_SIZE_ZERO`), not on
-    a validated real-fill curve. Cross-referencing positions.json `closed` lots against fills.json
-    for Soul rune, Blood rune, Prayer potion(4), Super restore(4), Ruby dragon bolts (e), and Raw
-    anglerfish found a rough knee: **below ~0.5% of daily volume** a tranche reliably clears close
-    to the best available price (Blood rune 25k/lap ≈0.28%, Soul rune 25k/lap ≈0.56% — both clean
-    across every tested lot); **~0.7–1%** already shows visible degradation (Prayer potion(4)
-    1,799 units ≈0.71% sold 8,684 vs ~8,744 on same-day tiny ladder-top lots; Super restore(4)
-    1,044 units ≈0.71% sold 10,698 vs ~10,774); **by ~5–7%** the premium is gone and you're pricing
-    near the bulk-clearing level (Raw anglerfish 9,890 units ≈6.6% sold 2,449 vs 2,480–2,498 on
-    tiny same-day lots — a NET LOSS after tax despite nominally selling above the buy). Raw
-    anglerfish's own full buy limit (15,000 units) is ~10.4% of its daily volume — structurally
-    oversized for its own liquidity depth, not just an unlucky trade. This is the real-data
-    explanation for why the pressure-exit trial was found too
-    optimistic that session (Water orb) — and why it was eventually RETIRED outright
-    (2026-08-30, join-exit-ev.mjs's criterion): the theory
-    (small clips get better prices) is directionally right, and `reachRelief` DOES scale the
-    effect down by size (it conditions on `sizeRatio`) — but its full-relief threshold
-    (`REACH_RELIEF_SIZE_FULL` = 2% of daily flow) sits ABOVE the measured degradation knee
-    (~0.5–1%), so it grants full relief across a mid-size range that the real fills show already
-    degrading — i.e. it OVER-CREDITS mid-size positions rather than not scaling at all.
-    HONESTY (rule 4): n≈6 items, same-session, real fills but not a controlled experiment — a
-    rough knee-in-the-curve observation, not a calibrated threshold; don't hardcode 0.5%/1%/5% as
-    gates off this alone. Full numbers live here; `js/estimators.mjs`'s `reachRelief` header
-    carries a one-line pointer, don't duplicate.
-- **Fresh-repricer flag.** _(judgment: sizing call)_ A large multi-day regime move = the item was recently repriced
-  → overnight-retrace risk. Size small; skip for unattended holds.
-- **Phase tag on the Regime cell (2026-07-06).** `screen-flip-niches.mjs` annotates each Regime cell with a
-  trajectory phase from the shared `phase()` (off the same 6h series, zero extra fetch): `spike`
-  (elevated over its own base), `decay` (pulled back from a recent peak with lows STILL stepping
-  down — a falling knife), or `basing` (decayed back to the pre-spike base with lows FLATTENED —
-  a possible base-buy). It's a read aid, not a gate. **A `spike` tag is NOT automatically "about
-  to retrace" (Ben, 2026-07-06).** The Tier-1 tag can't tell froth from a genuine reprice: `spike`
-  covers BOTH the frothy-about-to-retrace case (DWH) AND a real reprice UP to a new sustained
-  higher level (webweaver: base ~15.7m repriced to ~18m, with recent daily LOWS *rising*/higher-lows,
-  not decaying). So treat a `spike` on an item you're considering as a PROMPT to run the full
-  `/positions` "trajectory read for confidence" (`read-window-range.mjs --window 0-23 --nights 21`,
-  phase-mapped) and read the recent-low trend: RISING higher-lows = a healthy reprice (holdable);
-  lows flattening/falling from a recent peak = the froth-retrace case (size-small/skip). A `basing`
-  tag is likewise the prompt to run that same trajectory read before committing. Honesty (process
-  rule 4): the webweaver reprice is one item of evidence.
-  `--phase-rescue` (OFF by default) is a gated trial that surfaces a `basing` faller the
-  falling-exclusion would otherwise drop (grade-capped B, flagged provisional) — turn it on only to
-  trial base-buy candidates, and treat its picks as unproven (thresholds are placeholders, one item
-  of evidence). Honesty rule (process rule 4): the classifier is new and unvalidated.
-- **Froth entry — the check is a CLASSIFIER, not a PREDICTOR (2026-07-07, method).** _(judgment: method, n≈0 froth trades)_ When tempted
-  to trade a spike ("catch the froth window"), run the froth-entry diligence — the 21-night full-day
-  trajectory (`read-window-range.mjs "<item>" --window 0-23 --nights 21`) read for the **lows-trend + volume**
-  — but be clear about what it can and cannot do. It tells you, for a move ALREADY UNDERWAY, whether
-  it's the good kind or a knife: **spike + rising-then-holding lows + solid/rising volume = a healthy
-  reprice to a new sustained base** (ride/dabble-able off that base, with a hard tripwire below the new
-  base low), vs **spike + FALLING lows = distribution/knife** (never enter). What it CANNOT do is
-  predict the IGNITION: the explosive first leg fires out of a flat-or-soft base driven by an EXOGENOUS
-  catalyst (meta shift, update, news) that is not in the price history, and volume typically rises WITH
-  the spike, not ahead of it — so there is no leading price/volume signal for the launch. Anchor
-  (2026-07-07): webweaver bow exploded 07-01 (14.3m→19.7m) out of a flat base whose lows were slightly
-  FALLING the day before — nothing on 06-30 forecast it; the check would only have flagged it (correctly,
-  as holding-lows) on 07-02, after the leg. **The strategic consequence:** froth trading here is "ride
-  the healthy moves already in motion and dodge the knives," NOT "catch the explosion" (unforecastable
-  with price-history tools). Two more guards carry over: a big-ticket spike (webweaver ~18m/unit) is NOT
-  dabble-sized — a genuine SMALL froth experiment needs a CHEAP holding-lows spike where 2–4m buys a
-  survivable position; and every froth entry pre-commits a mechanical exit (first pass of falling lows /
-  momentum ↓ = exit, no averaging down). Honesty (rule 4): n≈0 froth trades of our own — this is
-  data-gathering with a capped downside, not a proven edge.
-- **Big-ticket caution.** _(judgment: sizing; gp-flow gate in `pipeline/commands/screen-flip-niches.mjs`)_ High per-unit capital → each fill is expensive; require real
-  gp-flow (units × net), not a unit count. The script now SURFACES these via the gp-flow gate,
-  flagged `thin` and capped at grade A- with a "~N/day — size in units, expect slow fills" tooltip
-  (S1). Treat a `thin` row honestly: the edge is real but you can only place a few units/day, fills
-  are slow, and its wide band can be a thin-trading artifact — size in units, never chase.
-  For a big-ticket price SUGGESTION where you want confidence in the entry / where the item is
-  heading, run the same full-day multi-week trajectory read — `/positions` "trajectory read for
-  confidence on a marginal/big-ticket hold" (`read-window-range.mjs --window 0-23 --nights 21`,
-  phase-mapped). Point to it; don't copy the method here.
-- **`crowded out:` means a real edge lost its fetch slot — it lives in the cache now; check it when
-  something you expected is missing (PLAN-SCREEN-ARCHITECTURE, 2026-07-18; off the common pass by
-  FD7, 2026-09-08).** _(judgment: diagnosis discipline; mechanic in `pipeline/lib/signal/admission.mjs` `pickFetchPool`)_
-  The fetch pool is bounded (API-fetch cost) — only so many gated candidates get priced each pass.
-  Since the anchor incident (Abyssal bludgeon / Sanguinesti staff never surfacing despite real
-  profitable history — the raw-gp-flow-ranked thin reserve was silently starving them out every
-  single pass), the DEFAULT admission path ranks the thin/big-ticket lane on real after-tax edge
-  instead of raw turnover, rotates in starved candidates on a bounded exploration reserve, and
-  records every excluded candidate with a reason instead of dropping it silently. That record lands
-  in each flip-niche report's `drops.crowdedOut` on every run; the digest prints the
-  name only when it beats its lane's weakest digest row. So the protection is exercised in the §2 judgment pass, not by
-  relay: when an expected item is absent from the tables, check `drops` before concluding it has no
-  edge, and name the best-excluded item to Ben only if it's genuinely close. `--admission legacy`
-  restores the old raw-gp-flow thin-lane rank (rollback/comparison
-  only, never the default). ONE reason means something different and is NOT a lost
-  edge: `watch-reserve-full` (PP-R) means a WATCHLIST item lost the bounded watch reserve — it is still
-  quoted and graded in the always-shown Watchlist section below, so read it there rather than reporting
-  it as crowded out. Full diagnosis + design: `PLAN-SCREEN-ARCHITECTURE.md`.
-- **"Skip despite high grade."** Grade cutoffs are placeholders (`rating.mjs`); a good
-  letter on a ghost-spread / thin / tax-eaten row is still a skip. Under winners-only the skip is
-  SILENT — leave the row off the shortlist rather than writing a rejection line for it; give the
-  reason only if Ben asks about that item.
-- **Lane management — scale what's printing, rotate what's stalling (v1.8, 2026-07-05,
-  Ben's framing).** _(judgment: exposure call)_ Read the current book's recent lanes before pitching new picks: an
-  item that has closed several profitable laps TODAY is a live, validated edge — the
-  default recommendation is to **increase exposure there to test the theory** (up to the
-  buy limit / concentration comfort), not to spread into a fresh unproven pick of similar
-  grade. Conversely, a lane that is REALLY SLOW (capital parked, asks not filling across
-  multiple windows — the jaw) is a rotation prompt: say explicitly "this lane is stalling,
-  look elsewhere" and offer the redeploy. Frame both as *tests with an exit* (one day of
-  laps is one sample — process rule 4); the buy limit is usually the binding constraint,
-  so state it on the line.
-- **Peak-throughput sizing — decide "one-window clear" vs "multi-day roll" AT ENTRY (Ben,
-  2026-07-07, the nest retro).** _(judgment: sizing labeling discipline)_ Before building an accumulation position, read the **"median
-  window instabuy volume"** line the `--ask` sell-leg verify already prints (the pool your ask
-  competes for in the sell window — no new fetch). Size so your position is a realistic **share
-  (~10–20%)** of that pool for a **one-window clear** — you compete with other sellers, so you
-  won't take the whole pool. If the position is bigger than that share, it is a **multi-day roll
-  by definition**: SAY SO at entry and price the ask for the multi-day horizon — don't discover
-  the ceiling when the peak fades and the stack strands underwater. Anchor: a nest accumulation
-  of 2,622 (+3.6k bid) against ~28k window-instabuy was ~10% (clearable in a window), but we
-  never STATED the horizon, so a faded evening peak read as a problem instead of the plan — the
-  position was fine, the *unlabeled* horizon wasn't. **Honesty (rule 4):** the ~10–20% share is a
-  sizing sanity-check, not a formula; it's a labeling discipline (call the roll horizon at entry),
-  never a hard cap.
-- **Buy-limit-aware sizing — NEVER suggest a quantity over the 4h GE limit (Ben, 2026-07-08).**
-  _(code-pointer: `pipeline/lib/capital/limits.mjs` `limitWindow` + `js/validate.mjs` `limitValidator`; ask =
-  `node pipeline/commands/read-buy-limits.mjs "<item>"`)_ Every accumulation/tranche suggestion is CAPPED by the item's
-  GE buy limit (`quote-items.mjs` prints it as `· buy limit N/4h`; also in the mapping — look it up before
-  sizing). A "tranche" is ONE window's worth = **≤ limit units**; a position bigger than the limit is a
-  **multi-window accumulation by definition** — state the per-window cap, the gp it represents, and how
-  many 4h windows it takes (e.g. "11k darts = ~2.0m/window; 44k = 4 windows ≈ 16h"). Do NOT pitch a
-  single-tranche size that silently exceeds the limit (the anchor: I suggested "~45–55k amethyst darts"
-  against an 11k/4h limit — that's 4+ windows, not a tranche). This is now ENCODED on every suggesting
-  surface (LM1): the rolling-4h `limitWindow` math is fed to the BUY-side `limitValidator`, which
-  **REJECTs** (screen drops it, quote/held/watchlist note it) a buy whose window is exhausted and
-  **CAUTIONs** one nearly spent — and `quote-items.mjs`'s regime line appends `(bought X this window — Y
-  left, next frees ~HH:MM)` when there are in-window logged buys. Two follow-ons the numbers already do
-  for you: (1) **if the item was already bought today, the limit is partially/fully consumed** — run
-  `node pipeline/commands/read-buy-limits.mjs "<item>"` (reads `fills.json`, no fetch) for bought/remaining + the local
-  `next frees ~HH:MM` / `fully resets ~HH:MM`; size the REMAINING headroom, not the full limit. HONEST
-  LIMIT: only RuneLite-logged fills are visible, so a mobile/unlogged buy is invisible — "left" is an
-  UPPER bound, not a guarantee. (2) **a null/untracked limit ≠ unlimited** — the validator DEGRADES to
-  pass on a null limit (never green-lights it); flag it and size conservatively off volume.
-- **A thin CURRENT 2h band ≠ no edge — read the recent DAILY range on a proven lane (Ben,
-  2026-07-08).** _(judgment: read call; tool `pipeline/commands/read-window-range.mjs`)_ The screen's band is the last-2h window; it looks THIN precisely when live sits at
-  the top or bottom of the item's wider daily range. Do NOT dismiss a known/proven lane (one you've
-  flipped before) off the thin 2h band — run the full-day `read-window-range.mjs --window 0-23` and read
-  the **recent daily lows→highs** (the band you actually flip over), recency-verified per RC1. Bid
-  the recent daily-LOW zone, sell the recent daily-HIGH zone. If live isn't at the low right now,
-  it's a **patient dip-bid** (rest it, it fills on the next daily dip), not a fill-now — say which.
-  Anchor: I skipped Berserker ring as "thin band" off its 3.11–3.23m 2h window, but its recent daily
-  range is ~2.93m→3.165m (both recent 3/3) = a real +5.9% band-flip; live was just near the daily top
-  (3.11m), so it was a patient dip-bid at 2.93m, not "no edge."
+For the rows the sweep (B) passed, and only those, get fresh levels in one call:
 
-## 3. Hard rules (cited from CLAUDE.md's table contract — don't restate, don't violate)
+```
+node pipeline/commands/quote-items.mjs "<A>" "<B>" --dwell=attended|away|overnight --verbose
+```
 
-- Falling handling is PER-STRATEGY, not global (Ben's 2026-07-08 amendment; P5 — memory
-  `falling-exclusion-amended`, encoded in `js/flip-niches.mjs` `spec.falling`). The `band`/`churn`
-  flip-niches EXCLUDE fallers silently (`falling: 'exclude'`) — for those, never re-add
-  or mention a falling row. But `--mode scalp` ACCEPTS fallers (a deliberate intraday flip expects a
-  falling wide band) and `--mode value` KNIFE-GUARDS (rejects a decay knife, accepts a flat/basing
-  value-low) — do NOT call a scalp/value faller a mistake; the spec surfaced it on purpose. Exception
-  for the EXCLUDE flip-niches: items Ben holds or explicitly asks about → always show, with
-  price-to-clear. ⚠ **Watchlisted items are NOT in that exception** — only HELD rows carry
-  `surviveMode`'s falling bypass, so a falling watchlist item is still excluded from the flip-niche
-  tables and appears only in the Watchlist section below (which is exactly what the next bullet says).
-  PP-R's watch reserve buys a watchlisted row a FETCH slot, never a pass through the regime doctrine.
-- **Watchlist section (S3): always report, honestly.** The script appends a Watchlist table (from
-  repo-root `watchlist.json`) that is exempt from every floor/gate; each row carries a Note saying
-  what a gate would have hidden (below-floor / thin / one-sided / falling). Never silently drop a
-  watchlist row and never hype one past its read — surface it with its Note and one honest line.
-  Falling watchlist items appear here with the falling warning (they're excluded from the flip-niches).
-- Preserve the standard table columns exactly as printed (app-code canon).
+Read its `⇄ dwell` line (FILL-NOW pair and REST-DAY pair), `buy limit` clause, and any `⚠ stale live
+print`. Price at the dwell pair for the stated horizon, then re-verify at that pair (B). A screen
+estimate that passed may be pitched as it stands, labelled `(screen est.)` with how long it will rest.
+
+- **Entry AND exit aggression follow the DWELL HORIZON.** _(judgment: horizon call; the comparison is `formatDwell` in `pipeline/lib/render/emit.mjs`)_
+  State the horizon every recommendation assumes; if Ben has not said how long he is away, ask before
+  sizing a big-ticket tilt.
+  - **attended** (at the client): both legs at the live edges, the FILL-NOW pair, thin edge accepted
+    while the exit clears break-even meaningfully (bludgeon half-chase, +292k).
+  - **away-hours (~2–8h) and overnight**: BOTH legs off the REST-DAY pair, never the live edges. A
+    resting ask at the live instabuy gives the day away (Marlin 3,885). A level with a `⚠` reality
+    clause goes to Ben with the clause, or priced at the typical level the clause names.
+  - Fill-now is per-time profit, rest-day is per-flip; neither is wrong, undeclared is wrong.
+  - **New lane**: the first entry into an unproven ILLIQUID or big-ticket item is a passive bid below
+    live and/or a starter size (webweaver: filled at live, instabuy fell 160k in five minutes). On a
+    hyper-liquid item the caution is dropped: price to fill and size fully, the liquidity is the exit.
+- **WINDOW-CLEAR PRICING.** _(judgment: the pricing method; back-solve is `maxBuyForExit` in `js/quotecore.js`)_
+  "Reaches N/M days" is the daily gate; printing inside your window is the fill. (1) Name the exit
+  window: *4h-lap* (ask at or just under live instabuy) or *diurnal-spike* (the peak-window level).
+  (2) Quote the ask that is reachable in that window, never the raw band top. (3) Price the buy
+  backward from that ask, not forward from the band low. (4) Is the window ahead today or already
+  printed? Behind you: price the 4h-lap exit or name the next window. Anchor: anglerfish, 2,899 in the
+  14:00–17:00 spike or ~2,815 inside 4h.
+- **Name the window, not a chase bid.** _(judgment: Ben 2026-08-04)_ Never answer a stranded or deep
+  bid with "raise it so it fills". Give the next buy-dip window and the sell-peak it pairs with
+  (`node pipeline/commands/read-schedule.mjs -c`), preferring a pair that fits one sitting.
+- **Band is the edge.** _(judgment: pricing call)_ On a liquid item with a stable regime and a wide
+  intraday band, ladder buys at band lows and sell band tops (crystal teleport seed, ~4:1 over
+  mid-spread flips). Never list below break-even. Never chase a softening item's buy.
+- **Tax dominates thin flips.** _(judgment: the after-tax bar)_ Under roughly 0.5% after tax is not
+  worth a slot. Stable and tight is not profitable.
+- **Anchor pricing.** _(judgment: pricing nudge, n=2; the nudge itself is `pipeline/probes/anchor.mjs`)_
+  Asks sit just under a round number, bids just over it. Guards the probe cannot see: it refines a
+  price the band already justified, never sets one; the guide counts as an anchor only when guide ≈
+  live; never cross a TIGHT band to get over a round (bones: 3,001 ate 26 of 36 gp/u and all 7,500
+  filled before a cancel); on a sell ladder, rungs straddle the round million, with nothing parked
+  just over it and under the real daily-high prints (blowpipe 11.098m stalled).
+- **A flagged level travels with its clause.** _(judgment: relay discipline; renderer is `realityClause` in `js/windowread.mjs`)_
+  `⚠ spike-top` / `⚠ stale` never reprice the level. Quote the typical level it names, or carry the
+  clause beside the number.
+- **Diurnal timing line.** _(judgment: read discipline; rendered by `formatTimedLap` in `pipeline/lib/render/emit.mjs`)_
+  `timed` (trough→peak) and `same-hour` nets can disagree hard on a big ticket: relay both. "Levels
+  only — no reliable hours" is the normal case: use the level, treat hours as a bonus. The `tranche …
+  clean · … price-knee` segment is a round-trip price-quality knee, never a quantity Ben cannot clear;
+  a one-leg sell is bounded by `peak-pool` (two sapling sells cleared 4x the knee). `also ASK/BID`
+  = a second window: surface both, because a slot freed in window one can relist for window two.
+  `⚠ trend-dominates → bid to live` means the multi-day trend erased the dip.
+
+### B. Verify — `verify-pick.mjs`, twice: the sweep, then the pair you will quote
+
+```
+node pipeline/commands/verify-pick.mjs --scan [N]                                  # after the scan
+node pipeline/commands/verify-pick.mjs "<A>@<bid>:<ask>@<lane>" "<B>@…" --why     # after pricing
+```
+
+`--scan` reads the dump the scan just wrote: the digest rows, every churn row and the band rows (N = top N only)
+by net × units per window, each at the screen's pair and judged for its own lane. It prints one line
+per PASS (a PASS carrying warnings is marked) and a count of FAILs by reason. The second form runs
+the fresh trio at your prices; `@churn` judges a churn lap with the churn fold. `--why` adds the live
+prints and their age, max profitable buy, the peak window and its level, the fold, the floor/ceiling
+track, and each rule's result.
+
+- **Only a PASS at the quoted pair is pitched.** _(judgment: Ben 2026-09-21; the rules are `RULES` in `pipeline/commands/verify-pick.mjs`)_
+  A PASS is not a fill guarantee. Paste its line as printed. Re-recommending on a later pass means
+  re-running it; a dump row or an earlier run is not validation (495 chinchompas bought off a stale row).
+- **"Nothing clears today" only after `--scan`.** _(judgment: Ben 2026-09-21)_ Never from the digest
+  rows alone, and never lower the bar to produce a pick.
+- **Read the floor/ceiling track before pitching a PASS.** _(judgment: read call; the line is `formatFloorCeiling` in `js/windowread.mjs`)_
+  Price falling into the bid, or live pinned at the ceiling, outranks a clean reach count. The label
+  is a prompt; the per-day lows and highs are the signal.
+- **FAIL.** _(judgment: what to do next)_ Drop the row silently. You may re-price ONCE from the
+  failure's own numbers (bid above max profitable buy → bid at or under it) and re-verify at the new
+  exact prices. Never soften a FAIL into a caveat. An exit that rarely prints in its window fails on
+  any book, however deep.
+- **UNKNOWN is never pitched.** _(judgment: what to do next)_ `--why` names the missing read. A stale
+  live print is "unverified, re-check later": re-quoting does not refresh a print. Say "unverified"
+  on its lane line.
+- **Warnings do not change the status; each changes the pitch.** _(judgment: one line each; they are `WARN_RULES` in `pipeline/commands/verify-pick.mjs`)_
+  - `market pulling away from the bid`: the bid is unlikely to fill today. A deep REST-DAY PASS
+    carrying it is a patient bid, not a plan; never claim the fill.
+  - `ask … above the peak window's level`: re-verify with the ask at that level. If that is under
+    break-even, or the ask's recent split is 0/3, it is not a pick.
+  - `reach ⚠ stale`: the full count is rosier than the recent days. Trust the recent split. On a bid
+    it means "do not assert the fill" (Hydra leather 13.44m, recent 0/3, live 90k above).
+  - `bid touched on 0/N recent days and live … above it`: a deep resting bid. Fine as optionality,
+    never the plan.
+  - `no buy limit listed (not unlimited)`: size conservatively off volume and say the limit is unknown.
+- **Depth softens a low BID count, nothing else.** _(judgment: read call; the deep-book clause is `avgBoundRead` in `js/windowread.mjs`)_
+  On a deep book a bare low touch count or recent split on the bid is not a reject (ruby dragon bolts
+  skipped off `touched 0/14` on a 349k/d book). On a thin book stay near the centre. An ask at the
+  extreme of its distribution (the `pXX` on the quote's `⊙ reach/placement` line) or a band top that
+  reached about 0 of 7 days is an artifact on any book (Dharok's, ruby bolts).
+- **Margin is max-buy minus bid, never ask minus bid.** _(judgment: arithmetic discipline; `maxBuyForExit` in `js/quotecore.js`)_
+  The Tormented synapse subtraction overstated margin about 4x.
+- **A deeper look is the same tool, not a script of your own.** _(judgment: tool `pipeline/commands/read-window-range.mjs`)_
+  `--window peak|dip` literals, never hand-typed hours (`0-23` is all-day, and all-day reach once
+  hid a peak window reading 0/3). `--hourly --days 3` answers "is it stepping down by the hour".
+  `--window 0-23 --nights 21` is the multi-week trajectory for a spike, a `basing` tag or a
+  big-ticket entry.
+
+### C. Size and capital
+
+- **Buy-limit-aware sizing.** _(code-pointer: `sizeDigestRow` in `pipeline/lib/render/digest-extras.mjs`, `limitWindow` in `pipeline/lib/capital/limits.mjs`)_
+  Never suggest a quantity over the 4h limit. Quote the size line: units and gp per window, and when
+  the position is bigger, the number of windows ("11k darts ≈ 2.0m a window; 44k = 4 windows ≈ 16h").
+  A pick outside the digest: `node pipeline/commands/read-book.mjs --size "<item>"`; reset time:
+  `read-buy-limits.mjs "<item>"`. "Left" is an upper bound: an unlogged mobile buy is invisible.
+- **Sizes do not add up by themselves.** _(judgment: capital call; figures from `pipeline/commands/read-book.mjs`)_
+  Each row is sized against the whole pool alone. With more than one pick, sum them and cap the
+  total at the free capital `read-book.mjs` prints, after checking its restart-suspect bid flag.
+- **One-window clear or multi-day roll, said at entry.** _(judgment: labeling discipline)_ A position
+  near 10–20% of the sell window's instabuy pool (`peak-pool` on the quote's timing line) can clear
+  in one window; bigger is a multi-day roll
+  and the ask is priced for that horizon (the nest stack was fine, its unlabelled horizon was not).
+- **Tranche against day volume.** _(judgment: n≈6 same-session fills, a rough knee)_ Under about 0.5%
+  of day volume clears near the best price, ~1% shows degradation, 5–7% sells at the bulk level
+  (anglerfish: a full limit is ~10% of its volume, sold at a net loss).
+- **Velocity vs magnitude.** _(judgment: Ben's lean; crossover unmeasured, big-ticket n=1)_ Churn and
+  big-ticket return about the same per gp, so the choice is fuss against tail risk: churn is liquid
+  but needs presence; a big ticket is set-and-forget but cannot exit a crash. Lean big-ticket where
+  the sell is verified reachable, sized to what can sit through a crash. Short and present → more
+  churn; long and hands-off → big-ticket. Churn capacity tops out near 150–200m a window.
+- **`weak deploy`.** _(judgment: sizing read; flag is `weakDeploy` in `pipeline/commands/screen-flip-niches.mjs`)_
+  A big-ticket single turn under about 0.5% per turn is rarely worth the parked capital (Magus +160k
+  on 50m cancelled; blowpipe ~1.1% clears on margin).
+- **Lane management.** _(judgment: exposure call)_ An item that closed several profitable laps today
+  is a validated edge: scale it toward the buy limit before spreading into an unproven pick of similar
+  grade. A lane whose asks have not filled across several windows is a rotation prompt: say so and
+  offer the redeploy. Both are tests with an exit.
+- **Parked-capital leak (hypothesis).** _(judgment: unproven lean off ~116 concentrated lots)_ When
+  attended, price a MID-liquidity entry nearer live than the deep band floor; about a quarter of
+  bids never filled and those were the slowest.
+- **Deployable capital is shown, not modelled.** _(judgment: Ben 2026-07-26; composition from `pipeline/lib/capital/derive-cash-tiers.mjs`)_
+  If the figure is wrong fix the source: `derive-cash.mjs <amount>` re-anchors, a manual-log
+  correction clears a phantom bid. `⚠ restart-suspect bid(s)` means verify in-game before sizing.
+
+### D. Fast rules for falling, froth and catalysts
+
+- **Falling is per-strategy.** _(judgment: Ben 2026-07-08; spec in `js/flip-niches.mjs`)_ A faller is
+  not automatically a bad buy, and band/churn hiding it is a lane rule, not a verdict.
+- **`decay`, `▽ floor breaking`, or daily highs stepping down is a prompt, not a refusal.** _(judgment: Ben 2026-09-08; tool `pipeline/commands/read-trajectory.mjs`)_
+  Buy the floor, and quote the ceiling slope against the planned hold: a ceiling falling faster than
+  the margin over that hold is the reason to pass.
+- **Game updates.** _(judgment: Ben 2026-07-22)_ Combat and PvM gear rises into an update and dumps
+  after it. The post-update `@floor · buy now` is a knife the dip signals misread: on that gear only,
+  no dip-buy until the floor/ceiling track reads ranging. When Ben flags an update as imminent or
+  just shipped: no new big-ticket gear entries, sell held gear into the pump, rotate to commodities
+  and seeds (fang −1.44m held through the 07-20 dump).
+- **`spike` is a prompt, not "about to retrace".** _(judgment: one item of evidence; classifier is `phase` in `js/quotecore.js`)_
+  Rising higher-lows on solid volume = a healthy reprice, holdable off the new base with a tripwire
+  under it (webweaver). A spike with falling lows: never enter.
+- **Elevated is a caution, never a credit.** _(judgment: Ben 2026-07-23)_ An `elevated` trajectory
+  note, a base position at p90 or higher, or a `◇ elevated` line warns about the entry level. None
+  of them says the item was bought well or will hold.
+- **Froth is classified, never predicted.** _(judgment: method, n≈0 own trades)_ The launch comes from
+  outside the price history. Ride healthy moves already in motion, dodge the knives, keep a froth
+  experiment cheap (2–4m, not a big-ticket unit), pre-commit the exit, never average down.
+- **Fresh repricer.** _(judgment: sizing call)_ A large multi-day regime move carries overnight
+  retrace risk: size small, skip for an unattended hold.
+- **24h drift is a pre-filter only.** _(judgment: interpretation discipline)_ The Regime column is the
+  multi-day read. Never recommend off a 24h impression.
+- **Size scales diligence.** _(judgment: Ben 2026-07-02)_ A position above an hour or two of the
+  item's volume is an inventory bet: confirm the multi-day trend first (dragon nails).
+
+### E. Reading rows honestly
+
+- **Net decides, not grade.** _(judgment: Ben 2026-09-03; the render filter is `dropAccounting` in `pipeline/commands/screen-flip-niches.mjs`)_
+  A row can grade S+ on a displayed net that is negative. A good letter on a ghost-spread, thin or
+  tax-eaten row is a silent skip.
+- **Held and watchlist rows print regardless of net.** _(judgment: relay discipline)_ A negative net
+  there is a position or watch signal. Never shortlist it as a pick.
+- **`SUB-FLOOR FALLBACK` is not a pick list.** _(judgment: relay discipline; mechanic in `pipeline/lib/signal/gatecandidates.mjs`)_
+  Name the floor that emptied the lane and default to "nothing qualified today".
+- **Ghost spreads.** _(judgment: the floor; the two-sided gate is in `pipeline/lib/signal/gatecandidates.mjs`)_
+  Below a few thousand limiting-side units a day the juicy margin is uncrossable (cosmetics,
+  ornament kits).
+- **Band-top artifacts.** _(judgment: artifact spotting; dense bands are trimmed by `robustBand` in `js/quotecore.js`)_
+  A thin big ticket with a sparse side keeps its raw extreme: one lone print can still set the edge.
+  Eyeball those.
+- **Big-ticket rows.** _(judgment: sizing)_ `thin` and the A- cap mean a few units a day and slow
+  fills. Size in units, never chase.
+- **A thin current 2h band is not "no edge" on a proven lane.** _(judgment: read call; tool `pipeline/commands/read-window-range.mjs`)_
+  Read the recent daily lows→highs. Live near the daily top makes it a patient dip-bid: say which
+  (Berserker ring skipped as thin on a +5.9% daily band).
+- **`watch-reserve-full` is not a lost edge.** _(judgment: diagnosis; `pickFetchPool` in `pipeline/lib/signal/admission.mjs`)_
+  That item is still in the Watchlist section.
+
+## 3. Hard rules
+
+- **Falling handling by lane.** _(code-pointer: `spec.falling` in `js/flip-niches.mjs`)_ Band and churn
+  leave fallers out silently: never re-add or mention one, except an item Ben holds or asks about,
+  which always shows with a price-to-clear. Scalp requires a faller. A faller on the scalp or value
+  board was surfaced on purpose. A falling WATCHLIST item is not exempt: it appears only in the
+  Watchlist section.
+- **Watchlist section: always report, honestly.** _(judgment: relay discipline; list is `watchlist.json`)_
+  Each row's Note says what a gate would have hidden. Never drop a row, never hype one past its read.
+- **Tables as printed.** _(judgment: app-code canon)_ When a lane table is pasted because Ben asked,
+  paste it unfenced with columns and numbers unaltered.
 
 ## 4. Output
 
-The judgment-filtered shortlist — **the surviving picks only** — with a one-line rationale per pick
-(why this edge is real). Run the full both-leg verification as always; report only what survived it.
-There is **no "what failed and why" section** (Ben, 2026-09-02) and **no drop-accounting relay**
-(FD7, 2026-09-08): the floor/gate counts and the removed rows live in the cache — each flip-niche
-report's `drops` object, printed only under `--full` — and are never re-narrated. If Ben asks about
-a specific item you passed on, read `drops` and answer then — that is a follow-up, not a standing
-section.
+Order by what Ben can act on now, not by the script's order.
 
-**Cover every flip-niche each pass — "no dips" is NOT a complete scan (Ben, 2026-07-07).** A
-recurring scan (esp. inside a watch loop) drifts narrow: one salient sub-task — the dip-hunt
-— quietly becomes the *only* thing evaluated, and the broader mandate (candidates for the
-dry/committed capital) silently collapses to "nothing." The fix is structural, not
-willpower: the report must give an **explicit one-line read on EACH flip-niche every pass** —
-`Dips · Band big-tickets · Churn · Amplitude (MULTI-DAY-cycle big tickets)` — even when the answer is "nothing, because X".
-A slot you must fill can't be silently dropped (same principle as the ONE-LINE-PER-ITEM and
-recent-reach rules — make the output enforce the coverage). "No dips" ends the *dip* line,
-never the scan. Anchor (2026-07-07): several watch-loop passes reported only "no new dips"
-while band big-tickets (bludgeon/sang/tassets class) went unmentioned for an hour — Ben had
-to ask "are we looking at other flip-niches?"; the miss was omission, not a bad call.
+1. **Digest table**, verbatim and unfenced, with the per-item notes of rows you discuss. Skip it on
+   a looped pass where `Δ` says no change.
+2. **Picks — rows that PASS at the quoted pair, one line each.** The verify-pick line, then: basis and target for each
+   leg, size, horizon. Shape:
+   `Item (lane) · bid X (rest-day) — tonight's 18:00–23:00 trough · sell Y (rest-day, reached 7/7d) — 23:00–03:00 lift · +net/u · BE Z · 1,200u ≈ 28m a window (limit, 0 bought) · away ~8h`
+3. **One rec line.**
+4. **One line per flip-niche, every pass**: `Dips · Band big-tickets · Churn · Amplitude`, from the
+   `coverage:` and lane lines (Amplitude: its top row and round-trip figure), even when the answer is "nothing, because X". "No dips" ends the dip
+   line, never the scan. Lanes with nothing actionable sit at the bottom.
+5. **Book lines** only where §5 found something.
 
-**Every recommended price states its timing target AND its basis (Ben, 2026-07-05; basis token
-2026-09-10):** a pick's bid and sell are each "X **(basis)**, targeting Y" — the basis is the
-`⇄ dwell` line's own token, `(fill-now)` or `(rest-day)`, QUOTED never recomputed —
-and the number is bound to the window/mechanism expected to fill it (e.g. "bid 17.00m (rest-day)
-— tonight's 18:00–23:00 trough" / "sell 17.55m (rest-day, reached 7/7d) — the
-23:00–03:00 UK-morning lift"; a churn item's target can simply be "(fill-now) normal daily
-churn"). A fill-now price is not wrong — it is wrong UNDECLARED on a leg that will rest; the
-dwell-horizon rule (§2) picks the basis. Run the time-of-day `read-window-range.mjs` read the
-MARKET-ANALYSIS §5 requires and quote it — never a bare number.
+- **Every price states its basis and its timing target.** _(judgment: Ben 2026-07-05, basis 2026-09-10)_
+  `(fill-now)` or `(rest-day)` is the column of the `⇄ dwell` line the price came from, quoted, never
+  recomputed; a price taken from the scan row is `(screen est.)`. Each is bound to the window or
+  mechanism expected to fill it. A churn target can be "(fill-now) normal daily churn".
+- **Winners only.** _(judgment: Ben 2026-09-02)_ No "what failed and why", no drop counts, no gate
+  chatter. If Ben asks about an item you passed on, answer then.
+- **Shape.** _(judgment: Ben's display)_ Numbers in a tight table or one line per item; no prose in
+  table cells; never two items on one line; every item line carries `list @ X (BE Y)`.
+- **Prices are point-in-time.** _(judgment: Ben 2026-07-06)_ Say so; re-quote before he places if a
+  pass or several minutes have gone by.
 
-## 5. Position-context pass (Ben, 2026-07-05) — read the shortlist against the current book
+## 5. Position-context pass
 
-A scan is not done until the picks are compared against where Ben's capital already sits.
-After the shortlist, run `node pipeline/commands/watch-positions.mjs` (positions = held inventory + every
-active offer) and close the loop:
+Skip inside `/overnight` (Phase 1 resolved the book) and while a `run-loop.mjs` watch is running.
 
-- **Stale-bid displacement.** _(judgment: redeploy call)_ For each resting BUY offer, ask: does a shortlist pick offer
-  a better expected edge than what that parked capital is waiting on? A bid that's
-  BID-BEHIND with the floor rising away is a candidate to cancel and redeploy into a pick —
-  say so explicitly with the two edges side by side.
-- **Overlap check.** _(judgment: concentration call)_ If a pick is something Ben already holds or bids, say that on the
-  pick's line (don't recommend doubling a position blind — buy-limit and concentration
-  both bite).
-- **Held-ask sanity.** _(judgment: cross-check)_ If a shortlist item's read contradicts a current ask's premise
-  (e.g. the scan shows its band breaking down while Ben's ask rides the old top), flag it —
-  that's the `/positions` step-down doctrine firing from the scan side.
+- **Every pass.** _(judgment: session-local relay; plan lines from `pipeline/lib/render/plan.mjs`)_
+  `node pipeline/commands/quote-items.mjs --positions` prints one plan line per held lot. Relay a
+  line only when its verdict changed since your last look this session, or a pick contradicts it.
+- **Only when a pick passed.** _(judgment: redeploy call)_ `node
+  pipeline/commands/watch-positions.mjs` (offer verdicts; `read-rows.mjs watch` for rows) and
+  `read-book.mjs` (slots, free and reclaimable capital). A resting BUY that is `BID-BEHIND` with the
+  floor moving away is a cancel-and-redeploy candidate: show the two edges side by side.
+- **Overlap.** _(judgment: concentration call)_ A pick Ben already holds or bids says so on its line;
+  never double a position blind. `read-book.mjs --lots --item "<item>"` shows what he did with it.
+- **Held-ask sanity.** _(judgment: cross-check)_ If the scan shows a band breaking down under one of
+  Ben's asks, flag it for `/positions`. Do not re-verdict every lot here.
 
-This is a lightweight cross-check, not a full `/positions` review — don't re-verdict every
-lot; only surface lines where the scan changes what an existing position should do. When
-`/scan` runs inside `/overnight`, skip this pass (Phase 1 already resolved the book).
+## 6. Encode learnings — after the market work, never during
 
-## 6. Encode learnings (self-improvement — after the market work, never during)
-
-Each run may teach something (a judgment filter that misfired, a threshold that misled, a
-band-artifact that fooled the grade). Capture it — but the shortlist comes first, always.
-
-- **Timing:** _(judgment: process)_ only AFTER the shortlist is delivered and Ben's offers are placed/adjusted
-  (or he says he's done). Never interleave doc edits with live market work — offers first,
-  encoding after (Ben's explicit rule).
-- **Prompt:** _(judgment: process)_ at that point ask one short question — "anything from this run worth
-  encoding?" — and propose the candidates this run surfaced (a judgment call that
-  worked/failed, a threshold that misled, a screen that hid/hyped a real edge, a gap).
-- **Routing — one canonical home per fact, move never copy:** _(judgment: process)_ judgment-layer lessons → this
-  SKILL.md (bump its `version:`); table/app contracts → CLAUDE.md; user preferences →
-  Claude memory; monitoring doctrine → `pipeline/MONITORING.md`.
-- **Execution:** _(judgment: process)_ spawn a **background subagent** to make the edits + commit so this
-  conversation keeps flowing; report the diff summary when it lands.
-- **Honesty guard (process rule 4):** _(judgment: process)_ process learnings encode freely; a *market* claim (a
-  new threshold, a pattern) needs the usual evidence standard — one session is one sample.
+- **Timing and prompt.** _(judgment: process)_ Only after the shortlist is delivered and offers are
+  placed, ask once: "anything from this run worth encoding?" and propose what the run surfaced.
+- **Routing.** _(judgment: process)_ One home per fact, move never copy. Prefer a test or script
+  output over prose; judgment that stays prose goes here (bump `version:`), preferences to memory,
+  monitoring doctrine to `pipeline/MONITORING.md`. A background subagent makes the edit.
+- **Evidence.** _(judgment: process)_ Process lessons encode freely; a market claim from one session
+  is one sample.

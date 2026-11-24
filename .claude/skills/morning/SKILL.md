@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.22
+version: 1.23
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -14,12 +14,8 @@ exchange log. Skills never bump `APP_VERSION`.
 resting-offers / fills view): paste the raw markdown table verbatim, unfenced (Ben, 2026-07-16) — relay
 the script's own markdown table as PLAIN markdown, NOT wrapped in a fenced code block (a code fence forces
 the client to show literal `|`/`-` characters instead of a real table — confirmed live, 2026-07-16). For
-**`quote-items.mjs --positions`** (the re-verdict of held lots / new positions): follow the `/positions`
-JSON-dump contract instead — run QUIET (no `--verbose`), read `pipeline/.cache/last-report/quote.json`, and
-build the reply from its `table` section + your own prose; never paste raw `--positions` stdout. This
-SUPERSEDES the earlier blanket "paste raw stdout for `--positions` too" — `/positions` owns that surface's
-display rule (2026-07-17), so defer to it, don't duplicate it here (§3 already delegates to `/positions`
-doctrine). The overnight-fill narrative supplements the table, it doesn't replace it.
+**`quote-items.mjs --positions`** (the re-verdict of held lots / new positions): follow `/positions`
+§1 and its output format instead (`--verbose`, read whole). The overnight-fill narrative supplements the table, it doesn't replace it.
 
 **READ everything, RELAY what's actionable (winners-only, Ben 2026-09-02 — supersedes R10's
 "relay both tiers by default", 2026-07-16).** The render layer labels every note family a TRACKING
