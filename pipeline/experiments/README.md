@@ -465,3 +465,5 @@ detrended gap rides along for comparability and decides nothing. Read-only again
 aggregates only — owned-items.json is deliberately off the public repo, so per-item
 console lines must never be pasted into tracked files.** Numbers live in the plan's §8
 RESULTS; inform-only, gates nothing.
+
+- `frozen-market.mjs` — preload (`node --import`) that records or replays every fetch and pins the clock, for PLAN-LEAN LN0 comparisons. Header has the usage and the isolation rules.

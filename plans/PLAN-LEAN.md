@@ -1,6 +1,6 @@
 # PLAN-LEAN — cut the instruction text, generate the registry
 
-Status: PROPOSED. Prefix `LN`.
+Status: ACTIVE. Prefix `LN`. LN1 and LN2 shipped 2026-11-24 (bug 4 held for the owner, bug 9 became a decision: `docs/BACKLOG.md`). LN0 metrics done; the frozen capture waits for a normal market.
 
 **Decision it changes:** what an agent reads before every scan (about 42k tokens) and what every code change must
 also edit. **If it has no effect** (agents still hand-write `node -e`, or errors rise): revert the skill commits.
@@ -18,6 +18,14 @@ also edit. **If it has no effect** (agents still hand-write `node -e`, or errors
 
 Record the 5 real asks below with the current text, and from session transcripts the share of shell calls that are
 `node -e` and the tokens per `/scan` and `/positions`. Prior sample: 37% of 309 calls.
+
+Measured 2026-11-24 over the 7 session files on disk: 89 of 278 shell calls were `node -e` (32%; two files share an
+opening, so some calls count twice). Only two distinct `/scan` turns exist: 18 and 8 tool calls, `node -e` 9 and 0,
+context +74k and +69k tokens. No `/positions` sample. Skill text: scan 102,976 bytes, positions 60,372.
+
+Freeze: `pipeline/experiments/frozen-market.mjs` (record, then replay, byte-identical on a two-item quote). Capture
+after the 2026-11-24 game update settles, in a separate clone with its own archive copy, recording `/timeseries` for
+every scan and book item. Run the 5 asks with the old skill text just before LN4: `git show a3e08de:.claude/skills/`.
 
 ## Chunks, in order
 
