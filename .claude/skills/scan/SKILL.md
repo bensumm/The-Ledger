@@ -1022,7 +1022,7 @@ and the number is bound to the window/mechanism expected to fill it (e.g. "bid 1
 23:00–03:00 UK-morning lift"; a churn item's target can simply be "(fill-now) normal daily
 churn"). A fill-now price is not wrong — it is wrong UNDECLARED on a leg that will rest; the
 dwell-horizon rule (§2) picks the basis. Run the time-of-day `read-window-range.mjs` read the
-doctrine requires (MARKET-ANALYSIS §5) and quote it — never a bare number.
+MARKET-ANALYSIS §5 requires and quote it — never a bare number.
 
 ## 5. Position-context pass (Ben, 2026-07-05) — read the shortlist against the current book
 
