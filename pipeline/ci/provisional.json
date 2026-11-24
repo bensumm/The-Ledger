@@ -106,5 +106,13 @@
     "files": [
       "pipeline/commands/join-fade-outcomes.mjs"
     ]
+  },
+  {
+    "id": "verify-pick",
+    "decideBy": "2027-02-28",
+    "passTest": "the scan trio step runs through it and, over 20+ picks, it neither fails all nor passes one that breaks the owner's fail list; otherwise cut the over-firing rules, or delete",
+    "files": [
+      "pipeline/commands/verify-pick.mjs"
+    ]
   }
 ]

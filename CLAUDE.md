@@ -127,6 +127,7 @@ the numbers are byte-identical to the app's tables.
 | "loop positions AND scan", "check positions every X and scan every Y" | `run-loop.mjs [--watch min] [--scan min] [--min-idle gp] [--no-sync]` — the scan runs only when deployable capital clears --min-idle; /loop at the gcd of the two cadences |
 | "what can I reverse-flip?", "sell a keep into the peak", "harvest a held item" | `screen-flip-niches.mjs --mode reverse` — reverse: the regime read is INVERTED (rising is bad), inform-only, owned keeps only |
 | "sync", "refresh the book" (scan and positions already do it) | `sync-fills.mjs` — --publish pushes to main: only when Ben asks |
+| "verify X at bid/ask", "is this pick still good?", "re-check my picks" | `verify-pick.mjs "<item>@<bid>:<ask>" [...] [--why]` — run in the same turn as the rec; pitch only a PASS, which is not a fill guarantee |
 | "watch/monitor my positions", "run a flipping session", "keep an eye on X" (drive with /loop, pipeline/MONITORING.md) | `watch-positions.mjs ["<item>" ...]` |
 | "watch for dips/flushes", "run the dip loop" | `watch-positions.mjs --dip ["<item>" ...]` |
 <!-- /registry:asks -->

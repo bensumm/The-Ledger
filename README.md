@@ -86,6 +86,7 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
 - `set-scan-analysis.mjs` — Attaches a judgment blurb to the published screen.json
 - `sync-fills.mjs` — Rebuilds fills/positions/offers from the RuneLite logs; local and zero-git
 - `trigger-alerts.mjs` — Emits market alert events as JSON lines
+- `verify-pick.mjs` — One PASS/FAIL/UNKNOWN line per pick: fresh trio at your bid and ask, print age, break-even, buy limit
 - `watch-log.mjs` — Local log-watcher daemon
 - `watch-positions.mjs` — Adaptive live monitor of positions and offers; --dip adds the flush loop
 <!-- /registry:commands -->
@@ -1458,12 +1459,11 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
     (anchor + Σ sells-after-tax − Σ buys − resting escrow, via `lib/derive-cash-tiers.mjs`); `<amount>` =
     re-anchor the `.capital-state.json` starting point — the total-capital denominator `watch-positions.mjs`'s
     SUMMARY reads),
+    `verify-pick.mjs` (named FAIL rules over `read-window-range.mjs --json` plus a full-day read; writes nothing; `verify-pick.test.mjs`),
     `read-window-range.mjs` (né `nightlows.mjs` — time-of-day
-    range read / overnight fill-realism scoring; **`--window` accepts the literals `peak`/`dip`**
-    (2026-07-26) resolved PER ITEM off that item's own `hourProfile`, so a peak/dip verification never
-    depends on hand-transcribing hours — **`--window 0-23` is a legal 24-hour window, NOT a "no scoping"
-    sentinel**, and scoring an exit against it while pitching a narrower window is what cost a real trade
-    (CHANGELOG 2026-07-26); a full-day window self-labels `ALL-DAY`, an explicit `--window` that disagrees
+    range read / overnight fill-realism scoring; `--window` accepts `peak`/`dip`,
+    resolved PER ITEM off that item's own `hourProfile`; `--window 0-23` omits hour 23;
+    a full-day window self-labels `ALL-DAY`, an explicit `--window` that disagrees
     with `--profile`'s peak/dip prints a divergence warning, the volume-pool lines restate their own window,
     and the `--profile` DIP/PEAK lines carry an `↳ in-window:` read — that window's own level reach, the pool
     competing in those hours, and (with `--ask`/`--bid`) your level's in-window reach + signed gap to the

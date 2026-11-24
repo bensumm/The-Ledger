@@ -664,7 +664,8 @@ for (const want of positionals) {
         result.exit.reachedDays = reached; result.exit.placement = exitPlace;
         result.exit.avgBound = avgBound('ask', EXIT, reached, N);
         logAvgBound(result.exit.avgBound);
-        if (reached / N < EXIT_REACH_MIN)
+        result.exit.rarelyPrints = reached / N < EXIT_REACH_MIN;
+        if (result.exit.rarelyPrints)
           log(`    ⚠ this exit rarely prints in-window (${reached}/${N}) — it OVER-states the reachable sell, so the back-solved buy ${fmt(buy)} is optimistic; pick a lower, more-reachable exit`);
       } else {
         log(`    (no window highs to score the exit's reachability against — treat the buy as an upper bound)`);
