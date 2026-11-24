@@ -31,6 +31,17 @@ const run = (root, ...args) => {
 const budget = root => JSON.parse(readFileSync(join(root, 'comment-budget.json'), 'utf8'));
 const codeLines = n => Array.from({ length: n }, (_, i) => `export const v${i} = ${i};`).join('\n');
 
+test('registry tags are exempt only in pipeline/commands', () => {
+  const tags = Array(60).fill('// @read tag').join('\n') + '\nx();\n';
+  const root = fixture({ 'a.js': tags });
+  assert.equal(run(root).code, 1);
+  rmSync(join(root, 'js', 'a.js'));
+  mkdirSync(join(root, 'pipeline', 'commands'), { recursive: true });
+  writeFileSync(join(root, 'pipeline', 'commands', 'a.mjs'), tags);
+  assert.equal(run(root).code, 0);
+  rmSync(root, { recursive: true, force: true });
+});
+
 test('block-comment INTERIORS count as comment, not code', () => {
   // The hole: a /* … */ body written without leading `*` matched no line-shape test, so it scored as
   // CODE — prose bought allowance. js/quotecore.js's whole canonical header is written this way.

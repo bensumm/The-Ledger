@@ -102,8 +102,8 @@ the numbers are byte-identical to the app's tables.
 <!-- registry:asks -->
 | Ask | `node pipeline/commands/…` |
 | --- | --- |
-| "I bought/sold X on mobile", "log this trade" | `add-manual-fill.mjs --item "<item>" --type buy\|sell\|banked --qty N --price gp --time <when it happened>` — a personal-use mention IS the instruction; --time is the real trade time (omitting it mis-pairs lots); then sync |
-| "X is personal use" | `add-manual-fill.mjs --item "<item>" --type withdraw --qty N --time <after the buy>` — a personal-use mention IS the instruction; --time is the real trade time (omitting it mis-pairs lots); then sync |
+| "I bought/sold X on mobile", "log this trade" | `add-manual-fill.mjs --item "<item>" --type buy\|sell\|banked --qty N --price gp --time <YYYY-MM-DDTHH:MM local>` — a personal-use mention IS the instruction; --time is the real trade time (omitting it mis-pairs lots); then sync |
+| "X is personal use" | `add-manual-fill.mjs --item "<item>" --type withdraw --qty N --time <YYYY-MM-DDTHH:MM, after the buy>` — a personal-use mention IS the instruction; --time is the real trade time (omitting it mis-pairs lots); then sync |
 | "back up my data", "is the backup current?" | `backup-data.mjs [--status]` |
 | "what's my idle cash?" | `derive-cash.mjs` — an amount overwrites the anchor; a session budget goes to --capital instead |
 | "re-anchor my cash to X" | `derive-cash.mjs 16m` — an amount overwrites the anchor; a session budget goes to --capital instead |

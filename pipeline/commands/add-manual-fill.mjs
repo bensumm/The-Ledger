@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // @does Injects a trade the logger missed, a personal-use withdraw, a banked basis or a revive
-// @ask "I bought/sold X on mobile", "log this trade" => --item "<item>" --type buy|sell|banked --qty N --price gp --time <when it happened>
-// @ask "X is personal use" => --item "<item>" --type withdraw --qty N --time <after the buy>
+// @ask "I bought/sold X on mobile", "log this trade" => --item "<item>" --type buy|sell|banked --qty N --price gp --time <YYYY-MM-DDTHH:MM local>
+// @ask "X is personal use" => --item "<item>" --type withdraw --qty N --time <YYYY-MM-DDTHH:MM, after the buy>
 // @read a personal-use mention IS the instruction; --time is the real trade time (omitting it mis-pairs lots); then sync
 /**
  * add-manual-fill.mjs — inject a trade the Exchange Logger never saw (mobile fills,
@@ -158,6 +158,7 @@ if (A.net) {
 }
 
 // timestamp
+if (A.time && !/\d:\d\d/.test(A.time)) die('--time needs a date AND a local HH:MM (a bare date parses as UTC midnight)');
 const when = A.time ? new Date(A.time) : new Date();
 if (isNaN(when.getTime())) die('--time is not a valid date/time');
 const pad = n => String(n).padStart(2, '0');

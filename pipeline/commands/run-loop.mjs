@@ -65,7 +65,11 @@ const GRACE_MS = 60_000; // a tick firing up to 60s early still counts an action
 // --- parse args ---
 const argv = process.argv.slice(2);
 const argOf = (flag, dflt) => { const i = argv.indexOf(flag); return i >= 0 && argv[i + 1] != null ? argv[i + 1] : dflt; };
-const parseInterval = v => (v === 'off' || v === '0') ? null : Math.max(1, Math.round(Number(v)));
+const parseInterval = v => {
+  if (v === 'off' || v === '0') return null;
+  if (!Number.isFinite(Number(v))) { console.error(`error: "${v}" is not a number of minutes (or off)`); process.exit(1); }
+  return Math.max(1, Math.round(Number(v)));
+};
 const watchMin = parseInterval(argOf('--watch', '30'));
 const scanMin = parseInterval(argOf('--scan', '15'));
 const minIdle = Math.max(0, parseGp(argOf('--min-idle', '20m')));

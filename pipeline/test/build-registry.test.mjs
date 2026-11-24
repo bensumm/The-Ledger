@@ -50,6 +50,9 @@ ok('the CLI fails when stale, writes, then passes; CRLF survives; an empty regis
   assert.equal(run('--write').status, 0); assert.equal(run().status, 0);
   const c = fs.readFileSync(path.join(t, 'CLAUDE.md'), 'utf8');
   assert.match(c, /\| "x" \| `a\.mjs` \|/); assert.ok(!/[^\r]\n/.test(c));
+  fs.writeFileSync(path.join(cmds, 'b.mjs'), 'untagged();\n');
+  assert.match(run().stderr, /b\.mjs: no @does/); assert.equal(run().status, 1);
+  fs.rmSync(path.join(cmds, 'b.mjs'));
   fs.writeFileSync(path.join(cmds, 'a.mjs'), '// @does A changed\n');
   assert.match(run().stderr, /empty registry/);
   fs.rmSync(t, { recursive: true, force: true });
