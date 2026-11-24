@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // @does Capital dashboard and tranche sizer (the /book engine)
+// @ask "show my open lots", "last closed flips", "what did I do with X?", "lots of X" => --lots [N] [--item "<item or id>"]
+// @read offline after the local sync: lots only, no live fetch; times are local
 /**
  * read-book.mjs — the BOOK / CAPITAL DASHBOARD (/book skill; PLAN-DASHBOARD).
  *
@@ -11,6 +13,9 @@
  *       buy-limit × clearability(volume) × capital, plus which bound is BINDING and the net-if-cycled.
  *       --capital defaults to THIS run's own deployablePool (the three-tier deploy denominator).
  *
+ *   node pipeline/commands/read-book.mjs --lots [N] [--item "<name|id>"]
+ *       Lots only, off positions.json after the usual local sync: open, last N closed (default 5), last N unmatched,
+ *       awaiting-rebuy, settled; names from the cached mapping. No live fetch.
  * IMPURE SHELL ONLY. Reads the three repo-root JSON files (positions/offers/fills), does the ONE
  * per-invocation live fetch (fetchItemInputs per id in the held ∪ resting-bid ∪ {sizer} union), builds
  * the marketRef + age-labelled marks map (via computeQuote's row.quickStale.sell/quoteAgeMin.sell),
@@ -36,7 +41,7 @@ import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';
 import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';
 import { buysByItem, limitWindow } from '../lib/capital/limits.mjs';
-import { buildBook, buildReverseFlipPending, CLEARABILITY_FRAC } from '../lib/capital/book-model.mjs';
+import { buildBook, buildReverseFlipPending, buildLotsView, CLEARABILITY_FRAC } from '../lib/capital/book-model.mjs';
 import { parseGp } from '../lib/render/cli.mjs';
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 "Reverse-flip pending" section
 import { fmt, fmtP } from '../../js/money-format.js';
@@ -45,7 +50,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', '..', 'positions.json');
 const OFFERS = path.join(HERE, '..', '..', 'offers.json');
 const FILLS = path.join(HERE, '..', '..', 'fills.json');
-const REVERSE_FLIP = path.join(HERE, '..', '..', 'reverse-flip-state.json');
+const MAPPING_CACHE = path.join(HERE, '..', '.cache', 'mapping.cache.json');
+const REVERSE_FLIP =path.join(HERE, '..', '..', 'reverse-flip-state.json');
 
 // LOCAL wall-clock HH:MM for a unix-SECONDS instant (repo rule: rendered times are local). Copied from
 // read-buy-limits.mjs — not worth a shared import for one 3-line helper.
@@ -58,6 +64,10 @@ function hhmm(tsSec) {
 const argv = process.argv.slice(2);
 function flagVal(name) { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null; }
 const sizeToken = flagVal('--size');
+const lotsAt = argv.indexOf('--lots');
+const lotsN = lotsAt >= 0 && /^\d+$/.test(argv[lotsAt + 1] || '') ? Math.max(1, Number(argv[lotsAt + 1])) : 5;
+const itemToken = flagVal('--item');
+if (itemToken != null && lotsAt < 0) { console.error('--item filters the lots view: pass --lots too (or use --size "<item>" for the sizer).'); process.exit(1); }
 const capitalRaw = flagVal('--capital');
 const capitalOverride = capitalRaw != null ? Math.max(0, parseGp(capitalRaw)) : null;
 if (capitalOverride != null && !Number.isFinite(capitalOverride)) {
@@ -78,6 +88,7 @@ function pct(x) { return x == null ? '—' : (x >= 0 ? '+' : '') + (x * 100).toF
 async function main() {
   runLocalSync({ offBookNote: 'reading the book off the current on-disk state' });
 
+  if (lotsAt >= 0) { renderLots(); return; }
   const map = await loadMapping();
   const guide = await loadGuide().catch(() => ({}));
 
@@ -108,16 +119,13 @@ async function main() {
     try { inp = await fetchItemInputs(id, { ts1h: wantTs1h }); }
     catch (e) { console.error(`⚠ fetch failed for #${id}: ${(e && e.message) || e}`); continue; }
     inputsById.set(id, inp);
-    // PLAN-VOL24 parity: correct vol24 BEFORE computeQuote, so the row's volDay/pressure and the sizer's
-    // clearability below can never be two different answers off the same `inp` (they were: the sizer path
-    // corrected at its own call site while this row kept the raw /24h read). Same ordering as the
-    // quote-items.mjs / watch-positions.mjs paths — the reassign-then-quote pattern is the convention.
+    // PLAN-VOL24 parity: correct vol24 BEFORE computeQuote so the row and the sizer read one figure off the same
+    // `inp` (same reassign-then-quote order as quote-items.mjs / watch-positions.mjs).
     // COVERAGE LIMIT, stated plainly: only the sizer target fetches a 1h series (`wantTs1h`, Risk 3), and
     // vol24FromInputs DEGRADES to the raw /24h value without one. So for every other id this is a no-op
     // and `row.volDay` stays the raw PER-ITEM /24h read — which the reverse-flip thin read below consumes.
-    // The raw and corrected values DIFFER for most of the day (the per-item endpoint is a UTC-DAY
-    // aggregate, not a trailing window), so this reorder fixes a real figure, not just an ordering
-    // smell. Do NOT restate it as consistency-only — see the loadAll24hRolling ONE HOME block.
+    // Raw and corrected values differ for most of the day (UTC-day aggregate, not a trailing window): a real
+    // figure, not just ordering. See the loadAll24hRolling ONE HOME block.
     inp.vol24 = vol24FromInputs(inp, now).vol24;
     const row = computeQuote({ ...inp, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, now, id });
     quoteById.set(id, row);
@@ -185,6 +193,19 @@ async function main() {
   const suspectEsc = loadSuspectBidEscrow();
 
   render(book, { cash, capitalSource: (capitalOverride != null ? 'override' : 'deployablePool'), reverseFlip, suspectEsc });
+}
+
+function renderLots() {
+  let names = {};
+  try { names = JSON.parse(fs.readFileSync(MAPPING_CACHE, 'utf8')); } catch { /* no cache: ids only */ }
+  const nameOf = id => { const v = names[id]; return (v && (typeof v === 'string' ? v : v.name)) || '#' + id; };
+  const byName = itemToken != null && !/^\d+$/.test(itemToken) && !Object.keys(names).length;
+  if (byName) console.error('⚠ no mapping cache: names unavailable, --item matches ids only');
+  let pos;
+  try { pos = JSON.parse(fs.readFileSync(POSITIONS, 'utf8')); } catch (e) { console.error('positions.json: ' + e.message); process.exit(1); }
+  const when = s => (s == null ? '—' : new Date(s * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
+  const lines = buildLotsView(pos, { nameOf, item: itemToken, n: lotsN, fmtP, when });
+  console.log(lines.length ? lines.join('\n') : `no lots${itemToken != null ? ` match "${itemToken}"` : ''}`);
 }
 
 function render(book, { cash, capitalSource, reverseFlip = [], suspectEsc = null }) {

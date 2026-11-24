@@ -14,7 +14,7 @@
  *    qty·(mark−breakEven).
  */
 import assert from 'node:assert/strict';
-import { buildBook, sizeTranche, CLEARABILITY_FRAC, TOTAL_SLOTS } from '../lib/capital/book-model.mjs';
+import { buildBook, buildLotsView, sizeTranche,CLEARABILITY_FRAC, TOTAL_SLOTS } from '../lib/capital/book-model.mjs';
 import { bookUtilization, totalCapital } from '../lib/capital/capital-utilization.mjs';
 import { breakEven } from '../../js/quotecore.js';
 
@@ -257,6 +257,35 @@ ok('buildBook threads a sizer input through to sizeTranche', () => {
       limitRemaining: 50, dailyVol: 100_000, mark: 110_000, breakEven: be } });
   assert.equal(withSizer.sizer.recommendedQty, 10);
   assert.equal(withSizer.sizer.binding, 'capital');
+});
+
+// --- buildLotsView (read-book --lots) -----------------------------------------------------------
+const NAMES = { 1: 'Coal', 2: 'Dragon claws' };
+const POS = {
+  open: [{ itemId: 2, qty: 3, buyEach: 1000, buyTs: 1000 }, { itemId: 1, qty: 0, buyEach: 5, buyTs: 1 }],
+  closed: [1, 2, 3].map(k => ({ itemId: k % 2 ? 1 : 2, qty: k, buyEach: 10, sellEach: 12, realised: k % 2 ? 5 : -5, banked: k === 3, buyTs: k, sellTs: 100 + k })),
+  unmatched: [{ itemId: 1, qty: 9, sellEach: 7, sellTs: 50 }],
+  awaitingRebuy: [{ itemId: 2, qty: 1, sellEach: 90, beRebuy: 88, sellTs: 60 }],
+  settled: [{ itemId: 1, qty: 1, sellEach: 90, beRebuy: 88, sellTs: 60, settledTs: 70, reason: 'aged-out' }],
+};
+const view = o => buildLotsView(POS, { nameOf: id => NAMES[id], when: s => `t${s}`, ...o });
+ok('lots view: open lots skip zero-qty, closed keeps the LAST n by sell time with sign and banked tag', () => {
+  const t = view({ n: 2 }).join('\n');
+  assert.match(t, /=== OPEN LOTS ===\n- Dragon claws x3 · bought @ 1000 each \(3000\) · t1000\n=== CLOSED \(last 2\)/);
+  assert.match(t, /Dragon claws x2 · buy 10 -> sell 12 · realised -5 · sold t102\n- Coal x3 · buy 10 -> sell 12 · realised \+5 \(banked\) · sold t103/);
+  assert.ok(!t.includes('sold t101'));
+});
+ok('lots view: unmatched, awaiting-rebuy and settled sections render', () => {
+  const t = view({}).join('\n');
+  assert.match(t, /UNMATCHED SELLS \(last 5\) ===\n- Coal x9 · sold @ 7 · t50 · no matching buy/);
+  assert.match(t, /AWAITING REBUY ===\n- Dragon claws x1 · sold @ 90 · break-even rebuy 88 · t60/);
+  assert.match(t, /SETTLED ===\n- Coal x1 .* aged-out · t70/);
+});
+ok('lots view: item filters by name substring or id across every section, and empty sections vanish', () => {
+  const t = view({ item: 'COAL' }).join('\n');
+  assert.ok(!t.includes('Dragon claws') && !t.includes('OPEN LOTS') && !t.includes('AWAITING'));
+  assert.deepEqual(view({ item: '2' }).filter(l => l.startsWith('===')), ['=== OPEN LOTS ===', '=== CLOSED (last 5) ===', '=== AWAITING REBUY ===']);
+  assert.deepEqual(view({ item: 'zzz' }), []);
 });
 
 console.log(`\n${n} book-model assertions passed.`);

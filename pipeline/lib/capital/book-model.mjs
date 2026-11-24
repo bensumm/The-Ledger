@@ -203,8 +203,7 @@ export function buildBook({ groups = [], offers = [], cash = {}, marks = new Map
  * { id, name, state, soldEach, beRebuy, live, daysPending, soldTxt, beRebuyTxt, liveTxt, daysPendingTxt,
  *   thin, notes[] }. Returns [] on an EMPTY / all-holding store — read-book renders NOTHING then (the
  * zero-ripple guard; the section header only prints when this is non-empty). A between-legs cycle owns no
- * open FIFO lot and no GE slot, so it never appears in the SLOTS/BOOK sections — this is its only home.
- * `live` reuses the caller's already-built marks (mark = live sell price); no new fetch. INFORM-ONLY, n≈0. */
+ * open FIFO lot and no GE slot, so this is its only home. `live` reuses the caller's marks; no fetch. INFORM-ONLY, n≈0. */
 export function buildReverseFlipPending(state, { marks = new Map(), infoById = {}, now = Date.now(), fmt = String, fmtP = String } = {}) {
   const entries = reverseFlipPendingEntries(state, { marks, infoById, now });
   return entries.map(e => ({
@@ -224,4 +223,20 @@ export function buildReverseFlipPending(state, { marks = new Map(), infoById = {
     daysPendingTxt: e.daysPending != null ? `${e.daysPending.toFixed(1)}d` : '—',
     notes: reverseFlipCycleNotes(e, { row: e.row, driftNote: (infoById[e.id] && infoById[e.id].driftNote) || null, now, fmt }),
   }));
+}
+
+/* buildLotsView(pos, {nameOf, item, n, fmtP, when}) → lines for read-book --lots; PURE, `when(sec)` renders LOCAL time. */
+export function buildLotsView(pos, { nameOf = id => '#' + id, item = null, n = 5, fmtP = String, when = s => String(s) } = {}) {
+  const want = item == null ? null : String(item).toLowerCase();
+  const keep = l => want == null || String(l.itemId) === want || nameOf(l.itemId).toLowerCase().includes(want);
+  const last = (arr, k) => arr.filter(keep).sort((a, b) => (a.sellTs ?? a.buyTs ?? 0) - (b.sellTs ?? b.buyTs ?? 0)).slice(-k);
+  const sgn = v => (v >= 0 ? '+' : '') + fmtP(v);
+  const out = [], sec = (title, rows) => { if (rows.length) out.push(`=== ${title} ===`, ...rows); };
+  const open = (pos.open || []).filter(l => l.qty > 0 && keep(l));
+  sec('OPEN LOTS', open.map(l => `- ${nameOf(l.itemId)} x${l.qty} · bought @ ${fmtP(l.buyEach)} each (${fmtP(l.qty * l.buyEach)}) · ${when(l.buyTs)}`));
+  sec(`CLOSED (last ${n})`, last(pos.closed || [], n).map(l => `- ${nameOf(l.itemId)} x${l.qty} · buy ${fmtP(l.buyEach)} -> sell ${fmtP(l.sellEach)} · realised ${sgn(l.realised)}${l.banked ? ' (banked)' : ''} · sold ${when(l.sellTs)}`));
+  sec(`UNMATCHED SELLS (last ${n})`, last(pos.unmatched || [], n).map(l => `- ${nameOf(l.itemId)} x${l.qty} · sold @ ${fmtP(l.sellEach)} · ${when(l.sellTs)} · no matching buy in the log`));
+  sec('AWAITING REBUY', (pos.awaitingRebuy || []).filter(keep).map(l => `- ${nameOf(l.itemId)} x${l.qty} · sold @ ${fmtP(l.sellEach)} · break-even rebuy ${fmtP(l.beRebuy)} · ${when(l.sellTs)}`));
+  sec('SETTLED', (pos.settled || []).filter(keep).map(l => `- ${nameOf(l.itemId)} x${l.qty} · sold @ ${fmtP(l.sellEach)} · break-even ${fmtP(l.beRebuy)} · ${l.reason || 'settled'} · ${when(l.settledTs)}`));
+  return out;
 }

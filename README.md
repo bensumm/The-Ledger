@@ -2687,7 +2687,8 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
     watch's SUMMARY footer) and break-even to `js/quotecore.js`. RF4 (2026-07-25) adds the PURE
     `buildReverseFlipPending(state, {marks, infoById, now, fmt, fmtP})` render block for the "Reverse-flip
     pending" section (awaiting-rebuy/rebuy-armed cycles → rendered rows with sold/BE-rebuy/live/days-pending
-    + `js/reverseflip.mjs` cycle notes; `[]` on an empty/all-holding store). Pinned by `book-model.test.mjs`
+    + `js/reverseflip.mjs` cycle notes; `[]` on an empty/all-holding store). `buildLotsView` renders
+    `read-book.mjs --lots [N] [--item]` (open, last N closed/unmatched, awaiting, settled; no fetch). Pinned by `book-model.test.mjs`
     + `reverseflip-surfacing.test.mjs`),
     `last-report-rows.mjs` (PURE reader over a `last-report/<kind>.json` payload for `read-rows.mjs`: table rows by item/mode/column, `--drops`, `--digest`, age; display cells only, no numbers; pinned by `read-rows.test.mjs`),
     `staleexit.mjs` (Proposal C 2026-07-12 — PURE `staleExitRead({ts1h, exitLevel})`: scores a DECLARED

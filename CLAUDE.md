@@ -115,6 +115,7 @@ the numbers are byte-identical to the app's tables.
 | "which reach basis is right?", "is the sell-unreliable tag any good?" | `join-reach-basis.mjs [--horizon H] [--item "<item>"]` — settled for neither basis; quote the cost-regime map and r*, never the accuracy number |
 | "which exit estimator is best?", "is pressure any good?", "score the reachability head-to-head" | `join-reach-outcomes.mjs --horizon H [--item "<item>"]` — describes, never ranks: use the MATCHED tables, name the horizon, retire nothing on it |
 | "how's X?", "quote X", "what's X doing?", "check X and Y" | `quote-items.mjs "<item>" [...]` |
+| "show my open lots", "last closed flips", "what did I do with X?", "lots of X" | `read-book.mjs --lots [N] [--item "<item or id>"]` — offline after the local sync: lots only, no live fetch; times are local |
 | "can I buy more X?", "how much limit left?", "when does it reset?" | `read-buy-limits.mjs ["<item>" ...]` |
 | "what should I ask if I'll wait H?", "how long to clear at price P?", "the EV-max ask?" | `read-exit-surface.mjs "<item>" [--horizon 6,24,48] [--price gp]` — askStar LOST the backtest (join-exit-ev): description only, price nothing off it |
 | "is X in the last scan?", "what grade was X?", "why isn't X in the scan?", "what got crowded out?" | `read-rows.mjs [screen\|quote\|watch] --item "<item>" [--mode band] [--cols a,b] [--limit N] [--drops] [--digest] [--list]` — reads the saved report only, never the market: check the printed age and re-run the read when it says STALE |
