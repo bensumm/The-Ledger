@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 
 const dir = process.env.COFFER_FROZEN, mode = process.env.COFFER_FROZEN_MODE;
 if (dir && (mode === 'record' || mode === 'replay')) {
+  process.env.COFFER_NO_CHORES = '1';
   fs.mkdirSync(dir, { recursive: true });
   const clock = path.join(dir, 'clock');
   if (mode === 'record' && !fs.existsSync(clock)) fs.writeFileSync(clock, String(Date.now()));

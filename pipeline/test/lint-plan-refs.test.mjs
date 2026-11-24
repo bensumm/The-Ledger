@@ -43,7 +43,7 @@ ok('the PLAN.md "Used ids:" line declares ids, and the live PLAN.md carries it',
   assert.deepStrictEqual([...chunkIdsIn('Used ids: DT1 V2-P4a MT-V2/2\n')], ['DT1', 'V2-P4a', 'MT-V2/2']);
   assert.ok(chunkIdsIn(fs.readFileSync(new URL('../../PLAN.md', import.meta.url), 'utf8').replace(/\r\n/g, '\n')).size > 100);
 });
-ok('', () => {
+ok('reads a chunk id from a HEADING', () => {
   assert.deepStrictEqual([...chunkIdsIn('### AC1 — the reader\n')], ['AC1']);
 });
 ok('reads a chunk id from a leading TABLE CELL, bold or bare', () => {
