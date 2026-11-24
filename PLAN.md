@@ -2,7 +2,7 @@
 
 Open work: `docs/BACKLOG.md` (no plan) and `plans/` (active plans). Process: `docs/PLANNING.md`. This file was a
 255 KB scoreboard until 2026-11-24; every old Status row, chunk spec and Discovered entry is in
-`git show a3e08de:PLAN.md`, and where each one went is in `git show LN1SHA:pipeline/experiments/LN1-FATES.md`.
+`git show a3e08de:PLAN.md`, and where each one went is in `git show a27dc01:pipeline/experiments/LN1-FATES.md`.
 
 ## Executor rules (apply to every chunk)
 
