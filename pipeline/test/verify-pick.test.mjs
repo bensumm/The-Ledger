@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parsePick, judge, formatLine, formatWhy, fieldsFrom, RULES, staleLivePrint, sellEarlyTrigger, bidPullingAway, foldUnderBreakEven,
-  fadingBidAboveTodaysLow, exitRarelyPrints, noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, peakWindowMissing } from '../commands/verify-pick.mjs';
+  fadingBidAboveTodaysLow, exitRarelyPrints, noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, peakWindowMissing, bondFee, WARN_RULES } from '../commands/verify-pick.mjs';
 import { breakEven, maxBuyForExit, QUICK_FRESH_MIN } from '../../js/quotecore.js';
 import { netMargin } from '../../js/money-math.js';
 
@@ -28,7 +28,15 @@ const day = o => ({ ...base().day, ...o });
 const bad = rm({ trend: 'fading', pace: { onPace: false, liveNow: 980, medianAtHour: 1000 } });
 const noPace = rm({ pace: null });
 
-ok('the clean fixture passes every rule', () => { assert.deepEqual(judge(base()), { status: 'PASS', fails: [], unknowns: [] }); });
+ok('the clean fixture passes every rule', () => { assert.deepEqual(judge(base()), { status: 'PASS', fails: [], unknowns: [], warns: [] }); });
+ok('a skill caution warns and never changes the status', () => {
+  const f = base({ peak: peak({ gap: 5, level: 1095 }) }), j = judge(f);
+  assert.equal(j.status, 'PASS'); assert.equal(j.warns.length, 1); assert.match(formatLine(f, j), /warn: ask 5 above/);
+  assert.deepEqual([...WARN_RULES].map(r => r.name).sort(), ['askAbovePeakLevel', 'bidNotTouched', 'bidPullingAway', 'staleReach']);
+  assert.equal(judge(base({ day: day({ bid: leg({ recency: null }) }) })).status, 'PASS');
+});
+ok('a bid out of reach at the peak is not a warning: only the all-day bid counts', () => { assert.deepEqual(bidPullingAway(base({ peak: peak({ bid: leg({ rm: bad }) }) })), {}); });
+ok('a bond is UNKNOWN: its retrade fee is not modelled', () => { assert.equal(judge(base({ bond: true })).status, 'UNKNOWN'); assert.deepEqual(bondFee(base()), {}); });
 
 // [rule, name, fields that must FAIL, text, fields that must be UNKNOWN]
 const cases = [
@@ -38,7 +46,6 @@ const cases = [
   [sellEarlyTrigger, 'ask trigger all-day', { day: day({ ask: leg({ rm: bad }) }) }, /⚠⚠ sell-early.*all-day/, { day: day({ ask: leg({ rm: null }) }) }],
   [sellEarlyTrigger, 'negative cushion that is not fading', { peak: peak({ ask: leg({ rm: rm({ cushionNow: -4, pace: { onPace: false } }) }) }) }, /cushion now −4/, { peak: peak({ ask: null }) }],
   [bidPullingAway, 'bid trigger all-day', { day: day({ bid: leg({ rm: bad }) }) }, /⚠⚠ market pulling away.*all-day/, { day: day({ bid: null }) }],
-  [bidPullingAway, 'bid trigger in the peak window', { peak: peak({ bid: leg({ rm: bad }) }) }, /⚠⚠ market pulling away.*peak/, { peak: peak({ bid: leg({ rm: noPace }) }) }],
   [foldUnderBreakEven, 'forward list-at under break-even', { fold: { estSell: 1080, estSellForward: 1019, confidence: {} } }, /list at 1,019 under BE 1,021/, { fold: { estSell: 1080, estSellForward: null, confidence: {} } }],
   [foldUnderBreakEven, 'reach-fold under break-even', { fold: { estSell: 1000, estSellForward: 1085, confidence: {} } }, /reach-fold 1,000 under BE/, { fold: null }],
   [foldUnderBreakEven, 'reach-fold floored to break-even', { fold: { estSell: 1080, estSellForward: 1085, confidence: { beFloored: true } } }, /floored/, { fold: { estSellForward: 1085, confidence: {} } }],
@@ -60,17 +67,18 @@ const cases = [
 for (const [rule, name, f, re, u] of cases) {
   ok(`${rule.name}: FAIL — ${name}`, () => {
     assert.match(rule(base(f)).fail ?? '', re);
-    assert.equal(judge(base(f)).status, 'FAIL');
+    if (WARN_RULES.has(rule)) assert.ok(judge(base(f)).warns.length && !judge(base(f)).fails.includes(rule(base(f)).fail));
+    else assert.equal(judge(base(f)).status, 'FAIL');
   });
   ok(`${rule.name}: UNKNOWN when its input is missing (${name})`, () => {
     const r = rule(base(u));
     assert.ok(r.unknown && !r.fail, JSON.stringify(r));
-    assert.notEqual(judge(base(u)).status, 'PASS');
+    if (!WARN_RULES.has(rule)) assert.notEqual(judge(base(u)).status, 'PASS');
   });
   ok(`${rule.name}: silent on the clean fixture (${name})`, () => assert.deepEqual(rule(base()), {}));
 }
 ok('every rule in RULES has a flipping case or the window case', () => {
-  const tested = new Set([...cases.map(c => c[0]), peakWindowMissing]);
+  const tested = new Set([...cases.map(c => c[0]), peakWindowMissing, bondFee]);
   for (const r of RULES) assert.ok(tested.has(r), r.name);
   assert.equal(tested.size, RULES.length);
 });

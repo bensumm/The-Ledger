@@ -16,6 +16,7 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 - One manual-slot rule (slot 8 and up); the book is unchanged.
 - Scan digest (LN5): `digestRows` in the screen dump; under the block, a per-4h-window size line, a `Δ vs` line against the last complete same-scope scan (`pipeline/.cache/digest-prev.json`), one counts line per flip-niche, and a coverage line. No change to rows, order, grade, rank or the ledger.
 - `own-picks.json`: buys the owner picked are reported as `ownPick`, outside every niche. `deriveCandidates` proposes real niches only.
+- PLAN-LEAN LN5: `verify-pick.mjs`, `read-rows.mjs`, `read-book.mjs --lots`, a plan line per held lot, and digest size / Δ / crowded-out / coverage lines. Inform-only.
 
 ## pipeline 1.9.0 — 2026-11-23 — the circular asym probabilities and `--asym` retired (APP_VERSION 0.76.3)
 

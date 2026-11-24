@@ -5,7 +5,7 @@ import { fmtP } from '../../../js/money-format.js';
 
 const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
 
-const NO_SIZE = { units: null, gp: null, windows: null, bound: null };
+const NO_SIZE = { units: null, gp: null, windows: null, bound: null, clear: null };
 
 export function buildDigestRows(rows, { sizeOf = () => NO_SIZE, prevOf = () => null } = {}) {
   return rows.map(r => ({
@@ -18,34 +18,36 @@ export function buildDigestRows(rows, { sizeOf = () => NO_SIZE, prevOf = () => n
   }));
 }
 
-/* One 4h window. `bought` comes off this window only, later windows get the full limit. sizeTranche
- * drops a zero-capital bound, so it is applied here as 0. */
+/* One 4h window, bound by buy limit and capital. `bought` comes off this window only. `clear` is sizeTranche's
+ * unvalidated clearability knee: shown, never binding. */
 export function sizeDigestRow(r, { capital = null, bought = 0 } = {}) {
   if (!(num(r.bid) > 0)) return NO_SIZE;
+  if (num(r.limit) == null) return { ...NO_SIZE, clear: num(r.volDay) == null ? null : Math.floor(r.volDay * CLEARABILITY_FRAC) };
   const at = limitRemaining => {
     if (capital != null && !(capital > 0)) return { units: 0, bound: 'capital' };
-    const s = sizeTranche({ capital, unitCost: r.bid, limitRemaining, dailyVol: r.volDay });
+    const s = sizeTranche({ capital, unitCost: r.bid, limitRemaining, dailyVol: null });
     return { units: s.recommendedQty, bound: s.binding };
   };
+  const clear = num(r.volDay) == null ? null : Math.floor(r.volDay * CLEARABILITY_FRAC);
   const limit = num(r.limit);
   const full = at(limit), now = at(limit == null ? null : Math.max(0, limit - bought));
   const want = Math.floor(num(r.deployUnits) ?? 0);
   const windows = want < 1 || !(full.units > 0) ? null
     : want <= now.units ? 1
     : (now.units > 0 ? 1 : 0) + Math.ceil((want - now.units) / full.units);
-  return { units: now.units, gp: now.units == null ? null : Math.round(now.units * r.bid), windows, bound: now.bound };
+  return { units: now.units, gp: now.units == null ? null : Math.round(now.units * r.bid), windows, bound: now.bound, clear };
 }
 
-const BOUND_WORD = { 'buy-limit': 'limit', clearability: 'clear', capital: 'capital' };
+const BOUND_WORD = { 'buy-limit': 'limit', capital: 'capital' };
 export function sizeLine(digestRows) {
   if (!digestRows.length) return null;
   const cell = d => {
     const why = [BOUND_WORD[d.bound], d.limit == null ? 'limit unknown' : null].filter(Boolean).join(', ');
     if (d.units == null) return `${d.name} ?${why ? ' ' + why : ''}`;
-    if (d.units === 0) return `${d.name} ${d.bound === 'clearability' ? '<1u' : '0u'} ${why}`;
-    return `${d.name} ${d.units.toLocaleString('en-US')}u ${fmtP(d.gp)}${d.windows ? ` x${d.windows}w` : ''} ${why}`;
+    if (d.units === 0) return `${d.name} 0u ${why}`;
+    return `${d.name} ${d.units.toLocaleString('en-US')}u ${fmtP(d.gp)}${d.windows ? ` x${d.windows}w` : ''} ${why}${d.clear == null ? '' : ` ~${d.clear.toLocaleString('en-US')} clear`}`;
   };
-  return `size per 4h window (smallest of buy limit, clear = ${CLEARABILITY_FRAC * 100}% of day volume, whole-pool capital; xNw = windows to reach the deploy column, which is the 2-day model): ${digestRows.map(cell).join(' | ')}`;
+  return `size per 4h window (buy limit left or whole-pool capital; xNw = windows to fill the 2-day deploy column; ~clear = ${CLEARABILITY_FRAC * 100}% of day volume, unvalidated): ${digestRows.map(cell).join(' | ')}`;
 }
 
 const age = ms => ms < 3600e3 ? `${Math.max(0, Math.round(ms / 60e3))}m` : ms < 48 * 3600e3 ? `${(ms / 3600e3).toFixed(1)}h` : `${Math.round(ms / 86400e3)}d`;

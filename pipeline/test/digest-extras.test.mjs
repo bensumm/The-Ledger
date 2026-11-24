@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sizeTranche } from '../lib/capital/book-model.mjs';
 import { buildDigestRows, sizeDigestRow, sizeLine, digestDiffLine, readDigestPrev, writeDigestPrev, nicheLine, coverageLine } from '../lib/render/digest-extras.mjs';
 import { selectDigestRows, buildDigestBlock } from '../commands/screen-flip-niches.mjs';
 import { digestReachAndPlacement } from '../lib/signal/digest.mjs';
@@ -15,7 +14,7 @@ const R = { id: 1, name: 'X', nicheKey: 'band', grade: 'A', verdict: 'fill-now',
 test('digestRows: numeric, and null where unknown', () => {
   const [d] = buildDigestRows([R], { prevOf: () => 'mirage top' });
   assert.deepEqual(d, { itemId: 1, name: 'X', mode: 'band', grade: 'A', verdict: 'fill-now', bid: 1000, ask: 1100, netEach: 78, roi: 7.8,
-    be: 1021, reachHit: 2, reachDays: 3, reachBasis: 'recent', limit: 100, units: null, gp: null, windows: null, bound: null, prev: 'mirage top' });
+    be: 1021, reachHit: 2, reachDays: 3, reachBasis: 'recent', limit: 100, units: null, gp: null, windows: null, bound: null, clear: null, prev: 'mirage top' });
   const [n] = buildDigestRows([{ id: 2, name: 'Y' }]);
   for (const k of ['bid', 'ask', 'netEach', 'roi', 'be', 'reachHit', 'reachDays', 'limit', 'units', 'gp', 'windows', 'bound', 'prev']) assert.equal(n[k], null, k);
 });
@@ -42,29 +41,29 @@ test('reach counts follow the basis the fraction was read on', () => {
 });
 
 const size = (over, opts = {}) => sizeDigestRow({ ...R, ...over }, { capital: 1e9, ...opts });
-test('size: the smallest of limit, clearability and capital binds', () => {
-  assert.deepEqual(size({}), { units: 100, gp: 100_000, windows: 3, bound: 'buy-limit' });
-  assert.deepEqual(size({ volDay: 8000 }), { units: 40, gp: 40_000, windows: 7, bound: 'clearability' });
-  assert.deepEqual(size({}, { capital: 30_500 }), { units: 30, gp: 30_000, windows: 9, bound: 'capital' });
-  assert.equal(size({ volDay: 8000 }).units, sizeTranche({ capital: 1e9, unitCost: 1000, limitRemaining: 100, dailyVol: 8000 }).recommendedQty);
+test('size: buy limit or capital binds; the clearability knee is shown, never binding', () => {
+  assert.deepEqual(size({}), { units: 100, gp: 100_000, windows: 3, bound: 'buy-limit', clear: 5000 });
+  assert.deepEqual(size({ volDay: 8000 }), { units: 100, gp: 100_000, windows: 3, bound: 'buy-limit', clear: 40 });
+  assert.deepEqual(size({}, { capital: 30_500 }), { units: 30, gp: 30_000, windows: 9, bound: 'capital', clear: 5000 });
 });
 test('size: what was bought in the window comes off this window only', () => {
-  assert.deepEqual(size({}, { bought: 70 }), { units: 30, gp: 30_000, windows: 4, bound: 'buy-limit' });
-  assert.deepEqual(size({}, { bought: 100 }), { units: 0, gp: 0, windows: 3, bound: 'buy-limit' });
+  assert.deepEqual(size({}, { bought: 70 }), { units: 30, gp: 30_000, windows: 4, bound: 'buy-limit', clear: 5000 });
+  assert.deepEqual(size({}, { bought: 100 }), { units: 0, gp: 0, windows: 3, bound: 'buy-limit', clear: 5000 });
 });
 test('size: thin, capital-less and unknown inputs never invent a size', () => {
-  assert.deepEqual(size({ volDay: 113 }), { units: 0, gp: 0, windows: null, bound: 'clearability' });
-  assert.deepEqual(size({}, { capital: 0 }), { units: 0, gp: 0, windows: null, bound: 'capital' });
-  assert.deepEqual(size({ bid: null }), { units: null, gp: null, windows: null, bound: null });
+  assert.deepEqual(size({ volDay: 113 }), { units: 100, gp: 100_000, windows: 3, bound: 'buy-limit', clear: 0 });
+  assert.deepEqual(size({}, { capital: 0 }), { units: 0, gp: 0, windows: null, bound: 'capital', clear: 5000 });
+  assert.deepEqual(size({ bid: null }), { units: null, gp: null, windows: null, bound: null, clear: null });
+  assert.deepEqual(size({ limit: null }), { units: null, gp: null, windows: null, bound: null, clear: 5000 });
   assert.equal(size({ deployUnits: 0.4 }).windows, null);
   assert.equal(size({ deployUnits: 100 }).windows, 1);
 });
 test('size line: null limit prints limit unknown; the label separates it from deploy', () => {
   const line = sizeLine(buildDigestRows([R, { ...R, id: 2, name: 'Y', limit: null }, { ...R, id: 3, name: 'Z', volDay: 113 }], { sizeOf: r => sizeDigestRow(r, { capital: 1e9 }) }));
-  assert.match(line, /^size per 4h window .*deploy.*2-day/);
-  assert.match(line, /X 100u 100k x3w limit |/);
-  assert.match(line, /Y 5,000u .*clear, limit unknown/);
-  assert.match(line, /Z <1u clear/);
+  assert.match(line, /^size per 4h window .*2-day deploy column/);
+  assert.match(line, /X 100u 100k x3w limit ~5,000 clear \|/);
+  assert.match(line, /Y \? limit unknown/);
+  assert.match(line, /Z 100u 100k x3w limit ~0 clear/);
   assert.ok(!/Infinity|NaN|unlimited/.test(line));
   assert.equal(line.split('\n').length, 1);
   assert.equal(sizeLine([]), null);

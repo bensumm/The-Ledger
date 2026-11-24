@@ -14,7 +14,7 @@ import { LOG_DIR } from '../lib/reconstruct/offers.mjs';
 import { regenerate } from './sync-fills.mjs';
 import { windowStats, hourProfile, reachMargin, reachMarginTrigger, recencySplit, RECENT_NIGHTS, floorCeilingTrack, formatFloorCeiling } from '../../js/windowread.mjs';
 import { breakEven, QUICK_FRESH_MIN } from '../../js/quotecore.js';
-import { netMargin } from '../../js/money-math.js';
+import { netMargin, isBond } from '../../js/money-math.js';
 
 const TRIO = path.join(path.dirname(fileURLToPath(import.meta.url)), 'read-window-range.mjs');
 const USAGE = 'usage: node pipeline/commands/verify-pick.mjs "<item>@<bid>:<ask>" [...more] [--why]';
@@ -39,15 +39,15 @@ export function staleLivePrint(f) {
       : f.live[age] > QUICK_FRESH_MIN ? { fail: `stale live print: ${name} ${Math.ceil(f.live[age])}m old` } : {}));
 }
 
-function trigger(f, side, label) {
-  return worst(WINDOWS.map(([k, where]) => {
+function trigger(f, side, label, windows = WINDOWS) {
+  return worst(windows.map(([k, where]) => {
     const rm = f[k]?.[side]?.rm, t = reachMarginTrigger(rm);
     if (t == null) return { unknown: `${side} ${where}: no live pace to test the ⚠⚠ trigger` };
     return t ? { fail: `⚠⚠ ${label} ${where}: cushion now ${signed(rm.cushionNow)}${rm.trend === 'fading' ? ' FADING' : ''}, live ${fmt(rm.pace.liveNow)} vs hour median ${fmt(rm.pace.medianAtHour)}` } : {};
   }));
 }
 export function sellEarlyTrigger(f) { return trigger(f, 'ask', 'sell-early trigger on the ask'); }
-export function bidPullingAway(f) { return trigger(f, 'bid', 'market pulling away from the bid'); }
+export function bidPullingAway(f) { return trigger(f, 'bid', 'market pulling away from the bid', [['day', 'all-day']]); }
 
 export function foldUnderBreakEven(f) {
   const fold = f.fold;
@@ -112,13 +112,18 @@ export function buyLimitSpent(f) {
 
 export function peakWindowMissing(f) { return f.peak?.resolved ? {} : { unknown: 'no peak window could be derived' }; }
 
+export function bondFee(f) { return f.bond ? { unknown: 'bond retrade fee not modelled here' } : {}; }
+
+// WARN never changes the status: a skill caution, not one of the owner's FAIL conditions.
+export const WARN_RULES = new Set([bidPullingAway, askAbovePeakLevel, staleReach, bidNotTouched]);
 export const RULES = [staleLivePrint, sellEarlyTrigger, bidPullingAway, foldUnderBreakEven, fadingBidAboveTodaysLow, exitRarelyPrints,
-  noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, peakWindowMissing];
+  noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, peakWindowMissing, bondFee];
 
 export function judge(f) {
-  const out = RULES.map(r => r(f));
-  const fails = out.filter(r => r.fail).map(r => r.fail), unknowns = out.filter(r => r.unknown).map(r => r.unknown);
-  return { status: fails.length ? 'FAIL' : unknowns.length ? 'UNKNOWN' : 'PASS', fails, unknowns };
+  const gate = RULES.filter(r => !WARN_RULES.has(r)).map(r => r(f));
+  const fails = gate.map(r => r.fail).filter(Boolean), unknowns = gate.map(r => r.unknown).filter(Boolean);
+  const warns = RULES.filter(r => WARN_RULES.has(r)).map(r => r(f).fail).filter(Boolean);
+  return { status: fails.length ? 'FAIL' : unknowns.length ? 'UNKNOWN' : 'PASS', fails, unknowns, warns };
 }
 
 const reach = l => l && fin(l.hit) && l.n > 0 ? `${l.hit}/${l.n}` : '—';
@@ -126,7 +131,7 @@ export function formatLine(f, j) {
   const left = fin(f.limit?.remaining) ? `${fmt(f.limit.remaining)} left` : 'limit left —';
   return [`${j.status} ${f.name} ${fmt(f.bid)}→${fmt(f.ask)} ${signed(f.net)} BE ${fmt(f.be)}`,
     `reach bid ${reach(f.day?.bid)} ask ${reach(f.day?.ask)} (peak ask ${reach(f.peak?.ask)})`, left,
-    ...j.fails, ...(j.unknowns.length ? ['unknown: ' + j.unknowns.join('; ')] : [])].join(' · ');
+    ...j.fails, ...(j.warns.length ? ['warn: ' + j.warns.join('; ')] : []), ...(j.unknowns.length ? ['unknown: ' + j.unknowns.join('; ')] : [])].join(' · ');
 }
 
 export function formatWhy(f) {
@@ -141,7 +146,7 @@ export function formatWhy(f) {
   ].map(s => '    ' + s).join('\n');
 }
 
-export function fieldsFrom({ name, bid, ask, trio, series, latest, limit, now = new Date() }) {
+export function fieldsFrom({ name, bid, ask, trio, series, latest, limit, bond = false, now = new Date() }) {
   const ageMin = t => fin(t) ? (now / 1000 - t) / 60 : null;
   const live = latest && { low: latest.low ?? null, high: latest.high ?? null, lowAgeMin: ageMin(latest.lowTime), highAgeMin: ageMin(latest.highTime) };
   const isStale = age => !(fin(age) && age <= QUICK_FRESH_MIN);
@@ -155,7 +160,7 @@ export function fieldsFrom({ name, bid, ask, trio, series, latest, limit, now = 
   const trioLeg = (l, hit) => l ? { hit, n: l.nDays, recency: l.recency, rm: l.reachMargin } : null;
   const pk = trio?.windowScored?.peak;
   return {
-    name, bid, ask, be: breakEven(bid), net: netMargin(bid, ask), maxBuy: trio?.exit?.maxBuy, live, fold: trio?.fold ?? null, limit,
+    name, bid, ask, bond, be: breakEven(bid), net: netMargin(bid, ask), maxBuy: trio?.exit?.maxBuy, live, fold: trio?.fold ?? null, limit,
     track: st ? formatFloorCeiling(floorCeilingTrack(st.days, { forming: st.forming }), fmt) : null,
     day: st && { bid: dayLeg('bid', bid), ask: dayLeg('ask', ask), todayLow: st.forming?.low ?? null },
     peak: trio ? { resolved: trio.window?.resolvedFrom === 'peak', window: trio.window, level: pk?.level, gap: pk?.user?.gap ?? null, rarelyPrints: trio.exit?.rarelyPrints,
@@ -189,7 +194,7 @@ async function main() {
     if (r) {
       const or = v => v.catch(() => null);
       const [latest, series, trio] = await Promise.all([or(fetchLatest(r.id)), or(fetchTs(r.id, '1h')), or(runTrio(r.id, p))]);
-      f = fieldsFrom({ name: r.name, bid: p.bid, ask: p.ask, trio, series, latest,
+      f = fieldsFrom({ name: r.name, bid: p.bid, ask: p.ask, trio, series, latest, bond: isBond(r.id),
         limit: buys && limitWindow({ buys: buys.get(r.id) || [], limit: map.byId[r.id]?.limit ?? null }) });
     }
     console.log(formatLine(f, judge(f)));

@@ -1666,7 +1666,7 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
     **`pipeline/lib/render/digest-extras.mjs`** — the lines printed UNDER the digest, and the numeric rows
     behind them: `buildDigestRows` (the dump's top-level `digestRows`, one object per printed digest row,
     numbers or null; `bid`/`ask` are the pair the row's printed net uses), the per-4h-window size line
-    (the book's `sizeTranche`, whole pool per row; NOT the 2-day `deploy` column), the `Δ vs` line, one
+    (buy limit left or whole-pool capital; clearability shown only; NOT the 2-day `deploy`), the `Δ vs` line, one
     shown/rejected/crowded-out line per flip-niche, and the coverage line. Inform-only: no row, order,
     grade, rank or ledger effect. State: `pipeline/.cache/digest-prev.json` (gitignored) — the last
     COMPLETE digest per scan scope (modes, posture, filter flags); a partial, failed or empty scan never
