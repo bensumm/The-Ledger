@@ -102,7 +102,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   caveat applies),
   `forward-reach.mjs` (the shared FORWARD-SCORING primitives over the 1h archive — `touchedAt` (bid
   side, `avgLowPrice`), `reachedWithin` / `maxHighWithin` (ask side, `avgHighPrice`), `covers`,
-  `firstIndexAfter`, and the END-OF-WINDOW bail pair `endLowWithin` / `endHighWithin` off one
+  `firstIndexAfter`, `readableCut` (the decision-side cut: buckets stamped before the decision hour —
+  the ONE no-look-ahead convention; moved here from `join-exit-ev.mjs` at CRX1), and the END-OF-WINDOW bail pair `endLowWithin` / `endHighWithin` off one
   `lastPrintWithin(series, from, windowH, field)` (chunk 4 homed them here; `js/reach-surface.mjs` had
   carried a private `endLowWithin` twin). The two bails are DIFFERENT POLICIES for a seller whose ask
   was never reached — cross the spread into a standing bid (`avgLow`, chunk 1's choice) or rest at the
@@ -232,7 +233,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   the **hour-of-day diurnal profile**
   `hourProfile`/`deriveDiurnalRange` (2026-07-09 — de-trended per-hour dip/peak detection, side-specific
   clustering, and the stale-to-live guard; the peak-timing engine `screen-flip-niches.mjs` auto-runs and
-  `windowrange --profile` prints) + **multi-peak windows** (PLAN-MULTI-PEAK-WINDOWS 2026-07-23 — `hourProfile`
+  `windowrange --profile` prints; local days/hours by default, `{ utc: true }` for the crash-entry replay) + **multi-peak windows** (PLAN-MULTI-PEAK-WINDOWS 2026-07-23 — `hourProfile`
   gains ADDITIVE prominence-ranked `peaks`/`dips` arrays (length 1–2); `peaks[0]`/`dips[0]` deep-equal the
   unchanged `peak`/`dip`, `peaks[1]`/`dips[1]` is a SECOND window that cleared the `SECOND_PROMINENCE_FRAC`
   topographic-prominence gate; `diurnalTimedLap` mirrors it with index-aligned `askReaches`/`bidReaches`
@@ -1950,7 +1951,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     future data. (The store-lag does NOT establish that — the fetcher only ever requests the last
     COMPLETE hour, so a lag over an hour is a property of the fetch policy and reads the same under
     either convention. Comparing a 1h bucket's volume against the twelve 5m buckets on each side of it
-    does establish it.) `readableCut`
+    does establish it.) `readableCut` (`js/forward-reach.mjs`)
     stops strictly before it and the outcome window starts after it, leaving that bucket to neither
     side; contenders, reference and dispersion are all rebuilt from what remains, and deleting any of
     the truncations reddens the suite. INFORM-ONLY: gates nothing, writes nothing, prices no offer. Honest limits — one
@@ -2023,6 +2024,25 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `beats`/`scoreItem` fixture-pinned in `pipeline/test/fade-outcomes.test.mjs` (incl. the
     Diamond-bolts 12h shape end-to-end). `--json`, `--items N`, `--cost-ratio r`,
     `--item <name|id>`; the 4h outcome horizon is part of the LOCKED spec, deliberately not a flag),
+    `join-crash-entry.mjs` (CRX2, `plans/PLAN-CRASH-REPLAY.md` — the crash-entry SCORER, read-only. One bulk
+    read of the 1h archive; `crash-entry.mjs` detects per-item dump events and scores every rule at the
+    plan's locked spec with each item's buy limit. Prints the pre-registered primary (ST-time vs RB1 on
+    block P, paired, onset-day cluster bootstrap via `cluster-ci.mjs`; "beats" needs that CI, ST-time's own
+    CI > 0 and the 3d/14d horizon signs), the secondary family vs RB1 Holm-corrected, the RB0/RB2 baselines,
+    a VERSUS-NEVER-ENTER table (every rule's own mean with no-entry counted as 0, its mean when entered,
+    Holm across the rules, never-enter as a row; the report's first line is the verdict computed from it),
+    RB2 read against `RB1-00UTC` (RB2 always enters at 00:00 UTC, so against plain RB1 it is
+    clock-confounded), the oracle as medians only (its volume-free trough entry can sit on a one-unit
+    lowball print, so its mean is not a usable bound), class strata by onset price, at one unit per tranche
+    (lot-size neutral) and keyed on the pre-dump price, the diurnal/bail/volume/fill/bid/EX2 sensitivities,
+    the persistence row
+    (labelled NOT pre-registered), and block R (raids-4) as a point-estimate case series that never gets an
+    interval. Below `MIN_CLUSTERS` onset days a contrast prints no interval. **Result: no rule beats
+    never-enter on block P, and the pre-registered primary is "no detectable edge" — run the command for the
+    numbers.** Block P is single-item repricings, not a crash; every
+    fill and reach is an upper bound; block R stays incomplete until 2026-11-13 (CRX4). Pure core
+    `scoreEvent`/`contrast`/`holm`/`primaryVerdict`/`caseSeries`/`versusNothing`/`report` pinned by
+    `pipeline/test/join-crash-entry.test.mjs`. `--json`, `--items N`. Inform-only, gates nothing),
     `join-window-clears.mjs` (WC2, PLAN-WINDOW-CLEAR-OUTCOMES — the window-clear ask-RUNG fill-attribution
     join, read-only. PRODUCER: the WC1 `windowExit` shadow rows on `suggestions.jsonl` (the surfaced list
     level + peak window + the daily-HIGH vs 5m-grain reach pair, logged on `quote-items.mjs --positions` /
@@ -2358,6 +2378,28 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     the answer SHOWS both numbers without applying either: a decision-mover ships as a visible comparison,
     not a silent swap.
     Fixture-pinned by `pipeline/test/fill-surface.test.mjs`. NOT wired to any surface yet — AB7),
+    **`crash-entry.mjs`** (CRX1, `plans/PLAN-CRASH-REPLAY.md` — PURE per-item dump-event layer over
+    archive-shaped 1h series: `detectEvents` (onset = first completed bucket ≤ `ONSET_FRAC` × the trailing
+    `ONSET_LOOKBACK_H` max mid, liquid + ≥ `CRASH_MIN_PRICE`, `COOLDOWN_H` per item; cluster = onset UTC day,
+    block P/R by `BLOCK_R_FIRST`/`BLOCK_R_LAST`), the entry rules `RULES` (RB0/RB1/RB2/R0/R2/R3/R4/R5, plus
+    the `RB1-diurnal` sensitivity row: RB1 moved into the item's `hourProfile` dip window on UTC days and
+    hours, and `RB1-00UTC`: RB1 deferred to the next 00:00 UTC, RB2's clock control) +
+    the staged `ST-time`/`ST-trigger` keys, `simulateFill` (volume-gated, bid = last readable avgLow),
+    the exits `exitCertainClear` (EX1) / `exitLadder` (EX2), `eventWindow` + `entriesFor` + `scoreEntries`
+    (entries decided once, then filled/exited under any spec) and `scoreOracle`, `persistentOnset` (the
+    NOT-pre-registered persistence sensitivity: onset re-timed to the hour its `PERSIST_BUCKETS`-bucket
+    persistence and `PERSIST_MIN_UNITS` onset volume are readable), `pairedRows`
+    (resolved rows for `cluster-ci.mjs` `pairedClusterCI` with the onset day as the unit; a pending leg
+    is dropped), and
+    `breadthRead`/`stabilityRead` (the stability line CRX3 and the `/scan` header reuse). Every decision
+    at hour t reads only what `js/forward-reach.mjs` `readableCut` admits; forward reads are capped at
+    `nowSec`, so an unresolved window is `pending`, never a miss. REUSES `breakEven`, `tax`,
+    `floorCeilingTrack` (R2) and `dislocation.mjs` `trailingDeviation`/`bucketOf` (RB2, called with
+    `{ utc: true }` so the replay is timezone-independent). A staged tranche smaller than one unit still
+    buys one. Thresholds are the plan's
+    pre-registered placeholders. Consumer: `join-crash-entry.mjs` (CRX2); `stabilityRead` keeps its
+    `@test-only` marker until the CRX3 live read consumes it. Inform-only, gates nothing. Pinned by
+    `pipeline/test/crash-entry.test.mjs`),
     `marketfetch.mjs`
     (node-side price/guide fetch layer + historical bands `loadHistBands`/past-anchored 6h series
     `loadHistDaily` (YF1) + `loadBands(hours,{db})` — the whole-market 5m intraday band read, PERF-1
@@ -2687,13 +2729,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     the executability check; the deep edge is volume-fragile), `adv` (same-day upper bound), `cond`
     (raw conditional net → `waitSavesGp`'s after-tax inversion); `dislocationRead` composes daily
     mids off an archive-shaped 1h series (strictly-trailing 15d reference, ≥12/15 prior days, ≥3
-    rows today, ≤6h fresh — else SILENCE, never a fabricated read) and `formatDislocation` renders
+    rows today, ≤6h fresh — else SILENCE, never a fabricated read) (`dailyMidsFrom1h`/`trailingDeviation` take `{ utc }`; the default is the
+    local-calendar study grain, and only `crash-entry.mjs` passes `utc: true`) and `formatDislocation` renders
     the one line. Consumers: `quote-items.mjs` (bare + positions, note kind `dislocation` ◇ — TF2,
     PLAN-THESIS-FRAME: on a `{crash-risk, cooling}` row the line renders DIRECTLY under the regime
     warning, which gains a `→ measured cell:` pointer; non-falling rows keep the original stack slot,
     mild-cooldown untouched) and
     `screen-flip-niches.mjs`'s decision digest (rendered rows only, grouped per item — TF2). Fixtures:
     `dislocation.test.mjs` + `thesisframe.test.mjs`),
+    `cluster-ci.mjs` (the paired CLUSTER-bootstrap interval `pairedClusterCI` + `BOOTSTRAP_ITERS`/
+    `BOOTSTRAP_SEED` — PURE, seeded; rows carry `rec.itemId` as the resampling unit, which the caller
+    chooses: an item for `join-exit-ev.mjs`, an onset day for `crash-entry.mjs`. Moved out of
+    `join-exit-ev.mjs` at CRX1 so the lib does not import a command. Also returns `p`, the two-sided bootstrap
+    p of a zero difference (used by `join-crash-entry.mjs`'s Holm step). Pinned by `join-exit-ev.test.mjs`
+    and `crash-entry.test.mjs`),
     `freed-capital.mjs` (V6 Companion — PURE `freedCapital`: detects capital freed by a booked SELL between
     passes off V1's prior-pass state and prompts a redeploy scan ≥ `FREED_CAPITAL_SCAN_GP` — surface-
     only, never auto-places/runs the scan; anchor-free, no startup/stale-gap misfire),
@@ -3369,7 +3418,19 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `capped` top-of-grid flag, the below-2% not-claimable band, all nine refusal paths, plus the three
     2026-08-08 review fixes: the above-ceiling `tier-out-of-range` refusal that must not also carry a
     price, the wider-of-CI-vs-windowSpread rule (and the suppression of the reassuring pooled figure
-    when the spread wins), and the grain bias being SHOWN with `p` left untouched)
+    when the spread wins), and the grain bias being SHOWN with `p` left untouched),
+    `crash-entry.test.mjs` (CRX1 — the plan's Verification list: look-ahead (detector and every rule
+    identical on full, truncated-at-t and future-poisoned series; a fill or exit printed at or after the
+    bucket stamped floor(`nowSec`) is `pending`), the clock bucket in neither the readable set nor the fill
+    window, the V-trough, the fill/exit volume gates, the staged partial position and its never-zero
+    tranche, the onset-day cluster unit with pending legs dropped, the scoring window dropping nothing a
+    rule reads, and RB2 identical across machine timezones; plus a fire/no-fire pin per rule threshold,
+    the liquidity gate's edges, the EX2 three-day ladder, the oracle window, breadth/stability, the persistence
+    re-timing and the diurnal row),
+    `join-crash-entry.test.mjs` (CRX2 — the scorer's own logic on synthetic per-event results: the
+    `MIN_CLUSTERS` refusal (rows on one onset day add rows, not clusters), Holm's step-down order, block
+    assignment (only big/1–10m in P or R, block R never feeding the primary), block R never getting an
+    interval, and the all-conditions "beats" verdict)
     — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - `pipeline/test/fixtures/replay/snapshot.json` + `golden.json` (**tracked**, P1) — the committed inputs +

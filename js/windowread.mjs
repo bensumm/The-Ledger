@@ -1243,9 +1243,9 @@ function rankExtrema(items, valueFn, spread, mode) {
  *     is the sole new info — a { …span, hours, level, atHour, prominenceFrac } secondary window. INFORM-
  *     only, n≈0 — no consumer gates/prices/ranks off it. Existing `peak`/`dip` are UNCHANGED.
  */
-export function hourProfile(series, { nights = 14, now = new Date(), recentN = RECENT_NIGHTS } = {}) {
+export function hourProfile(series, { nights = 14, now = new Date(), recentN = RECENT_NIGHTS, utc = false } = {}) {
   const pad2 = n => String(n).padStart(2, '0');
-  const dk = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const dk = utc ? d => d.toISOString().slice(0, 10) : d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   const byHour = new Map();       // h → [{ day, low, hi, volLo, volHi }]
   const dayMids = new Map();      // day → [mids] (for the per-day baseline that DE-TRENDS the shape)
   const dayLow = new Map();       // day → min avgLowPrice across the day (the trend series)
@@ -1253,7 +1253,7 @@ export function hourProfile(series, { nights = 14, now = new Date(), recentN = R
   for (const pt of series || []) {
     if (pt.avgLowPrice == null && pt.avgHighPrice == null) continue;
     const d = new Date(pt.timestamp * 1000);
-    const h = d.getHours(), day = dk(d);
+    const h = utc ? d.getUTCHours() : d.getHours(), day = dk(d);
     daySet.add(day);
     if (!byHour.has(h)) byHour.set(h, []);
     byHour.get(h).push({ day, low: pt.avgLowPrice, hi: pt.avgHighPrice, volLo: pt.lowPriceVolume || 0, volHi: pt.highPriceVolume || 0 });

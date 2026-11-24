@@ -86,7 +86,8 @@ import { parseArgs, median } from '../lib/render/cli.mjs';
 import { readSuggestionLines, liqClassOf } from '../lib/render/suggestlog.mjs';
 import { buildReachSurface } from '../../js/reach-surface.mjs';
 import { askStar } from '../../js/exit-ev.mjs';
-import { maxHighWithin, endLowWithin, endHighWithin, covers, HOUR } from '../../js/forward-reach.mjs';
+import { maxHighWithin, endLowWithin, endHighWithin, covers, HOUR, readableCut } from '../../js/forward-reach.mjs';
+import { pairedClusterCI } from '../lib/signal/cluster-ci.mjs';
 import { windowStats, reachableBand, asymPair, clearableAsk, reachedDays, recencySplit, floorCeilingTrack, RECENT_NIGHTS } from '../../js/windowread.mjs';
 import { estimatePair } from '../lib/signal/estimators.mjs';
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';
@@ -109,8 +110,6 @@ export const MIN_CELL_N = 30;
 // Acceptance rows below this and the reconstruction is UNBOUNDED, not merely thin. One matched row is
 // not a bound, and treating "n > 0" as one let a contender with a single row out of the block.
 export const ACCEPTANCE_MIN_ROWS = MIN_CELL_N;
-export const BOOTSTRAP_ITERS = 2000;
-export const BOOTSTRAP_SEED = 12345;   // the seed the sibling joiners use; one value keeps them comparable
 // Which end-of-window price a never-reached ask bails at. 'low' crosses the spread into a standing
 // bid; 'high' rests at the ask level. Chunk 1 chose 'low'; both are scored because the choice moves
 // the ranking - it shifts only the REACHED rows, so contenders with different reach rates move apart.
@@ -193,22 +192,6 @@ export function foldAskAt({ stats, live }) {
   const extra = { askReach: { reachedDays: reachedDays(stats.his, row.optSell), nDays: stats.his.length, recentHit: rc.recentHit, recentDays: rc.recentDays } };
   const est = estimatePair(FLIP_NICHES.band, row, extra, { sellModel: 'reach-fold' });
   return est && Number.isFinite(est.estSell) ? est.estSell : null;
-}
-
-/* Buckets a decision at `ts` may read. An archive bucket is stamped with the START of its hour, so the
- * bucket AT the origin covers the hour AFTER it and is future data. Reading it was a real one-hour
- * leak, and the suite was blind to it because its no-look-ahead fixture only perturbed rows strictly
- * past the origin. The bucket containing the origin now belongs to neither side: the read stops before
- * it and the outcome window starts after it.
- *
- * `ts` is FLOORED to the hour first. A wall-clock timestamp — which is what the co-log carries — is
- * essentially never hour-aligned, and without the floor the last admitted bucket straddles it and
- * hands back up to an hour of future. */
-export function readableCut(series, ts) {
-  const hour = Math.floor(ts / HOUR) * HOUR;
-  let cut = 0;
-  while (cut < series.length && series[cut].ts < hour) cut++;
-  return cut;
 }
 
 /* Every non-surface contender's ask at one origin. PURE — the caller supplies the series and the cut. */
@@ -372,35 +355,6 @@ export function crossoverClosed(h2h) {
   }
   out.sort((a, b) => a.at - b.at);
   return { lead: lead.key, first: out[0] || null, all: out };
-}
-
-/* Item-CLUSTER bootstrap on the PAIRED per-origin difference in edge. Paired because both contenders
- * saw the same window; clustered because an item's origins share one price path. */
-export function pairedClusterCI(rows, keyA, keyB, { iters = BOOTSTRAP_ITERS, seed = BOOTSTRAP_SEED } = {}) {
-  const byItem = new Map();
-  let allSum = 0, allN = 0;
-  for (const r of rows) {
-    const a = r.per[keyA], b = r.per[keyB];
-    if (!a || !b) continue;
-    const d = a.edgeFrac - b.edgeFrac;
-    const cur = byItem.get(r.rec.itemId) || { sum: 0, n: 0 };
-    cur.sum += d; cur.n++;
-    byItem.set(r.rec.itemId, cur);
-    allSum += d; allN++;
-  }
-  const items = [...byItem.values()];
-  if (items.length < 4) return null;
-  let s = seed >>> 0;
-  const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
-  const out = [];
-  for (let i = 0; i < iters; i++) {
-    let sum = 0, n = 0;
-    for (let k = 0; k < items.length; k++) { const g = items[Math.floor(rnd() * items.length)]; sum += g.sum; n += g.n; }
-    if (n) out.push(sum / n);
-  }
-  if (out.length < iters / 4) return null;
-  out.sort((a, b) => a - b);
-  return { point: allSum / allN, lo: out[Math.floor(out.length * 0.025)], hi: out[Math.floor(out.length * 0.975)], items: items.length };
 }
 
 /* Origins thinned to non-overlapping outcome windows, per item. */

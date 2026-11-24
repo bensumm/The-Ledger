@@ -85,14 +85,17 @@ export const DISLOCATION_TABLE = {
   'rune': { lane: 'unresolved', deep: {}, elevated: { adv: -2.40, cond: -4.11, t: -3.80, nItems: 17, hold: 69 } },
 };
 
-// 1h archive rows → local-calendar daily mean mids (the study's grain), ascending [{di, mid, n}].
-export function dailyMidsFrom1h(series) {
+const dayIndex = (d, utc) => Math.round((utc
+  ? Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12)
+  : Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 12)) / 86400000);
+
+// 1h archive rows → daily mean mids, ascending [{di, mid, n}]; local-calendar days (the study's grain) unless utc.
+export function dailyMidsFrom1h(series, { utc = false } = {}) {
   const byDay = new Map();
   let lastTs = null;
   for (const r of (series || [])) {
     if (r == null || r.timestamp == null || r.avgHighPrice == null || r.avgLowPrice == null) continue;
-    const d = new Date(r.timestamp * 1000);
-    const di = Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 12) / 86400000);
+    const di = dayIndex(new Date(r.timestamp * 1000), utc);
     const e = byDay.get(di) || { s: 0, n: 0 };
     e.s += (r.avgHighPrice + r.avgLowPrice) / 2; e.n++;
     byDay.set(di, e);
@@ -103,9 +106,8 @@ export function dailyMidsFrom1h(series) {
 }
 
 // Deviation of today's partial-day mean vs the trailing TRAIL_DAYS complete prior days.
-export function trailingDeviation(days, nowMs) {
-  const d = new Date(nowMs);
-  const todayDi = Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 12) / 86400000);
+export function trailingDeviation(days, nowMs, { utc = false } = {}) {
+  const todayDi = dayIndex(new Date(nowMs), utc);
   const today = days.find(x => x.di === todayDi);
   if (!today || today.n < TODAY_MIN_ROWS || today.mid <= 0) return null;
   let s = 0, n = 0;
@@ -115,7 +117,7 @@ export function trailingDeviation(days, nowMs) {
   return { devPct: (today.mid / ref - 1) * 100, ref, current: today.mid, nPrior: n };
 }
 
-const bucketOf = dev => dev <= -7 ? 'deep7' : dev <= -4 ? 'deep4' : dev <= -2 ? 'deep2' : dev >= 4 ? 'elevated' : null;
+export const bucketOf = dev => dev <= -7 ? 'deep7' : dev <= -4 ? 'deep4' : dev <= -2 ? 'deep2' : dev >= 4 ? 'elevated' : null;
 
 /** The one composed read. Returns null (silence) for: unclassified, no measured cell for the
  * state, neutral deviation, stale/thin archive data. Never throws on bad input. */

@@ -62,10 +62,12 @@ import assert from 'node:assert/strict';
 import {
   CONTENDERS, CONTENDER_KEYS, ESTIMATOR_POOL_KEYS, DEPLOYABLE_POOL_KEYS, INCUMBENT_KEYS, BASELINE_KEYS,
   BAIL_MODES, LADDER_Z_STEP, DEFAULT_NIGHTS, ARM_KEYS, ACCEPTANCE_MIN_ROWS, EXECUTED_RETIREMENTS,
-  liveAt, foldAskAt, incumbentAsksAt, buildOriginRecord, readableCut, askOf, scoreAsk, scoreLadder,
-  matchedRows, summarize, topIsBaseline, pairedClusterCI, thinIndependent, headToHead, armVerdict, verdict, retirementTable,
+  liveAt, foldAskAt, incumbentAsksAt, buildOriginRecord, askOf, scoreAsk, scoreLadder,
+  matchedRows, summarize, topIsBaseline, thinIndependent, headToHead, armVerdict, verdict, retirementTable,
   acceptanceRow, acceptanceSummary, unboundedKeys, ACCEPTANCE_FIELDS, CELL_OF, crossoverClosed,
 } from '../commands/join-exit-ev.mjs';
+import { readableCut } from '../../js/forward-reach.mjs';
+import { pairedClusterCI } from '../lib/signal/cluster-ci.mjs';
 import { tax } from '../../js/money-math.js';
 
 let pass = 0;

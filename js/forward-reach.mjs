@@ -2,10 +2,8 @@
  *
  * A level printed at time `ts` is scored by walking the archive FORWARD from it: was the level
  * touched (bid side, avgLow) or reached (ask side, avgHigh) inside a window, and how far did the
- * market actually get. Lifted VERBATIM from join-asym-outcomes.mjs so the reach joiners share ONE
- * implementation of "did the market get there" — the same extraction campaigns.mjs made for the
- * campaign build. Side convention is pinned by js/quotecore.js: a BUY fills against avgLow, a SELL
- * against avgHigh. PURE: no fs, no fetch, no clock — the caller supplies the ts-ascending series.
+ * market actually get — ONE implementation the reach joiners share. Side convention is pinned by
+ * js/quotecore.js: a BUY fills against avgLow, a SELL against avgHigh. PURE: no fs, no fetch, no clock — the caller supplies the ts-ascending series.
  *
  * Homed in js/ (not pipeline/lib/market/, which keeps a re-export shim) so js/reach-surface.mjs can
  * build its surface from the same walk the joiners score with: js/ never imports pipeline/.
@@ -17,6 +15,15 @@ export function firstIndexAfter(series, ts) {
   let lo = 0, hi = series.length;
   while (lo < hi) { const m = (lo + hi) >> 1; if (series[m].ts <= ts) lo = m + 1; else hi = m; }
   return lo;
+}
+
+/* Buckets a decision at `ts` may read: those stamped before ts floored to the hour. The bucket AT that
+ * hour covers the hour after it, so it is future data (outcome windows start after it too). */
+export function readableCut(series, ts) {
+  const hour = Math.floor(ts / HOUR) * HOUR;
+  let cut = 0;
+  while (cut < series.length && series[cut].ts < hour) cut++;
+  return cut;
 }
 
 /* The ts of the first bucket in (from, from+windowH] printing avgLowPrice ≤ level, or null. */
