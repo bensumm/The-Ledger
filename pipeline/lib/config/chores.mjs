@@ -26,7 +26,7 @@ export function dueChores({ backupAge, attemptAge, outcomesAge, noticeAge }) {
   const notices = [];
   if (over(noticeAge, ANNOUNCE_EVERY)) {
     const days = ms => Math.floor(ms / (24 * HOUR));
-    if (backupAge == null ? attemptAge != null : backupAge > BACKUP_OVERDUE) notices.push(`private backup ${backupAge == null ? 'has never succeeded' : `last succeeded ${days(backupAge)}d ago`} — run: node pipeline/commands/backup-data.mjs`);
+    if (backupAge == null ? attemptAge > BACKUP_RETRY : backupAge > BACKUP_OVERDUE) notices.push(`private backup ${backupAge == null ? 'has never succeeded' : `last succeeded ${days(backupAge)}d ago`} — run: node pipeline/commands/backup-data.mjs`);
     if (over(outcomesAge, OUTCOMES_STALE)) notices.push(`outcomes.json is ${outcomesAge == null ? 'missing' : days(outcomesAge) + 'd old'} — run when idle: node pipeline/commands/join-outcomes.mjs`);
   }
   return { runBackup: over(backupAge, BACKUP_EVERY) && over(attemptAge, BACKUP_RETRY), notices };

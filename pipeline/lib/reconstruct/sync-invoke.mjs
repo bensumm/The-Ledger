@@ -72,5 +72,5 @@ export function runLocalSync({ offBookNote = 'reading off the current book' } = 
     // console.error, NOT console.log — see the ⚠ in the header. The callers stub console.log.
     console.error('sync · ⚠ FAILED (' + why + ') — ' + offBookNote + ', which may be STALE\n');
   }
-  runChores();   // after the sync, so the backup never reads a half-written book
+  runChores();
 }

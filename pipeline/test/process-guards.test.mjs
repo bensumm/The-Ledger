@@ -30,6 +30,7 @@ ok('chores: stale outcomes and a failing backup announce, throttled', () => {
   assert.deepEqual(dueChores({ backupAge: 4 * D, attemptAge: 2 * H, outcomesAge: 63 * D, noticeAge: H }).notices, []);
 });
 ok('chores: a backup that has NEVER succeeded is announced, not silent', () => {
+  assert.equal(dueChores({ backupAge: null, attemptAge: 1000, outcomesAge: D, noticeAge: null }).notices.length, 0, 'a first run in flight is not a failure');
   assert.match(dueChores({ backupAge: null, attemptAge: 2 * H, outcomesAge: D, noticeAge: null }).notices[0], /never succeeded/);
 });
 ok('chores: inert under CI', () => { assert.equal(runChores({ env: { CI: '1' } }), undefined); });
@@ -93,9 +94,10 @@ ok('analyze-record output stays small enough to read', () => {
   }
 });
 
-console.log(`All ${pass} checks passed.`);
 
 ok('the read-time sync calls the chores, after the book is written', () => {
   const src = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'lib', 'reconstruct', 'sync-invoke.mjs'), 'utf8');
   assert.ok(src.lastIndexOf('runChores()') > src.lastIndexOf('execFileSync('), 'hook missing or before the sync');
 });
+
+console.log(`All ${pass} checks passed.`);
