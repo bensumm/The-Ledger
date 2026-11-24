@@ -52,6 +52,7 @@ import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from '../lib/reconstruct/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
 import { stdCells, writeLastReport } from '../lib/render/cli.mjs';   // mdTable is no longer called here — the table now renders via render.mjs's `table` section (VZ3); writeLastReport — AO1 agent-readable dump
 import { resolve, loadPipelineConfig } from '../lib/market/compose.mjs';   // PC1 — the flag>config>default precedence resolver (routes --est-sell here)
+import { planLines } from '../lib/render/plan.mjs';
 import { renderReport } from '../lib/render/render.mjs';   // VZ3 (PLAN-VIZ-LAYER) — the ONE render layer; both modes build a report object and print renderReport(buildQuoteReport(...)); the flat lines[] is now typed note items (the sigil moved from the push site into render.mjs's per-kind formatter)
 import { loadModules, runProbes, logFirings } from '../lib/market/probes.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
 import { logSuggestions, suggestionEntry, classAndSource, reachableShadow, asymShadow, windowExitShadow } from '../lib/render/suggestlog.mjs';   // SF-3 — classAndSource picks class + volSrc from a warm bulk map (or per-item fallback); RC-S2 — shared reachable/depthExit/asym ledger-shadow reshapers; WC1 — windowExitShadow (the window-clear ask-rung forward record)
@@ -60,7 +61,7 @@ import { buysByItem, limitWindow } from '../lib/capital/limits.mjs';   // LM1 �
 import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/market/guideanchor.mjs';   // YP1 advisory
 import { buildItemContext, renderHeldVerdict, renderPathLine, staleBookBanner } from '../lib/market/item-context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line; COD-4 — the shared positions.json-age banner
-import { formatTimedLap, formatAsymFill, asymClassRateNote, dwellSellClassRateNote, formatReachMargin, formatDwell, formatExitRungs } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site); formatAsymFill — the shared ◆ asym fill clause pair (screen emits the same line)
+import { formatTimedLap, formatAsymFill, asymClassRateNote, dwellSellClassRateNote, formatReachMargin, formatDwell, formatExitRungs, heldListAt } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site); formatAsymFill — the shared ◆ asym fill clause pair (screen emits the same line)
 import { loadState, ALERT_PERSIST_MS } from '../lib/thesis/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/thesis/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 additive reverse-flip pending block (read-only)
@@ -698,6 +699,7 @@ async function runPositions() {
     const report = buildQuoteReport({ mode: 'positions', header: msg + '\n', headers: [], rows: [], notes: [] });
     console.log(renderReport(report));            // no-op unless --verbose, exactly like the main path
     const rel = writeLastReport('quote', report); // AO1: refresh the dump so no agent reads a stale prior run
+    realLog(planLines([]).join('\n'));
     if (!VERBOSE) realLog(`${msg} → ${rel}`);
   };
   if (!allGroups.length) { finishEarly('No open positions in positions.json.'); return; }
@@ -741,6 +743,7 @@ async function runPositions() {
   // (the arithmetic still governs). Best-effort: any archive error leaves it empty.
   let dailyPos = {};
   try { ({ series: dailyPos } = await loadDaily(28, 6, { noFetch: true })); } catch { dailyPos = {}; }
+  const planLots = [];
   const rows = [], notes = [], sugg = [], staleRisk = [], convLines = [], pathLines = [], rebidLines = [];
   const rfMarks = new Map(), rfInfoById = {};   // RF4: in-hand marks/rows for any reverse-flip item that overlaps the held set (no new fetch)
   for (const { itemId, qty, cost, avgCost, buyTs } of groups) {
@@ -780,6 +783,12 @@ async function runPositions() {
     rfMarks.set(itemId, { mark: row.quickSell ?? null });
     rfInfoById[itemId] = { row, live: row.quickSell ?? null };
     const v = renderHeldVerdict(ctx, { mode: 'compact' });   // the shared held-verdict renderer (P0)
+    {
+      const P = ctx.position, dl = P.deltas, fresh = !dl || dl.firstSeen || dl.reset;
+      planLots.push({ name, qty, verdictText: v, listAt: heldListAt(row, be, P.mv), be, frame: !!(P.display && P.display.frame),
+        raw: P.display && P.display.raw, tripwire: thesisEntry && thesisEntry.tripwire, cur: P.display && P.display.state.displayVerdict,
+        prev: fresh ? null : ((priorState['held:' + itemId] || {}).displayVerdict ?? null) });
+    }
     // P2 validators — the level we'd list the held lot at (patient band top). Set the reach candidate
     // on the built ctx (row now available) and run the registry. ts1h is NOT fetched here → degrade to
     // pass/no-data; a held lot is NEVER hidden, a fired flag is a NOTE + logged (verdict unchanged).
@@ -1048,6 +1057,7 @@ async function runPositions() {
   });
   console.log(renderReport(report));   // no-op unless --verbose
   const rel = writeLastReport('quote', report);   // AO1: always dump the report object for an agent read
+  realLog(planLines(planLots).join('\n'));
   if (!VERBOSE) realLog(`# positions (quiet default; --verbose for the table) — ${groups.length} item(s), ${openLots} lot(s) → ${rel}`);
 }
 
