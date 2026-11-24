@@ -6,8 +6,7 @@ claim, so re-check before building. Finish or delete a line; do not grow it into
 
 ## Bugs
 
-4. verified — `quotecore.js` `mom` is magnitude-blind: a 1 gp print under the 2h band is a `breakdown`, which can headline a CUT. Scale by noise (GN-0). M
-5. verified — held-lot exit rung (`quote-items.mjs` "typical exit") has no break-even term (EC5). S
+4. verified — `quotecore.js` `mom` is magnitude-blind: a 1 gp print under the 2h band is a `breakdown`, which can headline a CUT. GN-0 as planned is built and HELD (local branch `gn0-held`, 9716009): it would silence 94% of 7,227 replayed breaks. Score broken-against-not forward on the archive first, then pick the scale. M
 10. reported — `collapseOffers` merges two offers when a terminal row is lost and the slot relists: wrong unit cost. Read FILLS-PIPELINE §5.1. M
 11. reported — `js/watch.js` shows UNDERWATER without the thesis silencing the console applies (AP3). M
 12. reported — capital is multiplied in three times (`THROUGHPUT_CAP_GP`, Path-A gp/d, digest `rankKey`, now only a tie-break); Path-A reads 0/d on a fully deployed book, and capEff is unbounded for dust items. Decide which ONE layer owns capital. M

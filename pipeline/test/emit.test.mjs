@@ -18,7 +18,8 @@
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { heldNoteBlock, heldListAt, formatAsymFill, asymClassRateNote,
+import { fmtP } from '../../js/money-format.js';
+import { heldNoteBlock, heldListAt, formatAsymFill, formatExitRungs, asymClassRateNote,
   ASYM_RT_24H_PCT, ASYM_RT_24H_BIG_PCT, ASYM_MEASURED_ROWS } from '../lib/render/emit.mjs';
 
 let pass = 0;
@@ -238,6 +239,22 @@ ok('asymClassRateNote: the numbers come from the exported constants, never a res
   assert.match(asymClassRateNote(), new RegExp(`~${esc(ASYM_RT_24H_BIG_PCT)}% on`));
   assert.ok(ASYM_RT_24H_BIG_PCT < ASYM_RT_24H_PCT,
     'the big-ticket stratum converts WORSE than pooled — that ordering is the finding, not a typo');
+});
+
+/* --- EC5: held-lot exit rungs carry break-even; a rung under it is marked, never floored -------- */
+ok('EC5: a rung under break-even is marked with its per-unit shortfall; others are not; BE shown', () => {
+  const as = { q50: 30_800_000, q75: 31_200_000, everyDay: 30_120_000, recent50: 30_900_000 };
+  const t = formatExitRungs(as, 30_520_000, fmtP);
+  assert.match(t, /every-day 30\.12m ⚠ under BE by 400k/);
+  assert.doesNotMatch(t, /~50% 30\.80m ⚠/);
+  assert.doesNotMatch(t, /~75% 31\.20m ⚠/);
+  assert.doesNotMatch(t, /recent-3 ~50% 30\.90m ⚠/);
+  assert.match(t, /BE 30\.52m/);
+});
+ok('EC5: every rung clearing BE -> no warning; null BE -> no mark and no BE term', () => {
+  const as = { q50: 31_000_000, q75: 32_000_000, everyDay: 30_600_000, recent50: null };
+  assert.doesNotMatch(formatExitRungs(as, 30_520_000, fmtP), /⚠/);
+  assert.doesNotMatch(formatExitRungs(as, null, fmtP), /⚠|BE/);
 });
 
 console.log(`\nAll ${pass} checks passed.`);

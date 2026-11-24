@@ -8,9 +8,13 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
-## pipeline 1.9.1 — 2026-11-24 — `reachPhaseNote` no longer reads a missing floor slope as 0
+## pipeline 1.9.1 — 2026-11-24 — PLAN-LEAN LN2 bug fixes (no APP_VERSION bump)
 
-When the drift projection degrades (`driftExitFrom` null, or `floorSlope` null/non-finite) an oscillating row printed "trough phase — floor holding". It now prints "oscillating — floor slope unavailable". Display only; no gate or rank change; no APP_VERSION bump.
+- Held-lot "typical exit" rungs (`quote-items.mjs`, `formatExitRungs` in `emit.mjs`) mark each rung under break-even and end with `BE <price>`. Never floored.
+- When the drift projection degrades (`driftExitFrom` null, or `floorSlope` null/non-finite) an oscillating row printed "trough phase — floor holding". It now prints "oscillating — floor slope unavailable". Display only; no gate or rank change; no APP_VERSION bump.
+- `REPO_DIR` is the checkout the code lives in; a worktree sync no longer writes the live book.
+- One manual-slot rule (slot 8 and up); the book is unchanged.
+- `own-picks.json`: buys the owner picked are reported as `ownPick`, outside every niche. `deriveCandidates` proposes real niches only.
 
 ## pipeline 1.9.0 — 2026-11-23 — the circular asym probabilities and `--asym` retired (APP_VERSION 0.76.3)
 

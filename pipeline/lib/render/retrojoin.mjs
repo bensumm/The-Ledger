@@ -236,7 +236,7 @@ export function aggregateOutcomes(rows) {
   const niche = new Map(), pathG = new Map();
   for (const r of rows) {
     if (r.outcome === 'ownPick') continue;
-    const nk =r.mode != null ? r.mode : '(none)';
+    const nk = r.mode != null ? r.mode : '(none)';
     const pk = nk + ' / ' + (r.path != null ? r.path : '(no-path)');
     (niche.get(nk) || niche.set(nk, []).get(nk)).push(r);
     (pathG.get(pk) || pathG.set(pk, []).get(pk)).push(r);

@@ -58,7 +58,7 @@ import { buysByItem, limitWindow } from '../lib/capital/limits.mjs';   // LM1 �
 import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/market/guideanchor.mjs';   // YP1 advisory
 import { buildItemContext, renderHeldVerdict, renderPathLine, staleBookBanner } from '../lib/market/item-context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line; COD-4 — the shared positions.json-age banner
-import { formatTimedLap, formatAsymFill, asymClassRateNote, dwellSellClassRateNote, formatReachMargin, formatDwell } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site); formatAsymFill — the shared ◆ asym fill clause pair (screen emits the same line)
+import { formatTimedLap, formatAsymFill, asymClassRateNote, dwellSellClassRateNote, formatReachMargin, formatDwell, formatExitRungs } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site); formatAsymFill — the shared ◆ asym fill clause pair (screen emits the same line)
 import { loadState, ALERT_PERSIST_MS } from '../lib/thesis/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/thesis/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 additive reverse-flip pending block (read-only)
@@ -905,7 +905,7 @@ async function runPositions() {
             const rc = aer.ask.recency || {};
             parts.push(`list ${fmt(aer.ask.level)} reached ${aer.ask.reachedDays}/${aer.ask.nDays}d (recent ${rc.recentHit ?? '—'}/${rc.recentDays ?? '—'}) · placement ${pct(aer.ask.placement)} of the ${aer.ask.nDays}-day daily-HIGH distribution`);
           }
-          parts.push(`typical exit ~50% ${fmt(as.q50)} / ~75% ${fmt(as.q75)} / every-day ${fmt(as.everyDay)}${as.recent50 != null ? ` · recent-3 ~50% ${fmt(as.recent50)}` : ''}`);
+          parts.push(formatExitRungs(as, be, fmt));
           // live instabuy — ALWAYS carries its AGE via the shared liveAgeTag: `(Nm ago)` when
           // fresh, `⚠ Nm old` past QUICK_FRESH_MIN. Never read a stale print as a live tick (the godsword
           // 39.75m@64m lesson) — and, equally, never mistake an unchanged-but-current price for a stale one.

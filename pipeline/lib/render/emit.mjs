@@ -91,6 +91,17 @@ export function heldNoteBlock({
   return lines;
 }
 
+// EC5: the held-lot "typical exit" rungs with break-even joined on. A rung under BE is marked with its
+// shortfall, never floored — the loss stays visible (the 2026-09-08 hilt every-day rung, 30.12m vs BE 30.52m).
+export function formatExitRungs(as, be, fmtFn = fmt) {
+  const mark = x => (be != null && x != null && x < be) ? ` ⚠ under BE by ${fmtFn(be - x)}` : '';
+  const r = (label, x) => `${label} ${fmtFn(x)}${mark(x)}`;
+  let t = `typical exit ${r('~50%', as.q50)} / ${r('~75%', as.q75)} / ${r('every-day', as.everyDay)}`;
+  if (as.recent50 != null) t += ` · ${r('recent-3 ~50%', as.recent50)}`;
+  if (be != null) t += ` · BE ${fmtFn(be)}`;
+  return t;
+}
+
 export function formatReachMargin(rm) {
   if (!rm || (!rm.trend && !rm.pace)) return null;
   const sg = v => v == null ? '—' : (v >= 0 ? '+' : '') + fmt(v);

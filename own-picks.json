@@ -1,5 +1,5 @@
 {
-  "_doc": "Owner-declared own picks: buys the owner chose himself, not on a scan suggestion. retroJoin reports a claimed buy whose item id matches and whose first-fill epoch-second ts falls in [from, to] as outcome 'ownPick', excluded from per-niche taken/realised. Hand-edited.",
+  "_doc": "Owner-declared own picks: buys the owner picked, not on a scan suggestion. retroJoin reports a claimed buy whose item id matches and whose first-fill epoch-second ts falls in [from, to] as outcome 'ownPick', excluded from per-niche taken/realised. Hand-edited.",
   "picks": [
     { "itemId": 11785, "from": 1788929334, "to": 1788936534, "note": "Armadyl crossbow 1x @34.101m, 2026-09-08" },
     { "itemId": 11785, "from": 1789696438, "to": 1789703638, "note": "Armadyl crossbow 3x @34.111m, 2026-09-17" }
