@@ -6,8 +6,6 @@ claim, so re-check before building. Finish or delete a line; do not grow it into
 
 ## Bugs
 
-1. verified — `reconstruct.mjs` exempts only slots 8–9 as manual; `campaigns.mjs` `isManualSlot` says ≥ 8, and real events sit on 10–17, so double terminals there are dropped. Changes realised P/L; attended. S
-2. verified — `retrojoin.mjs` `HORIZON_AMPLITUDE_SEC` is 2 days while the lane holds 4 (`AMP_HOLD_DAYS_DEFAULT`): amplitude fills go unattributed in `/analyze`. Owner call. S
 3. verified — `reachPhaseNote` reads a missing forecast as slope 0 and prints "trough phase — floor holding"; a test pins the wrong behaviour. S
 4. verified — `quotecore.js` `mom` is magnitude-blind: a 1 gp print under the 2h band is a `breakdown`, which can headline a CUT. Scale by noise (GN-0). M
 5. verified — held-lot exit rung (`quote-items.mjs` "typical exit") has no break-even term (EC5). S
@@ -19,6 +17,7 @@ claim, so re-check before building. Finish or delete a line; do not grow it into
 12. reported — capital is multiplied in three times; digest `rankKey` is 0 on a fully deployed book. M
 13. reported — amplitude "Both-leg reach" column is quantile-pinned (always 7/14). M
 14. reported — `quote-items --positions` logs no estimator fields. S
+17. verified — `dedupeSnapshots` drops an identical repeat manual entry (two events on slot 8 today); people work round it by bumping the slot. Exempting manual slots double-counts those two until they are tombstoned. S
 15. reported — mobile-cancel phantom deflates deployable capital; `add-manual-fill` has no cancel mode. M
 16. reported — `validate.mjs` `windowHours` above 24 wraps (latent); `valuescreen.mjs` missing `knifeDelta` passes the gate (latent); `market.js` labels a falling short series reversion; `eventId` omits price and qty; `askFromSnapshot`/`bidFromSnapshot` take the first match only; value lane ignores bonds; `restartBlindSuspects` uses read order; a Webweaver bow (u) row once printed twice on one board, undiagnosed. S each
 

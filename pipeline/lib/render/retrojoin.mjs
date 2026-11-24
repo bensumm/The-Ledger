@@ -38,13 +38,8 @@ import { tax, grossFromNet, quantileOf } from '../../../js/quotecore.js';   // q
 export const HORIZON_INTRADAY_SEC = 12 * 3600;        // scalp / band / spread / churn — intraday flip family
 export const HORIZON_MULTIDAY_SEC = 7 * 24 * 3600;    // rising / value — patient multi-day accumulation
 export const HORIZON_DEFAULT_SEC  = 24 * 3600;        // mode-less rows (quote / --positions) — one day
-// ⚠ KNOWN MISMATCH, DELIBERATELY UNRESOLVED (2026-08-09 — audit round 3). This 2-day claim window was set
-// when the amplitude thesis was a 24h cycle ("buy trough day-1, sell peak day-1/2", covering the 1.5-day
-// experiment; PLAN-AMPLITUDE-SCAN §A5). DT1 re-horizoned the lane to `AMP_HOLD_DAYS_DEFAULT` = 4 days after
-// measuring 4.8% completion within 24h, with MEDIAN completion ~69h — i.e. the typical real round trip now
-// closes on day 3, OUTSIDE this window, and goes unattributed. Widening it to track the hold default is a
-// one-line fix, but it CHANGES WHICH FILLS THE RETRO ATTRIBUTES to amplitude suggestions, so it is an
-// owner call, not a doc-pass edit. Tracked in PLAN.md's Discovered list. PLACEHOLDER either way.
+// Suggestion → BUY fill latency, NOT the hold: the round trip is joined by lot, so this does not track
+// AMP_HOLD_DAYS_DEFAULT (30 days added no claim on the 2026-11-24 record). PLACEHOLDER.
 export const HORIZON_AMPLITUDE_SEC = 2 * 24 * 3600;
 export const HORIZON_BY_MODE = Object.freeze({
   scalp: HORIZON_INTRADAY_SEC, band: HORIZON_INTRADAY_SEC, spread: HORIZON_INTRADAY_SEC, churn: HORIZON_INTRADAY_SEC,

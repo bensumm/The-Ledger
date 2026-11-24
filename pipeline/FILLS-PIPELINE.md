@@ -220,7 +220,7 @@ answer "what do I hold?" the same way and a purged lot never reappears as a phan
   (a completed-but-uncollected offer's terminal line re-logged on login/world-hop). It drops a
   same-slot second terminal that is strictly identical to the prior terminal with no placement line
   between, `console.warn`s per drop (with a dropped-count in the sync summary), and so a FRESH
-  re-emit never enters `fills.json` at all. Manual slots 8/9 are exempt; any differing field warns
+  re-emit never enters `fills.json` at all. Manual slots 8+ are exempt; any differing field warns
   but is KEPT (fail toward preserving data). Discriminator + rationale in §10 "Duplicate terminal lines".
 - **`dedupeSnapshots()`** (P1, 2026-07-05) runs inside `reconstruct()` as the SILENT DERIVATION-LAYER
   BACKSTOP: it drops the same class using the same discriminator, catching any phantom ALREADY
@@ -554,7 +554,7 @@ slot is a state machine and cannot close twice with no offer placed between.
   `buildEvents()` in `sync-fills.mjs` `regenerate()` and in `monitor-offers.mjs`, BEFORE the `fills.json`
   merge). Drops the identical re-emit, `console.warn`s per drop (with item/qty/price/slot + the prior
   terminal's ts) and a dropped-count in the attended sync summary, and — because it runs pre-merge —
-  a FRESH re-emit **never enters `fills.json`**. Conservative: manual slots 8/9 are exempt; a same-slot
+  a FRESH re-emit **never enters `fills.json`**. Conservative: manual slots 8+ are exempt; a same-slot
   double-terminal that DIFFERS in any field warns but is KEPT (fail toward preserving data). The loud
   warnings are gated to the attended sync (`warn:false` in the `--local`/`watch-log.mjs`/`monitor-offers.mjs`
   callers, which re-read the whole log every run and would otherwise re-print months-old re-emits every

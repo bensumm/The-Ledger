@@ -243,7 +243,7 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR,
   // LH1: validate the per-slot state machine BEFORE the fills.json merge, so a suspected re-emit
   // (an impossible second terminal on a slot with no placement between — the 13:29 double-BOUGHT)
   // is dropped LOUDLY here and never enters the archive. Conservative: only exact-identical dups
-  // drop; any differing field warns but is kept. Manual slots 8/9 are exempt.
+  // drop; any differing field warns but is kept. Manual slots (>= 8) are exempt.
   const { events, dropped: reEmitDropped } = validateSlotTransitions(buildEvents(rawParsed), { warn });
   const parsed = events.length;
   for (const e of events) e.id = eventId(e);

@@ -180,7 +180,7 @@ export function buildEvents(rawLinesParsed) {
 // re-opening it between is impossible. Strictly identical to the prior terminal (sameTerminal) ⇒ a
 // provable re-emit: DROP + warn LOUDLY, at INGEST, so it never enters fills.json. ANY field differs
 // ⇒ a possible fast re-trade whose placement line was missed: WARN but KEEP (fail toward preserving
-// data; a REMOVE tombstone is the manual override). Manual slots 8/9 are not state machines and are
+// data; a REMOVE tombstone is the manual override). Manual slots (>= 8) are not state machines and are
 // EXEMPT. A SUPERSET of dedupeSnapshots(), which stays the silent derivation-layer backstop for a
 // phantom already persisted in an older fills.json. This is NOT the deleted cancel-to-EMPTY
 // inference: EMPTY lines are consumed by buildEvents and never reach here. Full story: §10.
@@ -190,12 +190,14 @@ function isTerminalState(s) { return s === 'complete' || s === 'cancelled'; }
 // daemon, --local desk freshness, monitor's per-tick poll) pass it FALSE so months-old historical
 // re-emits — re-seen on every whole-log re-read — don't spam a background terminal. The DROP itself
 // is unconditional either way; only the chattiness is gated.
+const MANUAL_SLOT_MIN = 8;   // GE slots are 0-7
+export const isManualSlot = slot => Number.isFinite(slot) && slot >= MANUAL_SLOT_MIN;
 export function validateSlotTransitions(events, { warn = true } = {}) {
   const lastBySlot = new Map(); // GE slot -> last KEPT event on it (ts order)
   const kept = [], dropped = [];
   const iso = ts => new Date(ts * 1000).toISOString();
   for (const e of [...events].sort((a, b) => a.ts - b.ts)) {
-    if (e.slot === 8 || e.slot === 9) { kept.push(e); continue; } // manual slots: no state machine
+    if (isManualSlot(e.slot)) { kept.push(e); continue; }
     const prev = lastBySlot.get(e.slot);
     if (isTerminalState(e.state) && prev && isTerminalState(prev.state)) {
       // two terminals in a row on this slot with nothing re-opening it between (a placement/progress

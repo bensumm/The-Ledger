@@ -105,7 +105,12 @@ ok('same-slot double-terminal that differs in price → KEPT, but warned', () =>
   assert.ok(warns.some(w => /fields DIFFER/.test(w)), 'still warns loudly about the suspicious pair');
 });
 
-// --- 4. manual slots 8/9 are exempt ---------------------------------------------------------
+// --- 4. manual slots (>= 8) are exempt -------------------------------------------------------
+ok('every synthetic slot (8 up) is exempt; real slot 7 is not', () => {
+  const t = (slot, ts, id) => ({ slot, ts, id, type: 'buy', itemId: 24422, qty: 2, price: 100, filled: 2, spent: 200, state: 'complete' });
+  for (const s of [8, 9, 10, 17]) assert.equal(validateSlotTransitions([t(s, 1, 'a'), t(s, 2, 'b')], { warn: false }).events.length, 2, 'slot ' + s);
+  assert.equal(validateSlotTransitions([t(7, 1, 'a'), t(7, 2, 'b')], { warn: false }).events.length, 1);
+});
 ok('identical manual terminals on slots 8/9 are NEVER dropped (no GE state machine)', () => {
   const evs = events([
     raw({ state: 'BOUGHT', slot: 8, item: 400, time: '10:00:00', filledQty: 5, grossWorth: 500, offerSize: 5, priceEach: 100 }),
