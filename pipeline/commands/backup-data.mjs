@@ -15,7 +15,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from '../lib/render/cli.mjs';
-import { BACKUP_STAMP } from '../lib/config/chores.mjs';
+import { BACKUP_STAMP, isLinkedWorktree } from '../lib/config/chores.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ROOT_SKIP = new Set(['manifest.json', 'package.json', 'package-lock.json', 'heartbeat.json']);
@@ -75,6 +75,7 @@ export function runBackup({ root = ROOT, dest, logDir = path.join(os.homedir(), 
 
 function main() {
   const a = parseArgs(process.argv.slice(2));
+  if (isLinkedWorktree(ROOT)) { console.error('backup refused: this is a worktree, not the live checkout'); process.exit(1); }
   const dest = typeof a.dest === 'string' ? a.dest : defaultDest();
   if (a.status) {
     let s = null; try { s = fs.readFileSync(BACKUP_STAMP, 'utf8').trim(); } catch {}

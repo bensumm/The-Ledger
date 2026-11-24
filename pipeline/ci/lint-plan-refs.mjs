@@ -100,10 +100,11 @@ const TABLE_RE = new RegExp(`^\\|(?:\\s*\\|)*\\s*\\**\\s*(${CHUNK_ID})\\s*\\**\\
 const BULLET_RE = new RegExp(`^\\s*(?:[-*]|\\d+\\.)\\s*\\**\\s*(${CHUNK_ID})\\**\\s*[—–-]\\s`);
 const isChunkId = id => id.length <= 14 && /[0-9]/.test(id) && !id.startsWith('PLAN-');
 
-/** Every chunk id ONE plan's text declares, in any of the four declaration forms. */
+/** Every chunk id ONE plan's text declares, in any of the five declaration forms. */
 export function chunkIdsIn(text) {
   const out = new Set();
   for (const line of text.split('\n')) {
+    if (line.startsWith('Used ids: ')) { for (const id of line.slice(10).trim().split(/\s+/)) if (isChunkId(id)) out.add(id); continue; }
     const m = HEADING_RE.exec(line) || TABLE_RE.exec(line) || BULLET_RE.exec(line);
     if (m && isChunkId(m[1])) out.add(m[1]);
   }
@@ -112,10 +113,7 @@ export function chunkIdsIn(text) {
 
 /**
  * id -> Set(plan names declaring it), across every plan on disk PLUS the root `PLAN.md`.
- * PLAN.md is the master plan + scoreboard and the single biggest declarer of chunk ids (~99 of
- * them), and it is precisely the document the collision footer tells you cannot disambiguate a bare
- * id — so scanning only `plans/` answered the question against a corpus it had not read, and hid
- * five genuine cross-document clashes including `O1`, which CLAUDE.md cites bare as F1's gate.
+ * PLAN.md's "Used ids:" line carries every id from folded plans; a PLAN.md yielding none is an error.
  * Memoised: the report needs the map twice (the clash list and the id total).
  */
 let CHUNK_IDS_CACHE = null;
@@ -131,7 +129,9 @@ function chunkIds() {
   for (const f of fs.readdirSync(PLANS).filter(f => f.endsWith('.md'))) {
     declare(f.slice(0, -3), fs.readFileSync(path.join(PLANS, f), 'utf8'));
   }
-  try { declare('PLAN.md (root)', fs.readFileSync(path.join(ROOT, 'PLAN.md'), 'utf8')); } catch { /* absent → plans/ only */ }
+  const used = fs.readFileSync(path.join(ROOT, 'PLAN.md'), 'utf8').replace(/\r\n/g, '\n');
+  if (!chunkIdsIn(used).size) throw new Error('PLAN.md declares no chunk ids — its "Used ids:" line is missing');
+  declare('PLAN.md (root)', used);
   CHUNK_IDS_CACHE = byId;
   return byId;
 }

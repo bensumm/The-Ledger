@@ -16,6 +16,9 @@
  * SYNTHETIC fixtures only — never the live fills.json. Run: `node pipeline/test/retrojoin.test.mjs`.
  */
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { readOwnPicks } from '../lib/render/suggestlog.mjs';
 import {
   retroJoin, aggregateOutcomes, horizonFor,
   HORIZON_INTRADAY_SEC, HORIZON_MULTIDAY_SEC, HORIZON_DEFAULT_SEC,
@@ -233,6 +236,14 @@ ok('an owner-declared pick is reported as ownPick and excluded from per-niche ta
   const out = retroJoin(sugs, events, { ownPicks: [{ itemId: 100, from: T + 5000, to: T + 6000 }] });
   assert.equal(out.rows[0].outcome, 'filled', 'a fill outside the declared range stays a scan pick');
   assert.equal(out.meta.nOwnPick, 0);
+});
+
+ok('own-picks.json is well formed, read, and passed by both retro commands', () => {
+  const picks = readOwnPicks();
+  assert.ok(picks.length >= 2 && picks.every(p => Number.isFinite(p.itemId) && p.from < p.to));
+  assert.deepEqual(readOwnPicks(fileURLToPath(new URL('no-such-file.json', import.meta.url))), []);
+  for (const c of ['analyze-record', 'report-retro'])
+    assert.match(fs.readFileSync(new URL(`../commands/${c}.mjs`, import.meta.url), 'utf8'), /retroJoin\([^;]*ownPicks: readOwnPicks\(\)/);
 });
 
 console.log(`\n✓ retrojoin.test.mjs — ${pass} assertions passed.`);

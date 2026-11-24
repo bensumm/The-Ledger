@@ -2,7 +2,7 @@
 /**
  * lint-plan-lifecycle.mjs — a NON-GATING report for the /cleanup skill (PLAN-CLEANUP-SKILL C10+C11).
  *
- * WHY: `docs/PLANNING.md` states that a per-topic `PLAN-*.md` "folds into PLAN.md and is deleted the
+ * WHY: `docs/PLANNING.md` states that a per-topic `PLAN-*.md` is deleted "the
  * moment its last chunk ships" — but nothing checked it (`lint-arch.mjs` checks the inverse: that files
  * a doc NAMES resolve). This gives that prose a cheap, repeatable data source so /cleanup doesn't
  * re-derive it by hand each run. It is a REPORT, not a gate — a plan doc legitimately stays open for a

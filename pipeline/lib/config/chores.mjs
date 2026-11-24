@@ -35,9 +35,12 @@ export function dueChores({ backupAge, attemptAge, outcomesAge, noticeAge }) {
 const mtimeAge = (f, now) => { try { return now - fs.statSync(f).mtimeMs; } catch { return null; } };
 const stamp = f => { fs.mkdirSync(dirname(f), { recursive: true }); fs.writeFileSync(f, String(Date.now())); };
 
+// A linked worktree (its .git is a file) holds committed stubs, not the live data.
+export const isLinkedWorktree = root => { try { return fs.statSync(join(root, '.git')).isFile(); } catch { return false; } };
+
 /* Never throws and never blocks the read. Skipped under CI and test runs. */
 export function runChores({ now = Date.now(), env = process.env } = {}) {
-  if (env.CI || env.COFFER_NO_CHORES) return;
+  if (env.CI || env.COFFER_NO_CHORES || isLinkedWorktree(join(PIPELINE, '..'))) return;
   try {
     const r = dueChores({ backupAge: mtimeAge(BACKUP_STAMP, now), attemptAge: mtimeAge(ATTEMPT_STAMP, now), outcomesAge: mtimeAge(OUTCOMES, now), noticeAge: mtimeAge(ANNOUNCE_STAMP, now) });
     if (r.runBackup) {

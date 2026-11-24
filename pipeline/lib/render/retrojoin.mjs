@@ -39,7 +39,7 @@ export const HORIZON_INTRADAY_SEC = 12 * 3600;        // scalp / band / spread /
 export const HORIZON_MULTIDAY_SEC = 7 * 24 * 3600;    // rising / value — patient multi-day accumulation
 export const HORIZON_DEFAULT_SEC  = 24 * 3600;        // mode-less rows (quote / --positions) — one day
 // Suggestion → BUY fill latency, NOT the hold: the round trip is joined by lot, so this does not track
-// AMP_HOLD_DAYS_DEFAULT (30 days added no claim on the 2026-11-24 record). PLACEHOLDER.
+// AMP_HOLD_DAYS_DEFAULT (claims are identical from 1 to 30 days). PLACEHOLDER.
 export const HORIZON_AMPLITUDE_SEC = 2 * 24 * 3600;
 export const HORIZON_BY_MODE = Object.freeze({
   scalp: HORIZON_INTRADAY_SEC, band: HORIZON_INTRADAY_SEC, spread: HORIZON_INTRADAY_SEC, churn: HORIZON_INTRADAY_SEC,

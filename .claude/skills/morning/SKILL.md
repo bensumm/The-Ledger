@@ -73,7 +73,6 @@ recorded: `offers.json` carries `placedTs` and monitor/watch lines render `· re
 declared deep/long bid lives in `bid-thesis.json` (`declare-thesis.mjs bid` to declare, `list` to
 read). What is still unrecorded is the PLAN behind an *undeclared* bid — reconstruct that from
 the currently-open offers plus Ben's recollection; never fabricate what "was supposed to" fill.
-(If PLAN.md chunk L1 action-logging lands, that log becomes the full memory source.)
 
 ## 2. Re-verdict stale unfilled bids
 

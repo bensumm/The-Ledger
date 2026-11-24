@@ -3,13 +3,13 @@
  * report-branches.mjs — a NON-GATING fact-gather for the /cleanup skill (PLAN-CLEANUP-SKILL C12).
  *
  * WHY: nothing in `pipeline/ci/` touches git branches/worktrees, yet CLAUDE.md process rule 9's
- * stale-branch-delete rule ("verify each landed against PLAN.md's Status table, NOT `git branch
+ * stale-branch-delete rule ("verify each landed against the shas in PLAN.md, NOT `git branch
  * --merged`") is prose only. This gives that prose a cheap, repeatable data source so /cleanup's
  * worktree/branch review reads gathered facts instead of a fresh manual `git log`/`merge-base`
  * investigation each time.
  *
  * IT ONLY GATHERS FACTS. Classification ("stale" vs "deferred") is the CALLER's judgment step —
- * staleness also needs cross-referencing PLAN.md's Status table and any `PLAN-*.md`'s explicit
+ * staleness also needs cross-referencing PLAN.md's shas and any `PLAN-*.md`'s explicit
  * "preserved UNCOMMITTED, do not delete" note (a text-understanding step). The script NEVER decides
  * stale, NEVER deletes anything, NEVER exits non-zero, and is NOT wired into checks.yml.
  *

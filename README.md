@@ -1164,8 +1164,6 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   ~45 bytes/row). Every chunk carries expected benefit, confidence,
   risk-of-cutting-a-good-candidate, effort and rollback, plus an explicit
   behaviour-preserving-vs-changes-what-surfaces label and a do-first/do-later/don't-bother split.
-  Produced by a planning session; consumed by an executor + `PLAN.md`'s Status table. Folds into
-  `PLAN.md` and is deleted when its last chunk ships (the plan-file rule).
 - `plans/` — the per-topic `PLAN-*.md` working docs (moved off the repo root 2026-07-26). Each is a
   transient planning doc, deleted (leftovers to `docs/BACKLOG.md`)
   the moment its last chunk ships (`docs/PLANNING.md` lifecycle). `plans/PLAN-*.md` is scanned by
@@ -3077,14 +3075,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     records folds and refuses to add a name without `--force`. A token match, not a link checker: it answers
     "is anything still pointing here?", never "does this plan still matter?". Consumes nothing; exit 1 + the
     referencing file list per dangling name. `--collisions` is a SEPARATE, non-gating report over chunk-id
-    reuse — commit messages cite chunks by bare id, and 49 ids are currently
-    claimed by more than one document (`A1`, `A2`, `A3` and `D1` by five each), so a bare id can be genuinely
-    ambiguous. It reads four declaration forms — headings, table cells, and dashed or numbered bullets —
-    across `plans/` plus the root `PLAN.md`, and requires a digit in the id, so purely alphabetic ids (`F-A`)
-    are invisible. UNDER-REPORTING has bitten this mode twice: reading two of the forms hid the `AC1`
-    three-way clash, and scanning `plans/` alone hid five more — including `O1`, which CLAUDE.md cites bare
-    as F1's gating dependency — by skipping PLAN.md, the corpus's single biggest declarer at ~99 ids. Treat
-    the count as a floor and widen the reader before trusting a clean run. The two
+    reuse — commit messages cite chunks by bare id, so a
+    reused one is ambiguous. It reads `plans/` plus PLAN.md's "Used ids:" line, and requires a digit in the id,
+    so purely alphabetic ids (`F-A`) are invisible. The two
     pure readers (`unwrap`, `chunkIdsIn`) are pinned by `lint-plan-refs.test.mjs` against literal fixtures,
     never the live tree),
   - `lint-arch.mjs` (doc-reference guard, 2026-07-14 — enforces `docs/ARCHITECTURE.md` invariant E7 in the

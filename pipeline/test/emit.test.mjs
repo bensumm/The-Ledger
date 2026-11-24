@@ -255,6 +255,7 @@ ok('EC5: every rung clearing BE -> no warning; null BE -> no mark and no BE term
   const as = { q50: 31_000_000, q75: 32_000_000, everyDay: 30_600_000, recent50: null };
   assert.doesNotMatch(formatExitRungs(as, 30_520_000, fmtP), /⚠/);
   assert.doesNotMatch(formatExitRungs(as, null, fmtP), /⚠|BE/);
+  assert.match(fs.readFileSync(new URL('../commands/quote-items.mjs', import.meta.url), 'utf8'), /formatExitRungs\(as, be, fmt\)/, 'the held-lot call site passes break-even');
 });
 
 console.log(`\nAll ${pass} checks passed.`);

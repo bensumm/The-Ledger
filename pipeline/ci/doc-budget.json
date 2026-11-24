@@ -2,8 +2,8 @@
   "plans": 5,
   "docs": {
     "CLAUDE.md": 39818,
-    "README.md": 379339,
-    "PLAN.md": 4619,
+    "README.md": 378588,
+    "PLAN.md": 6087,
     "pipeline/MONITORING.md": 70332,
     "pipeline/FILLS-PIPELINE.md": 74768,
     "docs/ARCHITECTURE.md": 18816,
@@ -17,12 +17,12 @@
     ".claude/skills/analyze/SKILL.md": 7248,
     ".claude/skills/book/SKILL.md": 6436,
     ".claude/skills/cleanup/SKILL.md": 12116,
-    ".claude/skills/morning/SKILL.md": 16062,
+    ".claude/skills/morning/SKILL.md": 15977,
     ".claude/skills/overnight/SKILL.md": 18060,
     ".claude/skills/positions/SKILL.md": 60372,
     ".claude/skills/scan/SKILL.md": 102976,
     ".claude/skills/schedule/SKILL.md": 8030,
     ".claude/skills/ship/SKILL.md": 11550,
-    "docs/BACKLOG.md": 12923
+    "docs/BACKLOG.md": 13178
   }
 }
