@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { tablesOf, rowLines, listLines, dropLines, digestLines, ageLine, resolveCols } from '../lib/render/last-report-rows.mjs';
+import { tablesOf, rowLines, listLines, dropLines, digestLines, noteLines, ageLine, resolveCols } from '../lib/render/last-report-rows.mjs';
 
 let n = 0;
 const ok = (name, fn) => { fn(); n++; console.log('  ✓ ' + name); };
@@ -62,6 +62,23 @@ ok('age line flags stale past 30 minutes and a missing stamp', () => {
   assert.equal(ageLine('screen', '2026-01-01T00:56:00Z', now), 'screen 4m old');
   assert.match(ageLine('screen', '2026-01-01T00:00:00Z', now), /60m old - STALE/);
   assert.match(ageLine('screen', undefined, now), /age unknown/);
+});
+ok('markdown tables in lines sections are indexed and notes follow the item', () => {
+  const md = { kind: 'screen', reports: [
+    { sections: [{ type: 'lines', lines: ['## AMPLITUDE — 1', '| Item | Live |', '| --- | --- |', '| Coal | 5 |'] }, { type: 'lines', lines: ['  ↳ Coal — base p10', 'unrelated'] }] },
+    { sections: [{ type: 'lines', lines: ['## WATCHLIST — 1', '| Item | Note |', '| --- | --- |', '| Ash | x |'] }] },
+    { sections: [{ type: 'notes', items: [{ kind: 'regime', itemId: 7, text: '- Gem: flat' }, '  trajectory', { kind: 'dwell', itemId: 7, text: 'dwell: x' }, { kind: 'regime', itemId: 8, text: '- Rune: up' }, '  rune detail'] }] },
+  ] };
+  assert.deepEqual(tablesOf(md).map(t => t.mode), ['amplitude', 'watchlist']);
+  assert.equal(rowLines(tablesOf(md), { items: ['coal'], mode: 'amplitude' }).lines[1], 'Coal | Live=5');
+  assert.deepEqual(noteLines(md, { items: ['coal'] }), ['note: ↳ Coal — base p10']);
+  assert.deepEqual(noteLines(md, { items: ['gem'] }).length, 3);
+  assert.deepEqual(noteLines(md, { items: ['rune'] }), ['note: - Rune: up', 'note: rune detail']);
+});
+ok('drops --item names the rejected item with its reason', () => {
+  const p2 = { reports: [{ sections: [{ type: 'lines', lines: ['## BAND — x'] }], drops: { reject: 1, rejected: [{ itemId: 1, name: 'Coal', reason: 'too thin' }] } }] };
+  assert.deepEqual(dropLines(p2, { items: ['coal'] }), ['band: Coal REJECTED - too thin']);
+  assert.match(dropLines(p2, { items: ['zzz'] })[0], /no drop record names "zzz"/);
 });
 ok('the command prints age first, exits 1 on no match and on a missing report', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-'));

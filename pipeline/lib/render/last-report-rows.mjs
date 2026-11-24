@@ -18,17 +18,72 @@ export function ageLine(kind, generatedAt, now) {
   return `${kind} ${a}m old${a > STALE_MIN ? ` - STALE (>${STALE_MIN}m), re-run the read` : ''}`;
 }
 
-/* One entry per table section: { mode, headers, rows:[string[]] }. mode = first word of the report's `## ` heading. */
+const mdCells = l => l.trim().replace(/^\||\|$/g, '').split(/\s\|\s/).map(c => c.trim());
+const isMdRow = l => /^\s*\|/.test(String(l));
+const isSep = l => /^\s*\|[\s|:-]+\|\s*$/.test(String(l));
+
+/* Markdown tables inside `lines` sections (amplitude, watchlist, digest) → [{headers, rows}]. */
+function mdTables(lines) {
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!(isMdRow(lines[i]) && isSep(lines[i + 1] ?? ''))) continue;
+    const headers = mdCells(lines[i]), rows = [];
+    for (i += 2; i < lines.length && isMdRow(lines[i]); i++) rows.push(mdCells(lines[i]));
+    out.push({ headers, rows });
+  }
+  return out;
+}
+
+const modeFor = (payload, r, i) => { const head = headOf(r); return head ? modeOf(head) : `${payload.kind || 'report'}${i}`; };
+
+/* One entry per table (real or markdown-in-lines): { mode, headers, rows:[string[]] }. mode = first word of the report's `## ` heading. */
 export function tablesOf(payload) {
   const out = [];
   (payload.reports || []).forEach((r, i) => {
-    const head = headOf(r);
-    const mode = head ? modeOf(head) : `${payload.kind || 'report'}${i}`;
+    const mode = modeFor(payload, r, i);
     (r.sections || []).forEach(s => {
       if (s.type === 'table' && Array.isArray(s.headers)) out.push({ mode, headers: s.headers, rows: (s.rows || []).map(row => row.map(cellText)) });
+      else if (s.type === 'lines') for (const t of mdTables(s.lines || [])) out.push({ mode, ...t });
     });
   });
   return out;
+}
+
+/* Every free-text line of the dump → [{mode, text, owner}]; a block note's continuation lines inherit the item they follow. */
+export function notesOf(payload) {
+  const out = [];
+  (payload.reports || []).forEach((r, i) => {
+    const mode = modeFor(payload, r, i);
+    (r.sections || []).forEach(s => {
+      if (s.type === 'lines') (s.lines || []).forEach(l => { if (l && !isMdRow(l)) out.push({ mode, text: String(l) }); });
+      else if (s.type === 'alerts') (s.items || []).forEach(a => out.push({ mode, text: String(a.msg ?? a) }));
+      else if (s.type === 'notes') {
+        const names = new Map();
+        for (const n of s.items || []) { const m = typeof n === 'object' && n.itemId != null && /^- ([^:]+):/.exec(n.text || ''); if (m) names.set(n.itemId, m[1]); }
+        let owner = null;
+        for (const n of s.items || []) {
+          const text = typeof n === 'string' ? n : String(n.text ?? '');
+          if (typeof n === 'object' && n.itemId != null) owner = names.get(n.itemId) ?? null;
+          else { const m = /^- ([^:]+):/.exec(text); if (m) owner = m[1]; }
+          out.push({ mode, text, owner });
+        }
+      }
+    });
+  });
+  return out;
+}
+
+export function noteLines(payload, { items = [], mode = null } = {}) {
+  const seen = new Set(), lines = [];
+  for (const n of notesOf(payload)) {
+    if (mode && n.mode !== lc(mode)) continue;
+    if (items.length && !(matches(n.text, items) || (n.owner && matches(n.owner, items)))) continue;
+    const t = n.text.trim();
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    lines.push(`note: ${t}`);
+  }
+  return lines;
 }
 
 export function digestRowsOf(payload) {
@@ -80,13 +135,26 @@ export function listLines(payload) {
   return out;
 }
 
-export function dropLines(payload) {
+export function dropLines(payload, { items = [] } = {}) {
   const out = [];
+  if (items.length) {
+    for (const r of payload.reports || []) {
+      const d = r.drops;
+      if (!d) continue;
+      const head = headOf(r), m = head ? modeOf(head) : 'report';
+      for (const x of d.rejected || []) if (matches(x.name, items)) out.push(`${m}: ${x.name} REJECTED - ${x.reason}`);
+      for (const w of d.winnersFiltered || []) if (matches(w.name, items)) out.push(`${m}: ${w.name} filtered (shown net ${w.net})`);
+      for (const n of d.skippedUnprofitable || []) if (matches(n, items)) out.push(`${m}: ${n} skipped unprofitable at the shown pair`);
+    }
+    if (!out.length) out.push(`no drop record names ${items.map(s => `"${s}"`).join(' / ')} (reject names are kept per niche, capped at 100, in dumps written after they landed; crowded-out candidates are count-only)`);
+    return out;
+  }
   for (const r of payload.reports || []) {
     const d = r.drops;
     if (!d) continue;
     const head = headOf(r);
     out.push(`# ${head ? modeOf(head) : 'report'}: ${d.reject ?? 0} rejected`);
+    if ((d.rejected || []).length) out.push(`  rejected names kept: ${d.rejected.length} (--drops --item <name>)`);
     for (const [reason, n] of Object.entries(d.rejectReasons || {}).sort((a, b) => b[1] - a[1])) out.push(`  ${n}x ${reason.length > 150 ? reason.slice(0, 147) + '...' : reason}`);
     if ((d.skippedUnprofitable || []).length) out.push(`  skippedUnprofitable: ${d.skippedUnprofitable.join(', ')}`);
     for (const w of d.winnersFiltered || []) out.push(`  winnerFiltered: ${w.name} net ${w.net}`);
