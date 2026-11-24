@@ -3042,7 +3042,7 @@ async function main() {
     ])];
   };
   if (digestRows) {
-    const under = [sizeLine(digestRows), diffLine, ...nicheCoverage()].filter(Boolean);
+    const under = [sizeLine(digestRows, { placeholderCapital: !VALUE_CAPITAL_EXPLICIT && !VALUE_CAPITAL_DERIVED }), diffLine, ...nicheCoverage()].filter(Boolean);
     if (under.length) {
       REPORTS.push({ kind: 'screen', generatedAt: null, sections: [{ type: 'lines', lines: under, blank: false }] });
       realLog(under.join('\n') + '\n');

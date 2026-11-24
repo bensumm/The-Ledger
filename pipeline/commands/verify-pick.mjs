@@ -106,18 +106,22 @@ export function bidNotTouched(f) {
 }
 
 export function buyLimitSpent(f) {
-  if (!f.limit || f.limit.remaining == null) return { unknown: 'buy limit left unknown' };
+  if (!f.limit) return { unknown: 'buy limit left unknown' };
+  if (f.limit.limit == null) return {};
+  if (f.limit.remaining == null) return { unknown: 'buy limit left unknown' };
   return f.limit.remaining <= 0 ? { fail: `buy limit exhausted (${fmt(f.limit.boughtInWindow)}/${fmt(f.limit.limit)} this 4h window)` } : {};
 }
+
+export function noListedLimit(f) { return f.limit && f.limit.limit == null ? { fail: 'no buy limit listed (not unlimited)' } : {}; }
 
 export function peakWindowMissing(f) { return f.peak?.resolved ? {} : { unknown: 'no peak window could be derived' }; }
 
 export function bondFee(f) { return f.bond ? { unknown: 'bond retrade fee not modelled here' } : {}; }
 
 // WARN never changes the status: a skill caution, not one of the owner's FAIL conditions.
-export const WARN_RULES = new Set([bidPullingAway, askAbovePeakLevel, staleReach, bidNotTouched]);
+export const WARN_RULES = new Set([bidPullingAway, askAbovePeakLevel, staleReach, bidNotTouched, noListedLimit]);
 export const RULES = [staleLivePrint, sellEarlyTrigger, bidPullingAway, foldUnderBreakEven, fadingBidAboveTodaysLow, exitRarelyPrints,
-  noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, peakWindowMissing, bondFee];
+  noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, noListedLimit, peakWindowMissing, bondFee];
 
 export function judge(f) {
   const gate = RULES.filter(r => !WARN_RULES.has(r)).map(r => r(f));
@@ -168,9 +172,9 @@ export function fieldsFrom({ name, bid, ask, trio, series, latest, limit, bond =
   };
 }
 
-async function runTrio(id, { bid, ask }) {
-  const { stdout } = await promisify(execFile)(process.execPath, [TRIO, String(id), '--ask', String(ask), '--bid', String(bid), '--exit', String(ask),
-    '--window', 'peak', '--profile', '--json'], { maxBuffer: 1 << 26, timeout: 60000 });
+export const trioArgs = (id, { bid, ask }) => [String(id), '--ask', String(ask), '--bid', String(bid), '--exit', String(ask), '--window', 'peak', '--profile', '--json'];
+async function runTrio(id, p) {
+  const { stdout } = await promisify(execFile)(process.execPath, [TRIO, ...trioArgs(id, p)], { maxBuffer: 1 << 26, timeout: 60000 });
   return JSON.parse(stdout).items[0];
 }
 

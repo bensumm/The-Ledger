@@ -54,7 +54,7 @@ test('size: thin, capital-less and unknown inputs never invent a size', () => {
   assert.deepEqual(size({ volDay: 113 }), { units: 100, gp: 100_000, windows: 3, bound: 'buy-limit', clear: 0 });
   assert.deepEqual(size({}, { capital: 0 }), { units: 0, gp: 0, windows: null, bound: 'capital', clear: 5000 });
   assert.deepEqual(size({ bid: null }), { units: null, gp: null, windows: null, bound: null, clear: null });
-  assert.deepEqual(size({ limit: null }), { units: null, gp: null, windows: null, bound: null, clear: 5000 });
+  assert.deepEqual(size({ limit: null }, { capital: 30_500 }), { units: 30, gp: 30_000, windows: 9, bound: 'capital', clear: 5000 });
   assert.equal(size({ deployUnits: 0.4 }).windows, null);
   assert.equal(size({ deployUnits: 100 }).windows, 1);
 });
@@ -62,7 +62,9 @@ test('size line: null limit prints limit unknown; the label separates it from de
   const line = sizeLine(buildDigestRows([R, { ...R, id: 2, name: 'Y', limit: null }, { ...R, id: 3, name: 'Z', volDay: 113 }], { sizeOf: r => sizeDigestRow(r, { capital: 1e9 }) }));
   assert.match(line, /^size per 4h window .*2-day deploy column/);
   assert.match(line, /X 100u 100k x3w limit ~5,000 clear \|/);
-  assert.match(line, /Y \? limit unknown/);
+  assert.match(line, /Y 1,000,000u .*capital, limit unknown/);
+  assert.match(sizeLine(buildDigestRows([R]), { placeholderCapital: true }), /PLACEHOLDER capital/);
+  assert.ok(!line.includes('PLACEHOLDER'));
   assert.match(line, /Z 100u 100k x3w limit ~0 clear/);
   assert.ok(!/Infinity|NaN|unlimited/.test(line));
   assert.equal(line.split('\n').length, 1);

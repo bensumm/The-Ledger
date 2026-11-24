@@ -785,8 +785,8 @@ async function runPositions() {
     const v = renderHeldVerdict(ctx, { mode: 'compact' });   // the shared held-verdict renderer (P0)
     {
       const P = ctx.position, dl = P.deltas, fresh = !dl || dl.firstSeen || dl.reset;
-      planLots.push({ name, qty, verdictText: v, listAt: heldListAt(row, be, P.mv), be, frame: !!(P.display && P.display.frame),
-        raw: P.display && P.display.raw, tripwire: thesisEntry && thesisEntry.tripwire, cur: P.display && P.display.state.displayVerdict,
+      planLots.push({ name, qty, be, display: P.display, verdictText: v, listAt: heldListAt(row, be, P.mv), holdListAt: heldListAt(row, be, null),
+        exitPrice: thesisEntry && thesisEntry.exitPrice, tripwire: thesisEntry && thesisEntry.tripwire,
         prev: fresh ? null : ((priorState['held:' + itemId] || {}).displayVerdict ?? null) });
     }
     // P2 validators — the level we'd list the held lot at (patient band top). Set the reach candidate

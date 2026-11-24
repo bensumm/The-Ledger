@@ -22,7 +22,6 @@ export function buildDigestRows(rows, { sizeOf = () => NO_SIZE, prevOf = () => n
  * unvalidated clearability knee: shown, never binding. */
 export function sizeDigestRow(r, { capital = null, bought = 0 } = {}) {
   if (!(num(r.bid) > 0)) return NO_SIZE;
-  if (num(r.limit) == null) return { ...NO_SIZE, clear: num(r.volDay) == null ? null : Math.floor(r.volDay * CLEARABILITY_FRAC) };
   const at = limitRemaining => {
     if (capital != null && !(capital > 0)) return { units: 0, bound: 'capital' };
     const s = sizeTranche({ capital, unitCost: r.bid, limitRemaining, dailyVol: null });
@@ -39,7 +38,7 @@ export function sizeDigestRow(r, { capital = null, bought = 0 } = {}) {
 }
 
 const BOUND_WORD = { 'buy-limit': 'limit', capital: 'capital' };
-export function sizeLine(digestRows) {
+export function sizeLine(digestRows, { placeholderCapital = false } = {}) {
   if (!digestRows.length) return null;
   const cell = d => {
     const why = [BOUND_WORD[d.bound], d.limit == null ? 'limit unknown' : null].filter(Boolean).join(', ');
@@ -47,7 +46,7 @@ export function sizeLine(digestRows) {
     if (d.units === 0) return `${d.name} 0u ${why}`;
     return `${d.name} ${d.units.toLocaleString('en-US')}u ${fmtP(d.gp)}${d.windows ? ` x${d.windows}w` : ''} ${why}${d.clear == null ? '' : ` ~${d.clear.toLocaleString('en-US')} clear`}`;
   };
-  return `size per 4h window (buy limit left or whole-pool capital; xNw = windows to fill the 2-day deploy column; ~clear = ${CLEARABILITY_FRAC * 100}% of day volume, unvalidated): ${digestRows.map(cell).join(' | ')}`;
+  return `size per 4h window (buy limit left or whole-pool ${placeholderCapital ? 'PLACEHOLDER ' : ''}capital; xNw = windows to fill the 2-day deploy column; ~clear = ${CLEARABILITY_FRAC * 100}% of day volume, unvalidated): ${digestRows.map(cell).join(' | ')}`;
 }
 
 const age = ms => ms < 3600e3 ? `${Math.max(0, Math.round(ms / 60e3))}m` : ms < 48 * 3600e3 ? `${(ms / 3600e3).toFixed(1)}h` : `${Math.round(ms / 86400e3)}d`;

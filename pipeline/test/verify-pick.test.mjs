@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parsePick, judge, formatLine, formatWhy, fieldsFrom, RULES, staleLivePrint, sellEarlyTrigger, bidPullingAway, foldUnderBreakEven,
-  fadingBidAboveTodaysLow, exitRarelyPrints, noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, peakWindowMissing, bondFee, WARN_RULES } from '../commands/verify-pick.mjs';
+  fadingBidAboveTodaysLow, exitRarelyPrints, noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, peakWindowMissing, bondFee, noListedLimit, trioArgs, WARN_RULES } from '../commands/verify-pick.mjs';
 import { breakEven, maxBuyForExit, QUICK_FRESH_MIN } from '../../js/quotecore.js';
 import { netMargin } from '../../js/money-math.js';
 
@@ -32,10 +32,16 @@ ok('the clean fixture passes every rule', () => { assert.deepEqual(judge(base())
 ok('a skill caution warns and never changes the status', () => {
   const f = base({ peak: peak({ gap: 5, level: 1095 }) }), j = judge(f);
   assert.equal(j.status, 'PASS'); assert.equal(j.warns.length, 1); assert.match(formatLine(f, j), /warn: ask 5 above/);
-  assert.deepEqual([...WARN_RULES].map(r => r.name).sort(), ['askAbovePeakLevel', 'bidNotTouched', 'bidPullingAway', 'staleReach']);
+  assert.deepEqual([...WARN_RULES].map(r => r.name).sort(), ['askAbovePeakLevel', 'bidNotTouched', 'bidPullingAway', 'noListedLimit', 'staleReach']);
   assert.equal(judge(base({ day: day({ bid: leg({ recency: null }) }) })).status, 'PASS');
 });
 ok('a bid out of reach at the peak is not a warning: only the all-day bid counts', () => { assert.deepEqual(bidPullingAway(base({ peak: peak({ bid: leg({ rm: bad }) }) })), {}); });
+ok('an item with no listed limit warns and can still PASS; an unreadable log cannot', () => {
+  const j = judge(base({ limit: { limit: null, boughtInWindow: 0, remaining: null } }));
+  assert.equal(j.status, 'PASS'); assert.match(j.warns[0], /no buy limit listed/);
+  assert.equal(judge(base({ limit: null })).status, 'UNKNOWN');
+});
+ok('the trio argv: ask, bid and exit in place, peak window', () => { assert.deepEqual(trioArgs(566, { bid: 371, ask: 395 }), ['566', '--ask', '395', '--bid', '371', '--exit', '395', '--window', 'peak', '--profile', '--json']); });
 ok('a bond is UNKNOWN: its retrade fee is not modelled', () => { assert.equal(judge(base({ bond: true })).status, 'UNKNOWN'); assert.deepEqual(bondFee(base()), {}); });
 
 // [rule, name, fields that must FAIL, text, fields that must be UNKNOWN]
@@ -61,7 +67,7 @@ const cases = [
   [staleReach, 'stale bid reach', { day: day({ bid: leg({ recency: rec({ staleOptimistic: true, recentHit: 0 }) }) }) }, /bid reach ⚠ stale all-day \(recent 0\/3/, { day: day({ bid: leg({ recency: null }) }) }],
   [staleReach, 'stale ask reach in the peak window', { peak: peak({ ask: leg({ recency: rec({ staleOptimistic: true, recentHit: 0 }) }) }) }, /ask reach ⚠ stale in peak/, { peak: peak({ ask: leg({ recency: rec({ fullN: 4 }) }) }) }],
   [bidNotTouched, 'no recent touch and live above the bid', { day: day({ bid: leg({ recency: rec({ recentHit: 0 }) }) }) }, /touched on 0\/3 recent days and live 1,005/, { day: day({ bid: leg({ recency: rec({ recentDays: 0 }) }) }) }],
-  [buyLimitSpent, 'limit exhausted', { limit: { limit: 100, boughtInWindow: 100, remaining: 0 } }, /buy limit exhausted \(100\/100/, { limit: { limit: null, boughtInWindow: 0, remaining: null } }],
+  [buyLimitSpent, 'limit exhausted', { limit: { limit: 100, boughtInWindow: 100, remaining: 0 } }, /buy limit exhausted \(100\/100/, { limit: { limit: 100, boughtInWindow: 0, remaining: null } }],
   [buyLimitSpent, 'more bought than the limit', { limit: { limit: 100, boughtInWindow: 120, remaining: 0 } }, /exhausted/, { limit: null }],
 ];
 for (const [rule, name, f, re, u] of cases) {
@@ -78,7 +84,7 @@ for (const [rule, name, f, re, u] of cases) {
   ok(`${rule.name}: silent on the clean fixture (${name})`, () => assert.deepEqual(rule(base()), {}));
 }
 ok('every rule in RULES has a flipping case or the window case', () => {
-  const tested = new Set([...cases.map(c => c[0]), peakWindowMissing, bondFee]);
+  const tested = new Set([...cases.map(c => c[0]), peakWindowMissing, bondFee, noListedLimit]);
   for (const r of RULES) assert.ok(tested.has(r), r.name);
   assert.equal(tested.size, RULES.length);
 });
