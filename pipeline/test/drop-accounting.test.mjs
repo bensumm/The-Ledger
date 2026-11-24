@@ -59,6 +59,13 @@ test('`drops` is identical across views and carries every family — the account
   });
 });
 
+test('reject names ride drops only, capped at 100 per niche', () => {
+  const rejected = Array.from({ length: 150 }, (_, i) => ({ itemId: i, name: 'n' + i, reason: 'r' }));
+  const r = dropAccounting({ reject: 150, rejReasons: { r: 150 }, rejected }, { diet: false });
+  assert.equal(r.drops.rejected.length, 100);
+  assert.deepEqual(r.footer, ['rejected: 150 (r×150)']);
+});
+
 test('nothing dropped → no lines on either view and drops null (serialized as `"drops":null`, never `{}`)', () => {
   // MUTANT: `drops` defaulting to `{}` — red. An empty object in every clean niche report would make
   // "does drops exist" meaningless as the suspicious-removal check.

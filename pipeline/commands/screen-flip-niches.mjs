@@ -1087,7 +1087,7 @@ export function buildScreenNicheReport({ headerLines = [], table = null, estExpl
 // last-report dump regardless, so "a filter you cannot see is a filter you cannot check" is answered
 // by the dump, not stdout. PURE — pinned by pipeline/test/drop-accounting.test.mjs (presence AND
 // absence off the same builder, so a renamed family and a flipped gate both fail).
-export function dropAccounting({ reject = 0, rejReasons = {}, skippedNames = [], winnersFiltered = [], crowded = null } = {}, { diet = true } = {}) {
+export function dropAccounting({ reject = 0, rejReasons = {}, rejected = [], skippedNames = [], winnersFiltered = [], crowded = null } = {}, { diet = true } = {}) {
   const footer = [];
   const extra = [];
   if (!diet) {
@@ -1102,7 +1102,7 @@ export function dropAccounting({ reject = 0, rejReasons = {}, skippedNames = [],
     }
   }
   const drops = (reject > 0 || skippedNames.length > 0 || winnersFiltered.length > 0 || (crowded && crowded.count > 0)) ? {
-    ...(reject > 0 ? { reject, rejectReasons: rejReasons } : {}),
+    ...(reject > 0 ? { reject, rejectReasons: rejReasons, ...(rejected.length ? { rejected: rejected.slice(0, 100) } : {}) } : {}),
     ...(skippedNames.length ? { skippedUnprofitable: skippedNames } : {}),
     ...(winnersFiltered.length ? { winnersFiltered } : {}),
     ...(crowded && crowded.count > 0 ? { crowdedOut: { count: crowded.count, bestName: crowded.bestName, bestGpDay: crowded.bestGpDay, reason: crowded.reason } } : {}),
@@ -1126,6 +1126,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0, negNet: 0, subBeNet: 0, notFalling: 0, partition: 0 };  // post-fetch discard reasons (--stats)
   const skippedNames = [];
   const skippedRows = [];   // the same drops, kept for the ledger — see the admitSkip marker at logSuggestions  // rows dropped by spec.admitMinNet — NAMED in the --full footer + `drops` summary (FD7), never a silent drop
+  const rejected = [];   // reject names for the dump only (drops.rejected, capped at 100 in dropAccounting)
   const rejReasons = {};   // P2: reject reason → count, for the `rejected: N (top reasons)` footer (--full) + `drops` (FD7)
   const cautionNotes = []; // P2: one flagged-caution note per item (the row still shows)
   const informNotes = [];  // inform-mode validator findings (trajectory/reach analysis) — decision support, never a drop
@@ -1196,7 +1197,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     if (vworst === 'reject') {
       disc.reject++;
       dropWhy(mode, s.id, flags(vres).filter(f => f.status === 'reject').map(f => f.key).join('+') + ' reject');
-      for (const f of flags(vres)) if (f.status === 'reject') rejReasons[f.reason] = (rejReasons[f.reason] || 0) + 1;
+      for (const f of flags(vres)) if (f.status === 'reject') { rejReasons[f.reason] = (rejReasons[f.reason] || 0) + 1; rejected.push({ itemId: s.id, name, reason: f.reason }); }
       continue;
     }
     if (vworst === 'caution') {
@@ -1754,7 +1755,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   const dietLosers = rows.filter(r => !isWinner(r));
   // FD7: the pre-formatted drop-accounting input, built ONCE per niche for dropAccounting().
   const dropInput = {
-    reject: disc.reject, rejReasons,
+    reject: disc.reject, rejReasons, rejected,
     skippedNames,
     winnersFiltered: dietLosers.map(r => ({ name: map.byId[r.id]?.name || ('#' + r.id), net: shownNet(r) })),
     // excluded is pre-sorted desc by expGpDay in admission.mjs, so [0] is the best excluded candidate.
