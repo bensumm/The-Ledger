@@ -18,6 +18,15 @@ export function buildDigestRows(rows, { sizeOf = () => NO_SIZE, prevOf = () => n
   }));
 }
 
+/* The dump's `laneRows`: every printed band/churn row plus amplitude (mode marks it). gpPerWindow = netEach × units. */
+export function buildLaneRows(rows, { sizeOf = () => NO_SIZE } = {}) {
+  return rows.map(r => {
+    const netEach = num(r.netEach), units = num(sizeOf(r).units);
+    return { itemId: r.id, name: r.name, mode: r.nicheKey ?? null, grade: r.grade ?? null, bid: num(r.bid), ask: num(r.ask), netEach,
+      be: num(r.be), limit: num(r.limit), volDay: num(r.volDay), units, gpPerWindow: netEach == null || units == null ? null : Math.round(netEach * units) };
+  });
+}
+
 /* One 4h window, bound by buy limit and capital. `bought` comes off this window only. `clear` is sizeTranche's
  * unvalidated clearability knee: shown, never binding. */
 export function sizeDigestRow(r, { capital = null, bought = 0 } = {}) {

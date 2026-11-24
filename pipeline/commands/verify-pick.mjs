@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 // @does One PASS/FAIL/UNKNOWN line per pick: fresh trio at your bid and ask, print age, break-even, buy limit
 // @ask "verify X at bid/ask", "is this pick still good?", "re-check my picks" => "<item>@<bid>:<ask>[@<flip-niche>]" [...] [--why]
-// @read run in the same turn as the rec; pitch only a PASS, which is not a fill guarantee
+// @ask "verify the whole scan", "does anything clear?" => --scan [N] [--all]
+// @read run in the same turn as the rec; pitch only a PASS (no fill guarantee)
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadMapping, fetchLatest, fetchTs } from '../lib/market/marketfetch.mjs';
+import { API, jget, loadMapping, fetchLatest, fetchTs } from '../lib/market/marketfetch.mjs';
 import { parseGp } from '../lib/render/cli.mjs';
+import { ageMin, STALE_MIN } from '../lib/render/last-report-rows.mjs';
 import { limitWindow, buysByItem } from '../lib/capital/limits.mjs';
 import { LOG_DIR } from '../lib/reconstruct/offers.mjs';
 import { regenerate } from './sync-fills.mjs';
@@ -18,7 +20,8 @@ import { netMargin, isBond } from '../../js/money-math.js';
 import { MODE_KEYS } from '../../js/flip-niches.mjs';
 
 const TRIO = path.join(path.dirname(fileURLToPath(import.meta.url)), 'read-window-range.mjs');
-const USAGE = `usage: node pipeline/commands/verify-pick.mjs "<item>@<bid>:<ask>[@<flip-niche>]" [...more] [--why]   niche: ${MODE_KEYS.join('|')} (default band)`;
+const USAGE = `usage: node pipeline/commands/verify-pick.mjs "<item>@<bid>:<ask>[@<flip-niche>]" [...more] [--why]   niche: ${MODE_KEYS.join('|')} (default band)
+       node pipeline/commands/verify-pick.mjs --scan [N] [--all] [--why]   the last scan's digest, churn and top N band rows (default 25)`;
 const TRIO_NICHES = ['band', 'churn', 'scalp'];
 const fin = Number.isFinite;
 const fmt = n => fin(n) ? n.toLocaleString('en-US') : '—';
@@ -191,20 +194,101 @@ function readBuys() {
   } catch { return null; }
 }
 
+async function checkPick(p, { map, buys, latest = fetchLatest }) {
+  const r = map?.resolve(p.item);
+  if (!r) return { name: p.item + ' (not in the item mapping)', bid: p.bid, ask: p.ask, be: breakEven(p.bid), net: netMargin(p.bid, p.ask) };
+  const or = v => v.catch(() => null);
+  const [live, series, trio] = await Promise.all([or(latest(r.id)), or(fetchTs(r.id, '1h')), or(runTrio(r.id, p))]);
+  return fieldsFrom({ name: r.name, bid: p.bid, ask: p.ask, niche: p.niche, trio, series, latest: live, bond: isBond(r.id),
+    limit: buys && limitWindow({ buys: buys.get(r.id) || [], limit: map.byId[r.id]?.limit ?? null }) });
+}
+
+export const SCAN_BAND_DEFAULT = 25;
+const SCAN_CONCURRENCY = 4;
+const SCREEN_DUMP = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.cache', 'last-report', 'screen.json');
+
+export function dumpRefusal(payload, now = Date.now()) {
+  const age = ageMin(payload?.generatedAt, now);
+  if (!Array.isArray(payload?.laneRows)) return `no laneRows in the last scan dump${age == null ? '' : ` (${age}m old)`}: re-run the scan`;
+  if (age == null) return 'the last scan dump has no readable age: re-run the scan';
+  return now - Date.parse(payload.generatedAt) > STALE_MIN * 60000 ? `the last scan dump is ${age}m old (limit ${STALE_MIN}m): re-run the scan` : null;
+}
+
+// Equal gp (no capital: all 0) keeps the dump's wallet-free table order.
+export function scanCandidates({ laneRows = [], digestRows = [] }, n = SCAN_BAND_DEFAULT) {
+  const of = m => laneRows.filter(r => r.mode === m), gp = r => (r.netEach ?? 0) * (r.units ?? 0);
+  const band = of('band').sort((a, b) => gp(b) - gp(a)).slice(0, n);
+  const seen = new Map();
+  for (const r of [...digestRows, ...of('churn'), ...band]) if (!seen.has(r.itemId + ':' + r.mode)) seen.set(r.itemId + ':' + r.mode, r);
+  const isAmp = r => r.mode === 'amplitude', priced = r => r.bid > 0 && r.ask > 0;
+  const rows = [...seen.values()].filter(r => !isAmp(r)), trade = rows.filter(r => !isBond(r.itemId));
+  return {
+    picks: trade.filter(priced), digest: digestRows.length, bandTotal: of('band').length, bonds: rows.length - trade.length, unpriced: trade.filter(r => !priced(r)).length,
+    amplitude: new Set([...of('amplitude'), ...digestRows.filter(isAmp)].map(r => r.itemId)).size,
+  };
+}
+
+export async function mapLimit(items, limit, fn) {
+  const out = [];
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => { while (next < items.length) { const i = next++; out[i] = await fn(items[i]); } }));
+  return out;
+}
+
+const ruleWords = r => r.name.replace(/([A-Z])/g, ' $1').toLowerCase();
+const leadingReason = f => ruleWords(RULES.find(r => !WARN_RULES.has(r) && r(f).fail));
+
+// results: [{ row, f, j }]
+export function scanReport(results, { all = false, why = false } = {}) {
+  const of = s => results.filter(x => x.j.status === s);
+  const passes = of('PASS'), fails = of('FAIL'), unknowns = of('UNKNOWN');
+  const line = ({ row, f, j }) => [formatLine(f, j).replace(/^PASS/, j.warns.length ? 'PASS ⚠' : 'PASS') + ` · ${row.mode} ${row.grade ?? '—'}`, ...(why ? [formatWhy(f)] : [])];
+  const counts = new Map();
+  for (const { f } of fails) counts.set(leadingReason(f), (counts.get(leadingReason(f)) || 0) + 1);
+  const tally = [...counts].sort((a, b) => b[1] - a[1]).map(([r, k]) => `${r} ${k}`).join(', ');
+  return [
+    ...(passes.length ? [] : [`⚠ nothing clears at screen prices (${results.length} checked${unknowns.length ? `, ${unknowns.length} UNKNOWN` : ''})`]),
+    ...passes.filter(x => !x.j.warns.length).flatMap(line), ...passes.filter(x => x.j.warns.length).flatMap(line),
+    `FAIL ${fails.length}${tally ? ': ' + tally : ''} · UNKNOWN ${unknowns.length}${unknowns.length ? ': ' + unknowns.map(x => x.f.name).join(', ') : ''}`,
+    ...(all ? fails.flatMap(line) : []),
+  ];
+}
+
+async function runScan(n, opts) {
+  let payload;
+  try { payload = JSON.parse(fs.readFileSync(SCREEN_DUMP, 'utf8')); } catch { console.error('no readable scan dump: run the scan first'); process.exit(1); }
+  const refusal = dumpRefusal(payload);
+  if (refusal) { console.error(refusal); process.exit(1); }
+  const c = scanCandidates(payload, n);
+  const skipped = [`${c.amplitude} amplitude excluded`, c.bonds && `${c.bonds} bond skipped`, c.unpriced && `${c.unpriced} unpriced skipped`].filter(Boolean).join(', ');
+  console.log(`scan dump ${ageMin(payload.generatedAt)}m old: checking ${c.picks.length} (${c.digest} digest + churn + top ${Math.min(n, c.bandTotal)} of ${c.bandTotal} band), ${skipped}`);
+  const [map, bulk] = await Promise.all([loadMapping().catch(() => null), jget(API + '/latest').then(j => j.data, () => null)]);
+  const ctx = { map, buys: readBuys(), latest: bulk ? async id => bulk[id] ?? null : fetchLatest };
+  const results = await mapLimit(c.picks, SCAN_CONCURRENCY, async row => {
+    const f = await checkPick({ item: map ? String(row.itemId) : row.name, bid: row.bid, ask: row.ask, niche: row.mode }, ctx);
+    return { row, f, j: judge(f) };
+  });
+  console.log(scanReport(results, opts).join('\n'));
+}
+
+function scanArgs(args) {
+  const rest = args.filter(a => !['--scan', '--all', '--why'].includes(a));
+  if (rest.length > 1 || (rest.length && (!/^[1-9]\d*$/.test(rest[0]) || args[args.indexOf('--scan') + 1] !== rest[0]))) return null;
+  return rest.length ? +rest[0] : SCAN_BAND_DEFAULT;
+}
+
 async function main() {
   const args = process.argv.slice(2), why = args.includes('--why');
+  if (args.includes('--scan')) {
+    const n = scanArgs(args);
+    if (n == null) { console.error(USAGE); process.exit(1); }
+    return runScan(n, { all: args.includes('--all'), why });
+  }
   const picks = args.filter(a => a !== '--why').map(a => a.startsWith('--') ? null : parsePick(a));
   if (!picks.length || picks.includes(null)) { console.error(USAGE); process.exit(1); }
   const map = await loadMapping().catch(() => null), buys = readBuys();
   for (const p of picks) {
-    const r = map?.resolve(p.item);
-    let f = { name: p.item + (r ? '' : ' (not in the item mapping)'), bid: p.bid, ask: p.ask, be: breakEven(p.bid), net: netMargin(p.bid, p.ask) };
-    if (r) {
-      const or = v => v.catch(() => null);
-      const [latest, series, trio] = await Promise.all([or(fetchLatest(r.id)), or(fetchTs(r.id, '1h')), or(runTrio(r.id, p))]);
-      f = fieldsFrom({ name: r.name, bid: p.bid, ask: p.ask, niche: p.niche, trio, series, latest, bond: isBond(r.id),
-        limit: buys && limitWindow({ buys: buys.get(r.id) || [], limit: map.byId[r.id]?.limit ?? null }) });
-    }
+    const f = await checkPick(p, { map, buys });
     console.log(formatLine(f, judge(f)));
     if (why) console.log(formatWhy(f));
   }

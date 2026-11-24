@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildDigestRows, sizeDigestRow, sizeLine, digestDiffLine, readDigestPrev, writeDigestPrev, nicheLine, coverageLine } from '../lib/render/digest-extras.mjs';
+import { buildDigestRows, buildLaneRows, sizeDigestRow, sizeLine, digestDiffLine, readDigestPrev, writeDigestPrev, nicheLine, coverageLine } from '../lib/render/digest-extras.mjs';
 import { selectDigestRows, buildDigestBlock } from '../commands/screen-flip-niches.mjs';
 import { digestReachAndPlacement } from '../lib/signal/digest.mjs';
 
@@ -17,6 +17,15 @@ test('digestRows: numeric, and null where unknown', () => {
     be: 1021, reachHit: 2, reachDays: 3, reachBasis: 'recent', limit: 100, units: null, gp: null, windows: null, bound: null, clear: null, prev: 'mirage top' });
   const [n] = buildDigestRows([{ id: 2, name: 'Y' }]);
   for (const k of ['bid', 'ask', 'netEach', 'roi', 'be', 'reachHit', 'reachDays', 'limit', 'units', 'gp', 'windows', 'bound', 'prev']) assert.equal(n[k], null, k);
+});
+
+test('laneRows: numeric, sized by the digest helper, null where unknown', () => {
+  const [l] = buildLaneRows([R], { sizeOf: r => sizeDigestRow(r, { capital: 1e9, bought: 70 }) });
+  assert.deepEqual(l, { itemId: 1, name: 'X', mode: 'band', grade: 'A', bid: 1000, ask: 1100, netEach: 78, be: 1021, limit: 100, volDay: 1e6, units: 30, gpPerWindow: 2340 });
+  assert.equal(buildLaneRows([R], { sizeOf: () => ({ units: 0 }) })[0].gpPerWindow, 0);
+  const [n] = buildLaneRows([{ id: 2, name: 'Y', nicheKey: 'amplitude' }]);
+  assert.equal(n.mode, 'amplitude');
+  for (const k of ['grade', 'bid', 'ask', 'netEach', 'be', 'limit', 'volDay', 'units', 'gpPerWindow']) assert.equal(n[k], null, k);
 });
 
 test('selectDigestRows is exactly the set buildDigestBlock renders', () => {

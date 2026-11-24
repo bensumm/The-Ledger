@@ -1459,7 +1459,7 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
     (anchor + Σ sells-after-tax − Σ buys − resting escrow, via `lib/derive-cash-tiers.mjs`); `<amount>` =
     re-anchor the `.capital-state.json` starting point — the total-capital denominator `watch-positions.mjs`'s
     SUMMARY reads),
-    `verify-pick.mjs` (named FAIL rules over `read-window-range.mjs --json` plus a full-day read; a pick may end `@<flip-niche>`, forwarded as `--niche` for band/churn/scalp (others warn); writes nothing; `verify-pick.test.mjs`),
+    `verify-pick.mjs` (named FAIL rules over `read-window-range.mjs --json` plus a full-day read; a pick may end `@<flip-niche>`, forwarded as `--niche` for band/churn/scalp (others warn); `--scan [N]` checks the last screen dump's digest, churn and top N band `laneRows` and refuses one over 30 min old; writes nothing; `verify-pick.test.mjs`),
     `read-window-range.mjs` (né `nightlows.mjs` — time-of-day
     range read / overnight fill-realism scoring; `--window` accepts `peak`/`dip`,
     resolved PER ITEM off that item's own `hourProfile`; `--window 0-23` omits hour 23;
@@ -1665,7 +1665,8 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
 
     **`pipeline/lib/render/digest-extras.mjs`** — the lines printed UNDER the digest, and the numeric rows
     behind them: `buildDigestRows` (the dump's top-level `digestRows`, one object per printed digest row,
-    numbers or null; `bid`/`ask` are the pair the row's printed net uses), the per-4h-window size line
+    numbers or null; `bid`/`ask` are the pair the row's printed net uses), `buildLaneRows` (`laneRows`: the same for every
+    printed band/churn/amplitude row, sub-floor excluded; read by `verify-pick.mjs --scan`), the per-4h-window size line
     (buy limit left or whole-pool capital; clearability shown only; NOT the 2-day `deploy`), the `Δ vs` line, one
     shown/rejected/crowded-out line per flip-niche, and the coverage line. Inform-only: no row, order,
     grade, rank or ledger effect. State: `pipeline/.cache/digest-prev.json` (gitignored) — the last
@@ -3368,13 +3369,10 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
     whole-fleet, never fetched by the app. Missing/corrupt → `{}`, never throws. Disposable), and the AO1
     `last-report/<kind>.json`
     dumps (`screen.json`/`quote.json`/`watch.json`/`watchlist.json`, plus `exit-surface.json` — which is NOT a render.mjs
-report object but `read-exit-surface.mjs`'s own report array; a `--digest` screen dump also carries `digestRows`) — the compact-JSON render.mjs report object(s)
+report object but `read-exit-surface.mjs`'s own report array; the screen dump also carries `laneRows`, and `digestRows` under `--digest`) — the compact-JSON render.mjs report object(s)
     the last run of each market-read CLI built, overwritten with "last run" semantics. **NOT written on
-    every run** — three of the four producers return before their dump on a degenerate path
-    (`quote-items.mjs` exits at `:618`/`:655`; `watch-positions.mjs` returns on "Nothing to watch";
-    `screen-flip-niches.mjs --mode reverse` returns before its write), so a stale dump can outlive the
-    run that should have replaced it. `read-watchlist.mjs` is the one that writes on every path,
-    including the empty case. A reader that must know the dump is fresh should check `generatedAt`,
+    every run** — every producer but `read-watchlist.mjs` can return before its dump, so a stale dump
+    can outlive the run meant to replace it. A reader that must know the dump is fresh should check `generatedAt`,
     for an agent to read instead of re-parsing stdout. Producer: `screen-flip-niches.mjs` /
     `quote-items.mjs` / `watch-positions.mjs` / `read-watchlist.mjs` (via `writeLastReport`, `pipeline/lib/render/cli.mjs`); consumer:
     agent analysis passes — quiet-and-dump-only is now the DEFAULT (an agent must read this file for

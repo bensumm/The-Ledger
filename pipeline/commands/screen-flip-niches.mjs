@@ -647,7 +647,7 @@ const LAPS_PER_DAY_CEIL = Math.floor(86400 / LIMIT_WINDOW_SEC);   // = 6 — the
 // MIRAGE_PLACEMENT (the "mirage top" ask-side placement bar, PLACEHOLDER n≈0) MOVED to
 // js/estimators/families.mjs (EF1(b), PLAN-ESTIMATOR-FIDELITY) — it now also bounds the churn
 // ask-reach exemption there, so the digest rule and the rank/fold bound share ONE constant (imported above).
-import { buildDigestRows, sizeDigestRow, sizeLine, digestDiffLine, readDigestPrev, writeDigestPrev, nicheLine, coverageLine } from '../lib/render/digest-extras.mjs';
+import { buildDigestRows, buildLaneRows, sizeDigestRow, sizeLine, digestDiffLine, readDigestPrev, writeDigestPrev, nicheLine, coverageLine } from '../lib/render/digest-extras.mjs';
 import { MIRAGE_REACH_FRAC, digestReachAndPlacement } from '../lib/signal/digest.mjs';
 
 // roiPct(er): after-tax per-TURN ROI% off the rank estimate — er.net (per-unit tax-net) ÷ er.pair.bid.
@@ -749,6 +749,11 @@ export function digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, m
 // The cross-niche digest candidate pool, filled while niches render and printed ONCE after the RUN_MODES
 // loop via realLog. --digest-gated. Rides the last-report dump; stays out of screen.json (the app).
 const DIGEST_ROWS = [];
+const LANE_ROWS = [];   // the dump's laneRows, before sizing
+const shownBreakEven = (pair, row) => pair.bid > 0 ? breakEven(pair.bid, row?.bond ? { bond: true, guide: row.guide } : undefined) : null;
+const collectLaneRow = ({ id, name, nicheKey, grade, row, pair }) => LANE_ROWS.push({ id, name, nicheKey, grade,
+  bid: pair.bid ?? null, ask: pair.ask ?? null, netEach: pair.net ?? null, be: pair.be ?? shownBreakEven(pair, row),
+  limit: row?.limit ?? null, volDay: row?.volDay ?? null });
 const digestPrevPath = () => join(REPO_ROOT, 'pipeline', '.cache', 'digest-prev.json');
 const DISPLAY_FLAGS = ['mode', 'digest', 'verbose', 'full', 'stats', 'publish', 'raw'];
 const digestScope = () => JSON.stringify([RUN_MODES, POSTURE, Object.entries(A).filter(([k]) => !DISPLAY_FLAGS.includes(k)).sort()]);
@@ -839,7 +844,7 @@ function collectDigestRow({ id, name, shown = null, expGpDay = null, spec, row, 
     askLevel: row ? (row.optSell ?? null) : null,   // HT3 — the ask-reachability-decay reference level (zero extra fetch)
     name,
     bid: pair.bid ?? null, ask: pair.ask ?? null, netEach: pair.net ?? null,
-    be: pair.be ?? (pair.bid > 0 ? breakEven(pair.bid, row?.bond ? { bond: true, guide: row.guide } : undefined) : null),
+    be: pair.be ?? shownBreakEven(pair, row),
     limit: row?.limit ?? null, volDay: row?.volDay ?? null, deployUnits: units,
     reachHit, reachDays, expGpDay,
     capEff,
@@ -1752,6 +1757,8 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   const isWinner = r => HELD_IDS.has(r.id) || WATCHLIST_IDS.has(r.id) || (n => n == null || n > 0)(shownNet(r));
   const dietRows = rows.filter(isWinner);
   SHOWN_N[mode] = subFloor ? 0 : dietRows.length;
+  if (!subFloor && (mode === 'band' || mode === 'churn')) for (const r of dietRows) collectLaneRow({ id: r.id, name: map.byId[r.id]?.name || ('#' + r.id),
+    nicheKey: mode, grade: r.grade, row: r.row, pair: shownPair(r) || { bid: r.er?.pair?.bid, ask: r.er?.pair?.ask, net: r.er?.net } });
   const dietLosers = rows.filter(r => !isWinner(r));
   // FD7: the pre-formatted drop-accounting input, built ONCE per niche for dropAccounting().
   const dropInput = {
@@ -2390,6 +2397,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
     const ampEr = { pair: { bid: ar.ampBid, ask: ar.ampAsk }, net: (driftShadow && driftShadow.margin != null) ? driftShadow.margin : ar.netPerCycle, ttf, pFill, rank, lapUnits };
     // softBuyFc off the in-hand amplitude windowStats days + forming (EC2) → digestSoftBuy's @floor cue.
     const softBuyFc = (stats && stats.days) ? floorCeilingTrack(stats.days, { forming: stats.forming }) : null;
+    collectLaneRow({ id: s.id, name, nicheKey: 'amplitude', grade, row, pair: { bid: ar.ampBid, ask: ar.ampAsk, net: ar.netPerCycle, be: breakEven(ar.ampBid, bondOpt) } });
     collectDigestRow({ id: s.id, name, spec: FLIP_NICHES.amplitude, shown: { bid: ar.ampBid, ask: ar.ampAsk, net: ar.netPerCycle, be: breakEven(ar.ampBid, bondOpt) }, row, er: ampEr, grade, reachFrac: null, askPlacement: null, prof, ts1h: ts1h || null, lap: null, fc: softBuyFc, subFloor: null });
     // A3: the day-crossing day-of-week seasonality read (fires whenever holdDays > 1 — i.e. always at
     // the 4-day default since DT1; it originated with the 1.5-day experiment) (net-new — no day-of-week tooling existed).
@@ -2975,6 +2983,7 @@ async function main() {
   // appears even under the AO1 quiet default (console.log is a no-op there) — its own gate, independent of
   // --verbose. It DOES ride the last-report dump; the scope lock it stays behind is screen.json / the app.
   let digestRows = null, diffLine = null, partial = [];
+  const sizeOf = r => sizeDigestRow(r, { capital: VALUE_CAPITAL, bought: limitWindow({ buys: BUYS_BY_ITEM.get(r.id), limit: r.limit }).boughtInWindow });
   if (DIGEST) {
     const wfHd = wfArchive();
     const dislocFn = wfHd ? ((id, name) => formatDislocation(
@@ -2983,7 +2992,7 @@ async function main() {
     const prevScan = readDigestPrev(digestPrevPath(), digestScope());
     digestRows = buildDigestRows([...sel.main, ...sel.bigExtra], {
       prevOf: id => prevScan?.rows[id]?.verdict ?? null,
-      sizeOf: r => sizeDigestRow(r, { capital: VALUE_CAPITAL, bought: limitWindow({ buys: BUYS_BY_ITEM.get(r.id), limit: r.limit }).boughtInWindow }),
+      sizeOf,
     });
     const bandWins = bands ? Object.values(bands).reduce((m, b) => Math.max(m, b.tradedWin), 0) : N_WIN;
     partial = [
@@ -3097,7 +3106,7 @@ async function main() {
   }
   // AO1: always write the pass's report objects to the last-report dump (one file per invocation), then
   // unless --verbose surface the ONE summary line + path in place of the suppressed markdown.
-  const rel = writeLastReport('screen', REPORTS, digestRows ? { digestRows } : {});
+  const rel = writeLastReport('screen', REPORTS, { ...(digestRows ? { digestRows } : {}), laneRows: buildLaneRows(LANE_ROWS, { sizeOf }) });
   if (digestRows) writeDigestPrev(digestPrevPath(), digestScope(), digestRows, { partial });
   if (!VERBOSE) realLog(`# screen (quiet default; --verbose for the table) — mode ${MODE}: ${RUN_MODES.map(m => `${m} ${Array.isArray(niches[m]) ? niches[m].length : 0}`).join(', ')} → ${rel} (value/amplitude stay out of screen.json — the app — but ride the dump)`);
 }

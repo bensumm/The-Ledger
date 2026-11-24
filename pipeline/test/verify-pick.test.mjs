@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parsePick, judge, formatLine, formatWhy, fieldsFrom, RULES, staleLivePrint, sellEarlyTrigger, bidPullingAway, foldUnderBreakEven,
-  fadingBidAboveTodaysLow, exitRarelyPrints, noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, peakWindowMissing, bondFee, noListedLimit, trioArgs, nicheUnfolded, WARN_RULES } from '../commands/verify-pick.mjs';
+  fadingBidAboveTodaysLow, exitRarelyPrints, noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, peakWindowMissing, bondFee, noListedLimit, trioArgs, nicheUnfolded, WARN_RULES, dumpRefusal, scanCandidates, scanReport, mapLimit } from '../commands/verify-pick.mjs';
 import { breakEven, maxBuyForExit, QUICK_FRESH_MIN } from '../../js/quotecore.js';
 import { netMargin } from '../../js/money-math.js';
 
@@ -183,8 +183,47 @@ ok('an exit with no profitable buy is null, a missing exit block undefined', () 
   assert.equal(fieldsFrom({ ...inputs, trio: { ...trio, exit: undefined } }).maxBuy, undefined);
 });
 
+const T = Date.parse('2026-06-20T12:00:00Z'), dump = min => ({ generatedAt: new Date(T - min * 60000).toISOString(), laneRows: [] });
+ok('--scan refuses a dump over 30 min old, undated, or without laneRows', () => {
+  assert.equal(dumpRefusal(dump(30), T), null);
+  assert.match(dumpRefusal(dump(30.3), T), /30m old \(limit 30m\)/);
+  assert.match(dumpRefusal({ ...dump(5), laneRows: undefined }, T), /no laneRows.*5m old/);
+  assert.match(dumpRefusal({ laneRows: [] }, T), /no readable age/);
+  assert.match(dumpRefusal(null, T), /no laneRows/);
+});
+const L = (itemId, mode, o = {}) => ({ itemId, name: 'i' + itemId, mode, grade: 'B', bid: 100, ask: 110, netEach: 8, units: 10, ...o });
+ok('--scan candidates: digest, all churn, top N band by net × units, one per item+mode', () => {
+  const c = scanCandidates({ digestRows: [L(1, 'band'), L(7, 'amplitude')], laneRows: [L(1, 'band', { units: 1 }), L(2, 'band', { units: 50 }), L(3, 'band', { units: 20 }),
+    L(4, 'churn', { units: 0 }), L(5, 'churn'), L(1, 'churn'), L(7, 'amplitude'), L(8, 'amplitude')] }, 1);
+  assert.deepEqual(c.picks.map(r => r.itemId + r.mode), ['1band', '4churn', '5churn', '1churn', '2band']);
+  assert.deepEqual([c.amplitude, c.bonds, c.unpriced, c.bandTotal], [2, 0, 0, 3]);
+});
+ok('--scan counts bonds and unpriced rows instead of checking them; no size keeps table order', () => {
+  const c = scanCandidates({ laneRows: [L(13190, 'band'), L(2, 'churn', { ask: null }), L(3, 'band', { bid: 0 })] });
+  assert.deepEqual([c.picks.length, c.bonds, c.unpriced], [0, 1, 2]);
+  assert.deepEqual(scanCandidates({ laneRows: [L(1, 'band', { units: null }), L(2, 'band', { units: 0, netEach: 9 })] }, 1).picks.map(r => r.itemId), [1]);
+});
+const res = (o, row) => { const f = base(o); return { row: L(1, 'churn', row), f, j: judge(f) }; };
+ok('--scan report: clean PASS, PASS ⚠, then one tally line; --all adds the FAIL lines', () => {
+  const rs = [res({ maxBuy: 999, name: 'F1' }), res({ peak: peak({ gap: 5, level: 1095 }), name: 'W' }), res({ limit: null, name: 'U' }), res({ name: 'P' }, { grade: null, mode: 'band' }), res({ maxBuy: null, net: 0, name: 'F2' })];
+  const out = scanReport(rs);
+  assert.match(out[0], /^PASS P .* · band —$/); assert.match(out[1], /^PASS ⚠ W .*warn: .* · churn B$/);
+  assert.equal(out[2], 'FAIL 2: bid above max buy 1, no margin after tax 1 · UNKNOWN 1: U'); assert.equal(out.length, 3);
+  assert.equal(scanReport(rs, { all: true }).filter(l => /^FAIL F/.test(l)).length, 2);
+});
+ok('--scan says so when nothing passes', () => {
+  assert.match(scanReport([res({ net: 0 })])[0], /nothing clears at screen prices \(1 checked\)/);
+  assert.match(scanReport([res({ limit: null })])[0], /1 checked, 1 UNKNOWN/);
+  assert.match(scanReport([])[0], /0 checked/);
+});
+{
+  let live = 0, max = 0;
+  const out = await mapLimit([1, 2, 3, 4, 5, 6, 7], 3, async x => { max = Math.max(max, ++live); await new Promise(r => setTimeout(r, 5)); live--; return x * 2; });
+  ok('mapLimit keeps order and its bound', () => { assert.deepEqual(out, [2, 4, 6, 8, 10, 12, 14]); assert.equal(max, 3); });
+}
+
 const CLI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'commands', 'verify-pick.mjs');
-for (const a of [[], ['Soul rune'], ['Soul rune@371:395', 'junk'], ['--why'], ['Soul rune@371:395', '--wat']])
+for (const a of [[], ['Soul rune'], ['Soul rune@371:395', 'junk'], ['--why'], ['Soul rune@371:395', '--wat'], ['--all'], ['--scan', '0'], ['--scan', 'x'], ['--scan', 'Soul rune@371:395'], ['--scan', '5', '6']])
   ok(`usage error exits 1: ${JSON.stringify(a)}`, () => {
     const r = spawnSync(process.execPath, [CLI, ...a], { encoding: 'utf8' });
     assert.equal(r.status, 1); assert.match(r.stderr, /usage/);

@@ -1,4 +1,4 @@
-# The Coffer / The-Ledger — instructions for Claude Code
+# The Coffer / The-Ledger
 
 This repo is worked in repeated sessions. Check `git log` and this file before assuming something is new.
 
@@ -32,7 +32,6 @@ This repo is worked in repeated sessions. Check `git log` and this file before a
     `js/money-format.js`): README "Map of the repo".
 
 ## Where shipped work is documented (check before assuming something is new)
-Much of what feels new already exists: check `git log` and `CHANGELOG.md` before building.
 
 | Need | Home |
 | --- | --- |
@@ -100,7 +99,8 @@ import `js/quotecore.js`, so their numbers match the app's.
 | "loop positions AND scan", "check positions every X and scan every Y" | `run-loop.mjs [--watch min] [--scan min] [--min-idle gp] [--no-sync]` — the scan runs only when deployable capital clears --min-idle; /loop at the gcd of the two cadences |
 | "what can I reverse-flip?", "sell a keep into the peak", "harvest a held item" | `screen-flip-niches.mjs --mode reverse` — reverse: the regime read is INVERTED (rising is bad), inform-only, owned keeps only |
 | "sync", "refresh the book" (scan and positions already do it) | `sync-fills.mjs` — --publish pushes to main: only when Ben asks |
-| "verify X at bid/ask", "is this pick still good?", "re-check my picks" | `verify-pick.mjs "<item>@<bid>:<ask>[@<flip-niche>]" [...] [--why]` — run in the same turn as the rec; pitch only a PASS, which is not a fill guarantee |
+| "verify X at bid/ask", "is this pick still good?", "re-check my picks" | `verify-pick.mjs "<item>@<bid>:<ask>[@<flip-niche>]" [...] [--why]` — run in the same turn as the rec; pitch only a PASS (no fill guarantee) |
+| "verify the whole scan", "does anything clear?" | `verify-pick.mjs --scan [N] [--all]` — run in the same turn as the rec; pitch only a PASS (no fill guarantee) |
 | "watch/monitor my positions", "run a flipping session", "keep an eye on X" (drive with /loop, pipeline/MONITORING.md) | `watch-positions.mjs ["<item>" ...]` |
 | "watch for dips/flushes", "run the dip loop" | `watch-positions.mjs --dip ["<item>" ...]` |
 <!-- /registry:asks -->
@@ -171,7 +171,7 @@ leak.
       occurs. Require "measured on <path>, N of M" or "shape only — unmeasured", and rank latent below live.
     - **Prose fixes regress; code fixes converge.** A prose correction is a fresh set of claims that can
       drift. **Derived numbers (counts, timings, call-site tallies) never go in
-      prose**: delete the number or encode the check; do not re-derive it.
+      prose**: delete the number or encode the check.
 13. **Prevent, don't accumulate.** (a) A lesson becomes a test, script output, or nothing; prose only for
     real judgment, and doc ceilings (`pipeline/ci/doc-budget.json`) only come down — after trimming run
     `lint-budget.mjs --bless`. (b) Anything inform-only or unproven ships with a `pipeline/ci/provisional.json`
@@ -194,7 +194,7 @@ imported `let` binding. Put new shared mutable state on `STATE`, never a new bar
 never-reassigned constants stay `export const`. Full rule: the header of `js/state.js`.
 
 ## Time display convention — displayed times are LOCAL
-Every timestamp the app renders uses the local-time `Date` getters (`getHours`, `getDate`, `getDay`,
+Every rendered timestamp uses the local-time `Date` getters (`getHours`, `getDate`, `getDay`,
 `getMonth`, `toLocaleTimeString`), never `getUTC*` or `toISOString`. UTC/ISO is storage and wire format only
 (epoch-second `ts` fields, backup metadata, the backup filename). Manual-log `date`/`time` strings are
 already local wall-clock (written by `fillsLogLine` and `add-manual-fill.mjs`), so render them raw.
