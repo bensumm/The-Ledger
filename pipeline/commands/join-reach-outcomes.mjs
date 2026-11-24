@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* join-reach-outcomes.mjs — the reachability head-to-head, FORWARD-SCORED (RC, PLAN-REACHABILITY-CONSOLIDATION).
  *
- * The tool carried five overlapping ways to price an exit (reach-fold · reachRelief · asym ·
+ * The tool carried four overlapping ways to price an exit (reach-fold · reachRelief · asym ·
  * pressure); `pressure` was RETIRED from exit pricing 2026-08-30 (join-exit-ev.mjs's pre-registered
  * criterion) and its `reachable.ask` co-log stopped that day — this command keeps scoring its logged
  * HISTORY (it is the record, not a pricing path), and new rows carry no pressure ask.
@@ -85,7 +85,7 @@ async function main() {
 
   const res = scoreReachability(scored, { minN });
   // The head-to-head proper: reads priced by all members of each set at once. NOTE each set holds THREE
-  // contenders + two reference lines — no matched pool ever holds all five.
+  // contenders + two reference lines — no matched pool ever holds them all.
   const MATCHED_SETS = [
     ['pressure', 'asym', 'reachFold', 'quickSell*', 'optSell*'],
     ['pressure', 'asym', 'reachRelief', 'quickSell*', 'optSell*'],

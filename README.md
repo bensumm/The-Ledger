@@ -1688,6 +1688,32 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     falsifier for the §4 make-or-break question; the realized truth is `retrojoin.mjs`→`/analyze`. Pure
     core `replayAmplitudePick`/`dayBuckets` fixture-pinned `pipeline/test/join-amplitude.test.mjs`; `--json`
     dumps the per-pick array),
+    **`join-asym-outcomes.mjs`** (2026-08-24, PLAN-PATIENT-PAIR §7 — replaces the asym pair's
+    READ-BACK QUANTILE CONSTANTS with forward-measured rates. PRODUCER: `asymShadow` on
+    `suggestions.jsonl` + the monthly archives via `readSuggestionLines()`; forward-scored against the
+    1h `pipeline/.market-archive.sqlite`. Asks the two-leg question the display implies but never
+    measured: was the deep bid actually TOUCHED, and if so was the high ask REACHED within H hours?
+    **The measured pair is nothing like the displayed one.** Over the pool `ASYM_MEASURED_ROWS`/
+    `ASYM_MEASURED_ITEMS` record (`emit.mjs` — read them there, they accrue) at the locked
+    decisive spec (entry ≤24h, exit ≤24h from the touch): entry **17.8%** against a logged `pBid` of
+    31.1%, exit-given-entry **24.2%** against a logged `pAsk` of **86.8%**, and a **4.3% round trip**.
+    The logged numbers are the `ASYM_P_LO`/`ASYM_P_HI` quantiles read back out (PLAN §2b), so this is
+    the size of the fiction, NOT a model comparison — do not report it as "the estimator was 62pp
+    optimistic". **DT1 GENERALISES, and hardest exactly where the anchor lived**: big-ticket rows
+    (ask ≥ `BIG_TICKET_GP`) enter MORE often (23.1%) but convert far less (**6.4%** exit-given-entry,
+    1.5% round trip) than sub-big-ticket (28.6% / 4.8%) — DT1's own figure was 4.8% at 24h. So the
+    Webweaver move reads as a good OUTCOME from a bad-odds setup, which is the answer PLAN §7 said
+    nobody had. Round trip rises with the horizon but never far: 6.3% at 48h, 9.0% at 96h, 10.8% at 7d.
+    **A REJECTED ESTIMATOR is recorded in the header and matters more than any shipped number**: the
+    first design scored a random-offset matched null and measured −36.0pp "adverse selection", which was
+    an artifact of the STARTING PRICE — the null arm begins at 99.8% of the row's ask level, the
+    conditional arm at 93.8%. The shipped contrast is time-matched instead (round trip vs ask-reached-
+    anywhere-in-W over the identical window), and `hit ⊆ askOnly` by construction makes it a
+    DECOMPOSITION, not a horse race. HONESTY: touched/reached ≠ filled — no queue position, no partials,
+    no competition at the level, so every absolute rate bounds a real offer from ABOVE; one era, one
+    update cycle, band-dominated; CIs resample ITEMS. **GATES NOTHING** — threshold work belongs to F1.
+    `--entry`/`--horizon`/`--item`/`--json`.)
+
     **`join-reach-outcomes.mjs`** (2026-08-27, PLAN-REACHABILITY-CONSOLIDATION — the RC head-to-head,
     forward-scored. The tool carries FOUR overlapping ways to price an exit (reach-fold · reachRelief ·
     asym · pressure); RC-S1/RC-S2 co-log them RAGGEDLY — see the Coverage table the command
