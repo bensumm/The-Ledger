@@ -6,7 +6,6 @@ claim, so re-check before building. Finish or delete a line; do not grow it into
 
 ## Bugs
 
-4. verified — `quotecore.js` `mom` is magnitude-blind: a 1 gp print under the 2h band is a `breakdown`, which can headline a CUT. GN-0 as planned is built and HELD (local branch `gn0-held`, 9716009): it would silence 94% of 7,227 replayed breaks. Score broken-against-not forward on the archive first, then pick the scale. M
 10. reported — `collapseOffers` merges two offers when a terminal row is lost and the slot relists: wrong unit cost. Read FILLS-PIPELINE §5.1. M
 11. reported — `js/watch.js` shows UNDERWATER without the thesis silencing the console applies (AP3). M
 12. reported — capital is multiplied in three times (`THROUGHPUT_CAP_GP`, Path-A gp/d, digest `rankKey`, now only a tie-break); Path-A reads 0/d on a fully deployed book, and capEff is unbounded for dust items. Decide which ONE layer owns capital. M
@@ -30,7 +29,6 @@ claim, so re-check before building. Finish or delete a line; do not grow it into
 - Unify the two thesis stores (ARCH-2). `reverseListBand` still folds the overshooting pressure ask. FloorValidator relax direction (R3b). Wave-3 ghost-band drop: gate on durable crossability, never the instant tick.
 - Registered, never run: the WPC §7b forward test; the holds interpretation layer (§9). Sampled validator pass-logging (owner picks N).
 - Multi-user template, MCP bank server: not planned.
-- PF1b peak floor: the projected peak follows the live mid down on a soft print. The planned reachable-high floor lags a decline, so it would raise exit prices and loosen the amplitude gate on fallers. If built: only on a non-falling trend, off recent hourly highs.
 - FIFO clock is offer PLACEMENT time, undocumented in FILLS-PIPELINE §5.1; a fill-time clock moves realised 39.16m → 35.78m. Document or change.
 - F1 evidence is lopsided (no falling cell; the rising cell is mostly one item): direction only, never magnitudes. Reconcile the four clearability constants (0.5%/1% display against 10% gating) there; nothing reads `trancheComfort` back.
 - Do not merge `renderValueMode`/`renderMode` or `valueScore`/`estimateRank` until the value lane survives its trial.
@@ -56,7 +54,7 @@ claim, so re-check before building. Finish or delete a line; do not grow it into
 ## Dropped (owner veto window)
 
 APP-PARITY AP2/AP5/1.0.0 · ANALYZE AZ3 · ASK-BACKTEST AB6/8/9 · CAPITAL-OPCOST · CODE-REVIEW chunk 2 · DIURNAL-TRIAGE DT5/6 · ESTIMATOR-FIDELITY EF2/EF3 · FLOW-DIET FD5/6 · FORECAST PF6–8 · GRADE-REACH C · GRADE-REWORK G2/3/7 · GATE-NOISE GN-2 · LANE-ADMISSION G–I · REACH-CALIBRATION AC3/AC4b · REACHABILITY RC1–3 · RECENCY-BASIS RB-0/4 · RECENCY-REACHABILITY 2/5/6 · PIPELINE-SEPARATION SEP1b/3/5–8/11b/13 (its cap is rule 10) · THIN-RESERVE TR3–5 · V2-P8 desk · HOLD, DIGEST DS0/1 (moot after SEP12), DS3/4/5/7, DS8 (shipped as monthly rotation).
-From PLAN.md: verdict V1–V6 Watch-tab lines · in-app re-scan and fill probability · `--niche` flag · mobile REMOVE editor · log-discovery dedup · SF-5 · reach-surface chunks 6/7/9 · PP1 named patient section · P8 state writer.
+From PLAN.md: verdict V1–V6 Watch-tab lines · in-app re-scan and fill probability · `--niche` flag · mobile REMOVE editor · log-discovery dedup · SF-5 · reach-surface chunks 6/7/9 · PF1b peak floor (a floor off past highs lags a faller) · PP1 named patient section · P8 state writer.
 
 ## Standing ruling
 
@@ -85,4 +83,5 @@ Keep `--raw`: a placeholder-model Est. column must never be the only number avai
 - `reach` is inform everywhere by design: a third to over half of rejects still printed in 8h (two samples; touches, not fills); 18.2% print by 48h but not 8h, so scoring needs a fill model. A validator pass is never logged: replay the pure function.
 - TOP 40→90: band +37 rows, churn S+ 2→10, not the thin big-tickets once named. `--max-price 90m` added 10 rows and displaced 9; `--gear-reserve 10` was worse. Churn's 12% yield is mostly the band partition.
 - N-day lows: best +0.26%/7d after tax. Range persistence adds nothing for commodities; big-ticket unmeasured. WK2's first-run 193 periods were an instrument artifact (rerun 0 of 2,516).
+- 2h-breakdown size does not predict a further drop (133 dates, 14,483 breaks; pct, band and swing scales): no noise cutoff on `mom`. Unsupported, not impossible; `break-size-study.mjs` header.
 - Guide re-anchor prediction: premise dead since 2026-09-30 (3h refresh, ±20% step).

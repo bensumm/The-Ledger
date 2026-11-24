@@ -1,7 +1,13 @@
 #!/usr/bin/env node
-/* break-size-study.mjs — does the SIZE of a 2h breakdown predict a further drop? (BACKLOG bug 4, GN-0)
+/* break-size-study.mjs — does the SIZE of a 2h breakdown predict a further drop? (GN-0)
  *
  *   node pipeline/experiments/break-size-study.mjs [--items 400] [--json]      read-only, no network
+ *
+ * RESULT 2026-11-24: registered verdict NULL. Read it with two defects found in review: the raw loss mean is too heavy-tailed
+ *   to pass at any realistic effect (one item printed 7 -> 699), and "first break wins" drops controls that later break
+ *   (look-ahead, which inflates excess). Re-run by the reviewer with losses clipped to 10%, with and without causal controls:
+ *   the 7 of 15 cutoffs tried still fail (b), and excess does not rise with size. Do not quote price-class splits from this
+ *   script: the >=100k continuation vanished with causal controls, top-5 removal or 3-day-matched controls.
  *
  * PRE-REGISTERED (committed before the first run)
  * Decision: may `mom` ignore breaks under a size cutoff, and on which scale.
