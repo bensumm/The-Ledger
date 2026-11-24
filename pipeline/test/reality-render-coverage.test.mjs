@@ -38,7 +38,7 @@
  * WHAT THIS FILE DOES **NOT** COVER — read before trusting it. It is a fixed set of regexes over six
  * named files. It cannot ENUMERATE the surfaces that print a diurnal level, so it cannot notice a new
  * one, and it does not today reach `js/trends.js`'s Trends-tab reference lines (which still render a
- * level with no clause — logged in plans/PLAN-DIURNAL-RECENCY-GUARD.md §10 "Still bare"). Do not
+ * level with no clause — logged in PLAN-DIURNAL-RECENCY-GUARD §10 "Still bare"). Do not
  * describe this guard as proving every surface is covered; it proves the call sites listed BELOW were
  * not removed.
  *   • `emit.mjs`'s `also ASK`/`also BID` secondary clause (cited as `:203-204` in Chunk 2b's write-up;

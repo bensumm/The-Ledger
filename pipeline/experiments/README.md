@@ -111,7 +111,7 @@ of that window, not predictive. Nothing in them has been encoded into a gate or 
 ## The 2026-08-09 bid-depth baseline
 
 - **`bid-depth-baseline-20260809.json` → `BID-DEPTH-BASELINE-FINDINGS.md`** — the control record for
-  Ben's live overnight test of the −5% queue-wall hypothesis (`plans/PLAN-BID-DEPTH-5PCT.md`): all 8
+  Ben's live overnight test of the −5% queue-wall hypothesis (`PLAN-BID-DEPTH-5PCT`): all 8
   resting buy offers captured at 2026-08-09 10:32 UTC against **both** anchors — the GE guide price and
   the live instasell — with the print ages that make the comparison trustworthy (4–13 min, inside
   `QUICK_FRESH_MIN`).
@@ -198,7 +198,7 @@ of that window, not predictive. Nothing in them has been encoded into a gate or 
   series LENGTH (`OSC_MIN_LEGS` is an absolute count) — 59.5% at 14d → 99.9% at 60d on the archive,
   and independently 63% → 100% by 30d on a synthetic driftless random walk with no cycle at all,
   identical across 3%/6%/12% per-step amplitude. Recorded as a don't-rebuild note in the function
-  header, README's `js/forecast.mjs` entry, and `plans/PLAN-OSCILLATION-CYCLE.md`'s F-H row (whose
+  header, README's `js/forecast.mjs` entry, and `PLAN-OSCILLATION-CYCLE`'s F-H row (whose
   "feed it a deeper archive series" follow-up is the live trap).
 
   **Read the correction banner first.** Two adversarial passes overturned seven headline claims (a

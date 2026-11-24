@@ -1,6 +1,6 @@
 # Bid-depth baseline — the live −5% experiment, captured 2026-08-09
 
-Companion data: `bid-depth-baseline-20260809.json`. Feeds `plans/PLAN-BID-DEPTH-5PCT.md`.
+Companion data: `bid-depth-baseline-20260809.json`. Feeds `PLAN-BID-DEPTH-5PCT`.
 
 ## Why this file exists
 

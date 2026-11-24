@@ -494,7 +494,7 @@ for (const want of positionals) {
       // early"; ASK-worded, it ships a price-to-sell-EARLY instruction under `--bid 2,291`. The AND
       // threshold is deliberately NARROW: firing on either signal alone measured a 60% fire-rate over 25
       // scored legs (56% cushion-only / 44% fading-only) against a ~40% wallpaper bar, so it was
-      // rejected. See plans/PLAN-DIURNAL-RECENCY-GUARD.md Chunk 2b §3.
+      // rejected. See PLAN-DIURNAL-RECENCY-GUARD Chunk 2b §3.
       const cushWord = rm.trend === 'fading' ? 'cushion FADING' : 'cushion NEGATIVE';
       log(rm.side === 'bid'
         ? `    ⚠⚠ ${cushWord} + pace lagging today — the market is pulling AWAY from this bid: it is not filling at this level, and the level is drifting further out of reach. Re-price to live or accept it rests unfilled — this is a FILL-side warning, not a sell trigger`

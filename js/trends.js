@@ -330,7 +330,7 @@ function renderDiurnal(profSeries, qrow, it, showAnalysis){
     // the same framing: since Chunk 2b (2026-08-12) the console appends the level-reality clause
     // (`⚠ spike-top ~X`) to its BID/ASK recommendation and this surface does not, so a spike-inflated
     // peak plots here as an unqualified `ask` reference line. `prof.peak.reality`/`prof.dip.reality` are
-    // in scope on `prof` — the gap is render-only. Tracked in plans/PLAN-DIURNAL-RECENCY-GUARD.md §10
+    // in scope on `prof` — the gap is render-only. Tracked in PLAN-DIURNAL-RECENCY-GUARD §10
     // "Still bare"; do not restate this parity as achieved until that ships.
     if(dr&&dr.bid!=null&&dr.ask!=null){
       const win=w=>fmtHour(w.startH)+'–'+fmtHour(w.endH);

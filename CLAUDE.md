@@ -124,39 +124,10 @@ deliberate):**
 | "**clean up** after this session/wave", "**check the architecture**", "did we **leave a mess**?", "post-wave **cleanup**" | **`/cleanup` skill** — the CODE/DOC/ARCHITECTURE hygiene pass (distinct from `/analyze`'s trading-record retro): runs every CI guard in `checks.yml` order + the two non-gating reports (`lint-plan-lifecycle.mjs`, `report-branches.mjs`), then a SESSION/WAVE-scoped judgment sweep (duplication, dead code, doc-honesty, worktree/branch staleness) ending in a propose-never-apply fix list. Judgment scoped to the wave diff, never a cold repo-wide re-audit |
 
 
-## Open followups (not yet built)
-- **The master plan: `PLAN.md`** (single plan file since 2026-07-04) — the plan + the
-  scoreboard. Waves 1–4 have **all shipped** (T1/T2, O1, K1–K3, S1–S3, Q1, E1, L1, G1, M1, N1,
-  and the Wave-4 cleanup D1/R1/P1/X1/X2/A1–A3/BE1/W1/CI1) — see PLAN.md's Status table for the
-  per-chunk shas. **The active program is the Pipeline-v2 wave (D0→P8)** — snapshot+SQLite
-  archive, context chain, validators on every surface, path engine (verdict = item × thesis),
-  declarative strategy specs — specs in PLAN.md "Pipeline v2"; note the **falling-exclusion
-  doctrine is AMENDED** (per-strategy, not global — encoded at P5). Also open: **F1** (GATED on
-  O1's sample thresholds) plus PLAN.md's **Discovered** list. Planning process: `docs/PLANNING.md`. `main` is protected by a PR+`checks` ruleset (G1, 2026-07-04); no merge queue on this
-  user-owned repo and PR creation is token-blocked for now, so chunks land via attended
-  direct-push under the admin bypass (parallel lanes still use worktree subagents,
-  hand-serialized) until `gh auth refresh` enables the PR path. The historical plan docs
-  (`PLAN-2/3/4/5.md`, and the folded `PLAN-LOCAL-WATCH.md`/`PLAN-LOG-HARDENING.md`) are
-  **deleted** — full text via `git show <sha>:PLAN-4.md` (etc.; for the pre-2026-07-26 shas these were
-  at the repo root, so no `plans/` prefix). A per-topic `PLAN-*.md` lives in **`plans/`** (moved off the
-  root 2026-07-26) and is folded into `PLAN.md` + deleted the moment its last chunk ships — `PLAN.md`
-  itself (the master plan + scoreboard) stays at the root; don't leave a shipped per-topic plan behind
-  in `plans/`.
-- **Per-item "recommend price adjustment" button** on the Trends page: pull fresh GE
-  state + item info on demand and recommend a price tweak (ties into patient pricing
-  and eventually the fills pipeline's realized-vs-suggested calibration; tracked in
-  PLAN.md's unscheduled notes).
-- ~~**Ledger redesign — grouped, watchlist-filtered, period P&L**~~ — **BUILT** (watchlist
-  filter, per-item grouping + drill-in, period P&L bucketed by SELL date — `renderLedger` /
-  `periodKey` in `js/ledger.js`, A3 — were `js/ui.js`). The local-timezone day-boundary verification lives in PLAN.md
-  chunk E1. **Ledger UX rework** (0.45.0, LU1) refined the surface: the grouped-row item name is now a
-  Trends link (`linkname`→`openTrends`) and multi-lot expansion moved to an explicit `.expbtn` chevron
-  (the old whole-row `data-grp` click is gone); the P&L period control (`#ledgerPeriod`) moved from the
-  top bar onto the "Closed flips" label; clicking a `#periodStrip` bucket filters the closed table to that
-  bucket's sell date (`STATE.ledgerBucket`, session-only — active bucket shows an `×`, "All" pill or
-  re-click clears, changing granularity clears); the manual-entry form is a collapsed-by-default
-  `<details id="ledgerFormD">` (persisted `ledgerFormOpen`); and the closed-flips columns sort via TB1's
-  `makeSortable` on group aggregates (default `last`-close desc = unchanged order).
+## Open followups
+- **`docs/BACKLOG.md`** — every open item without a plan, plus the measured "do not rebuild" list. Read it before
+  proposing work. **`plans/`** — the active plans only. **`PLAN.md`** — executor rules and the sha scoreboard
+  (being folded, PLAN-LEAN LN1). Planning process: `docs/PLANNING.md`. A folded plan's text: `git show 1cfdda0:plans/<NAME>.md`.
 
 ## Repo is public — no PII
 This repo is public on GitHub. Never commit account names, RSNs, real names, emails,

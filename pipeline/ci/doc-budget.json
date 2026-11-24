@@ -1,8 +1,8 @@
 {
-  "plans": 49,
+  "plans": 5,
   "docs": {
-    "CLAUDE.md": 42594,
-    "README.md": 382645,
+    "CLAUDE.md": 39897,
+    "README.md": 382695,
     "PLAN.md": 254655,
     "pipeline/MONITORING.md": 70332,
     "pipeline/FILLS-PIPELINE.md": 74770,
@@ -22,6 +22,7 @@
     ".claude/skills/positions/SKILL.md": 60402,
     ".claude/skills/scan/SKILL.md": 102976,
     ".claude/skills/schedule/SKILL.md": 8030,
-    ".claude/skills/ship/SKILL.md": 11550
+    ".claude/skills/ship/SKILL.md": 11550,
+    "docs/BACKLOG.md": 7140
   }
 }

@@ -1,6 +1,6 @@
 /**
  * wpc-label-study.mjs — PLAN-WEEKDAY-PHASE-CONFOUND §3 + §6, the REGISTERED test.
- * Pre-registration: plans/PLAN-WEEKDAY-PHASE-CONFOUND.md @ b7e294d (committed BEFORE this ran).
+ * Pre-registration: PLAN-WEEKDAY-PHASE-CONFOUND @ b7e294d (committed BEFORE this ran).
  * This header fixes the operational firing thresholds (registration left them qualitative); the
  * script is committed before its first result run, dated 2026-09-08.
  *

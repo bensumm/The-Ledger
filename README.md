@@ -1121,7 +1121,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `quote-items.mjs` default stdout view with `--raw` as the model-free escape hatch; console-only, no
   `screen.json`/app change). Folds into `PLAN.md` and is deleted when its last chunk ships (the
   plan-file rule).
-- `plans/PLAN-DIGEST-SIGNAL-AND-SCAN-PERF.md` — in-flight per-topic plan (2026-08-07, **PARTLY SHIPPED —
+- `PLAN-DIGEST-SIGNAL-AND-SCAN-PERF` — FOLDED (2026-08-07, **PARTLY SHIPPED —
   SP1 landed**; corrected 2026-08-09, this entry said PLANNING ONLY / no code changed): two workstreams that share one file (`pipeline/commands/screen-flip-niches.mjs`)
   and therefore one parallel-safety contract. **A — digest SIGNAL:** as of that plan's writing
   `buildDigestBlock`'s comparator ranked on `capEff × deployable` and never read the `reach` column it
@@ -1688,6 +1688,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     falsifier for the §4 make-or-break question; the realized truth is `retrojoin.mjs`→`/analyze`. Pure
     core `replayAmplitudePick`/`dayBuckets` fixture-pinned `pipeline/test/join-amplitude.test.mjs`; `--json`
     dumps the per-pick array),
+    **`docs/BACKLOG.md`** (open items without a plan + measured do-not-rebuild list),
     **`backup-data.mjs`** (private off-repo copy of the trading record to `COFFER_BACKUP_DIR` or
     `~/The-Ledger-backup`; zero-git; stamps `.cache/last-backup`. Pinned by `process-guards.test.mjs`),
     **`pipeline/lib/config/chores.mjs`** (`dueChores`/`runChores` — runs the backup and announces stale
@@ -2583,7 +2584,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     remaining content difference is the SEPARATE 5m-grain line (watch passes `stats5m: null`, honestly). **Reading the clause: `trend` is an OLS fit over all N recent days while
     `cushionFrom→cushionTo` are the RAW first and last of them, so the label and the pair answer
     different questions and can disagree. It is NOT robust to a volatile end-day — OLS gives endpoints
-    maximum leverage (`plans/PLAN-SIGNAL-RECENCY.md` retracted that claim; do not reintroduce it).**
+    maximum leverage (`PLAN-SIGNAL-RECENCY` retracted that claim; do not reintroduce it).**
     orders/formats already-computed pieces, decides nothing — output-format-only; PLAN-DIURNAL-TIMING
     DT2 adds `formatTimedLap(lap, {fmt})` here too — the ONE shared renderer for a `js/windowread.mjs`
     `diurnalTimedLap` result, SUPERSEDING the old per-call-site diurnal text so `screen-flip-niches.mjs`
