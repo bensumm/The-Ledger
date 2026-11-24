@@ -14,7 +14,7 @@ differently; neither ordering is a quality ordering.) Ranking needs the cost mod
 `join-reach-basis.mjs` already carries. (2) The headline is HORIZON-CONDITIONAL: pressure's gap is −2.9%
 at H=6, −1.6% at H=24 and **+0.2% at H=96**, closest to zero of the five — and H=24 is the horizon DT1
 retired for big-ticket, pressure's own class. Per-topic working doc (PLANNING.md lifecycle). Cross-linked from
-`PLAN-DEPTH-EXIT.md` (which shipped the primitives this consolidates around: DE1/DE2/DE6 depth,
+`the retired depth-exit plan` (which shipped the primitives this consolidates around: DE1/DE2/DE6 depth,
 PB1 pressure, DE3 the two-lens held-lot line). This doc SPANS beyond depth-exit — it governs how the
 whole *reachability layer* (how far a resting bid/ask realistically fills) converges on ONE
 evidence-scored primitive instead of accreting parallel heuristics. It designs HOW to earn the

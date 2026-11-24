@@ -33,7 +33,7 @@
  * beat. (No count is stated here on purpose — two reviewers counted the citing files and disagreed,
  * and a hand-maintained count in this repo has gone stale in exactly this way before.)
  *
- * A NOTE ON A REJECTED ESTIMATOR (kept per the join-depth convention of recording what failed):
+ * A NOTE ON A REJECTED ESTIMATOR (kept by the convention of recording what failed):
  * the first design used Δ = P(Y|D_B) − P(Y|D_A), the outcome-rate gap between the two discordant
  * cells. It is WRONG — it compares rates across disjoint cells and never sees the cell WEIGHTS.
  * With w_A=0.9, p_A=0.6, w_B=0.1, p_B=0.9, recent's accuracy is 0.45 and full's is 0.55, yet

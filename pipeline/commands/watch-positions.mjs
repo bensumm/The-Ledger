@@ -62,8 +62,8 @@ import { loadWatchlistIds } from '../lib/config/watchlist.mjs';
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs } from '../lib/market/marketfetch.mjs';   // vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readExchangeLog, activeOffers, restartBlindSuspects, restingAge } from '../lib/reconstruct/offers.mjs';
-import { logSuggestions, suggestionEntry, reachableShadow, depthExitShadow, asymShadow, windowExitShadow } from '../lib/render/suggestlog.mjs';   // DE3/RC-S1: shared reachable/depthExit/asym ledger-shadow reshapers (one home, no drift across watch/screen/quote); WC1: windowExitShadow (the window-clear ask-rung forward record)
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, diurnalTimedLap, clearableAsk, reachableBand, asymPair, askExitRead, askReachDecayNote, reachMarginTrigger } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots; RC-S1: asymPair for the head-to-head co-log; WC1: askExitRead for the window-clear ask-rung shadow; PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the two direct hourProfile+deriveDiurnalRange call sites below (the shadow-log bid/ask + the diurnalAsk fallback) — same bid/ask/peakWindow values, one shared composition
+import { logSuggestions, suggestionEntry, reachableShadow, asymShadow, windowExitShadow } from '../lib/render/suggestlog.mjs';
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, diurnalTimedLap, reachableBand, asymPair, askExitRead, askReachDecayNote, reachMarginTrigger } from '../../js/windowread.mjs';
 import { estimatePair, asymEstimate, estConfLean, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/signal/estimators.mjs';   // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION): the reachRelief-family estSell + asym pair, co-logged beside depthExit/reachable for the head-to-head; PC3 — SELL_TOP_MODELS validates --est-sell
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // RC-S1: the neutral band thesis for the held-lot est/asym shadow (same convention as quote-items --positions)
 import { blindWarningLine } from '../lib/reconstruct/logblind.mjs'; // LH2 restart-blindness header line
@@ -214,7 +214,7 @@ function windowLine(ts1h, { bid = null, ask = null, compact = false, heldQty = n
   if (!stats) return null;
   const { lows, his } = stats;
   // (The DE3 depth-floor/pressure-reachable clause is gone — it was gated on the
-  // retired --pressure-exit trial and died with it; the depthExit co-log is untouched.)
+  // retired --pressure-exit trial and died with it.)
   // recency-split guard: a ⚠ marker when the full touched/reached count is concentrated in an
   // older price regime (recent nights don't dip to the bid / reach the ask) — see windowread.mjs
   const stale = (side, level) => recencySplit(stats.days, side, level, RECENT_NIGHTS).staleOptimistic ? ' ⚠stale' : '';
@@ -767,17 +767,15 @@ async function main() {
   for (const it of held) {
     it.gate = { escalate: false, armed: false, reason: null };
     it._deltas = null; it._support = null; it._cutTrigger = null; it._thesis = null; it._pathCtx = null; it._display = null;
-    it._depthExit = null; it._reachable = null; it._estShadow = null; it._asymShadow = null; it._windowExit = null; it._reachRead = null;
+    it._reachable = null; it._estShadow = null; it._asymShadow = null; it._windowExit = null; it._reachRead = null;
     it._fade = null;   // HF2 (PLAN-HOLD-FADE-ALERT) — the per-lot FADE read {hours, maxDeficit, minGp, trigger, rm}
     it._cycle = null;   // Chunk 4 (--cycle): the per-item cycle-expectation tick result (null unless --cycle)
-    // DE3 (PLAN-DEPTH-EXIT): the held lot's WHOLE-DAY depth floor (clearableAsk — what this qty can
-    // book at, the plan's v1 whole-day decision) + pressure-driven reachable band (reachableBand),
-    // both off the ALREADY-fetched ts1h (zero new fetch). Inform-only: they feed the
-    // suggestions.jsonl shadow fields, never a verdict/alert/price. Guarded separately
-    // from the gating try so a depth failure can't cost the conviction read (and vice versa).
+    // The held lot's pressure-driven reachable band (reachableBand), off the ALREADY-fetched ts1h (zero
+    // new fetch). Inform-only: it feeds the suggestions.jsonl shadow field, never a verdict/alert/price.
+    // Guarded separately from the gating try.
     // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION): the same block ALSO computes the two OLDER reachability
     // estimators — the reachRelief-family estSell (estimatePair) and the fixed-quantile asym pair —
-    // so all FIVE competing exit estimators co-log on THIS row (the head-to-head accrual surface). The
+    // so the competing exit estimators co-log on THIS row (the head-to-head accrual surface). The
     // shadow est deliberately passes declaredExit:null so the scored number is the MODEL's intrinsic
     // ask (reachRelief's prediction), not the operator's declared plan; the declared exit is logged
     // separately via the thesis. Zero new fetch (reuses ts1h/ts5m). Inform-only — nothing rendered.
@@ -787,7 +785,6 @@ async function main() {
       const fadeRef = it.row.quickSell ?? it.avgCost ?? null;
       const hup = hoursUnderProfile(it.ts1h, { minGp: fadeMinGp(fadeRef) });
       it._fade = hup ? { hours: hup.hours, maxDeficit: hup.maxDeficit, minGp: hup.minGp, trigger: null, rm: null } : null;
-      it._depthExit = clearableAsk(it.ts1h, { qty: it.qty, wStart: 0, wEnd: 0, nights: 14 });
       it._reachable = dayStats ? reachableBand(dayStats) : null;
       if (dayStats) {
         const ap = asymPair(dayStats);
@@ -974,18 +971,12 @@ async function main() {
     : it.cls === 'LIQUID_RANGING_WIDE' ? 'SCALP-BUY' : 'BUY';
   const bidVerdict = it => offerVerdict(it.row, it.bid.offer, it._bidPathCtx);   // SHARED with the app Watch tab (js/quotecore.js); P5 path-aware
   const wPosture = isOvernightNow() ? 'overnight' : 'active';   // YS2: the posture this live read was made under
-  // DE3 (PLAN-DEPTH-EXIT) — lean shadow objects for the F1 retro-join (the estConfLean absent-field
-  // pattern: present only when a read was computed; normal rows byte-identical). depthExit ALWAYS
-  // carries either the booked ask or the collapse REASON + the liquidity class — that pair is exactly
-  // what F1 needs to measure whether the flat ×4 competition bar systematically nulls a class we'd
-  // want to price (the predicted liquidity bias). reachable carries the pressure band's bid/band record
-  // (its ASK leg no longer logs — the pressure exit retirement).
   // RC-S1 — the exit-estimator co-log lands on ONE held row via the SHARED reshapers
-  // (lib/suggestlog.mjs — one home, no drift across watch/screen/quote): depthExit (depth) · reachable
+  // (lib/suggestlog.mjs — one home, no drift across watch/screen/quote): reachable
   // (bid/band) · estSell (reachRelief) · asym (fixed-quantile); reach rides estConfidence.
   logSuggestions('watch', { mode: null, params: { targetsOnly: TARGETS_ONLY } }, [
     ...held.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: heldVerdict(it), posture: wPosture,
-      depthExit: depthExitShadow(it._depthExit, { qty: it.qty, volDay: it.row.volDay }), reachable: reachableShadow(it._reachable),
+      reachable: reachableShadow(it._reachable),
       estBuy: it._estShadow ? it._estShadow.estBuy : null,
       estSell: it._estShadow ? it._estShadow.estSell : null,
       estConfidence: estConfLean(it._estShadow),

@@ -28,7 +28,6 @@ export const REACH_ESTIMATORS = Object.freeze([
   { key: 'reachFold',   baseline: false, ask: s => fin(s && !reliefFired(s) ? s.estSell : null) },
   { key: 'reachRelief', baseline: false, ask: s => fin(s && reliefFired(s) ? s.estSell : null) },
   { key: 'asym',        baseline: false, ask: s => fin(s && s.asym ? s.asym.ask : null) },
-  { key: 'depth',       baseline: false, ask: s => fin(s && s.depthExit ? s.depthExit.ask : null) },
   { key: 'quickSell*',  baseline: true,  ask: s => fin(s ? s.quickSell : null) },
   { key: 'optSell*',    baseline: true,  ask: s => fin(s ? s.optSell : null) },
 ]);

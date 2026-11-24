@@ -360,11 +360,6 @@
       "block": 40,
       "comments": 85
     },
-    "pipeline/commands/join-depth-outcomes.mjs": {
-      "dated": 1,
-      "block": 62,
-      "comments": 106
-    },
     "pipeline/commands/join-exit-ev.mjs": {
       "dated": 2,
       "block": 40,

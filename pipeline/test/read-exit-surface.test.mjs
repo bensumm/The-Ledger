@@ -373,16 +373,6 @@ ok('the fold row names itself a reconstruction', () => {
   assert.equal(quick.ask, live.quickSell, 'quick* is the live instabuy verbatim');
 });
 
-ok('incumbentAsks names the depth collapse instead of dropping the row', () => {
-  const it = ITEMS[0];
-  const statsSeries = it.series.map(r => ({ ...r, timestamp: r.ts }));
-  const pts = incumbentAsks({ stats: null, live: null, statsSeries, qty: 1e12, nights: 14, now: NOW });
-  const depth = pts.find(p => p.key === 'depth');
-  assert.ok(depth, 'an unbookable qty must still produce a depth row');
-  assert.equal(depth.ask, null);
-  assert.match(depth.note, /no level books/);
-});
-
 /* --- the JSON branch returns before any table ------------------------------------------------------ */
 ok('--json emits the objects and NOTHING else — no table to strip', () => {
   const reps = ITEMS.map(it => reportFor(it));

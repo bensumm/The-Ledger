@@ -94,7 +94,12 @@ const brief = {
   minN,
 };
 
-if (JSON_OUT) { console.log(JSON.stringify(brief, null, 2)); process.exit(0); }
+const takenFlags = rows => (rows || []).filter(r => r.outcome && r.outcome !== 'not-taken');
+if (JSON_OUT) {
+  const lean = { ...askHead, rows: undefined, trusted: takenFlags(askHead.trusted), untrusted: takenFlags(askHead.untrusted) };
+  console.log(JSON.stringify({ ...brief, askHead: lean }, null, 2));
+  process.exit(0);
+}
 
 // ---- human report -----------------------------------------------------------------------------------
 console.log(`# analyze — dataset audit + retro rollup + tuning candidates`);
@@ -183,7 +188,7 @@ if (!askHead.n) {
 } else {
   console.log(`  ${askHead.n} shave-gap flag(s) · ${askHead.nTrusted} trusted (surfaced as a ladder note) · ${askHead.nUntrusted} untrusted (audit only — thin-flier path Bar E protects)`);
   console.log(`  trusted subset: mean gap ${pct(askHead.gapPctTrusted)} of the ask · mean net-leverage ${askHead.netLeverTrusted != null ? askHead.netLeverTrusted.toFixed(1) + '×' : '—'} · ${askHead.nTakenTrusted} taken → realized/u ${gp(askHead.realisedPerUnitTaken)}`);
-  for (const r of askHead.trusted)
+  for (const r of takenFlags(askHead.trusted))
     console.log(`    - #${r.itemId} · gap +${r.gap != null ? r.gap.toLocaleString() : '—'} (raw top ${r.rawTop != null ? r.rawTop.toLocaleString() : '—'}) · bucket ${r.topBucketVol != null ? r.topBucketVol.toLocaleString() : '—'} u → ${r.outcome ?? 'not-taken'}${r.realisedPerUnit != null ? ` · realized/u ${gp(r.realisedPerUnit)}` : ''}`);
 }
 console.log(`  ⚠ n≈0 — ASK_HEADROOM_MIN_PCT / RAWTOP_TRUST_BUCKET_VOL / ASK_HEADROOM_VOL_FLOOR are PLACEHOLDERS; this is a FLAG for F1 (analyze surfaces evidence, never retunes; the Option-B clamp-widen is F1's to graduate), not a calibrated conclusion.`);

@@ -51,7 +51,7 @@ export const BOOTSTRAP_ITERS = 2000;
 export const BOOTSTRAP_SEED = 12345;
 export const MIN_ITEMS_FOR_CI = 5;
 
-/* A REJECTED ESTIMATOR, kept per the join-depth convention of recording what failed.
+/* A REJECTED ESTIMATOR, kept by the convention of recording what failed.
  * The first design scored a MATCHED NULL: the same item and level over a horizon-length window at
  * RANDOM offsets, reporting `P(hit | entered) − null` as "does entering predict the exit". It
  * measured −36.0pp, CI [−42.7, −29.1] over 369 items — which reads as overwhelming adverse

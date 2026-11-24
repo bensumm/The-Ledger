@@ -37,21 +37,18 @@ test('reachPredictions: relief fired and relief absent are DISJOINT reads of the
 });
 
 test('reachPredictions: each estimator reads its OWN logged field, and a missing one is null not 0', () => {
-  const p = reachPredictions({ reachable: { ask: 11 }, asym: { ask: 12 }, depthExit: { ask: 13 }, quickSell: 14, optSell: 15 });
-  assert.equal(p.pressure, 11); assert.equal(p.asym, 12); assert.equal(p.depth, 13);
+  const p = reachPredictions({ reachable: { ask: 11 }, asym: { ask: 12 }, quickSell: 14, optSell: 15 });
+  assert.equal(p.pressure, 11); assert.equal(p.asym, 12);
   assert.equal(p['quickSell*'], 14); assert.equal(p['optSell*'], 15);
   // Post-retirement rows (2026-08-30) log a bid-only `reachable` — the HISTORICAL pressure key reads null.
   assert.equal(reachPredictions({ reachable: { bid: 383, pressure: 1.1, reliability: 1, bandLow: 5, bandHigh: 2 } }).pressure, null);
   assert.equal(p.reachFold, null, 'no estSell logged → null, never a fabricated 0');
-  // a depthExit that COLLAPSED carries a reason and no ask — it must not score as reachable-at-0
-  assert.equal(reachPredictions({ depthExit: { collapse: 'thin book' } }).depth, null);
 });
 
 test('scoreRow: reached is exactly "the window max cleared the ask", and headroom agrees with it', () => {
-  const out = scoreRow(series, rowWith({ pressure: 120, asym: 100, depth: 110 }), { horizonH: 2 });
+  const out = scoreRow(series, rowWith({ pressure: 120, asym: 100 }), { horizonH: 2 });
   assert.equal(out.pressure.reached, false, '120 is above the 110 top');
   assert.equal(out.asym.reached, true);
-  assert.equal(out.depth.reached, true, 'equal to the top counts as reached');
   assert.ok(out.pressure.headroomPct < 0 && out.asym.headroomPct > 0);
   assert.equal(Math.round(out.asym.headroomPct * 100) / 100, 10, '(110-100)/100');
   // Kills: a strict `top > a` reached test, and any sign flip in headroomPct.
@@ -72,7 +69,7 @@ test('matchedPool: only the rows where EVERY named estimator priced, so columns 
   const m = matchedPool(scored, ['pressure', 'asym']);
   assert.equal(m.n, 1, 'the row missing asym is excluded from BOTH columns, not just asym\'s');
   assert.equal(m.estimators.find(e => e.key === 'pressure').n, 1);
-  assert.equal(matchedPool(scored, ['pressure', 'depth']), null, 'no row carries them all → null, not an empty verdict');
+  assert.equal(matchedPool(scored, ['pressure', 'reachRelief']), null, 'no row carries them all → null, not an empty verdict');
   // Kills: falling back to per-estimator marginals, which is the unmatched-marginal trap.
 });
 
@@ -100,5 +97,5 @@ test('the joiner gates the class axis on the LIQUIDITY vocabulary, never on the 
 test('the baselines are declared as reference lines, so a reader cannot mistake optSell for an outside null', () => {
   const baselines = REACH_ESTIMATORS.filter(e => e.baseline).map(e => e.key);
   assert.deepEqual(baselines, ['quickSell*', 'optSell*']);
-  assert.ok(REACH_ESTIMATORS.filter(e => !e.baseline).length >= 5, 'the five contenders stay contenders');
+  assert.ok(REACH_ESTIMATORS.filter(e => !e.baseline).length >= 4, 'the contenders stay contenders');
 });

@@ -467,7 +467,7 @@ and power only inspector-only surfaces (`read-window-range.mjs --depth`/`--press
 feeds a main decision surface today. Ben needs to choose one of:
 1. **Graduate DE4** (the originally-staged consumer: fold depth-based pricing into `estimatePair`'s
    held-lot sell) — if chosen, this becomes a real code chunk with its own spec (see
-   `PLAN-DEPTH-EXIT.md`'s DE4 stub, which already scopes this).
+   `the retired depth-exit plan`'s DE4 stub, which already scopes this).
 2. **Mark both explicitly shelved** in `PLAN.md`'s Discovered/decisions list, so they stop reading as
    "still coming" indefinitely, with a one-line pointer to why (inert relative to main surfaces,
    `--depth`/`--pressure` remain useful manual inspectors, no plan to promote further absent new
@@ -509,7 +509,7 @@ regression surface):**
   number changes and looks surprising," not "a row disappears from the screen" — still worth a
   before/after diff, but not the same review bar as R2/R3.
 - **R8 has zero regression risk** by construction (it's a decision + doc chunk unless Ben chooses to
-  graduate DE4, at which point it inherits `PLAN-DEPTH-EXIT.md`'s own risk analysis).
+  graduate DE4, at which point it inherits `the retired depth-exit plan`'s own risk analysis).
 
 **Calibration placeholders the audit flagged, and whether they should be F1-gated rather than set
 now:**

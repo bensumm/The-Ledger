@@ -20,7 +20,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { LEDGER, suggestionEntry, liqClassOf, liquidityAtPlacement, LIQ_CLASSES, rotateLedger, readSuggestionLines, currentMonthKey, reachableShadow, depthExitShadow, windowExitShadow, excludedShadow } from '../lib/render/suggestlog.mjs';
+import { LEDGER, suggestionEntry, liqClassOf, liquidityAtPlacement, LIQ_CLASSES, rotateLedger, readSuggestionLines, currentMonthKey, reachableShadow, windowExitShadow, excludedShadow } from '../lib/render/suggestlog.mjs';
 
 let n = 0;
 function ok(name, fn) { fn(); n++; console.log('  ✓ ' + name); }
@@ -155,26 +155,20 @@ ok('YS2 forward fields are included only when supplied (lean, non-null)', () => 
 
 ok('DE3 + RC-S1: the reachability head-to-head shadow fields are lean-included (co-log contract)', () => {
   // watch held rows co-log the exit estimators on ONE row for the F1 head-to-head
-  // (PLAN-REACHABILITY-CONSOLIDATION): depthExit (depth), reachable (bid/band — its ask leg stopped
+  // (PLAN-REACHABILITY-CONSOLIDATION): reachable (bid/band — its ask leg stopped
   // logging 2026-08-30 with the pressure exit retirement), estSell (reachRelief),
   // asym (fixed-quantile). Each is lean-included — present only when supplied; suggestionEntry is a
   // pass-through, so a HISTORICAL reachable carrying `ask` still round-trips unchanged.
   const full = suggestionEntry({ quickBuy: 393, quickSell: 396 }, { itemId: 566, cls: 'liquid', verdict: 'HOLD',
-    depthExit: { qty: 25000, competition: 4, liqClass: 'liquid', ask: 394, clearFrac: 0.79 },
     reachable: { ask: 401, bid: 383, pressure: 1.66, reliability: 1, bandLow: 6, bandHigh: 2 },
     estBuy: 385, estSell: 396, estConfidence: { askHit: 7, askDays: 14, reachRelief: 0.75 },
     asym: { bid: 379, ask: 396, pAsk: 0.86, pBid: 0.29, n: 14, rank: 1200 } });
-  assert.equal(full.depthExit.ask, 394); assert.equal(full.reachable.ask, 401);
+  assert.equal(full.reachable.ask, 401);
   assert.equal(full.estSell, 396); assert.equal(full.asym.ask, 396);
   assert.equal(full.estConfidence.reachRelief, 0.75, 'reachRelief number rides estConfidence for the head-to-head');
-  // a collapsed depth read carries its reason + liqClass (the ×4-bias measurement F1 needs), no ask
-  const collapsed = suggestionEntry({}, { itemId: 999, cls: 'thin', verdict: 'HOLD',
-    depthExit: { qty: 100, competition: 4, liqClass: 'thin', collapse: 'insufficient-depth' } });
-  assert.equal(collapsed.depthExit.collapse, 'insufficient-depth');
-  assert.ok(!('ask' in collapsed.depthExit), 'a null depth read logs the reason, not a fake ask');
   // absent → byte-identical (a bid/target watch row, or any legacy row)
   const none = suggestionEntry({ quickBuy: 100 }, { itemId: 7, cls: 'mid', verdict: 'BID-OK' });
-  assert.ok(!('depthExit' in none) && !('reachable' in none) && !('estSell' in none) && !('asym' in none),
+  assert.ok(!('reachable' in none) && !('estSell' in none) && !('asym' in none),
     'no reachability shadow keys when none supplied — bid/target/legacy rows stay byte-identical');
 });
 
@@ -184,19 +178,12 @@ ok('a removed shadow field (demandRegime) is silently ignored — the destructur
   assert.ok(!('demandRegime' in e), 'the field is no longer emitted (destructure ignores the unknown key)');
 });
 
-ok('RC-S2: reachableShadow / depthExitShadow reshapers (shared, no drift across watch/screen/quote)', () => {
+ok('RC-S2: reachableShadow reshaper (shared, no drift across watch/screen/quote)', () => {
   const rb = { ask: 401, bid: 383, pressure: 1.6634, reliability: 1, bandLow: 6, bandHigh: 2, baseLow: 384 };
   assert.deepEqual(reachableShadow(rb), { bid: 383, pressure: 1.66, reliability: 1, bandLow: 6, bandHigh: 2 },
     'the ASK leg is NOT logged (retired 2026-08-30); pressure/reliability rounded to 2dp; base* dropped (lean)');
   assert.equal(reachableShadow(null), null);
   assert.equal(reachableShadow({ bid: null }), null, 'a degraded (null-bid) band logs nothing');
-  const ca = { price: 394, clearFrac: 0.7857, competition: 4, reason: null };
-  assert.deepEqual(depthExitShadow(ca, { qty: 25000, volDay: 1_200_000 }),
-    { qty: 25000, competition: 4, liqClass: 'liquid', ask: 394, clearFrac: 0.79 });
-  const collapsed = { price: null, competition: 4, reason: 'insufficient-depth' };
-  assert.deepEqual(depthExitShadow(collapsed, { qty: 100, volDay: 40 }),
-    { qty: 100, competition: 4, liqClass: 'thin', collapse: 'insufficient-depth' }, 'collapse + liqClass, no fake ask');
-  assert.equal(depthExitShadow(null, { qty: 1, volDay: 1 }), null);
 });
 
 ok('WC1: the windowExit ask-rung shadow is lean-included (present only when supplied)', () => {

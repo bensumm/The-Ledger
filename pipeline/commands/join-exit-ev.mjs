@@ -55,7 +55,7 @@
  * that retirement was carried out — the pressure sell model, its trial flags, the app's trial column and
  * the `reachable.ask` co-log are gone; the BID/band reads and the logged history survive. `reachFold`
  * qualified on sign agreement but its deficit sits UNDER the resolution floor, and `depth`'s
- * reconstruction is UNBOUNDED — both stay BLOCKED, which is the load-bearing lesson the guards encode:
+ * reconstruction was UNBOUNDED — both were BLOCKED (`depth` was later retired by owner decision), which is the load-bearing lesson the guards encode:
  * NOTHING may be retired on a gap narrower than the noise in the instrument that measured it, and an
  * unbounded reconstruction can never retire a deployed estimator. This command still recomputes
  * `pressure` per origin — it is the RECORD, not a pricing path, and the result must stay re-runnable.
@@ -77,7 +77,7 @@
  * price for every contender at an origin, so the entire comparison lives in the reached rows.
  *
  * Run: node pipeline/commands/join-exit-ev.mjs [--items N] [--stride H] [--horizon H] [--json]
- *      [--delay-cost-frac f] [--depth-qty-frac f] [--min-rows N] [--warmup-days N] [--acceptance-n N]
+ *      [--delay-cost-frac f] [--min-rows N] [--warmup-days N] [--acceptance-n N]
  *      [--bail low|high]
  */
 import { fileURLToPath } from 'node:url';
@@ -88,7 +88,7 @@ import { buildReachSurface } from '../../js/reach-surface.mjs';
 import { askStar } from '../../js/exit-ev.mjs';
 import { maxHighWithin, endLowWithin, endHighWithin, covers, HOUR, readableCut } from '../../js/forward-reach.mjs';
 import { pairedClusterCI } from '../lib/signal/cluster-ci.mjs';
-import { windowStats, reachableBand, asymPair, clearableAsk, reachedDays, recencySplit, floorCeilingTrack, RECENT_NIGHTS } from '../../js/windowread.mjs';
+import { windowStats, reachableBand, asymPair, reachedDays, recencySplit, floorCeilingTrack, RECENT_NIGHTS } from '../../js/windowread.mjs';
 import { estimatePair } from '../lib/signal/estimators.mjs';
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';
 import { tax } from '../../js/money-math.js';
@@ -102,9 +102,6 @@ export const DEFAULT_WARMUP_DAYS = 30;
 export const DEFAULT_NIGHTS = 14;
 // delayCost as a FRACTION of the reference price: gp is not comparable across a 400gp rune and a 1b bow.
 export const DELAY_COST_SWEEP = [0, 0.002, 0.005, 0.01, 0.02, 0.05];
-// The depth contender needs a size. A stated fraction of the origin's daily flow, not an inherited
-// one: the deployed reads size against a held lot, which no archive origin has.
-export const DEFAULT_DEPTH_QTY_FRAC = 0.005;
 export const LADDER_Z_STEP = 0.5;
 export const MIN_CELL_N = 30;
 // Acceptance rows below this and the reconstruction is UNBOUNDED, not merely thin. One matched row is
@@ -130,14 +127,13 @@ export const CONTENDERS = Object.freeze([
   { key: 'pressure', baseline: false },
   { key: 'asym', baseline: false },
   { key: 'reachFold', baseline: false },
-  { key: 'depth', baseline: false },
   { key: 'refHigh*', baseline: true },
   { key: 'quickSell*', baseline: true },
 ]);
 export const CONTENDER_KEYS = CONTENDERS.map(c => c.key);
 export const ESTIMATOR_POOL_KEYS = CONTENDER_KEYS.filter(k => k !== 'askStar+fold');
 export const DEPLOYABLE_POOL_KEYS = CONTENDER_KEYS.filter(k => k !== 'askStar');
-export const INCUMBENT_KEYS = ['pressure', 'asym', 'reachFold', 'depth'];
+export const INCUMBENT_KEYS = ['pressure', 'asym', 'reachFold'];
 // The policies under test. They are judged by `verdict`, and nothing here can "retire" a policy that
 // was never deployed — a nomination against one is a category error, not a finding.
 export const ARM_KEYS = ['askStar', 'askStar+fold'];
@@ -195,7 +191,7 @@ export function foldAskAt({ stats, live }) {
 }
 
 /* Every non-surface contender's ask at one origin. PURE — the caller supplies the series and the cut. */
-export function incumbentAsksAt({ series, cut, nights = DEFAULT_NIGHTS, depthQtyFrac = DEFAULT_DEPTH_QTY_FRAC, now }) {
+export function incumbentAsksAt({ series, cut, nights = DEFAULT_NIGHTS, now }) {
   const statsSeries = series.slice(0, cut).map(r => ({ ...r, timestamp: r.ts }));
   const stats = windowStats(statsSeries, { nights, wStart: 0, wEnd: 0, now });
   const live = liveAt(series, cut);
@@ -212,23 +208,20 @@ export function incumbentAsksAt({ series, cut, nights = DEFAULT_NIGHTS, depthQty
     : (Number.isFinite(live.quickSell) ? Math.max(live.quickSell, rawAsym) : rawAsym);
   const guardBound = rawAsym != null && Number.isFinite(live.quickSell) && live.quickSell > rawAsym;
   asks.reachFold = foldAskAt({ stats, live });
-  const qty = live.volDay > 0 ? Math.max(1, Math.round(live.volDay * depthQtyFrac)) : null;
-  const ca = qty ? clearableAsk(statsSeries, { qty, nights, wStart: 0, wEnd: 0, now }) : null;
-  asks.depth = ca && Number.isFinite(ca.price) ? ca.price : null;
   asks['quickSell*'] = live.quickSell;
-  return { asks, stats, live, statsSeries, qty, rawAsym, guardBound };
+  return { asks, stats, live, statsSeries, rawAsym, guardBound };
 }
 
 /* One origin's record: every contender's ask plus the forward outcome per horizon; built once, read at
  * every (horizon, delayCost). EC2: no `forming` below — a replay origin scores completed-days labels. */
-export function buildOriginRecord({ series, itemId, ts, horizons, delayCostFracs = [0], nights = DEFAULT_NIGHTS, depthQtyFrac = DEFAULT_DEPTH_QTY_FRAC, ladderZ = LADDER_Z_STEP }) {
+export function buildOriginRecord({ series, itemId, ts, horizons, delayCostFracs = [0], nights = DEFAULT_NIGHTS, ladderZ = LADDER_Z_STEP }) {
   const cut = readableCut(series, ts);
   if (!cut) return null;
   const now = new Date(ts * 1000);
   const surface = buildReachSurface(series.slice(0, cut), { nights, now });
   if (!surface || !Number.isFinite(surface.refHigh) || !(surface.disp > 0)) return null;
 
-  const { asks, stats, live, guardBound } = incumbentAsksAt({ series, cut, nights, depthQtyFrac, now });
+  const { asks, stats, live, guardBound } = incumbentAsksAt({ series, cut, nights, now });
   asks['refHigh*'] = surface.refHigh;
   const fc = stats && stats.days ? floorCeilingTrack(stats.days) : null;
 
@@ -380,20 +373,14 @@ export const ACCEPTANCE_FIELDS = Object.freeze({
     const r = s.estConfidence ? s.estConfidence.reachRelief : null;
     return (r == null || r === 0) && Number.isFinite(s.estSell) ? s.estSell : null;
   },
-  depth: s => (s.depthExit && Number.isFinite(s.depthExit.ask) ? s.depthExit.ask : null),
   'quickSell*': s => (Number.isFinite(s.quickSell) ? s.quickSell : null),
 });
 
-export function acceptanceRow({ series, s, nights, depthQtyFrac }) {
+export function acceptanceRow({ series, s, nights }) {
   const cut = readableCut(series, s.ts);
   if (!cut) return null;
   const now = new Date(s.ts * 1000);
-  const qtyFrac = (s.depthExit && s.depthExit.qty > 0) ? null : depthQtyFrac;
-  const { asks, stats, live, statsSeries } = incumbentAsksAt({ series, cut, nights, depthQtyFrac: qtyFrac ?? depthQtyFrac, now });
-  if (s.depthExit && s.depthExit.qty > 0) {
-    const ca = clearableAsk(statsSeries, { qty: s.depthExit.qty, competition: s.depthExit.competition, nights, wStart: 0, wEnd: 0, now });
-    asks.depth = ca && Number.isFinite(ca.price) ? ca.price : null;
-  }
+  const { asks, stats, live } = incumbentAsksAt({ series, cut, nights, now });
   if (!stats || !live) return null;
   const out = {};
   for (const [key, read] of Object.entries(ACCEPTANCE_FIELDS)) {
@@ -585,7 +572,6 @@ async function main() {
   const decisiveH = a.horizon != null ? Number(a.horizon) : DECISIVE_H;
   const minRows = a['min-rows'] != null ? Number(a['min-rows']) : DEFAULT_MIN_ROWS;
   const warmupDays = a['warmup-days'] != null ? Number(a['warmup-days']) : DEFAULT_WARMUP_DAYS;
-  const depthQtyFrac = a['depth-qty-frac'] != null ? Number(a['depth-qty-frac']) : DEFAULT_DEPTH_QTY_FRAC;
   const acceptanceN = a['acceptance-n'] != null ? Number(a['acceptance-n']) : 1200;
   const dcFracs = a['delay-cost-frac'] != null ? [Number(a['delay-cost-frac'])] : DELAY_COST_SWEEP;
   const asJson = !!a.json;
@@ -611,7 +597,7 @@ async function main() {
     : Array.from({ length: acceptanceN }, (_, i) => logged[Math.floor(i * (logged.length / acceptanceN))]);
   const accRows = [];
   for (const s of accSample) {
-    const r = acceptanceRow({ series: getSeries(s.itemId), s, nights: DEFAULT_NIGHTS, depthQtyFrac });
+    const r = acceptanceRow({ series: getSeries(s.itemId), s, nights: DEFAULT_NIGHTS });
     if (r) accRows.push(r);
   }
   const acceptance = acceptanceSummary(accRows);
@@ -629,7 +615,7 @@ async function main() {
     let kept = 0;
     for (let ts = from; ts <= to; ts += strideH * HOUR) {
       funnel.originsTried++;
-      const rec = buildOriginRecord({ series, itemId: id, ts, horizons, delayCostFracs: dcFracs, nights: DEFAULT_NIGHTS, depthQtyFrac });
+      const rec = buildOriginRecord({ series, itemId: id, ts, horizons, delayCostFracs: dcFracs, nights: DEFAULT_NIGHTS });
       if (rec) { records.push(rec); kept++; }
     }
     funnel.originsKept += kept;
@@ -698,7 +684,7 @@ async function main() {
       deficits: (h.deficits || []).map(d => ({ key: d.key, ci: d.ci })) });
     console.log(JSON.stringify({
       app: 'the-coffer-exit-ev-backtest', version: 1,
-      params: { nItems, strideH, decisiveH, minRows, warmupDays, depthQtyFrac, dcFracs, bailMode, nights: DEFAULT_NIGHTS },
+      params: { nItems, strideH, decisiveH, minRows, warmupDays, dcFracs, bailMode, nights: DEFAULT_NIGHTS },
       funnel, acceptance, acceptanceRows: accRows.length, resolutionFloor, unbounded: [...unbounded], asymGuardRate: guardRate(records),
       decisive: strip(decisive), deployable: strip(deployable),
       sensitivities: { estimator: sensE.map(strip), deployable: sensD.map(strip) },
@@ -713,8 +699,7 @@ async function main() {
 
   console.log(`\n── join-exit-ev — realized net of "list at ask for H, else bail" over the 1h archive ──`);
   console.log(`pool ${funnel.itemsWithRecords}/${funnel.items} item(s) with at least ${minRows} 1h rows · ${funnel.originsKept}/${funnel.originsTried} origins kept · every ${strideH}h from day ${warmupDays}`);
-  console.log(`depth is sized by a CONVENTION invented here (a fixed fraction of daily flow); the deployed reads size against a held lot.`);
-  console.log(`decisive H=${decisiveH}h · delayCost ${dc0 * 100}% of reference · depth sized at ${depthQtyFrac * 100}% of daily flow · reference = median of the last 3 daily highs`);
+  console.log(`decisive H=${decisiveH}h · delayCost ${dc0 * 100}% of reference · reference = median of the last 3 daily highs`);
   console.log(`bail on a miss: the last avg${bailMode === "high" ? "High" : "Low"} print in the window (--bail low|high)`);
 
   console.log(`\n## ACCEPTANCE — how far each RECOMPUTED contender sits from the ask it actually logged`);

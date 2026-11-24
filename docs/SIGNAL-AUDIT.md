@@ -34,7 +34,6 @@ window, no recency split.
 | ~~`demandRegime`/`hourlyPressure`~~ (REMOVED 2026-07-22) | per-hour buy/sell PRESSURE cycle — DELETED (PLAN-REMOVE-DEPTH-PRESSURE-READS, git-revivable); powered only `--pressure`'s DC2 block + scan DC3 note | — | — | — |
 | `reachableBand` (PB1) | pressure-driven two-sided reachable bid/ask (base = recent-3 median, band = recent-7 IQR) | 1h, recent-3/7 | the reverse-flip `Sold-ref/Peak` band + the bid/band ledger shadow (its SELL-model consumer was retired 2026-08-30) | ✅ (base+band both recency-windowed) | `read-window-range --pressure`, `reverseListBand`, ledger shadow |
 | `demandPressure` | buy/sell volume ratio + reliability | 1h aggregate | feeds `reachableBand` (survives) | ❌ | `reachableBand` |
-| `clearableAsk` (DE1; `depthDays`/`clearableBid` REMOVED 2026-07-22) | the highest ask that clears `competition×qty` on ≥75% of days | 1h buckets, ~14d | `--depth` "BOOK AT ≤X" + the LIVE DE3 `depthExit` shadow (watch/quote held lots) | ❌ whole-window clear fraction | `read-window-range --depth`, `watch-positions`/`quote-items` depthExit shadow |
 | `weekdayProfile` | per-weekday median amplitude % | 1h, ~28d | amplitude niche notes | ❌ | amplitude scan display |
 | `computeQuote` (row) | Quick (live) + Optimistic (robust 2h-band p10/p90 clamped to live) pair, momentum tell, pressure ratio, ask-headroom, bond math | live `/latest` + last 24×5m | every quote row | n/a (this IS the live basis) | everything |
 | `regimeDrift`/`regimeLabel` | 3-day median mid vs prior ~14-day median mid → flat/rising/falling | 6h archive, ~17d | every row (regime column) | ⚠️ ONE comparison (recent-3d vs prior-14d), no trend beyond that | gate/rank/screen exclusion, `momVerdict`, digest |
@@ -258,9 +257,7 @@ some of the five).
 - **`depthDays`/`clearableBid`** (DE1/DE6) — **REMOVED 2026-07-22** (PLAN-REMOVE-DEPTH-PRESSURE-READS,
   narrow removal, Ben's call; git-revivable). They were fully-built + fixture-tested but powered ONLY the
   manual `--depth` inspector's per-day flow tables + the low-side "CATCH AT ≥X" line, never a decision
-  surface. **`clearableAsk` SURVIVES** — correcting this section's earlier "inspector-only" claim: it feeds
-  the LIVE DE3 `depthExit` shadow on `watch-positions.mjs`/`quote-items.mjs` (a head-to-head challenger,
-  scored by `join-reach-outcomes.mjs`), so it was kept; the `--depth` inspector's "BOOK AT ≤X" clearableAsk line stays.
+  surface. `clearableAsk` and the whole depth model followed in pipeline 1.8.0 (no edge over its null).
 - **`weekdayProfile`** is genuinely new (no prior day-of-week tooling existed) but is amplitude-mode
   only and n≈3-4/cell — correctly labeled as a lean, but worth flagging that it's the thinnest
   sample of any signal in the inventory that still prints a number.

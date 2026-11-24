@@ -25,14 +25,11 @@
  *                  B3 — maxBuyForExit, the tax-exact inverse of breakEven) + how reachable that exit is
  *                  in-window (a rarely-printed exit over-states the sell → the buy is optimistic)
  *   --margin <gp>  minimum after-tax net/u the back-solve must leave (default 0 = break-even-clearing)
- *   --depth <qty>  (PLAN-DEPTH-EXIT DE2/DE6) percentile-DEPTH read for <qty> units: the per-day instabuy
- *                  flow at/above the scored --ask, and clearableAsk ("BOOK AT ≤ X"). A thin book prints
- *                  its COLLAPSE REASON, never a bare null. From bucket AVERAGES, not an order book (n≈0).
  *   --hourly       the RAW per-LOCAL-hour LOW/MID/HIGH grid — 7d median block + the last N dates
  *                  (--days, default 3). Same 1h series, no second fetch. Inform-only, n≈0, never gates.
  *   --niche <n>    strategy spec the reach-FOLD is scored against — band (default) | churn | scalp.
  *                  Prints `fold: best-case X → reach-folded Y`. No fetch; inform-only.
- *   --pressure     (PLAN-DEPTH-EXIT Extension A, PB2) the demand-balance reachable band: pressure =
+ *   --pressure     (depth-exit Extension A, PB2) the demand-balance reachable band: pressure =
  *                  medVolHi/medVolLo (buy-heavy > 1 / sell-heavy < 1), the regime label, and
  *                  reachableBid/reachableAsk = base ± band·φ(±s)·reliability, band + reliability inline.
  *                  The manual φ-tuning surface. Inform-only, n≈0 — φ/PRESSURE_* are placeholders.
@@ -46,7 +43,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadMapping, fetchTs, fetchLatest, rolling24FromTs1h } from '../lib/market/marketfetch.mjs';   // rolling24FromTs1h: the TRUE trailing-24h units/d composed from the IN-HAND 1h series (never the broken /24h) — feeds the avg-bound deep/thin split at zero new fetch
 import { parseArgs, parseGp } from '../lib/render/cli.mjs';
-import { windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, fmtHoldHorizon, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, demandPressure, reachableBand, askExitRead, reachMargin, reachMarginTrigger, realityClause, computeReality, avgBoundRead, formatAvgBound, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read printed under the --profile trajectory block; DE2: --depth reads the percentile-depth "BOOK AT ≤X" (clearableAsk); PB2: --pressure reads the demand-balance band; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home (depthDays/clearableBid/demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
+import { windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, fmtHoldHorizon, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, demandPressure, reachableBand, askExitRead, reachMargin, reachMarginTrigger, realityClause, computeReality, avgBoundRead, formatAvgBound, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read printed under the --profile trajectory block; PB2: --pressure reads the demand-balance band; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home 
 import { maxBuyForExit, breakEven, QUICK_FRESH_MIN, phase } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask; QUICK_FRESH_MIN gates the stale-live pace guard; `phase` feeds diurnalForecast's post-shock-shape REFUSAL through driftExitFrom's ctx — see the FORECAST-GUARD note below
 import { netMargin } from '../../js/money-math.js';   // PLAN-ESTIMATOR-HONEST-SELL E3: the HONEST best-case margin at the raw exit (never BE-clamped) for the three-part fold line
 import { open as openArchive } from '../lib/market/archive.mjs';   // AC4a: read-only 5m-grain reach where the Tier-1 archive has coverage (degrades to 1h-only when it doesn't)
@@ -70,10 +67,10 @@ for (let i = 0; i < argv.length; i++) {
   if (a.startsWith('--')) { const v = argv[i + 1]; if (v !== undefined && !v.startsWith('--')) i++; continue; }
   positionals.push(a);
 }
-if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8|peak|dip] [--bid <gp>] [--ask <gp>] [--exit <ask> [--margin <gp>]] [--depth <qty>] [--pressure] [--profile] [--trajectory] [--hourly [--days 3]] [--niche band|churn|scalp] [--json] [--out <path>]'); process.exit(1); }
+if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8|peak|dip] [--bid <gp>] [--ask <gp>] [--exit <ask> [--margin <gp>]] [--pressure] [--profile] [--trajectory] [--hourly [--days 3]] [--niche band|churn|scalp] [--json] [--out <path>]'); process.exit(1); }
 
 // DELIBERATELY ITS OWN LITERAL, *not* WINDOW_RELIABLE_NIGHTS. NIGHTS feeds ~15 call sites here —
-// windowStats ×4, hourProfile ×2, clearableAsk, and the quantile/reach/placement/depth/trajectory
+// windowStats ×4, hourProfile ×2, and the quantile/reach/placement/trajectory
 // block — almost none of which are the display gate. Pinning it to a DISPLAY-gate constant means
 // moving that gate silently moves reach counts, placement percentiles and the trajectory basis across
 // the whole command, exactly what displayFitNights' own header warns against ("DO NOT simplify this
@@ -104,9 +101,7 @@ const EXIT = A.exit !== undefined ? parseGp(A.exit) : null;
 if (A.exit !== undefined && !Number.isFinite(EXIT)) { console.error('error: --exit is not a parseable gp amount'); process.exit(1); }
 const MARGIN = A.margin !== undefined ? parseGp(A.margin) : 0;
 if (A.margin !== undefined && !Number.isFinite(MARGIN)) { console.error('error: --margin is not a parseable gp amount'); process.exit(1); }
-// DE2 — --depth <qty>: the percentile-depth read for a lot of <qty> units.
-const DEPTH_QTY = A.depth !== undefined ? parseGp(A.depth) : null;
-if (A.depth !== undefined && (!Number.isFinite(DEPTH_QTY) || DEPTH_QTY <= 0)) { console.error('error: --depth expects a positive unit quantity'); process.exit(1); }
+if (A.depth !== undefined) { console.error('error: --depth was retired — the model did not beat its null baseline (CHANGELOG, pipeline 1.8.0)'); process.exit(1); }
 // PB2 — --pressure: the pressure-driven reachable band (demand-balance read; no qty). A bare flag.
 const PRESSURE = A.pressure !== undefined && A.pressure !== false;
 // R1 (PLAN-SIGNAL-RECENCY) — --trajectory: the recency-weighted forward trajectory read (full-day per-day
@@ -328,11 +323,11 @@ for (const want of positionals) {
       // so on a `bidBasis: 'live'` row `bid` is NOT the level `dip.reality` describes.
       result.diurnalRange = dr ? { bid: dr.bid, ask: dr.ask, bidBasis: dr.bidBasis, notes: dr.notes } : null;
     }
-    // compose: only short-circuit the rest of the per-item loop (window-range table + ask/bid/exit/depth
+    // compose: only short-circuit the rest of the per-item loop (window-range table + ask/bid/exit
     // blocks below) when NONE of those flags were also given — a bare --profile keeps today's exact
-    // profile-only output, while --profile combined with --ask/--bid/--exit/--depth falls through so
+    // profile-only output, while --profile combined with --ask/--bid/--exit falls through so
     // this same `result` object also picks up the window-range read.
-    if (BID == null && ASK == null && EXIT == null && DEPTH_QTY == null && !TRAJ && !HOURLY) continue;
+    if (BID == null && ASK == null && EXIT == null && !TRAJ && !HOURLY) continue;
   }
 
   // --trajectory (R1): the recency-weighted forward read. Full-day (0-23) per-day low/high table + the
@@ -381,9 +376,9 @@ for (const want of positionals) {
       };
     }
     // a bare --trajectory (no scored flag) prints only this block and continues; combined with a scored
-    // --bid/--ask/--exit/--depth it falls through so the same `result` also gets the window read. (--profile
+    // --bid/--ask/--exit it falls through so the same `result` also gets the window read. (--profile
     // composes fine either way — its own block ran first and its short-circuit now checks !TRAJ.)
-    if (BID == null && ASK == null && EXIT == null && DEPTH_QTY == null && !HOURLY) continue;
+    if (BID == null && ASK == null && EXIT == null && !HOURLY) continue;
   }
 
   // --hourly (PLAN-DIURNAL-HOURLY): the raw per-LOCAL-hour LOW/MID/HIGH grid — a 7d-avg (median) block
@@ -420,7 +415,7 @@ for (const want of positionals) {
       if (decayNote) log(`  ${decayNote}`);
       result.hourly = { avgDates: hl.avgDates, perDayDates: hl.perDayDates, hours: hl.hours, askDecay: decay };
     }
-    if (BID == null && ASK == null && EXIT == null && DEPTH_QTY == null) continue;
+    if (BID == null && ASK == null && EXIT == null) continue;
   }
 
   const stats = windowStats(series, { nights: NIGHTS, wStart: W_START, wEnd: W_END });
@@ -518,10 +513,10 @@ for (const want of positionals) {
   // scored/verify read can't skip the trajectory in favour of just the reach/placement fields (the
   // under-read this prevents: reading reach/placement and ignoring the `days` series sitting in the
   // same dump). Console rendering of data already in `result.days`/`profMargin` — no new computation,
-  // no JSON/number change. Gated on a LEVEL run — bid/ask/exit/depth. It used to name --profile too, a
+  // no JSON/number change. Gated on a LEVEL run — bid/ask/exit. It used to name --profile too, a
   // term that could never admit a row (a profile-only run hits the trajectory block's own `continue`
   // first, and --profile WITH a level is already admitted by the level).
-  const isVerifyRun = BID != null || ASK != null || EXIT != null || DEPTH_QTY != null;
+  const isVerifyRun = BID != null || ASK != null || EXIT != null;
   if (isVerifyRun && scored.length) {
     log(`  --- DAILY TRAJECTORY (window low/high per day, oldest→newest)`);
     for (const [key, n] of scored) log(`    ${key}  low ${fmt(n.low)}  high ${fmt(n.hi)}`);
@@ -679,7 +674,7 @@ for (const want of positionals) {
   // re-deriving the fold math, guarantees byte-parity with what the screen would fold. The operator sees
   // `best-case X → reach-folded Y` at the moment capital is committed and picks with BOTH numbers in hand.
   // Inform-only PLACEHOLDER (n≈14) — the estimator's fold, NOT a verdict; never gates/overrides the
-  // reach/placement/depth reads. churn inherits AC5/AC6's exemption, so its fold line reads fold ≈ best-case.
+  // reach/placement reads. churn inherits AC5/AC6's exemption, so its fold line reads fold ≈ best-case.
   if (latest && latest.high != null && latest.low != null && (BID != null || ASK != null || EXIT != null)) {
     const askScoreLevel = ASK != null ? ASK : (EXIT != null ? EXIT : null);   // an explicit sell/exit level
     // synthetic row: live pair from latest; opt edges from the scored levels (or the window ~50% quantile).
@@ -760,25 +755,7 @@ for (const want of positionals) {
         confidence: estConfLean(est) };
     }
   }
-  // DE2 (PLAN-DEPTH-EXIT) — --depth <qty>: the percentile-DEPTH "BOOK AT ≤ X" read (clearableAsk — the
-  // highest ask <qty> can actually book at ≥ targetFrac of days). A thin book collapses to a null WITH its
-  // reason (never a silent degrade — the surfacing rule). There are no per-day depthDays flow tables and
-  // no low-side clearableBid "CATCH AT ≥ X" line (PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1 —
-  // inspector-only DE1/DE6 reads); clearableAsk stays (the live DE3 shadow).
-  if (DEPTH_QTY != null) {
-    result.depth = { qty: DEPTH_QTY };
-    const ca = clearableAsk(series, { qty: DEPTH_QTY, wStart: W_START, wEnd: W_END, nights: NIGHTS });
-    const compTxt = `×${ca.competition} comp · ≥${Math.round(ca.targetFrac * 100)}% of ${ca.nDays}d · ≥${ca.minBuckets} buckets`;
-    if (ca.price != null)
-      log(`  --depth ${fmt(DEPTH_QTY)}u → BOOK AT ≤ ${fmt(ca.price)}  (clears ${Math.round(ca.clearFrac * 100)}% of days at this size · ${compTxt})`);
-    else if (ca.reason === 'insufficient-depth')
-      log(`  --depth ${fmt(DEPTH_QTY)}u → NO clearable ask — the book can't absorb ${fmt(ca.need)}u (${fmt(DEPTH_QTY)}×${ca.competition}) at any level in this window: LIQUIDITY collapse, reach fallback (${compTxt})`);
-    else
-      log(`  --depth ${fmt(DEPTH_QTY)}u → no read (${ca.reason === 'thin-history' ? 'too little window history' : 'no traded window buckets'}); reach fallback`);
-    result.depth.clearableAsk = { price: ca.price, clearFrac: ca.clearFrac, reason: ca.reason, competition: ca.competition };
-    log(`    (depth estimated from 1h bucket AVERAGES + volumes — NOT an order book; competition ×${ca.competition} is a PLACEHOLDER, n≈0 — inform-only)`);
-  }
-  // PB2 (PLAN-DEPTH-EXIT Extension A) — --pressure: the demand-balance reachable band. pressure =
+  // PB2 (depth-exit Extension A) — --pressure: the demand-balance reachable band. pressure =
   // medVolHi/medVolLo drives one monotone φ(ln pressure); the band is the daily-high/low IQR; a
   // thin-VOLUME book degrades to the smoothed center via the reliability guard (no peak-cap). The φ
   // slope + PRESSURE_* are n≈0 placeholders — this is the manual tuning surface, inform-only.

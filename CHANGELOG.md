@@ -8,6 +8,16 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## pipeline 1.8.0 — 2026-11-23 — indexed archive reads, the depth model retired, a readable analyze-record (no APP_VERSION bump)
+
+- **`seriesFor` pins `INDEXED BY obs_item`.** With no planner statistics SQLite chose the primary key and
+  scanned the whole grain per item; row-identical results, roughly 20x faster.
+- **The depth model is gone** (`clearableAsk`, the `depthExit` shadow, the `read-window-range` depth flag, its
+  outcome scorer, and the `depth` contender in both exit scorers). It did not beat its null — the window's
+  median hourly high. Logged history keeps its `depthExit` fields; nothing reads them. The pressure band
+  (`reachableBand`) is a separate read and survives. The depth-exit plan is deleted.
+- **`analyze-record` lists only taken ask-headroom flags**, in text and `--json`; the rest are counted.
+
 ## pipeline 1.7.0 — 2026-09-22 — the FADE promotion: a fading day must ALERT, not annotate (no APP_VERSION bump — console/pipeline + skills)
 
 PLAN-HOLD-FADE-ALERT HF1–HF5, born of the Diamond dragon bolts 09-21 miss: today's HIGH sat 30–50 gp

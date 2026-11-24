@@ -155,7 +155,7 @@ export function open(dbPath = DEFAULT_DB, { readonly = false } = {}) {
       const hi = Number.isFinite(to) ? to : 9e18;
       return db.prepare(
         `SELECT ts, avgHighPrice, avgLowPrice, highPriceVolume, lowPriceVolume
-           FROM observations WHERE grain = ? AND itemId = ? AND ts BETWEEN ? AND ?
+           FROM observations INDEXED BY obs_item WHERE grain = ? AND itemId = ? AND ts BETWEEN ? AND ?
           ORDER BY ts ASC`).all(String(grain), Number(itemId), lo, hi);
     },
 

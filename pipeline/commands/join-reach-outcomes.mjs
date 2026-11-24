@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* join-reach-outcomes.mjs — the reachability head-to-head, FORWARD-SCORED (RC, PLAN-REACHABILITY-CONSOLIDATION).
  *
- * The tool carried five overlapping ways to price an exit (reach-fold · reachRelief · asym · depth ·
+ * The tool carried five overlapping ways to price an exit (reach-fold · reachRelief · asym ·
  * pressure); `pressure` was RETIRED from exit pricing 2026-08-30 (join-exit-ev.mjs's pre-registered
  * criterion) and its `reachable.ask` co-log stopped that day — this command keeps scoring its logged
  * HISTORY (it is the record, not a pricing path), and new rows carry no pressure ask.
@@ -85,12 +85,11 @@ async function main() {
 
   const res = scoreReachability(scored, { minN });
   // The head-to-head proper: reads priced by all members of each set at once. NOTE each set holds THREE
-  // contenders + two reference lines — no matched pool ever holds all five. depth is excluded from
-  // the first two pools — it needs a held qty, so requiring it would collapse the pool to the watch surface.
+  // contenders + two reference lines — no matched pool ever holds all five.
   const MATCHED_SETS = [
     ['pressure', 'asym', 'reachFold', 'quickSell*', 'optSell*'],
     ['pressure', 'asym', 'reachRelief', 'quickSell*', 'optSell*'],
-    ['pressure', 'asym', 'depth', 'quickSell*', 'optSell*'],
+    ['pressure', 'asym', 'quickSell*', 'optSell*'],
   ];
   const matched = MATCHED_SETS.map(k => matchedPool(scored, k)).filter(Boolean);
 
@@ -118,7 +117,7 @@ async function main() {
   console.log(`  A row is admitted only if the pressure band read, so every comparison is conditioned on it —`);
   console.log(`  through 2026-08-30 that made pressure's 100% an inclusion criterion; rows after the retirement`);
   console.log(`  admit on a bid-only band, so its coverage drifts below 100% as they age into scoring range.`);
-  console.log(`  depth needs a HELD qty, so it only ever logs on watch/held-quote reads. reachFold and`);
+  console.log(`  reachFold and`);
   console.log(`  reachRelief are the same estimator with and without the softening and NEVER co-occur, so`);
   console.log(`  this cannot answer "does relief help?" — that needs the relief=0 counterfactual logged too.`);
 

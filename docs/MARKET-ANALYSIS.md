@@ -155,16 +155,11 @@ estimator. (The PB4 per-row `reachable` band and the app Scan tab's trial column
   mirage (reach 3/3 today, cushion collapsing). It's ADDITIVE to the reach/relief fold, exempt on a
   symmetric (churn) lap, nulled by a declared exit, and byte-identical when the trend is absent/stable/
   extending. INFORM-only, n≈0 PLACEHOLDER; a `fade` marker rides `confidence` for the F1 shadow.
-- **The held-lot depth + pressure shadow reads (PLAN-DEPTH-EXIT, inform-only).** On a held lot,
-  `watch-positions` still computes the **depth floor**
-  (`clearableAsk` — the highest ask whose at-or-above instabuy flow absorbs `×4` the lot on ≥75% of
-  days; a CENTRAL estimate, not the conservative floor its own wording long claimed — measured at roughly
-  the median of the window's hourly highs, see README's `join-depth-outcomes.mjs` entry)
-  and the **pressure band** (`reachableBand` — `base ± band·φ(ln medVolHi/medVolLo)`, the
-  buyer/seller-balance read). Both shadow-log to `suggestions.jsonl` (`depthExit` incl. collapse reason
-  + liquidity class; `reachable`, bid/band-only since the retirement) for the F1 retro-join; neither
-  moves a verdict/price/grade, and the `size-relieved fill ~N%` relief note is the rendered read.
-  All constants are n≈0 placeholders (`DEPTH_*`, `PRESSURE_*` — `js/windowread.mjs`). The DE3 two-lens
+- **The held-lot pressure shadow read (inform-only).** On a held lot, `watch-positions` computes the
+  **pressure band** (`reachableBand` — `base ± band·φ(ln medVolHi/medVolLo)`, the buyer/seller-balance
+  read) and shadow-logs it to `suggestions.jsonl` (`reachable`, bid/band-only since the retirement); it
+  moves no verdict/price/grade, and the `size-relieved fill ~N%` relief note is the rendered read.
+  Constants are n≈0 placeholders (`PRESSURE_*` — `js/windowread.mjs`). The DE3 two-lens
   RENDER clause and the trial flag that gated it were RETIRED 2026-08-30: `join-exit-ev.mjs`'s
   pre-registered criterion retired the pressure exit ask (nothing retires on theory — this one retired
   on a measured deficit; `join-reach-outcomes.mjs` keeps scoring the logged history and DESCRIBES

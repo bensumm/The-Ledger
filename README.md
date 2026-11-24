@@ -291,14 +291,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `pushTrajectory` returns), and `screen-flip-niches.mjs`'s digest soft-buy column delegates to the SAME
   helper (ONE implementation); inform-only, n≈0, null profile / no fc ⇒ plain cue) + `asymPair` (PART II PLAN-GRADE-REACH 2026-07-12 — the day-level
   deep-bid/high-reach-ask realizable pair + P_ask/P_bid, consumed by `js/estimators.mjs` `asymEstimate`
-  for the `◆ asym fill` inform line + the `asym` suggestions-ledger shadow field) + `clearableAsk`
-  (PLAN-DEPTH-EXIT DE1 2026-07-15 — the percentile-DEPTH exit: reconstructs a per-day price→volume
-  distribution from the 1h bucket point masses and answers "what can I actually BOOK at?" for a given lot
-  size; the reach count is its qty→0 limit, and a thin book collapses to a null-with-`reason`; feeds the
-  `--depth` "BOOK AT ≤X" line + the LIVE DE3 `depthExit` shadow on watch/quote held lots; the `DEPTH_*`
-  constants module-internal placeholders. **`depthDays`/`clearableBid` were REMOVED 2026-07-22,
-  PLAN-REMOVE-DEPTH-PRESSURE-READS — git-revivable**) + `demandPressure`/`reachableBand`
-  (PLAN-DEPTH-EXIT Extension A PB1 2026-07-15 — the pressure-driven reachable band: `s=ln(medVolHi/medVolLo)`
+  for the `◆ asym fill` inform line + the `asym` suggestions-ledger shadow field) + `demandPressure`/`reachableBand`
+  (depth-exit Extension A PB1 2026-07-15 — the pressure-driven reachable band: `s=ln(medVolHi/medVolLo)`
   sets each side's headroom `base ± band·φ(±s)·reliability` off the recent central daily level (RC1 reused)
   + the daily-high/low IQR; a thin-VOLUME book collapses to the smoothed center via the sample-reliability
   guard (no peak-cap); the `PRESSURE_*` constants are exported n≈0 placeholders and the Soul-rune/sell-heavy
@@ -989,17 +983,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   carry a lean **`askHeadroom`** object (PLAN Bar-E-signal) when the robust p90 shaved a TRADED in-band top
   off the quoted ask — `{gap, gapPct, rawTop, topBucketVol, netLever, trusted}`, logged trusted AND
   audit-only, joined to fills by `analyze.mjs` §5 (`askHeadroomAudit`) for F1. A `watch` held row may
-  carry the lean **`depthExit`**/**`reachable`** pair (PLAN-DEPTH-EXIT DE3, 2026-07-15): the depth-floor
-  read incl. its collapse REASON + liquidity class, and the pressure-driven reachable band. RC-S1/RC-S2
+  carry the lean **`reachable`** pressure band (historical rows also carry the retired `depthExit`). RC-S1/RC-S2
   (PLAN-REACHABILITY-CONSOLIDATION) co-log the competing exit estimators — reach (`estConfidence`) ·
-  reachRelief (**`estBuy`/`estSell`/`estConfidence`**) · **`asym`** · depth (**`depthExit`**) — for the F1
+  reachRelief (**`estBuy`/`estSell`/`estConfidence`**) · **`asym`** — for the F1
   head-to-head against the realized `sellEach`; pressure's **`reachable`** rode beside them until its ASK
   leg stopped logging with the 2026-08-30 retirement (the bid/band record continues, historical rows still
   score). The head-to-head spans HELD
   (watch, quote `--positions`) AND DISCOVERY (screen survivors, quote per-item): `reachable` rides every row
-  with an in-hand 1h series; `depthExit` rides only held rows (real qty in hand — the DE7 fetch-budget rule
-  keeps depth off the screen). All three shadow shapes come from ONE reshaper home
-  (`suggestlog.mjs reachableShadow`/`depthExitShadow`/`asymShadow`). The `asym` leg also rides the screen
+  with an in-hand 1h series. Both shadow shapes come from ONE reshaper home
+  (`suggestlog.mjs reachableShadow`/`asymShadow`). The `asym` leg also rides the screen
   rows the `spec.admitMinNet` gate DROPS (the `admitSkip` marker, PP0): those rows are kept in the ledger
   precisely because they are where the reach-fold pair and the asym pair disagree most, and without the
   `asym` field they could not answer that question. ⚠ ON-DISK CAVEAT: every `admitSkip` row written before
@@ -1420,10 +1412,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     the measured bar, see `join-fade-outcomes.mjs`) — and the CUT/CUT-CANDIDATE magnitude clause
     (`cutGapClause`: signed quick-sell gap vs cost/BE, `[flicker]` at ≤ `FLICKER_GP`, `through
     cut-trigger` when breached; the /positions override rule keys on the tag). Both fixture-pinned
-    in `pipeline/test/fade-alert.test.mjs`; the app never reads `watch.json` (grep-verified). DE3 (PLAN-DEPTH-EXIT, 2026-07-15): each
-    held lot still computes the whole-day depth FLOOR (`clearableAsk`) + the pressure band
-    (`reachableBand`) and shadow-logs them as the lean `depthExit`/`reachable` ledger fields
-    (inform-only; `reachable` is bid/band-only since the retirement). The DE3 two-lens render clause
+    in `pipeline/test/fade-alert.test.mjs`; the app never reads `watch.json` (grep-verified). Each
+    held lot computes the pressure band (`reachableBand`) and shadow-logs it as the lean `reachable`
+    ledger field (inform-only; `reachable` is bid/band-only since the retirement). The DE3 two-lens render clause
     (`depthReachClause`) and the PB4 pressure-exit held list-at trial were RETIRED 2026-08-30 with
     the pressure exit estimator — join-exit-ev.mjs's criterion; the retired trial flag errors loudly. RC-S1
     (PLAN-REACHABILITY-CONSOLIDATION, 2026-07-15): held rows ALSO co-log the two OLDER exit estimators —
@@ -1518,7 +1509,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     its gate failed; `PLAN-REACH-CALIBRATION.md` AC1); where the Tier-1 archive (`lib/archive.mjs`,
     read-only) has ≥3 covered window-days it adds a less-smoothed 5m-grain reach/placement ALONGSIDE
     (labeled, a LOWER BOUND per AC2), degrading cleanly to 1h-only otherwise. A scored/verify run
-    (a `--bid`/`--ask`/`--exit`/`--depth` LEVEL — `--profile` alone does NOT, and the gate no longer
+    (a `--bid`/`--ask`/`--exit` LEVEL — `--profile` alone does NOT, and the gate no longer
     claims it does) also prints a **`DAILY TRAJECTORY`** block — the per-day window low/high path already
     in the `--json` `days` array, plus, when `--profile` wasn't passed, a compact `diurnal:` line;
     HEURISTIC + inform-only (the shape label never gates), the console-only fix for the trajectory
@@ -1530,11 +1521,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `--json`→stdout convention, NOT `writeLastReport` — this command builds no render.mjs sections);
     default markdown stdout is byte-identical when absent (the `DAILY TRAJECTORY`/`read:`/`diurnal:`
     lines are console-only — `--json` output is unchanged). `--profile` = the hour-of-day diurnal dip/peak read
-    + derived stale-guarded bid/ask; `--depth <qty>` = the PLAN-DEPTH-EXIT DE2 percentile-depth inspector —
-    the `clearableAsk` "BOOK AT ≤ X" (the highest ask the lot clears on ≥targetFrac of days), with the
-    collapse REASON surfaced on a thin book — inform-only, reads `js/windowread.mjs` `clearableAsk`. _(The
-    per-day `depthDays` flow tables + the low-side `clearableBid` "CATCH AT ≥X" were REMOVED 2026-07-22,
-    PLAN-REMOVE-DEPTH-PRESSURE-READS — git-revivable.)_ `--pressure` = the
+    + derived stale-guarded bid/ask; `--pressure` = the
     PB2 demand-balance read: `pressure` (medVolHi/medVolLo) + regime label + `reachableBid`/`reachableAsk`
     (`base ± band·φ` inline) + reliability, off `demandPressure`/`reachableBand`, inform-only n≈0. _(The DC2
     per-hour demand cycle + SELL/BUY window block (`demandRegime`) was REMOVED 2026-07-22, same removal.)_
@@ -1701,85 +1688,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     falsifier for the §4 make-or-break question; the realized truth is `retrojoin.mjs`→`/analyze`. Pure
     core `replayAmplitudePick`/`dayBuckets` fixture-pinned `pipeline/test/join-amplitude.test.mjs`; `--json`
     dumps the per-pick array),
-    **`join-depth-outcomes.mjs`** (2026-08-11 — the DEPTH model's missing OUTCOME half. Scores
-    `clearableAsk` (`js/windowread.mjs`, the DE3 `depthExit` shadow) against REALIZED sells, because its
-    `DEPTH_COMPETITION_MULT` ×4 is an explicit n≈0 PLACEHOLDER that had never been checked against a fill.
-    PRODUCER: `positions.json` `closed` rows, excluding `withdrawn` personal-use tombstones and `banked`
-    declared-basis rows. **THE HEADLINE IS NEGATIVE, AND IT IS ABOUT THE MODEL, NOT THE SCRIPT:** measured
-    over 277 sell episodes / 77 items, `clearableAsk` is **not distinguishable from the trivial null model**
-    "use the window's MEDIAN hourly high" (median residual +0.81% vs +0.83%), it sits at the ~52nd
-    percentile of the window's hourly highs so it is a CENTRAL estimate rather than the "conservative floor"
-    its own header claims, and sweeping `--competition` 0.5→16 moves the median 0.20pp. **The residual is
-    TREND-DOMINATED** (corr ≈0.61 with 14d drift; −0.19% falling / +0.00% flat / +3.39% rising) because
-    `clearableAsk` averages complete days ending at the previous midnight and that window LAGS a trending
-    item — so the report always stratifies by trend and reads size only WITHIN the flat arm, where the
-    item-CLUSTER bootstrap CI straddles zero and it says so instead of printing a gradient.
-    **RECOMPUTES the prediction per episode from the 1h archive rather than reading the logged
-    `depthExit`** — joining the full ledger (active file + `suggestions-archive/` via `readSuggestionLines`:
-    199 rows / 26 items) covers only ~60 of 392 lots, so ~85% of the evidence would be discarded. Note the
-    log's sparseness is NOT merely "few held lots": `quote-items.mjs --positions` computes the depth read
-    and never passes `depthExit` to `suggestionEntry` (0 of 81 held rows carry it), and on a default run it
-    is not even computed — see PLAN.md Discovered. Rows are FIFO fragments, so they are aggregated into
-    same-hour **sell EPISODES** (qty summed, price quantity-weighted) — without that a 39-unit sell split
-    into 16 rows scores as sixteen ~2-unit lots, corrupting the size axis specifically. `sizeFrac` divides
-    by the **LIMITING side** `min(hpv,lpv)`, matching `js/quotecore.js`'s `volDay` and `reachRelief`'s
-    `sizeRatio`; v1 summed both sides (median 2.24× off), which emptied the >2% buckets and reversed the
-    apparent direction. **NO LOOK-AHEAD**: series truncated to `ts < sellTs`, `now` pinned to the sell
-    moment, and the volDay/drift/null windows cut at the sell day's local midnight to match the model's own
-    complete-day boundary. `pipeline/test/joindepth.test.mjs` is MUTATION-VERIFIED (six deliberate breakages
-    each watched to fail) — v1's look-ahead test was vacuous, passing with the truncation deleted entirely;
-    the `now` pin remains uncovered by unit test for a reason documented there. `--json` (per-episode array,
-    returns before any table), `--item <name|id>` (adds a per-episode table), `--competition N`, `--nights N`.
-    Pure core `scoreDepthLot`/`sellEpisodes`/`bucketBy`/`clusterBootstrapCI`/`readClosedLots` fixture-pinned),
-    **`pipeline/lib/signal/digest.mjs`** (2026-08-25, PLAN-PIPELINE-SEPARATION) — the digest's ask-reach
-    INTERPRETATION, extracted from `screen-flip-niches.mjs`: which basis the reach column reads
-    (`digestReachFrac` → the one shared `reachFraction` on the recent-3 basis), the stale-live-print guard
-    that recomputes reach/placement/cushion-trend against the fresher instasell before any of them are
-    scored (`digestReachAndPlacement`), and the `MIRAGE_REACH_FRAC` threshold. **Why it exists as a module:**
-    the threshold was a bare module-private `const` inside a 3,000-line command, so nothing could import it —
-    and `join-reach-basis.mjs`, the script written to SCORE that very threshold, had to keep a hand-copied
-    duplicate with a comment warning the copy would not track the source. That comment's line reference had
-    itself gone stale. The scorer now imports it; verified by changing the value at the source and watching
-    the scorer follow. **A byte-identical move** — the extraction changed no logic, and the falsifier was two
-    back-to-back screen runs across the change with zero structural stdout diff (a later comparison showed
-    472 diff lines, which reproduces identically between two runs of the SAME code twenty minutes apart:
-    that is market drift, not regression — check the drift baseline before reading a diff as a defect).
-    **`digestVerdict` and `capEfficiency` deliberately did NOT move**: both reach into command-local helpers
-    (`weakDeploy` → `isBigTicket`, `gradeAtLeast`, `holdDays`), so moving them now would drag those along or
-    create an import cycle, and `isBigTicket` is itself slated for replacement by two explicitly-named
-    predicates. They follow once that lands.
-
-    **`join-asym-outcomes.mjs`** (2026-08-24, PLAN-PATIENT-PAIR §7 — replaces the asym pair's
-    READ-BACK QUANTILE CONSTANTS with forward-measured rates. PRODUCER: `asymShadow` on
-    `suggestions.jsonl` + the monthly archives via `readSuggestionLines()`; forward-scored against the
-    1h `pipeline/.market-archive.sqlite`. Asks the two-leg question the display implies but never
-    measured: was the deep bid actually TOUCHED, and if so was the high ask REACHED within H hours?
-    **The measured pair is nothing like the displayed one.** Over the pool `ASYM_MEASURED_ROWS`/
-    `ASYM_MEASURED_ITEMS` record (`emit.mjs` — read them there, they accrue) at the locked
-    decisive spec (entry ≤24h, exit ≤24h from the touch): entry **17.8%** against a logged `pBid` of
-    31.1%, exit-given-entry **24.2%** against a logged `pAsk` of **86.8%**, and a **4.3% round trip**.
-    The logged numbers are the `ASYM_P_LO`/`ASYM_P_HI` quantiles read back out (PLAN §2b), so this is
-    the size of the fiction, NOT a model comparison — do not report it as "the estimator was 62pp
-    optimistic". **DT1 GENERALISES, and hardest exactly where the anchor lived**: big-ticket rows
-    (ask ≥ `BIG_TICKET_GP`) enter MORE often (23.1%) but convert far less (**6.4%** exit-given-entry,
-    1.5% round trip) than sub-big-ticket (28.6% / 4.8%) — DT1's own figure was 4.8% at 24h. So the
-    Webweaver move reads as a good OUTCOME from a bad-odds setup, which is the answer PLAN §7 said
-    nobody had. Round trip rises with the horizon but never far: 6.3% at 48h, 9.0% at 96h, 10.8% at 7d.
-    **A REJECTED ESTIMATOR is recorded in the header and matters more than any shipped number**: the
-    first design scored a random-offset matched null and measured −36.0pp "adverse selection", which was
-    an artifact of the STARTING PRICE — the null arm begins at 99.8% of the row's ask level, the
-    conditional arm at 93.8%. The shipped contrast is time-matched instead (round trip vs ask-reached-
-    anywhere-in-W over the identical window), and `hit ⊆ askOnly` by construction makes it a
-    DECOMPOSITION, not a horse race. HONESTY: touched/reached ≠ filled — no queue position, no partials,
-    no competition at the level, so every absolute rate bounds a real offer from ABOVE; one era, one
-    update cycle, band-dominated; CIs resample ITEMS. **GATES NOTHING** — threshold work belongs to F1.
-    `--entry`/`--horizon`/`--item`/`--json`.)
-
     **`join-reach-outcomes.mjs`** (2026-08-27, PLAN-REACHABILITY-CONSOLIDATION — the RC head-to-head,
-    forward-scored. The tool carries FIVE overlapping ways to price an exit (reach-fold · reachRelief ·
-    asym · depth · pressure); RC-S1/RC-S2 co-log them RAGGEDLY — see the Coverage table the command
+    forward-scored. The tool carries FOUR overlapping ways to price an exit (reach-fold · reachRelief ·
+    asym · pressure); RC-S1/RC-S2 co-log them RAGGEDLY — see the Coverage table the command
     prints — and nothing had ever read that
-    log. PRODUCER: the `reachable`/`estSell`/`asym`/`depthExit` co-logs on `suggestions.jsonl` + the
+    log. PRODUCER: the `reachable`/`estSell`/`asym` co-logs on `suggestions.jsonl` + the
     monthly archives via `readSuggestionLines()`; forward-scored against the 1h
     `pipeline/.market-archive.sqlite` through `js/forward-reach.mjs`. Per estimator, per
     (side × class × regime) cell: was that ask REACHED within the horizon, and how far above it did the
@@ -1793,8 +1706,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `reachability.mjs:52`), and both are monotone in the ask price, so the REACH ordering is a
     PRICE-LEVEL ordering: `quickSell*`, the declared null, maximises the reach column in every MATCHED
     pool. But the two REPORTED columns are different functionals of that one quantity — a RATE and a
-    MEDIAN — so they can and do rank differently: `depth` sits above `quickSell*` on gap in the
-    depth-matched pool at every horizon tested. Neither ordering is a quality ordering.
+    MEDIAN — so they can rank differently. Neither ordering is a quality ordering.
     Read literally this surface says "always instasell", which nobody believes: an
     ask that misses costs a RE-LIST, not the trade, and nothing here expresses that cost. The sibling
     `join-reach-basis.mjs` already solved this exact problem (`mcnemarCost`, a cost ratio `r`, a
@@ -1809,8 +1721,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     pressure is the big-ticket estimator. Quote the horizon with any claim off this surface, and never
     the phrase "prices past the market" unqualified.
     **Compare on the gap column, never the conditional headroom** — headroom conditions on reaching, which selects
-    high-topping rows and flatters a rarely-reaching estimator. Read the MATCHED tables, never the pooled ones: coverage is ragged (depth needs
-    a held qty; reachFold/reachRelief are disjoint by construction) so the pooled per-estimator marginals
+    high-topping rows and flatters a rarely-reaching estimator. Read the MATCHED tables, never the pooled ones: coverage is ragged (
+    reachFold/reachRelief are disjoint by construction) so the pooled per-estimator marginals
     are computed over DIFFERENT row sets. HONESTY: reached ≠ filled — no queue position — so every rate
     bounds a real offer from ABOVE; n counts READS, not trades, and the screen re-prices the same item
     many times a day, so rows are heavily item-day clustered and effective n is far below nominal; the
@@ -1902,10 +1814,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     a fraction of a percent off its logged value (an hourly average against a live print), so a
     head-to-head gap narrower than that is not real. `askStar` has NO row in that table and cannot —
     it was never deployed, so the check bounds the INCUMBENTS ONLY. A contender the check scores zero
-    rows for is marked `†` UNBOUNDED in every table and can never be nominated for retirement; `depth`
-    is currently that contender, and its size is a convention invented here (a fixed fraction of daily
-    flow) because no archive origin has a held lot, so its last-place finish is not evidence about the
-    deployed depth read.
+    rows for is marked `†` UNBOUNDED in every table and can never be nominated for retirement.
     **The pre-registered RETIREMENT criterion is applied, not argued** — deficit CI clear of zero at
     the decisive spec plus the same sign in ≥2 of 3 sensitivity horizons, reference lines excluded,
     unbounded reconstructions blocked, an era sign flip blocking. It NOMINATES; executing one is a
@@ -1924,7 +1833,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     rather than hedged in prose. Nothing may be retired on a gap narrower than the noise in the
     instrument that measured it. The same guard, plus a row floor on what counts as a bounded
     reconstruction, left exactly one live nomination — the `pressure` retirement executed above;
-    `reachFold` and `depth` stay BLOCKED.
+    `reachFold` stays BLOCKED.
     **Three sensitivities are load-bearing and two of them moved something.** (1) The `delayCost` sweep
     turns out to be an ALGEBRAIC IDENTITY, not a robustness check: a miss scores an edge of exactly
     zero, so a contender whose ask does not move with the cost has mean edge `edge(0) + cost × reach`
@@ -1959,7 +1868,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     aggregate, so every reach rate bounds a real offer from ABOVE and flatters the HIGH asks most);
     origins overlap unless thinned and every origin of an item shares one price path, so read the ITEM
     counts, never the origin counts — the per-cell table prints both for that reason.
-    `--items`/`--stride`/`--horizon`/`--delay-cost-frac`/`--depth-qty-frac`/`--bail`/`--min-rows`/
+    `--items`/`--stride`/`--horizon`/`--delay-cost-frac`/`--bail`/`--min-rows`/
     `--warmup-days`/`--acceptance-n`/`--json`.)
 
     **`join-reach-basis.mjs`** (2026-08-13, PLAN-REACH-BASIS-DECISION — settles the digest's
@@ -2073,7 +1982,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     drift-guard tying `MIN_N_F1`/`MIN_CELLS_F1` to `join-outcomes.mjs`),
     `reachability.mjs` (RC, PLAN-REACHABILITY-CONSOLIDATION — the PURE reachability head-to-head scorer
     behind `join-reach-outcomes.mjs`. `REACH_ESTIMATORS` is the ONE registry mapping a logged suggestion
-    field to a contender: `reachable.ask`→pressure, `asym.ask`→asym, `depthExit.ask`→depth, and `estSell`
+    field to a contender: `reachable.ask`→pressure, `asym.ask`→asym, and `estSell`
     splitting into reachFold / reachRelief on whether `estConfidence.reachRelief` FIRED — the same
     estimator with and without the softening, so the two are scored over DISJOINT rows and this surface
     can never answer "does relief help?" (that needs the relief=0 counterfactual co-logged). `scoreRow`

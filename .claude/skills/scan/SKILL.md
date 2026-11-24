@@ -770,7 +770,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   problem; run `--ask` on the handful you actually pitch instead — accurate + cheap.)
   - **The verification TRIO — mandatory for every top pick, ONE combined call, every time (Ben,
     2026-07-18 — supersedes "run `--profile` on the handful you actually pitch" being optional;
-    revised same day once `--profile` was fixed to COMPOSE with `--ask`/`--bid`/`--exit`/`--depth`
+    revised same day once `--profile` was fixed to COMPOSE with `--ask`/`--bid`/`--exit`
     instead of short-circuiting the rest of the per-item read).**
     The sell-leg-only rule above is the FLOOR, not the whole bundle. Before naming a bid/ask on
     anything you're about to recommend, run ONE `read-window-range.mjs` call bundling all three

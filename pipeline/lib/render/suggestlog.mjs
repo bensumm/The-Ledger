@@ -81,7 +81,7 @@
  *   exemptionBounded? / rankPre?  true when the placement bound dropped a churn row's ask-reach exemption; the
  *              logged pFill/rank are then the DISCOUNTED numbers and rankPre is the pre-bound rank beside them.
  *              Screen rows only; PLACEHOLDER bounds, n≈0.
- *   depthExit?  held-lot percentile-depth { qty, competition, liqClass, ask?, clearFrac?, collapse? }; collapse
+ *   depthExit?  RETIRED — no longer written; historical rows carry it
  *              names the null-read reason ('insufficient-depth'|'thin-history'|'no-prints'). liqClass rides
  *              EVERY row so F1 can test whether the flat ×4 competition bar nulls one liquidity class.
  *              watch-positions held rows only.
@@ -314,7 +314,7 @@ export function classAndSource(row, id, warmBulk) {
 }
 
 // --- reachability head-to-head ledger-shadow reshapers (RC-S1/RC-S2, PLAN-REACHABILITY-CONSOLIDATION) --
-// ONE home for the `reachable`/`depthExit` shadow-field SHAPE so the watch/screen/quote co-logs can't
+// ONE home for the `reachable` shadow-field SHAPE so the watch/screen/quote co-logs can't
 // drift (the exit-estimator head-to-head reads these). Each takes a
 // RAW js/windowread result and returns the lean ledger object, or null when there is nothing to log.
 export function reachableShadow(rb) {
@@ -322,15 +322,6 @@ export function reachableShadow(rb) {
   if (!rb || rb.bid == null) return null;
   const r2 = x => x == null ? null : Math.round(x * 100) / 100;
   return { bid: rb.bid, pressure: r2(rb.pressure), reliability: r2(rb.reliability), bandLow: rb.bandLow, bandHigh: rb.bandHigh };
-}
-// depthExit ALWAYS carries the booked ask OR the collapse REASON + the liquidity class (so F1 can
-// measure whether the flat ×4 competition bar systematically nulls a class we'd want to price).
-export function depthExitShadow(ca, { qty, volDay } = {}) {
-  if (!ca) return null;
-  const o = { qty, competition: ca.competition, liqClass: liqClassOf(volDay) };
-  if (ca.price != null) { o.ask = ca.price; o.clearFrac = Math.round(ca.clearFrac * 100) / 100; }
-  else o.collapse = ca.reason;
-  return o;
 }
 // A5 (PLAN-AMPLITUDE-SCAN §4/§A5) — the amplitude lane shadow block: the printed daily trough-bid /
 // peak-ask levels, the both-leg RECENT-3 daily reach (DESCRIPTIVE, not a viability read — at default
@@ -536,7 +527,7 @@ export function timedLapShadow(lap) {
 // the prediction is just the item's dominant class from buildVelocityIndex(outcomes.json), which the join
 // recomputes for free. The MEASURED velocityClass (velocity.mjs, off a real round-trip) is a different
 // thing and is still live.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, dwell, tripwire, fillWindowHrs, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, admitSkip, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDay, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap, pathA, via, preRank, prePool, askPlacement, repriced, exemptionBounded, rankPre } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, dwell, tripwire, fillWindowHrs, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, admitSkip, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDay, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap, pathA, via, preRank, prePool, askPlacement, repriced, exemptionBounded, rankPre } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -627,16 +618,10 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, dw
   // signals SIDE-BY-SIDE, so WC2 can join it against fills.json and ask which predicts a resting-ask fill.
   // DISTINCT from winClear, which keys the within-window lap-clear on optSell.
   if (windowExit != null)    e.windowExit = windowExit;
-  // PLAN-DEPTH-EXIT DE3 / RC-S1 / RC-S2 (PLAN-REACHABILITY-CONSOLIDATION) — depthExit + reachable ride
-  // BESIDE estBuy/estSell/estConfidence and asym so the exit-estimator co-log lands on the SAME row
-  // (pressure's retired ASK leg no longer logs; its bid/band record continues), including
-  // whether the ×4 competition bar nulls a liquidity class we would want to price (collapse + liqClass). The head-to-head spans HELD (watch, quote --positions) AND DISCOVERY
-  // (screen survivors, quote per-item): `reachable` rides every row with an in-hand 1h series,
-  // while `depthExit` (depth) rides only HELD rows with a real qty — a bare discovery row omits it, the DE7
-  // fetch-budget rule. On watch the shadow est uses declaredExit:null, so the model's intrinsic ask is the
-  // scored quantity. All shaped by the reachableShadow/depthExitShadow/asymShadow reshapers above (ONE home,
-  // no drift). DC3: `demandRegime` (PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2) is REMOVED and never emitted.
-  if (depthExit != null)     e.depthExit = depthExit;
+  // RC-S1 / RC-S2 (PLAN-REACHABILITY-CONSOLIDATION) — reachable (bid/band) rides beside
+  // estBuy/estSell/estConfidence and asym so the exit-estimator co-log lands on the SAME row, on every
+  // row with an in-hand 1h series. On watch the shadow est uses declaredExit:null, so the model's
+  // intrinsic ask is the scored quantity.
   if (reachable != null)     e.reachable = reachable;
   // DL2 — a flush SIGNAL (watch-positions.mjs --dip) carries its full component object so the DL2 retro-join
   // (pipeline/commands/analyze-record.mjs §4) can join it against fills.json and, over enough history,

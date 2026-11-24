@@ -515,7 +515,7 @@ are verified — the buy (trajectory / dip-vs-knife) AND the sell (`--ask` reach
 
 **The verification TRIO — mandatory for every top pick/action price, ONE combined call, every time
 (Ben, 2026-07-18 — supersedes running these ad hoc/"on the handful you actually pitch"; revised
-same day once `--profile` was fixed to COMPOSE with `--ask`/`--bid`/`--exit`/`--depth` instead of
+same day once `--profile` was fixed to COMPOSE with `--ask`/`--bid`/`--exit` instead of
 short-circuiting the rest of the per-item read).** The sell-leg-only rule above is now the FLOOR,
 not the whole bundle. Before naming an action price on anything you're recommending (a new bid, a
 list-at, a rebid), run ONE `read-window-range.mjs` call bundling all three checks on it — cheap

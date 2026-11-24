@@ -30,8 +30,7 @@ import { fmtP, fmt, fmtHour, fmtHourRange } from '../../../js/money-format.js';
 import { fmtHoldHorizon, realityClause } from '../../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT2 — formatTimedLap's hold-horizon renderer; PLAN-DIURNAL-RECENCY-GUARD — realityClause: the spike-top/stale clause appended to the ASK/BID bits
 
 // (depthReachClause — DE3's two-lens depth-floor/pressure clause — is DELETED: its only
-// render path was gated on the retired --pressure-exit trial. Git-revivable; the depthExit co-log and
-// clearableAsk itself are untouched.)
+// render path was gated on the retired --pressure-exit trial. Git-revivable.)
 
 /**
  * The canonical list-at sell price for a held lot. Prefers the shared momVerdict's `listAt` (the

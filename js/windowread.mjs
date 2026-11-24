@@ -928,111 +928,9 @@ export function windowClearDiverges(clear, dayReachFrac = null, { minFrac = WINC
   return { diverges: windowShort || sizeShort, windowShort, sizeShort };
 }
 
-// --- percentile-depth exit/entry (PLAN-DEPTH-EXIT DE1) ----------------------------------------
-// THE GOAL — answer "what can I actually BOOK at?" (the price my size clears), not "how often does
-// the top print?" (that's reachedDays/touchedDays above — and it is the qty→0 LIMIT of this model,
-// pinned as a fixture). windowStats reads each day's MAX high; depth reads the WHOLE window's volume
-// distributed ACROSS price. The wiki exposes no order book, so we reconstruct the distribution from
-// the only thing it gives: each 1h bucket is a POINT MASS — highPriceVolume units transacted at
-// avgHighPrice (bid side: lowPriceVolume at avgLowPrice). depthAbove_d(P) = the instabuy flow that
-// printed at/above P on day d; a day "clears" my lot when that flow is COMPETITION× my size (I don't
-// take the whole pool — other sellers queue too). Full data-availability analysis + bias structure:
-// PLAN-DEPTH-EXIT.md. ALL constants are NAMED PLACEHOLDERS (n≈0 — the soul-rune anchor); F1 owns the
-// magnitudes (process rule 4). Kept module-internal for now (surfaced via the function returns);
-// promote to `export` when a cross-file consumer (DE2/DE3) actually imports one.
-//
-// LIQUIDITY BIAS — SURFACED BY DESIGN (Ben): a flat COMPETITION× makes this a LIQUID-CLASS
-// tool. A thin book whose whole-window flow is under COMPETITION×qty at every level returns a null read
-// WITH A REASON ('insufficient-depth') — honest deflation for held-lot pricing, but it means depth
-// cannot rescue a thin item's buried edge (only surface liquid ones). A null NEVER degrades silently;
-// the caller reads the reason and says "reach fallback — book absorbs <N× your lot". F1 must validate
-// whether the flat ×4 systematically nulls a class we'd want to price (DE3 shadow-logs the reason+class).
-const DEPTH_COMPETITION_MULT = 4;    // required flow = COMPETITION × qty (queue-position safety factor; Ben-accepted conditional on the surfacing above)
-const DEPTH_TARGET_FRAC      = 0.75; // a level "clears" when ≥ this fraction of scored days absorb the lot (echoes EST_REACH_SAT_FRAC's "reachable-enough")
-const DEPTH_MIN_DAYS         = 5;    // fewer scored window-days than this ⇒ null 'thin-history' (mirrors ASYM_MIN_DAYS)
-const DEPTH_MIN_BUCKETS      = 2;    // a candidate level needs ≥ this many distinct supporting buckets at/beyond it (within-bucket misattribution guard)
-
-/* Group the in-window 1h buckets by day, KEEPING each bucket's (price, volume) point mass — the piece
- * windowStats discards when it collapses a day to max-hi/total-vol. Returns
- *   [[key, { hi:[{p,v},…], lo:[{p,v},…] }], …]  oldest→newest, complete days only (today skipped while
- * inside the window, exactly like windowStats), capped at `nights`. Only buckets that actually TRADED
- * (vol>0) are kept — a zero-volume average is a quote, not depth. Module-internal engine for both funcs. */
-function windowBuckets(series, { nights = 14, wStart, wEnd, now = new Date() } = {}) {
-  const days = new Map();
-  const today = inWindow(now.getHours(), wStart, wEnd) ? dayKey(now, wStart, wEnd) : null;
-  for (const pt of series) {
-    const d = new Date(pt.timestamp * 1000);
-    if (!inWindow(d.getHours(), wStart, wEnd)) continue;
-    const key = dayKey(d, wStart, wEnd);
-    if (key === today) continue;
-    const rec = days.get(key) || { hi: [], lo: [] };
-    if (pt.avgHighPrice != null && (pt.highPriceVolume || 0) > 0) rec.hi.push({ p: pt.avgHighPrice, v: pt.highPriceVolume });
-    if (pt.avgLowPrice  != null && (pt.lowPriceVolume  || 0) > 0) rec.lo.push({ p: pt.avgLowPrice,  v: pt.lowPriceVolume  });
-    days.set(key, rec);
-  }
-  return [...days.entries()].filter(([, r]) => r.hi.length || r.lo.length)
-    .sort((a, b) => b[0].localeCompare(a[0])).slice(0, nights).reverse();
-}
-
-// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1: `depthDays` (the DE1 per-day flow-beyond table) and its
-// `flowBeyond` helper are GONE — a narrow removal of the DE1/DE6 percentile-depth INSPECTOR reads that
-// never fed a main decision surface. `clearableLevel`/`clearableAsk` (below) SURVIVE — clearableAsk still
-// powers the live DE3 `depthExit` shadow on watch-positions/quote-items. Revive from git if ever needed.
-
-/* clearableLevel — the ONE side-generic engine behind clearableAsk (DE1); the 'bid' path (DE6) is retained
-   for symmetry/revival but has no live caller after chunk-1's clearableBid removal.
- *   ask side: candidate levels = distinct hi-bucket prices scanned HIGH→LOW; flow-beyond = at/ABOVE.
- *   bid side: distinct lo-bucket prices scanned LOW→HIGH; flow-beyond = at/BELOW (instasell flow).
- * clearFrac is monotone toward the flow (non-increasing in the ask / non-decreasing in the bid), so
- * the FIRST clearing level in scan order is the extreme one — the max bookable ask / min catchable
- * bid. Both by construction stay inside the observed data (a real bucket price — the ask never above
- * the max print, the bid never below the min print). Module-internal. */
-function clearableLevel(series, side, { qty, competition = DEPTH_COMPETITION_MULT, targetFrac = DEPTH_TARGET_FRAC, minBuckets = DEPTH_MIN_BUCKETS, minDays = DEPTH_MIN_DAYS, wStart, wEnd, nights = 14, now = new Date() } = {}) {
-  const scored = windowBuckets(series, { nights, wStart, wEnd, now });
-  const nDays = scored.length;
-  // meta echoes the effective params so a caller can state "×4 comp, ≥75% target" without importing the consts.
-  const res = (price, clearFrac, reason, extra = {}) => ({ price, clearFrac, reason, nDays, competition, qty, targetFrac, minBuckets, ...extra });
-  if (nDays < minDays) return res(null, null, 'thin-history');
-  const pick = r => (side === 'bid' ? r.lo : r.hi);
-  const levels = [...new Set(scored.flatMap(([, r]) => pick(r).map(b => b.p)))]
-    .sort((a, b) => (side === 'bid' ? a - b : b - a));   // bid low→high, ask high→low: first clear = the extreme
-  if (!levels.length) return res(null, null, 'no-prints');
-  const need = competition * qty;
-  for (const P of levels) {
-    let supporting = 0, cleared = 0;
-    for (const [, r] of scored) {
-      const beyond = pick(r).filter(b => (side === 'bid' ? b.p <= P : b.p >= P));
-      supporting += beyond.length;
-      const flow = beyond.reduce((s, b) => s + b.v, 0);
-      if (flow > 0 && flow >= need) cleared++;
-    }
-    if (supporting < minBuckets) continue;                 // misattribution guard: too few prints to trust P
-    if (cleared / nDays >= targetFrac) return res(P, cleared / nDays, null);
-  }
-  return res(null, 0, 'insufficient-depth', { need });
-}
-
-/* clearableAsk(series, opts) → { price, clearFrac, reason, nDays, competition, qty }.
- *   price  = the HIGHEST ask whose flow clears the lot on ≥ targetFrac of days AND has ≥ minBuckets
- *            distinct supporting buckets at/above it — "what I can actually book at" (null when none).
- *   reason = why price is null: 'thin-history' (< minDays scored), 'no-prints' (no traded buckets),
- *            'insufficient-depth' (the book can't absorb competition×qty at ANY level — the liquidity
- *            collapse Ben predicted; the caller MUST surface it, never silently fall back to reach).
- * Candidate levels = the distinct bucket prices only (no interpolation — that would invent data).
- * By construction price never exceeds the observed data (a real bucket price); the caller still
- * caps a rendered ask at dayHighFrom5m. */
-// @provisional-api: PLAN-DEPTH-EXIT DE1 — the "book at X" ask, consumed by DE2 (--depth inspector) and
-// DE3 (watch-positions line/shadow log); F1 (DE4) later promotes it into estimatePair's held-lot sell.
-export function clearableAsk(series, opts = {}) { return clearableLevel(series, 'ask', opts); }
-
-// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1: `clearableBid` (the DE6 low-side mirror) is GONE — a narrow
-// removal, the low-side depth inspector had no live consumer. `clearableAsk` above survives. Revive from
-// git (`clearableLevel(series, 'bid', opts)` — the engine's bid path is intact) if needed.
-
-// --- pressure-driven reachable band (PLAN-DEPTH-EXIT Extension A, PB1) --------------------------
-// THE GAP the depth model left open (the Soul-rune 394 problem): clearableAsk reads 1h bucket
-// AVERAGES, which smooth away the peaks a resting limit ask actually fills at — on a deep book the
-// depth read is a strictly-conservative FLOOR that under-prices the top. The reachable price is set
+// --- pressure-driven reachable band (depth-exit Extension A, PB1) --------------------------
+// 1h bucket AVERAGES smooth away the peaks a resting limit ask actually fills at (the Soul-rune 394
+// problem). The reachable price is set
 // by the BUYER/SELLER BALANCE: you clear high when you're the lowest ask into impatient buyers; you
 // buy deep when sellers dump into your bid. That balance is already in windowStats: medVolHi
 // (instabuy flow) vs medVolLo (instasell flow). With s = ln(medVolHi/medVolLo) and one monotone
@@ -1070,7 +968,7 @@ export const PRESSURE_BAND_RECENT_N = 7;   // PB5: the band WIDTH (dispersion) i
  * ratio = medVolHi/medVolLo off a windowStats result (>1 buy-heavy, <1 sell-heavy); s = ln(ratio)
  * so 2× and 0.5× are symmetric; reliability ∈ [0,1] = how much volume stands behind the ratio
  * (min side ÷ PRESSURE_MIN_VOL, clamped — the noise guard). Null when either side is absent/zero. */
-// @provisional-api: PLAN-DEPTH-EXIT Extension A (PB1) — consumed by reachableBand below and by DC1's
+// @provisional-api: depth-exit Extension A (PB1) — consumed by reachableBand below and by DC1's
 // hourlyPressure (the per-hour demand-cycle track); PB2's --pressure inspector prints it directly.
 export function demandPressure(stats, { minVol = PRESSURE_MIN_VOL } = {}) {
   if (!stats || !(stats.medVolHi > 0) || !(stats.medVolLo > 0)) return null;
@@ -1087,7 +985,7 @@ const pressurePhi = (x, slope, cap) => Math.max(0, Math.min(cap, 0.5 + slope * x
  * The headroom each side adds/subtracts is band·φ(±s)·reliability — a thin-volume book collapses to
  * the smoothed center (the guard above), a balanced liquid book sits half a band out, a one-sided
  * liquid book reaches up to one full band (the clamp). Monotone in s on both sides by construction. */
-// @provisional-api: PLAN-DEPTH-EXIT Extension A (PB1) — consumed by suggestions.jsonl shadow
+// @provisional-api: depth-exit Extension A (PB1) — consumed by suggestions.jsonl shadow
 // fields (bid/band only — the pressure exit ASK is retired, join-exit-ev's criterion), PB2's
 // read-window-range --pressure inspector, and reverseListBand's Sold-ref/Peak band.
 export function reachableBand(stats, { slope = PRESSURE_PHI_SLOPE, headroomMax = PRESSURE_HEADROOM_MAX, minVol = PRESSURE_MIN_VOL, minDays = PRESSURE_MIN_DAYS, recentN = RECENT_NIGHTS, bandRecentN = PRESSURE_BAND_RECENT_N } = {}) {

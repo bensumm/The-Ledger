@@ -21,8 +21,7 @@ import { reachMarginTrigger } from '../../js/windowread.mjs';   // PLAN-HOLD-FAD
 import { projectTrajectory } from '../../js/windowread.mjs';   // PLAN-SIGNAL-RECENCY R1 — the shared trajectory primitive
 import { SECOND_PROMINENCE_FRAC } from '../../js/windowread.mjs';   // PLAN-MULTI-PEAK-WINDOWS — the secondary-window prominence gate
 import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-WINDOW-CLEAR B1
-import { clearableAsk } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1 (depthDays/clearableBid removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
-import { demandPressure, reachableBand, PRESSURE_PHI_SLOPE, PRESSURE_MIN_VOL, PRESSURE_HEADROOM_MAX } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension A (PB1) — hourlyPressure/demandRegime (Ext B) removed, PLAN-REMOVE-DEPTH-PRESSURE-READS
+import { demandPressure, reachableBand, PRESSURE_PHI_SLOPE, PRESSURE_MIN_VOL, PRESSURE_HEADROOM_MAX } from '../../js/windowread.mjs';   // depth-exit Extension A (PB1) — hourlyPressure/demandRegime (Ext B) removed, PLAN-REMOVE-DEPTH-PRESSURE-READS
 import { trajectoryRead } from '../../js/windowread.mjs';   // the fang under-read fix — shared multi-day shape read (read-window-range + quote-items render from ONE definition)
 import { floorCeilingTrack, formatFloorCeiling, FC_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — the phase-aligned floor+ceiling slope-asymmetry classifier
 import { fmtHoldHorizon } from '../../js/windowread.mjs';   // PLAN-ESTIMATOR-HONEST-SELL follow-up — the shared "~Nh/Nd hold" renderer
@@ -753,57 +752,7 @@ ok('windowClear: null on a too-thin window; windowClearDiverges flags the two tr
   assert.ok(!windowClearDiverges(null).diverges);
 });
 
-// --- percentile-depth exit (PLAN-DEPTH-EXIT DE1) -----------------------------------------------
-// Multi-bucket days: several 1h prints per day at different (price, volume) so depth distributes
-// across price (windowStats collapses this to a day max/total; depth needs the point masses).
-const dDay = (d, buckets) => buckets.map(b => pt(ts(2026, 0, d, b.h), b.hi - 500, b.hi, 10, b.volHi));
-const dNow = new Date(2026, 0, 25, 12, 0, 0);              // hour 12 ∉ 14–17 → no "today" skip games
-const dOpts = { wStart: 14, wEnd: 17, now: dNow, nights: 14 };
-
-// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1: the `depthDays` subsumption test was removed with depthDays.
-ok('clearableAsk: deep book + small size books HIGH; a large lot books lower (size-honest, monotone)', () => {
-  const series = [];   // every day trades deeply at 400 and 396 (1000 u each)
-  for (let d = 10; d <= 16; d++) series.push(...dDay(d, [{ h: 14, hi: 400, volHi: 1000 }, { h: 15, hi: 396, volHi: 1000 }]));
-  const small = clearableAsk(series, { qty: 10, ...dOpts });     // need 40 → clears the very top
-  assert.equal(small.price, 400);
-  assert.ok(small.clearFrac >= 0.75 && small.reason == null);
-  assert.ok(small.competition === 4 && small.targetFrac === 0.75 && small.minBuckets === 2, 'return echoes the effective params (DE2 states them without importing the consts)');
-  const large = clearableAsk(series, { qty: 400, ...dOpts });    // need 1600 → 400 alone (1000) can't; 396 cumulative (2000) can
-  assert.ok(large.price != null && large.price < small.price, 'a large lot books LOWER (needs cumulative depth)');
-});
-
-ok('clearableAsk: a thin book / oversized lot collapses to null WITH a reason (mirage guard, surfaced)', () => {
-  const thin = [];   // 6 days but ~nothing trades — flow can\'t absorb the lot at any level
-  for (let d = 10; d <= 15; d++) thin.push(...dDay(d, [{ h: 14, hi: 400, volHi: 3 }, { h: 15, hi: 396, volHi: 3 }]));
-  const r = clearableAsk(thin, { qty: 100, ...dOpts });          // need 400 ≫ 6 u/day
-  assert.equal(r.price, null);
-  assert.equal(r.reason, 'insufficient-depth', 'never a silent null — the liquidity collapse is named');
-  const few = dDay(10, [{ h: 14, hi: 400, volHi: 1000 }]).concat(dDay(11, [{ h: 14, hi: 400, volHi: 1000 }]));
-  assert.equal(clearableAsk(few, { qty: 1, ...dOpts }).reason, 'thin-history', '< minDays scored → thin-history');
-});
-
-ok('clearableAsk: monotone — higher qty/competition/targetFrac never books HIGHER', () => {
-  const series = [];   // three price tiers/day: 410(200) · 400(400) · 390(800)
-  for (let d = 10; d <= 16; d++) series.push(...dDay(d, [{ h: 14, hi: 410, volHi: 200 }, { h: 15, hi: 400, volHi: 400 }, { h: 16, hi: 390, volHi: 800 }]));
-  const p = q => clearableAsk(series, { qty: q, ...dOpts }).price ?? -Infinity;
-  assert.ok(p(10) >= p(100) && p(100) >= p(300), 'price non-increasing in qty');
-  const byComp = c => clearableAsk(series, { qty: 50, competition: c, ...dOpts }).price ?? -Infinity;
-  assert.ok(byComp(1) >= byComp(4) && byComp(4) >= byComp(8), 'price non-increasing in competition');
-  const byFrac = f => clearableAsk(series, { qty: 50, targetFrac: f, ...dOpts }).price ?? -Infinity;
-  assert.ok(byFrac(0.5) >= byFrac(0.75) && byFrac(0.75) >= byFrac(1), 'price non-increasing in targetFrac');
-});
-
-ok('clearableAsk: minBuckets guard — a lone fat bucket at the top cannot set the clearable ask', () => {
-  const series = [...dDay(10, [{ h: 14, hi: 420, volHi: 100000 }])];   // one day, one huge 420 flier
-  for (let d = 11; d <= 16; d++) series.push(...dDay(d, [{ h: 14, hi: 400, volHi: 1000 }, { h: 15, hi: 398, volHi: 1000 }]));
-  const r = clearableAsk(series, { qty: 10, ...dOpts });               // 420 is supported by 1 bucket (< minBuckets 2) → skipped
-  assert.ok(r.price != null && r.price <= 400, 'the lone 420 flier does not set the ask — the dense top ≤400 does');
-});
-
-// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1: the DE6 clearableBid low-side-mirror tests (+ the `bDay`
-// builder + the depthDays side:bid subsumption test) were removed with clearableBid.
-
-// --- pressure-driven reachable band (PLAN-DEPTH-EXIT Extension A, PB1) --------------------------
+// --- pressure-driven reachable band (depth-exit Extension A, PB1) --------------------------
 // Build a windowStats-SHAPED object directly (days oldest→newest; lows/his ascending — the
 // windowStats contract) so each fixture controls base/band/pressure exactly. reachableBand is pure
 // over that shape; the live path always feeds it a real windowStats result.
@@ -881,7 +830,7 @@ ok('reachableBand: SOUL-RUNE reasonableness pin (buy-heavy: high ask, shallow bi
   const his = [376, 380, 390, 394, 394, 394, 395, 396, 396, 396, 397, 396, 400, 402];
   const pairs = lows.map((l, i) => [l, his[i]]);
   const r = reachableBand(pStats(pairs, { volLo: 11012548, volHi: 18297822 }));
-  assert.equal(r.ask, 403, 'reachable ask ~403 — ABOVE the smoothed depth floor (clearableAsk read 394; real 397 fills); PB5 band = recent-7 his IQR 4 (was full-window IQR 2 → 401)');
+  assert.equal(r.ask, 403, 'reachable ask ~403 — ABOVE the smoothed 1h-average floor (394; real 397 fills); PB5 band = recent-7 his IQR 4 (was full-window IQR 2 → 401)');
   assert.equal(r.bid, 383, 'shallow bid on a buy-heavy book — deep bids are slow tail-dip trickle fills (unchanged: recent-7 low IQR 2)');
   assert.ok(r.pressure > 1.6 && r.pressure < 1.7 && r.reliability === 1);
 });

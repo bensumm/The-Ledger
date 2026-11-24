@@ -74,7 +74,7 @@ import { gradeCls, fmtP } from '../../../js/money-format.js';
                ride as PRE-FORMATTED strings, not typed kinds, so they carry no NOTE_KINDS entry; their
                tier is context by this doctrine).
      shadow  = never entered a report object: suggestions.jsonl analytics fields (estBuy/estSell/
-               reachable/depthExit/asym/winClear/…). Unrendered today, unchanged by this plan.
+               reachable/asym/winClear/…). Unrendered today, unchanged by this plan.
    A note kind only moves toward shadow (log-only) once real sessions evidence it's consistently
    unused — a separate future ruling (see PLAN honesty note), never speculatively upfront. */
 export const TIER = { core: 'core', context: 'context', shadow: 'shadow' };

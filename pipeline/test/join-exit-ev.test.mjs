@@ -406,11 +406,11 @@ ok('retirement: an EXECUTED nomination carries its date, so a re-run never reads
 
 ok('retirement: an UNBOUNDED reconstruction is BLOCKED however large its deficit', () => {
   const h = headToHead(spread(12), 24, 0, DEPLOYABLE_POOL_KEYS);
-  const blocked = retirementTable(h, [h], [h, h], new Set(['depth'])).find(r => r.key === 'depth');
-  assert.ok(blocked, 'depth must be in the table to be blocked in it');
+  const blocked = retirementTable(h, [h], [h, h], new Set(['reachFold'])).find(r => r.key === 'reachFold');
+  assert.ok(blocked, 'reachFold must be in the table to be blocked in it');
   assert.equal(blocked.nominated, false);
   assert.match(blocked.blockedBy, /UNBOUNDED/);
-  const free = retirementTable(h, [h], [h, h]).find(r => r.key === 'depth');
+  const free = retirementTable(h, [h], [h, h]).find(r => r.key === 'reachFold');
   assert.equal(free.blockedBy, null, 'without the flag it is judged on its numbers alone');
 });
 
@@ -513,7 +513,7 @@ ok('arm: a straddling interval does not clear, whatever its sign', () => {
 
 // --- the acceptance check --------------------------------------------------------------------------------
 ok('acceptance: it reads the DEPLOYED logged field for every contender it claims to bound', () => {
-  assert.deepEqual(Object.keys(ACCEPTANCE_FIELDS).sort(), ['asym', 'depth', 'pressure', 'quickSell*', 'reachFold'].sort());
+  assert.deepEqual(Object.keys(ACCEPTANCE_FIELDS).sort(), ['asym', 'pressure', 'quickSell*', 'reachFold'].sort());
   assert.ok(!('askStar' in ACCEPTANCE_FIELDS), 'askStar was never deployed; it has no logged counterpart');
 });
 
@@ -526,7 +526,7 @@ ok('acceptance: reachFold reads estSell only when the relief did NOT fire — th
 
 ok('acceptance: a row scores every field both sides carry, and reports a signed relative difference', () => {
   const s = { itemId: 1, ts: ORIGIN, quickSell: 1, asym: { ask: 1 }, reachable: { ask: 1 } };
-  const row = acceptanceRow({ series: FULL, s, nights: DEFAULT_NIGHTS, depthQtyFrac: 0.005 });
+  const row = acceptanceRow({ series: FULL, s, nights: DEFAULT_NIGHTS });
   assert.ok(row && row['quickSell*'], 'the live pair is always reconstructible');
   assert.equal(row['quickSell*'].logged, 1);
   assert.ok(row['quickSell*'].relDiff > 0, 'a logged 1gp against a 10k fixture must read far high');
@@ -538,20 +538,20 @@ ok('acceptance: a row scores every field both sides carry, and reports a signed 
 
 ok('acceptance: an estimator with no overlapping rows reports n=0, not a silent pass', () => {
   const sum = acceptanceSummary([{ pressure: { logged: 1, recomputed: 1, relDiff: 0 } }]);
-  assert.equal(sum.find(x => x.key === 'depth').n, 0);
+  assert.equal(sum.find(x => x.key === 'reachFold').n, 0);
   assert.equal(sum.find(x => x.key === 'pressure').exactFrac, 1);
 });
 
 ok('acceptance: ONE matched row is not a bound — the unbounded test is a row FLOOR, not n>0', () => {
-  const rows = Array.from({ length: ACCEPTANCE_MIN_ROWS - 1 }, () => ({ depth: { logged: 1, recomputed: 1, relDiff: 0 } }));
+  const rows = Array.from({ length: ACCEPTANCE_MIN_ROWS - 1 }, () => ({ reachFold: { logged: 1, recomputed: 1, relDiff: 0 } }));
   const sum = acceptanceSummary(rows);
-  const d = sum.find(x => x.key === 'depth');
+  const d = sum.find(x => x.key === 'reachFold');
   assert.equal(d.n, ACCEPTANCE_MIN_ROWS - 1);
   assert.ok(d.n > 0, 'it scored rows...');
   assert.ok(d.n < ACCEPTANCE_MIN_ROWS, '...and is still unbounded');
-  assert.ok(unboundedKeys(sum).has('depth'), 'a row floor, not n>0');
-  const plenty = acceptanceSummary(Array.from({ length: ACCEPTANCE_MIN_ROWS }, () => ({ depth: { logged: 1, recomputed: 1, relDiff: 0 } })));
-  assert.ok(!unboundedKeys(plenty).has('depth'), 'and it clears at the floor');
+  assert.ok(unboundedKeys(sum).has('reachFold'), 'a row floor, not n>0');
+  const plenty = acceptanceSummary(Array.from({ length: ACCEPTANCE_MIN_ROWS }, () => ({ reachFold: { logged: 1, recomputed: 1, relDiff: 0 } })));
+  assert.ok(!unboundedKeys(plenty).has('reachFold'), 'and it clears at the floor');
 });
 
 // --- cells and live reads ----------------------------------------------------------------------------------

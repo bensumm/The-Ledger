@@ -1279,8 +1279,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // RC-S2 (PLAN-REACHABILITY-CONSOLIDATION): the pressure-driven reachable band off the SAME in-hand
     // 1h series (zero new fetch) — the exit-estimator co-log on the discovery surface (reachRelief=estSell
     // + asym already log here; reach rides estConfidence). The reachable ASK leg stopped logging
-    // (pressure exit retirement); the bid/band shadow continues. DEPTH
-    // stays OFF the screen — a per-row clearableAsk read is the DE7 fetch-budget decision, out of scope.
+    // (pressure exit retirement); the bid/band shadow continues.
     // Inform-only: the `reachable` shadow field only (never a gate/drop/grade/screen.json input).
     const rbStats = (series1h && series1h.get(s.id)) ? windowStats(series1h.get(s.id), { nights: 14, wStart: 0, wEnd: 0 }) : null;
     const reachable = rbStats ? reachableBand(rbStats) : null;

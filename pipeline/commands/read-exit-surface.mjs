@@ -19,7 +19,7 @@
  *   node pipeline/commands/read-exit-surface.mjs "<item or id>" [...more]
  *     [--horizon H[,H…]]  horizons to price at, from the surface grid 2/6/12/24/48/96 (default 6,24,48)
  *     [--price P]         the horizon read: smallest H whose p at P clears --p-target
- *     [--qty N]           lot size — enables the depth incumbent and sizes the fold's relief
+ *     [--qty N]           lot size — sizes the fold's relief
  *     [--delay-cost gp]   per-unit cost charged to the MISS branch only (default 0)
  *     [--p-target f]      probability target for the HORIZON read only (default 0.7)
  *     [--nights N]        trailing daily highs the dispersion reads (default 14)
@@ -31,7 +31,7 @@ import { parseArgs, parseGp, mdTable, writeLastReport } from '../lib/render/cli.
 import { open as openArchive } from '../lib/market/archive.mjs';
 import { buildReachSurface, surfaceProb, DEFAULT_HORIZONS_H as SURFACE_HORIZONS_H } from '../../js/reach-surface.mjs';
 import { evCurve, askStar, horizonForAsk, DEFAULT_P_TARGET, DEFAULT_DELAY_COST } from '../../js/exit-ev.mjs';
-import { windowStats, asymPair, clearableAsk, reachedDays, recencySplit, RECENT_NIGHTS } from '../../js/windowread.mjs';
+import { windowStats, asymPair, reachedDays, recencySplit, RECENT_NIGHTS } from '../../js/windowread.mjs';
 import { estimatePair } from '../lib/signal/estimators.mjs';
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';
 import { computeQuote } from '../../js/quotecore.js';
@@ -137,7 +137,7 @@ export function bailDrivenDrift(surface, H, star, { delayCost = 0 } = {}) {
 /* The incumbents' current asks, computed fresh from the same series. `fold` is a reconstruction and
  * says so: the deployed estimator also sees diurnal/asym/dayHigh/placement and an anchor nudge that
  * are not built here, so its relief is structurally 0 (the read-window-range.mjs precedent). */
-export function incumbentAsks({ stats, live, statsSeries, qty = null, nights = 14, now = new Date() }) {
+export function incumbentAsks({ stats, live }) {
   const out = [];
   const push = (key, ask, note) => {
     if (Number.isFinite(ask) && ask > 0) out.push({ key, ask: Math.round(ask), note });
@@ -150,11 +150,6 @@ export function incumbentAsks({ stats, live, statsSeries, qty = null, nights = 1
   // join-exit-ev.mjs's pre-registered criterion; it is no longer computed as an exit-price candidate.)
   const ap = stats ? asymPair(stats) : null;
   if (ap) push('asym', ap.highReachAsk, `quantile level — its printed pAsk ${pct(ap.pAsk)} is that quantile read back, not a fill rate`);
-  if (qty != null && Array.isArray(statsSeries) && statsSeries.length) {
-    const ca = clearableAsk(statsSeries, { qty, nights, wStart: 0, wEnd: 0, now });
-    if (ca && ca.price != null) push('depth', ca.price, `books ${qty} units on ${pct(ca.clearFrac)} of days`);
-    else if (ca) out.push({ key: 'depth', ask: null, note: `no level books ${qty} units: ${ca.reason}` });
-  }
   const fold = foldAsk({ stats, live });
   if (fold != null) push('fold', fold, 'RECONSTRUCTED reach-fold — the deployed estimator sees inputs this surface does not build');
   return out;
@@ -236,7 +231,7 @@ export function buildExitReport({ name, itemId, series, fiveMin = null, live = n
     });
   }
 
-  const points = incumbentAsks({ stats, live, statsSeries, qty, nights, now });
+  const points = incumbentAsks({ stats, live });
   // The incumbents are placed at a horizon the SURFACE actually holds: placing them at a requested-but-
   // absent one silently renders a table of dashes under a header naming that horizon.
   const gridHs = surface.grid.map(r => r.h);
