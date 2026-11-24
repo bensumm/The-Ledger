@@ -203,7 +203,7 @@ return > −1% on three consecutive days. Printed as one line by the live read. 
   event, one line: onset, hours since, drawdown vs 72h/14d max, each rule's state (armed / FIRED N h ago),
   the ST-time tranche schedule, the fill-basis bid, EX1 ask and BE, plus the stability line. Header states
   "unscored" until CRX2 reports, then carries CRX2's one-line result. Not wired into `run-loop.mjs`.
-- **CRX4 — block-R re-run (≥ 2026-11-13)** + CHANGELOG/README write-up; fold into PLAN.md + delete this file.
+- **CRX4 — block-R re-run (≥ 2026-11-13)** + CHANGELOG/README write-up; leftovers to BACKLOG + delete this file.
 
 ## Encoding boundary
 

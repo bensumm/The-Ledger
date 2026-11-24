@@ -150,7 +150,7 @@ export function aggregate1hTo6h(rows) {
    |Δ| across that sample: median 0.00pp but p95 4.27pp, max 12.55pp (vs §8's daytime p95 0.70pp).
    The generalisation, which is NOT about the archive: any item whose slope sits within rounding distance
    of `FC_FLAT_FRAC × price` has a coin-flip regime label from ANY source, and the falling-exclusion gate
-   hangs off it (tracked in PLAN.md Discovered — wants a deadband, not a bare threshold).
+   hangs off it (docs/BACKLOG.md bug 18 — wants a deadband, not a bare threshold).
 
    And it gets WORSE with time, not better. Today the archive (~71d) is SHALLOWER than live (91d);
    past ~2026-08-28 it will be DEEPER, and an unpinned archive read would silently drift phase verdicts

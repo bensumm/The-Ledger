@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.73
+version: 1.74
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -52,7 +52,7 @@ sections plus your own prose:
   This table's headers are Quick/Optimistic + Held@/Break-even/Verdict: there is no `Est. sell` cell
   for the patient clause to live in, and the class-rate footer gates on a `kind:'asym'` note this
   surface never pushes. Two separate mechanisms — do not expect either here, and do not go hunting for
-  them (tracked in `PLAN.md`'s folded PLAN-PATIENT-PAIR section, open item 1). What to carry into any
+  them (tracked in `docs/BACKLOG.md` Decisions). What to carry into any
   read of the pair wherever it DOES render: the levels are in-sample quantiles, not fill rates,
   and forward measurement puts the deep bid touched **17.8%** within 24h, the ask
   reached **~24%** given that touch, and the round trip completing **4.3%** —

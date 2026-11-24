@@ -839,7 +839,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `--section a|b|c|d`, panel cached to the gitignored `pipeline/.cache/edge-map-panel.jsonl`). Plus
   **`floor-strategy-study.mjs` → `FLOOR-STRATEGY-FINDINGS.md`** (2026-08-11) — is "at its N-day low"
   (1/3/7/14/30) a buy signal? **No, and this was already closed** as a measured negative one day
-  earlier by the day-low-surfacing work (PLAN.md's `DL-0` Status row); this is a re-measurement under a different
+  earlier by the day-low-surfacing work (`a3e08de:PLAN.md` DL-0); this is a re-measurement under a different
   construction that reproduces the closure cell-for-cell. A real *relative* signal (monotone in N,
   survives an entry-lag control) that is **not a trade**: best after-tax round trip +0.26%/7d ≈ 15k
   gp/day on 40m vs the 250k gp/day attention floor. `termStructure` already ships `pctInRange` at
@@ -1068,7 +1068,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   non-screen scripts (YS2 lean-include). IDs/prices/timestamps only, no PII. Consumer: the future Path-A
   forward-join calibration.
   Every screen flip-niche row also carries the lean **admission-provenance trio** (EF-0a, 2026-08-01 — the
-  PLAN.md Discovered `via`+rank logging, the reserve-retirement prerequisite): **`via`** (`'reserve'` |
+  `via`+rank logging, the reserve-retirement prerequisite): **`via`** (`'reserve'` |
   `'explore'` | `'watch'` — how the row won its fetch slot; absent = ranked-in/held, the natural-experiment
   baseline. `'watch'` (PP-R) is the one value also emitted under `--admission legacy`, since it is stamped in
   `rankAndSlice`; `preRank`/`prePool` remain `pickFetchPool`-only), **`preRank`**/**`prePool`** (the candidate's 1-based position in its flip-niche's pre-fetch
@@ -1116,11 +1116,6 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
 - `pipeline/commands/set-scan-analysis.mjs` — patches repo-root `screen.json`'s optional `analysis`
   field (or `--clear`s it) without re-running the scan. CLI-only, trusted-input (the app renders it as
   raw HTML) — never wire an untrusted input path to this.
-- `PLAN-OUTPUT-TABLE.md` — in-flight per-topic plan: the reach-folded `Est. buy`/`Est. sell`
-  console table (shipped 2026-07-13 as `js/estimators.mjs` `estimatePair` + the `screen-flip-niches.mjs`/
-  `quote-items.mjs` default stdout view with `--raw` as the model-free escape hatch; console-only, no
-  `screen.json`/app change). Folds into `PLAN.md` and is deleted when its last chunk ships (the
-  plan-file rule).
 - `PLAN-DIGEST-SIGNAL-AND-SCAN-PERF` — FOLDED (2026-08-07, **PARTLY SHIPPED —
   SP1 landed**; corrected 2026-08-09, this entry said PLANNING ONLY / no code changed): two workstreams that share one file (`pipeline/commands/screen-flip-niches.mjs`)
   and therefore one parallel-safety contract. **A — digest SIGNAL:** as of that plan's writing
@@ -1173,39 +1168,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   behaviour-preserving-vs-changes-what-surfaces label and a do-first/do-later/don't-bother split.
   Produced by a planning session; consumed by an executor + `PLAN.md`'s Status table. Folds into
   `PLAN.md` and is deleted when its last chunk ships (the plan-file rule).
-- `PLAN-MCP-BANK-SERVER.md` — READ-ONLY scoping doc (2026-07-24, no code): a local MCP server that
-  reads Ben's RuneLite `data-export` plugin output (`~/.runelite/Data Exports/container_bank.json`,
-  NDJSON, same `{id,quantity,name}` schema the bank dump uses — the plugin is already installed and
-  running, a sibling of `exchange-logger`) and exposes `get_bank()`/`get_equipment()`/`get_inventory()`
-  plus thin `get_offers()`/`get_fills()`/`get_positions()` wrappers over existing pipeline code. Tier-A
-  (file-reader, recommended) vs Tier-B (custom RuneLite plugin + live socket, deferred). Feeds
-  reverse-flip RF0's owned-item seed and SUPERSEDES RF5 (the plugin RF5 would have built already exists).
-  Server CODE can live in the repo; the bank DATA (private) stays gitignored, never committed.
-- `PLAN-GRADE-REWORK.md` — per-topic plan (2026-07-21, un-folded): dimensionally-honest single-source
-  screen grading. 9 confirmed flaws in the `net × P(fill) ÷ TTF` grade; chunks G1 (centralize the grade
-  caps — incl. FLAW 4b, the reach-cap double-count from blindspot-audit #4), G2 (fold deployable capital
-  into every rank family — highest-leverage, app-touching), G3 (invocation-independent per-mode
-  normalized grading), G4 (collapse `riskMult` + kill the momentum double-count), G5 (bound TTF leverage),
-  G6 (`(thin)` confidence marker), G7 (retro-retune, F1-gated/deferred). PLANNING ONLY, no code yet.
-- `PLAN-ESTIMATOR-FIDELITY.md` — per-topic plan (2026-08-01): the discovery
-  estimator understates both legs against the daily distribution (the 2h-band basis + the
-  clamp-to-bandTop blend make a verified daily-basis ask/dip structurally unquotable), the rank
-  buries repriceable rows (dead-bid ⇒ P~0 instead of a repriced-entry alternative; churn's
-  symmetric fold exemption lacked a placement bound), and windows-per-day was assumed ×6 in four
-  homes while `diurnalTimedLap`'s measured cycle is discarded. _(The ×6 half of that finding was FIXED
-  2026-08-10 — every home now takes `ACTIONABLE_WINDOWS_PER_DAY = 2`, including `expUnits`' own
-  definition site. The discarded-measured-cycle half stands.)_ Chunks: EF-0a (`via`+rank ledger
-  logging — SHIPPED 2026-08-01) and **EF1 (rank-leg honesty: dead-bid `↻ repriced entry`
-  alternative, the placement-bounded churn exemption, ONE labeled P per row, the screen-vs-quote
-  bid-reach window divergence diagnosed — SHIPPED 2026-08-01)**; open: EF0 (counterfactual +
-  `(none)`-bucket attribution report) → EF2 (timed pair as a visible
-  second answer) → EF3 (measured cycles post-fetch + constant single-sourcing). Anchor is n=5
-  laps on one item — hypothesis-generating, nothing auto-applies without EF0. Starvation stays
-  with the fetch-pool-scaling work (PLAN.md's `FPS 1–4` Status row); the band sell fold moves only via AC7's re-decision path.
 - `plans/` — the per-topic `PLAN-*.md` working docs (moved off the repo root 2026-07-26). Each is a
-  transient planning doc that folds into the root `PLAN.md` (the master plan + scoreboard) and is deleted
+  transient planning doc, deleted (leftovers to `docs/BACKLOG.md`)
   the moment its last chunk ships (`docs/PLANNING.md` lifecycle). `plans/PLAN-*.md` is scanned by
-  `pipeline/ci/lint-plan-lifecycle.mjs` for docs past their fold-in point; `PLAN.md` itself stays at root.
+  `pipeline/ci/lint-plan-lifecycle.mjs` for docs past their fold-in point; `PLAN.md` (root) = executor rules + shipped shas.
 - `docs/` — repo docs that aren't app/pipeline reference:
   - `PLANNING.md` — the planning process itself (required plan sections, chunk design rules, the
     skills improvement loop, anti-patterns; written 2026-07-08, follow it when producing any
@@ -2619,7 +2585,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     in prose is stale by morning; `lint-docs`' constant-drift check pins doc↔source and cannot see
     source↔reality, so re-derive with the script rather than hand-editing to a remembered number.
     **`--positions` gets neither this footer nor the patient clause** — it pushes no `kind:'asym'` note and
-    renders no `Est.` columns; two independent reasons, see PLAN.md's folded PLAN-PATIENT-PAIR open item 1.
+    renders no `Est.` columns; two independent reasons, see `docs/BACKLOG.md` Decisions.
     Pinned by `pipeline/test/emit.test.mjs` (2 cases; the interpolation pin is a SOURCE scan, because
     asserting the rendered text cannot distinguish an interpolated constant from its pasted value — the
     first version of that case claimed to catch exactly that mutant and was green against it) and by
@@ -3113,7 +3079,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     records folds and refuses to add a name without `--force`. A token match, not a link checker: it answers
     "is anything still pointing here?", never "does this plan still matter?". Consumes nothing; exit 1 + the
     referencing file list per dangling name. `--collisions` is a SEPARATE, non-gating report over chunk-id
-    reuse — commit messages and PLAN.md rows cite chunks by bare id, and 49 ids are currently
+    reuse — commit messages cite chunks by bare id, and 49 ids are currently
     claimed by more than one document (`A1`, `A2`, `A3` and `D1` by five each), so a bare id can be genuinely
     ambiguous. It reads four declaration forms — headings, table cells, and dashed or numbered bullets —
     across `plans/` plus the root `PLAN.md`, and requires a digit in the id, so purely alphabetic ids (`F-A`)
@@ -3446,7 +3412,7 @@ report object but `read-exit-surface.mjs`'s own report array) — the compact-JS
     so cache pruning never touches it) — change-only GE guide-price observations for watched items,
     one JSON line `{ts,id,name,guide,prev}` per observed change, appended by `watch-positions.mjs`
     `logGuideChanges()` at watch cadence. Purpose: pin each item's ~daily guide-update
-    time + magnitude to feed the guide-re-anchor pricing edge (PLAN.md Discovered,
+    time + magnitude to feed the guide-re-anchor pricing edge (premise dead, BACKLOG Measured;
     2026-07-06). Consumer: `pipeline/lib/market/guideanchor.mjs` (YP1 — the guide re-anchor model, honesty-gated
     on accrual; quote-items.mjs/watch-positions.mjs surface its advisory line, silent until enough real updates accrue). (Not auto-committed by
     `sync-fills.mjs`; commit it periodically so the record on `origin` stays current.)

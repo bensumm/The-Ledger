@@ -397,7 +397,7 @@ every other windowread primitive's honesty contract.
    recurring "why is this graded B not A" investigation cost.
 8. **Decide and document the fate of DE1/DE6 depth pricing and the Extension-B pressure/demand
    read** — either graduate one into a production consumer or mark it explicitly shelved in
-   `PLAN.md` so it stops reading as "still coming."
+   BACKLOG so it stops reading as "still coming."
 
 ### Single highest-leverage recommendation
 

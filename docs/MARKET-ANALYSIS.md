@@ -178,7 +178,7 @@ PLACEHOLDER model (n≈3–14); `estBuy`/`estSell`/`estConfidence` ride `suggest
   closed ~24–48h before you read it; the ~10–27× under-report it showed in 2026-07 is history and now measures ~1.0×).
   Every volume-denominated floor is calibrated to the corrected scale. `--vol-source legacy` restores
   the raw read. Full story + the recalibrated floor values: the `marketfetch.mjs`
-  `loadAll24hRolling` header (the ONE home) + `PLAN.md`'s VOL24 Status row. (The app half shipped at
+  `loadAll24hRolling` header (the ONE home) + `a3e08de:PLAN.md` (VOL24). (The app half shipped at
   0.74.0/0.74.2 — the Finder reads a daily two-sided volume and a measured zero no longer reads as
   "no information".)
 - **Net/u** = after the 2% tax. **Regime** = the multi-day `regimeDrift` (flat/rising/falling), with
@@ -448,7 +448,7 @@ the right call. Note the RANKING already behaves this way — `expGpDay` is capi
 `THROUGHPUT_CAP_GP` (`capPerWindow = pool / mid`), so low capital naturally promotes cheaper items. It
 is the RESERVES that are capital-blind: a fixed slot count is a standing bypass of that ranking and
 costs the same at every bankroll. Making the three reserves capital-conditioned is the open follow-up
-(PLAN.md Open list) — until then, read a mid-tier row as "this class was given a look", not as "this
+(BACKLOG chores) — until then, read a mid-tier row as "this class was given a look", not as "this
 class is worth capital right now". Two populations remain unreached and are NOT addressed here —
 Berserker helm/Dragon scimitar (pre-fetch liquidity-gated) and Rune platebody (edge-gated). Still n=0.
 F-F (2026-07-22) reworked the **Both-leg reach cell** (since DT1b: "Both-leg reach + ROUND-TRIP (measured) + phase"): it now

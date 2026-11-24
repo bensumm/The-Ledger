@@ -185,8 +185,8 @@ recur — the point is to catch the pattern, not patch instances.
   `.js`/`.mjs` blast-radius convention, N3). **Guard: the app-import manifest test (E9, proposed) + this
   doc's blast-radius model.**
 
-Full audit + findings: `PLAN-ARCH-DOCS-AUDIT.md` (Parts 1–5); the disposition validation: PLAN.md's
-`CV1–CV14` Status row.
+Full audit + findings: `PLAN-ARCH-DOCS-AUDIT.md` (Parts 1–5); the disposition validation:
+`a3e08de:PLAN.md` (CV1–CV14).
 
 ---
 

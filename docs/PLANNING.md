@@ -11,9 +11,8 @@ itself proves wrong, fix it HERE (reconciliation, not append — the CLAUDE.md r
 2. **Review round(s) with Ben.** Every review answers three questions: does it meet the goals,
    what are the gaps, what would differ built from scratch. Verify every code claim against the
    actual code (file:line) before asserting it — plans built on unverified claims rot instantly.
-3. **Fold into `PLAN.md` at execution time** — the single master plan + scoreboard. The draft is
-   then dead; per-topic `PLAN-*.md` files live in **`plans/`** (moved off the root 2026-07-26) and are
-   folded + deleted the moment their last chunk ships. `PLAN.md` itself stays at the repo root.
+3. **Give it a file in `plans/`** and delete that file when its last chunk ships: results go to CHANGELOG,
+   leftovers and measured negatives to one line each in `docs/BACKLOG.md`, the landing sha to `PLAN.md`.
 4. **Execute** per PLAN.md's Executor rules + dispatch model (coordinator + Opus subagents,
    worktree lanes only for parallel work, hand-serialized landing).
 
@@ -50,7 +49,7 @@ itself proves wrong, fix it HERE (reconciliation, not append — the CLAUDE.md r
 
 - Small, independent, evidence-gated; each independently shippable and fixture-pinned.
 - **Chunk ids must be unique across the WHOLE `plans/` corpus, not just within their plan.** Commit
-  messages, `PLAN.md` Status rows and in-code comments all cite chunks by bare id, so a reused id is
+  messages, `PLAN.md` shas and in-code comments all cite chunks by bare id, so a reused id is
   ambiguous at exactly the moment someone is trying to trace why a line exists. Measured 2026-08-14:
   `AC1–AC6` was live in THREE plans at once (ESTIMATOR-POSTURE, REACH-CALIBRATION, PERF-1H-ARCHIVE),
   so "AC4" named three different open chunks; `R1–R8`, `A1–A6`, `WC1–WC3` and `Q1–Q4` each collided
@@ -74,8 +73,7 @@ itself proves wrong, fix it HERE (reconciliation, not append — the CLAUDE.md r
 
 Lessons land fixture-first (failing fixture + the code change that passes it); skill prose is the
 tagged exception (`judgment:` tag or it's a defect); encoded rules leave pointers, not copies;
-enforced by `pipeline/ci/lint-skills.mjs` (pipeline-v2 P7). Full protocol: PLAN.md's Pipeline-v2
-"Encoding boundary" section. Plans that touch skills MUST run the three-way triage and ship the
+enforced by `pipeline/ci/lint-skills.mjs` (pipeline-v2 P7). Plans that touch skills MUST run the three-way triage and ship the
 disposition table.
 
 ## Anti-patterns (each one has bitten this repo)

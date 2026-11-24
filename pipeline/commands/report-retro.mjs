@@ -15,7 +15,7 @@
  *
  * This is the ground-truth TTF calibrator the P6 ruling demands (realized suggestion→fill latency
  * from our own fills, NOT touch-proxies) and the per-niche "realized profit per unit of attention"
- * read that later decides the spread/band/churn consolidation question (PLAN.md Discovered). The
+ * read that later decides the spread/band/churn consolidation question. The
  * join logic is the PURE, fixture-tested pipeline/lib/retrojoin.mjs; this script is only IO + print.
  *
  * HONESTY (process rule 4): n is printed on EVERY aggregate; there are NO derived grades or

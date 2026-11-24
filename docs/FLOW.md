@@ -56,8 +56,8 @@ wiki API                    marketfetch                 quotecore               
   true rolling-24h is composed from the healthy `/1h` grain at the fetch layer
   (`pipeline/lib/market/marketfetch.mjs` `loadAll24hRolling`, `js/quotecore.js` consumers). Every
   volume-denominated gate/floor is calibrated to that corrected scale. Full story: the
-  `loadAll24hRolling` header (the ONE home); history + the count-matched floor table in `PLAN.md`'s
-  VOL24 Status row.
+  `loadAll24hRolling` header (the ONE home); history + the count-matched floor table in
+  `a3e08de:PLAN.md` (VOL24).
 - `computeQuote` turns raw prices + the 2h band + the 24h stats into the **row model** — Guide,
   Quick/Optimistic (robust `robustBand` edges), momentum tell, pressure, break-even, regime.
   Every surface renders that row; none re-derives prices. The canonical rendered shape is the

@@ -92,8 +92,8 @@ export function trackBoost(entry, { minN = TRACK_BOOST_MIN_N, cap = TRACK_BOOST_
 
    HOW THE PROOF GETS MADE: each reserve admission is a natural experiment — an item the ranking would
    NOT have fetched, fetched anyway and then scored post-fetch. Comparing `via`-tagged rows against
-   ranked-in rows is therefore the evidence that retires the reserves. EF-0a (2026-08-01, the PLAN.md
-   Discovered "log `via`" prerequisite): `via` + the candidate's `preRank`/`prePool` (its 1-based
+   ranked-in rows is therefore the evidence that retires the reserves. EF-0a (2026-08-01, the
+   "log `via`" prerequisite): `via` + the candidate's `preRank`/`prePool` (its 1-based
    position in this niche's pre-fetch ordering, stamped by pickFetchPool below) now RIDE
    suggestions.jsonl on every screen row, and each pass's non-admitted candidates are persisted as one
    aggregate `excluded` ledger line per niche (suggestlog.mjs excludedShadow) — so the reserve-vs-
@@ -215,7 +215,7 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
     const sorted = cand.slice().sort((a, b) => (b.valueScore - a.valueScore) || (a.id - b.id));
     // EF-0a — stamp every gated candidate's position in THIS niche's pre-fetch ordering (valueScore
     // desc, the ordering that decides admission here) so the ledger can answer "how did a reserve/
-    // excluded pick rank in the overall list?" (PLAN.md Discovered `via`+rank logging). Mutates the
+    // excluded pick rank in the overall list?" (`via`+rank logging). Mutates the
     // candidate objects (the proxyDrift precedent below); clones made later inherit the stamp.
     // Inform-only — never read by any gate/sort in this module.
     sorted.forEach((c, i) => { c.preRank = i + 1; c.prePool = sorted.length; });
@@ -257,7 +257,7 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
   for (const c of cand) c.proxyDrift = proxyDrift(dailySeries[c.id]);
   const boostOf = c => trackIndex ? trackBoost(trackIndex.get(c.id)) : 1;
 
-  // EF-0a (PLAN.md Discovered "log `via` into suggestions.jsonl" — the reserve-retirement prerequisite):
+  // EF-0a ("log `via` into suggestions.jsonl" — the reserve-retirement prerequisite):
   // stamp every gated candidate's 1-based position in the UNIFIED pre-fetch ordering,
   // expGpDay × softFactor(proxyDrift) × trackBoost — the exact formula the Discovered entry names as
   // unrecoverable after the fact ("neither multiplier is recorded"). This is a DIAGNOSTIC reference

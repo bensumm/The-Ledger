@@ -10,7 +10,7 @@ process rules — so CLAUDE.md can stay a lean routing/facts/pointers doc.
   "Where shipped work is documented"). Nothing in LORE.md is load-bearing — it's context.
 - **Shipped-change record** = `CHANGELOG.md` + `git log`.
 - **File/artifact registry** = `README.md` ("Files" + "Map of the repo").
-- **The plan + scoreboard** = `PLAN.md`.
+- **Open work** = `docs/BACKLOG.md`.
 
 ---
 
@@ -74,7 +74,7 @@ change, mapped in README "Map of the repo". Reconstruction detail: `FILLS-PIPELI
 - **The rollback incident (process rule 1).** Work was once done from a stale copy of the (then
   single) `index.html` and clobbered newer changes. The rule: confirm current state before editing;
   the same principle now applies across the split files together.
-- **The Hydra leather buy (the Pipeline-v2 root incident — PLAN.md).** A 13.5m buy off a mid-decay
+- **The Hydra leather buy (the Pipeline-v2 root incident).** A 13.5m buy off a mid-decay
   price (not the multi-week floor), because the reach/floor checks were prose in `/scan` and no
   script ran them — then whiplash hold/cut advice from the `quote.mjs`-vs-`watch.mjs` verdict fork.
   This is the anchor for the whole Pipeline-v2 wave (snapshot layer, one verdict home, validators on
@@ -134,12 +134,12 @@ change, mapped in README "Map of the repo". Reconstruction detail: `FILLS-PIPELI
 - **Cancel-to-EMPTY fill inference → deleted (LH1).** An EMPTY slot snapshot is NOT evidence of a
   fill; the inference that tried to read fills from cancel-to-EMPTY transitions was removed and must
   not be resurrected (`pipeline/lib/reconstruct/reconstruct.mjs` / LH1 header; the false-EMPTY-snapshot restart
-  variant is a known display-only warning case, PLAN.md Discovered).
+  variant is a known display-only warning case, BACKLOG 20).
 - **Re-scoring the screen off a reachable sell → rejected (`/scan`).** The cheap ts6h proxy
   understates reach → false negatives that HIDE good sells (worse than the band-top-artifact problem
   it would fix). The accepted alternative: run `windowrange.mjs --ask` on the handful you actually
   pitch, not on the whole screen.
-- **Bank-visibility auto-reconciliation → deferred (PLAN.md).** Bank data is a manual, always-stale
+- **Bank-visibility auto-reconciliation → not planned (BACKLOG).** Bank data is a manual, always-stale
   clipboard export; auto-reconciling it against live `positions.json` risks false discrepancies.
   Bank truth stays advisory, never injected into `fills.json`.
 

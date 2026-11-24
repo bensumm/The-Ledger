@@ -1685,7 +1685,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       // pathAGpDay + the row's in-lane rank). ACCRUAL for the H2/H4 forward validator (captureFrac is a
       // PLACEHOLDER); absent on a null-Path-A row (no intraday range). Lean-included (YS2 absent-field pattern).
       pathA: r.pathA || undefined,
-      // EF-0a shadow trio (PLAN.md Discovered `via`+rank logging): the admission provenance (via —
+      // EF-0a shadow trio (`via`+rank logging): the admission provenance (via —
       // 'reserve'/'explore', absent = ranked-in/held), the pre-fetch-ordering position ("12th of 178" —
       // NOT reconstructable after the pass), and the quoted ask's daily-HIGH placement percentile the
       // digest already computed (digestReachAndPlacement — null on symmetric/reach-exempt niches).
@@ -2873,7 +2873,7 @@ async function main() {
     }
   }
 
-  // EF-0a (PLAN.md Discovered `via`+rank logging; PLAN-ESTIMATOR-FIDELITY EF-0a) — persist each niche's
+  // EF-0a (`via`+rank logging; PLAN-ESTIMATOR-FIDELITY EF-0a) — persist each niche's
   // CROWDED-OUT set to the suggestions ledger as ONE aggregate line per niche ({ excluded:[{id, reason,
   // preRank?, expGpDay?}], prePool }) BEFORE the fetch phase, so "which gated candidate never got a fetch
   // slot, and where would it have ranked" survives the pass (it is NOT reconstructable later — it depends

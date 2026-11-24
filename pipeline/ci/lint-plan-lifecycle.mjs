@@ -165,7 +165,7 @@ function main() {
   }
   const flagged = plans.filter((p) => p.flag === 'review');
   console.log(flagged.length
-    ? `\n⚑ ${flagged.length} plan doc(s) read as complete with no deferred/partial marker — candidates to fold into PLAN.md + delete.`
+    ? `\n⚑ ${flagged.length} plan doc(s) read as complete with no deferred/partial marker — candidates to fold into docs/BACKLOG.md + delete.`
     : '\n· No plan doc reads as unconditionally complete — none overdue for fold-in.');
 
   console.log(`\nlint-skills SKILL_FILES coverage — ${unlisted.length} skill(s) present on disk but NOT linted:`);

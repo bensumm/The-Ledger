@@ -1202,7 +1202,7 @@ export const DL4_WIDE_DAY_PCT  = 0.05;          // PLACEHOLDER (n=2): min 24h-ra
 // NOT tied to MIN_GPD's NET-throughput floor (250k) — different dimension.
 // PROVENANCE (weak, known): 500k → 9m by TRANSFERRING GP_FLOOR's ~18× count-match ratio; never
 // count-matched on its own distribution. Not re-anchorable from the record: in the VOL24 recalibration
-// (PLAN.md's VOL24 Status row) this is the only floor with no target COUNT. Re-anchoring = pick a target count; do NOT re-solve against today's
+// (`a3e08de:PLAN.md` VOL24) this is the only floor with no target COUNT. Re-anchoring = pick a target count; do NOT re-solve against today's
 // legacy distribution (≈ true volume now; that path yields ~414k and is invalid). Admits ~1,214 today.
 export const DL4_MIN_GP_FLOW = 9_000_000;
 // PER-UNIT SWING FLOOR (2026-07-12, Ben — the penny-junk-still-leaked fix). The gp-flow floor above is a

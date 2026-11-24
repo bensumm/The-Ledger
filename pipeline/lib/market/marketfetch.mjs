@@ -262,7 +262,7 @@ export async function loadAllLatest() {
    (8/24, up to +56%) — different windows, not truncation.
    The ~10-27x under-report (2026-07-13) is HISTORY; bulk measures ~1.0x vs the day it labels.
    Why the endpoint changed is UNKNOWN — do not invent a mechanism.
-   Full retraction history: CHANGELOG 2026-08-10 / 2026-08-11 entries, PLAN.md's VOL24 Status row.
+   Full retraction history: CHANGELOG 2026-08-10 / 2026-08-11 entries, `a3e08de:PLAN.md` VOL24.
 
    /5m, /1h, /6h are healthy. Composers that reconstruct the TRUE trailing 24h from /1h:
      • rolling24FromTs1h  — sums an ALREADY-FETCHED per-item /timeseries?1h (zero new fetch).

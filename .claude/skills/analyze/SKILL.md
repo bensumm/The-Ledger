@@ -1,6 +1,6 @@
 ---
 name: analyze
-version: 1.4
+version: 1.5
 description: Retro our own track record, audit that we're logging/storing the right data, and surface data-backed tuning proposals — then check the session's edits against the project guidelines. Triggers — "analyze our track record", "what should we tune", "did we log everything", "run a retro", "how are our suggestions doing", "analyze".
 ---
 
@@ -12,7 +12,7 @@ bump `APP_VERSION` (that marks the deployed app, which this skill never touches)
 This is the JUDGMENT half of the analysis construct. The MECHANICAL half is `pipeline/commands/analyze-record.mjs`
 (AZ1) — it audits the dataset, orchestrates the joins, and derives n-gated flags. Your job is to
 INTERPRET its brief into a retro + proposals and to run the guidelines checklist. The plan of record
-is `PLAN-ANALYZE.md`; the calibration home is F1 (PLAN.md).
+is `PLAN-ANALYZE.md`; the calibration home is F1 (BACKLOG).
 
 ## 1. Run the engine — never hand-analyze
 

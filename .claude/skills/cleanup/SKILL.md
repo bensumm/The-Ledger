@@ -1,6 +1,6 @@
 ---
 name: cleanup
-version: 1.6
+version: 1.7
 description: A repeatable post-wave hygiene + architectural-integrity pass — run the CI guards, then a SESSION/WAVE-scoped judgment sweep for drift, duplication, dead code, doc-honesty, and worktree/branch staleness, and produce a proposed-fix list. Triggers — "clean up after this session/wave", "check the architecture", "did we leave a mess", "run a cleanup", "post-wave cleanup", "cleanup".
 ---
 
@@ -68,7 +68,7 @@ node pipeline/ci/lint-guard-lists.mjs
   claimed by more than one plan. _(judgment: only ACT on a collision when the wave you are cleaning
   up added one. Diff against the count `--collisions` prints on a clean checkout — the pre-existing
   set is a standing backlog, not this wave's mess, and is too large to keep as a literal here.)_ Renaming a shipped
-  chunk's id is NOT a fix: the old id is already in commit messages and PLAN.md rows, so a rename
+  chunk's id is NOT a fix: the old id is already in commit messages, so a rename
   moves the ambiguity rather than removing it. The fix is prospective — `docs/PLANNING.md`'s
   plan-unique-prefix rule — plus disambiguating the id at any in-tree citation that is now unclear.
 ```
@@ -90,7 +90,7 @@ node pipeline/ci/lint-plan-refs.mjs --collisions
 
 - **Determine the diff range FIRST — this is the single decision that keeps repeat runs cheap** —
   `judgment:` use `git log`/`git diff` since the wave's first commit (or against the last shipped
-  `PLAN.md` Status-table sha for this wave). A `/cleanup` over a 5-file wave reads 5 files of
+  `PLAN.md` sha for this wave). A `/cleanup` over a 5-file wave reads 5 files of
   context, not the whole `pipeline/` tree. Fall back to a repo-wide sweep ONLY on an explicit ask
   ("audit the whole repo"), and SAY SO before doing it — it is expensive and should be rare.
 
@@ -120,10 +120,10 @@ node pipeline/ci/lint-plan-refs.mjs --collisions
 ## 6. Worktree/branch review (the judgment half of the branch report)
 
 - **Classify each branch/worktree against three sources** — `judgment:` cross-reference
-  `report-branches.mjs`'s facts against (a) `PLAN.md`'s Status table (sha → landed chunk), (b) every
+  `report-branches.mjs`'s facts against (a) `PLAN.md`'s shas (id → landed chunk), (b) every
   `PLAN-*.md`'s own "preserved UNCOMMITTED" / "do not delete" language, (c) `lint-plan-lifecycle.mjs`'s
   flags. A ref is CONFIRMED-STALE only if its tip is an ancestor of `origin/main` (or squash-landed
-  per the Status table) AND no `PLAN-*.md` claims it as deferred work.
+  per PLAN.md) AND no `PLAN-*.md` claims it as deferred work.
 - **Confirmed-stale may be deleted without asking; anything ambiguous gets asked about** —
   `judgment:` per CLAUDE.md process rule 9 + memory `stale-branch-delete-ok`. Deletion stays an
   explicit git command the runbook issues AFTER the read — never auto-deleted from inside a script.

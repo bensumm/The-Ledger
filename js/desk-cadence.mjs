@@ -23,7 +23,7 @@
  * churn round-trip consumes one. THIS CONSTANT ONLY ENCODES THE FIRST HALF. It is a bound on
  * TRANCHES ACQUIRED PER DAY (what `expUnits` needs), not a per-lane cost model of completed flips.
  * The differential cost — gp per DECISION rather than gp per hour — is the still-unbuilt "attention
- * axis"; see PLAN.md's Discovered entry. Do not read this constant as if it already modelled that.
+ * axis"; see docs/BACKLOG.md Ideas. Do not read this constant as if it already modelled that.
  *
  * PLACEHOLDER (rule 4), n≈0, Ben-set — tune freely. To revert the experiment wholesale, set
  * ACTIONABLE_WINDOWS_PER_DAY back to REFILL_WINDOWS_PER_DAY.

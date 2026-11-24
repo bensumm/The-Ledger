@@ -12,11 +12,11 @@
    multi-week floor, a be-escape if you just want your capital back, and a cut if the floor is eroding.
    Each of those is a PATH. The engine ENUMERATES the sensible candidate paths for an item given its
    (already-derived) context, then WEIGHS them by viability so the desk shows the dominant path as the
-   headline and the rest as a weighed MENU. Per PLAN.md's Path-engine spec, the alternatives are
+   headline and the rest as a weighed MENU. The alternatives are
    decision SUPPORT — never an alert input; only the dominant path (once P4b's persistence gate says it
    has survived long enough) drives a headline.
 
-   Path shape (PLAN.md ~line 241):
+   Path shape:
      { key, thesis, action, levels, tripwire, horizon, economics, viability, evidence }
        key       — stable path identifier (one of PATH_KEYS)
        thesis    — one-line human premise ("hold above the durable multi-week floor")
@@ -38,8 +38,8 @@
    calibrated magnitude. P6 replaces these with evidence-based viability (walk-forward per item×path
    with printed sample sizes). Do NOT cite any constant here as validated. */
 
-/* --- the path vocabulary (derived from the momVerdict verdict set + PLAN.md's path mentions) ------
-   The verdict tree (momVerdict) already speaks HOLD / LIST-TO-CLEAR / CUT / WATCH; PLAN.md's P4a/P5
+/* --- the path vocabulary (derived from the momVerdict verdict set + the V2 path specs) ------
+   The verdict tree (momVerdict) already speaks HOLD / LIST-TO-CLEAR / CUT / WATCH; the P4a/P5
    specs name scalp, be-escape, hold-recovery, value-hold. This is that union, cast as first-class
    thesis-paths (WHY the six + AVOID: each is a distinct thesis a lot can be held/entered under —
    they are NOT mutually exclusive, which is the whole point of weighing them):

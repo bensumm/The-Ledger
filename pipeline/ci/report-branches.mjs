@@ -106,7 +106,7 @@ function main() {
   const pretty = process.argv.includes('--pretty');
   console.log(JSON.stringify(facts, null, pretty ? 2 : 0));
   if (pretty) {
-    console.log('\n(non-gating fact report — classify against PLAN.md Status + any PLAN-*.md "do not delete" note; never auto-deletes.)');
+    console.log('\n(non-gating fact report — classify against PLAN.md shas + any PLAN-*.md "do not delete" note; never auto-deletes.)');
   }
 }
 
