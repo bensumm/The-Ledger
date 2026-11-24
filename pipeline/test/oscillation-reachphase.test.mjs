@@ -12,6 +12,7 @@
  *   (a) oscillating + floor≥0                → "trough phase — floor holding, oscillation intact" (BUY signal)
  *   (c) oscillating + floor<0, margin>0      → "…falling floor — drift margin still clears"
  *   (c') oscillating + floor<0, margin≤0     → "…falling floor — drift margin does not clear"
+ *   (e) oscillating + floor slope missing/non-finite → "oscillating — floor slope unavailable" (no floor claim)
  *   (b) knife (falling floor)                → "no real cycle to harvest"
  *   (d) knife + RISING floor (Aldarium hollow) → ALSO "no real cycle to harvest" and NOT any direction
  *       word ("decay"/"rising"/"falling") — THE load-bearing pin: the knife bucket is direction-agnostic,
@@ -74,11 +75,11 @@ for (const word of ['decay', 'rising', 'falling', 'floor']) {
 
 // degrade: null osc (too few days to score) → treated as no cycle, never throws
 eq(reachPhaseNote(null, null, null), 'no real cycle to harvest', 'degrade: null osc → no real cycle to harvest');
-// degrade: oscillating but no dae (floorSlope unknown) → default to the floor-holding branch (null ⇒ 0)
-eq(
-  reachPhaseNote({ oscillating: true }, null, null),
-  'trough phase — floor holding, oscillation intact',
-  'degrade: oscillating + null dae → trough phase (unknown slope treated as ≥0)',
-);
+// degrade: oscillating but floor slope unknown (forecast degraded) → must NOT assert a floor
+const UNKNOWN = 'oscillating — floor slope unavailable';
+for (const dae of [null, {}, { floorSlope: null }, { floorSlope: NaN }, { floorSlope: undefined }]) {
+  eq(reachPhaseNote({ oscillating: true }, dae, null), UNKNOWN, `degrade: oscillating + dae ${JSON.stringify(dae)} → no floor claim`);
+}
+ok(!/floor holding|trough/.test(UNKNOWN), 'unknown-slope note carries no floor-holding or trough claim');
 
 console.log(`✓ oscillation-reachphase.test.mjs — ${pass} checks passed`);

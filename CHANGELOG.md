@@ -8,6 +8,10 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## pipeline 1.9.1 — 2026-11-24 — `reachPhaseNote` no longer reads a missing floor slope as 0
+
+When the drift projection degrades (`driftExitFrom` null, or `floorSlope` null/non-finite) an oscillating row printed "trough phase — floor holding". It now prints "oscillating — floor slope unavailable". Display only; no gate or rank change; no APP_VERSION bump.
+
 ## pipeline 1.9.0 — 2026-11-23 — the circular asym probabilities and `--asym` retired (APP_VERSION 0.76.3)
 
 - **`pAsk`/`pBid` are gone** (`asymPair`, `asymEstimate`, the `asym` shadow, and every "printed/touched k/Nd" tally

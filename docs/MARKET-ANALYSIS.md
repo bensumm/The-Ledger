@@ -456,14 +456,14 @@ prints the FULL-window hit count alongside recent-3 for BOTH legs (`recentHit/re
 straight off `recencySplit`) and appends a **trough-vs-decay phase annotation** (`reachPhaseNote`). WHY:
 a 3-day recent window is shorter than the ~7–8d oscillation cycle, so a trough-phase oscillator reads a
 low recent reach (e.g. ask `0/3`) at exactly the entry you want — over-implying "sell-unreliable". The
-annotation resolves it from three signals ALREADY computed at the gate stage (no new compute/fetch):
+annotation resolves it from three signals already computed at the gate stage:
 `oscillationVsKnife.oscillating` + `driftExitFrom(...).floorSlope` sign + `amplitudeDriftMargin(...).margin`
-sign → *oscillating + floor≥0* = "trough phase — floor holding, oscillation intact" (a BUY tell);
+sign → *oscillating + floor≥0* = "trough phase — floor holding, oscillation intact" (BUY tell; no slope → "floor slope unavailable");
 *oscillating + floor<0* = "oscillating into a falling floor — drift margin still clears / does not clear"
 (by the margin sign); *knife* = "no real cycle to harvest". **DIRECTION-AGNOSTIC**: the knife bucket
 carries NO floor-direction word ("decay"/"rising"/"falling") — a rising-floor collapsed-amplitude mirage
 (Aldarium) ALSO lands in `knife`, and "decay" there would be a false direction-label. DISPLAY-ONLY —
-touches nothing upstream of the gate, no admission/rank change. **Ranked by the STANDARD `net × P ÷ TTF`** at the `amplitude` estimator family
+touches nothing upstream of the gate. **Ranked by the STANDARD `net × P ÷ TTF`** at the `amplitude` estimator family
 (`js/estimators/families.mjs`: `pFill` = the MEASURED walk-forward round-trip rate (`ampWalkForward`, DT1b — see below; the bare 0.5 prior only below `AMP_WF_MIN_JUDGED` judged entries), `ttf` = the
 `--hold-days` horizon prior (4 by default since DT1; `--hold-days 7` for the weekly-oscillator horizon),
 `lapUnits` = the deployable-units min) — NOT a bespoke composite. Amplitude picks are patient multi-DAY

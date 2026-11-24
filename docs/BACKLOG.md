@@ -6,7 +6,6 @@ claim, so re-check before building. Finish or delete a line; do not grow it into
 
 ## Bugs
 
-3. verified — `reachPhaseNote` reads a missing forecast as slope 0 and prints "trough phase — floor holding"; a test pins the wrong behaviour. S
 4. verified — `quotecore.js` `mom` is magnitude-blind: a 1 gp print under the 2h band is a `breakdown`, which can headline a CUT. Scale by noise (GN-0). M
 5. verified — held-lot exit rung (`quote-items.mjs` "typical exit") has no break-even term (EC5). S
 6. verified — `retrojoin.mjs` cannot tell an owner pick from a scan pick. Build before the next `/analyze`. S

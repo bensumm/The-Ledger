@@ -2207,7 +2207,8 @@ const AMP_NIGHTS = 14;   // the per-item daily windowStats lookback (full-day wS
 // new claim, it stops an existing display from over-implying "sell-unreliable".
 export function reachPhaseNote(osc, dae, driftShadow) {
   if (!(osc && osc.oscillating)) return 'no real cycle to harvest';   // knife — direction-AGNOSTIC (no floor word)
-  const floorSlope = (dae && dae.floorSlope != null) ? dae.floorSlope : 0;
+  const floorSlope = dae ? dae.floorSlope : null;
+  if (!Number.isFinite(floorSlope)) return 'oscillating — floor slope unavailable';
   if (floorSlope >= 0) return 'trough phase — floor holding, oscillation intact';
   const clears = !!(driftShadow && driftShadow.margin != null && driftShadow.margin > 0);
   return `oscillating into a falling floor — drift margin ${clears ? 'still clears' : 'does not clear'}`;
