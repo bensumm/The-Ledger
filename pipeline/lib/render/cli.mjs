@@ -17,14 +17,14 @@ import { fileURLToPath } from 'node:url';
    pretty), overwritten every run — "last run from this command" semantics, mirroring join-outcomes.mjs's
    `.cache/last-weekly-report` marker. Gitignored (the whole `.cache/` tree is). `kind` = the report's own
    `kind` field ('screen'|'quote'|'watch'|'watchlist'); screen accumulates its N per-niche reports into the ONE file
-   per pass. Wrapped as `{kind, generatedAt, reports:[…]}` so a consumer reads a single predictable shape
+   per pass. Wrapped as `{kind, generatedAt, reports:[…], ...extra}` so a consumer reads a single predictable shape
    (`.reports[]` of render.mjs section objects) regardless of how many the pass produced. Best-effort:
    never throws (a dump-write failure must not break the read). Returns the repo-relative display path.
    PURE of side effects on import (only writes when CALLED), so it's safe in a test-imported entrypoint. --- */
 // TWO up. MUST match the repo-relative path this function RETURNS below; they silently disagreed once.
 const LAST_REPORT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '.cache', 'last-report');
-export function writeLastReport(kind, reports) {
-  const payload = { kind, generatedAt: new Date().toISOString(), reports: Array.isArray(reports) ? reports : [reports] };
+export function writeLastReport(kind, reports, extra = {}) {
+  const payload = { kind, generatedAt: new Date().toISOString(), reports: Array.isArray(reports) ? reports : [reports], ...extra };
   try { mkdirSync(LAST_REPORT_DIR, { recursive: true }); writeFileSync(join(LAST_REPORT_DIR, kind + '.json'), JSON.stringify(payload)); }
   catch { /* dump is best-effort — a write failure never breaks the market read */ }
   return `pipeline/.cache/last-report/${kind}.json`;

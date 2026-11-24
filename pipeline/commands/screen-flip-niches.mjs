@@ -62,7 +62,7 @@
  *
  * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only fetches, gates, rates and renders.
  */
-import { computeQuote, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
+import { breakEven, computeQuote, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
 import { tax, isBond } from '../../js/money-math.js';
 import { loadWatchlistEntries, loadWatchlistIds } from '../lib/config/watchlist.mjs';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
@@ -647,6 +647,7 @@ const LAPS_PER_DAY_CEIL = Math.floor(86400 / LIMIT_WINDOW_SEC);   // = 6 — the
 // MIRAGE_PLACEMENT (the "mirage top" ask-side placement bar, PLACEHOLDER n≈0) MOVED to
 // js/estimators/families.mjs (EF1(b), PLAN-ESTIMATOR-FIDELITY) — it now also bounds the churn
 // ask-reach exemption there, so the digest rule and the rank/fold bound share ONE constant (imported above).
+import { buildDigestRows } from '../lib/render/digest-extras.mjs';
 import { MIRAGE_REACH_FRAC, digestReachAndPlacement } from '../lib/signal/digest.mjs';
 
 // roiPct(er): after-tax per-TURN ROI% off the rank estimate — er.net (per-unit tax-net) ÷ er.pair.bid.
@@ -811,12 +812,13 @@ function digestSoftBuy(ts1h, row, fc = null, durable = null, lap = null) {
 // pure function of peak.startH/endH, so fitting it over a different window makes the digest row's phase
 // disagree with the window rendered beside it. `prof` survives ONLY as the no-lap fallback. See
 // phaseFromLap's header in js/windowread.mjs.
-function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, reachBasis = null, askPlacement, marginTrend = null, placementDiverges = false, prof, ts1h = null, lap = null, fc = null, durable = null, subFloor }) {
+function collectDigestRow({ id, name, shown = null, spec, row, er, grade, reachFrac, reachHit = null, reachDays = null, reachBasis = null, askPlacement, marginTrend = null, placementDiverges = false, prof, ts1h = null, lap = null, fc = null, durable = null, subFloor }) {
   if (subFloor) return;                       // sub-floor fallback rows are never "top-8 decision" candidates
   if (HELD_IDS.has(id)) return;               // a held item's read belongs to the positions surface, not the buy-triage digest
   const ph = (lap ? phaseFromLap(lap)?.phase : null) ?? (prof ? (diurnalPhase(prof)?.phase ?? null) : null);
   const buyLow = (er && er.pair && er.pair.bid != null) ? er.pair.bid : null;
   const units = deployUnits({ buyLow, limitVol: row ? (row.volDay ?? null) : null, limit: row ? (row.limit ?? null) : null, capGp: VALUE_CAPITAL });
+  const pair = shown || { bid: er?.pair?.bid, ask: er?.pair?.ask, net: er?.net, be: null };
   const deployable = (units != null && buyLow != null) ? units * buyLow : null;
   // POLISH 2 buy-limit lap cap: the deployed position recycles at most limit×(windows/day) units per day, so
   // its laps/day of the WHOLE position is (limit × LAPS_PER_DAY_CEIL) ÷ deployUnits. Only binds when the
@@ -829,6 +831,10 @@ function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, reachBasi
     nicheKey: spec ? spec.key : null,      // HT3 — which strategy this pick belongs to (band/churn/scalp/value/amplitude); drives the strategy-aware relabel
     askLevel: row ? (row.optSell ?? null) : null,   // HT3 — the ask-reachability-decay reference level (zero extra fetch)
     name,
+    bid: pair.bid ?? null, ask: pair.ask ?? null, netEach: pair.net ?? null,
+    be: pair.be ?? (pair.bid > 0 ? breakEven(pair.bid, row?.bond ? { bond: true, guide: row.guide } : undefined) : null),
+    limit: row?.limit ?? null, volDay: row?.volDay ?? null, deployUnits: units,
+    reachHit, reachDays,
     capEff,
     deployable,
     rankKey: (capEff != null && deployable != null) ? capEff * deployable : null,
@@ -913,9 +919,7 @@ function enrichDigestAskDecay(rows, series1h, noteMap) {
   });
 }
 
-export function buildDigestBlock(pool = DIGEST_ROWS, { series1h = null, disloc = null } = {}) {
-  const lines = ['## DECISION DIGEST — cross-niche triage (INFORM-ONLY, PLACEHOLDER n≈0 — never gates; ranked by RANK = net × P(fill) ÷ TTF — scale-aware and wallet-free, so the order does not move with your cash. capEff = realizable ROI%/day and deploy = parkable capital are SHOWN as sizing, not ranked on)'];
-  if (!pool.length) { lines.push('(no candidates this pass)'); return lines.join('\n'); }
+export function selectDigestRows(pool = DIGEST_ROWS) {
   // W3-1: an uncrossable live spread (crossable === false) is FLOORED to -Infinity in the comparator ONLY so it
   // sinks to the bottom — the stored/displayed `capEff` is NEVER mutated (the column still shows the true number)
   // and the row STILL RENDERS (never silently dropped, mirroring the subFloorLabel doctrine). null (unknown) is
@@ -947,7 +951,7 @@ export function buildDigestBlock(pool = DIGEST_ROWS, { series1h = null, disloc =
   const deduped = pool.filter(r => r.id == null || best.get(r.id) === r);
   const sorted = [...deduped].sort((a, b) =>
     (key(b) - key(a)) || ((b.rankKey ?? -Infinity) - (a.rankKey ?? -Infinity)) || ((b.capEff ?? -Infinity) - (a.capEff ?? -Infinity)));
-  let main = sorted.slice(0, DIGEST_TOP);
+  const main = sorted.slice(0, DIGEST_TOP);
   // POLISH 1: guaranteed big-ticket slice, appended only when the main block under-represents them.
   const bigInMain = main.filter(r => r.bigTicket).length;
   let bigExtra = [];
@@ -955,6 +959,13 @@ export function buildDigestBlock(pool = DIGEST_ROWS, { series1h = null, disloc =
     const shown = new Set(main);
     bigExtra = sorted.filter(r => r.bigTicket && !shown.has(r)).slice(0, BIG_TICKET_SLICE);
   }
+  return { main, bigExtra };
+}
+
+export function buildDigestBlock(pool = DIGEST_ROWS, { series1h = null, disloc = null } = {}) {
+  const lines = ['## DECISION DIGEST — cross-niche triage (INFORM-ONLY, PLACEHOLDER n≈0 — never gates; ranked by RANK = net × P(fill) ÷ TTF — scale-aware and wallet-free, so the order does not move with your cash. capEff = realizable ROI%/day and deploy = parkable capital are SHOWN as sizing, not ranked on)'];
+  if (!pool.length) { lines.push('(no candidates this pass)'); return lines.join('\n'); }
+  let { main, bigExtra } = selectDigestRows(pool);
   // DT3: enrich ONLY the rows about to render (main + the guaranteed big-ticket slice) — never the full pool.
   // Absent series1h (a caller that doesn't pass it, e.g. every pre-existing test) ⇒ enrichDigestAskDecay is a
   // no-op passthrough, so this stays byte-identical whenever the option is omitted.
@@ -1299,7 +1310,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // stale-live guard. MOVED UP from below the rank call (EF1, PLAN-ESTIMATOR-FIDELITY): the placement
     // now ALSO bounds the churn ask-reach exemption, so the estimate (estExtra.askPlacement) and the
     // rank (estimateRank extra.askPlacement) read the SAME stale-guarded number the digest verdicts use.
-    const { reachFrac: digestReach, reachBasis: digestReachBasis, askPlacement: digestAskPlacement, marginTrend: digestMarginTrend, placementDiverges: digestPlacementDiverges } = digestReachAndPlacement({ spec: FLIP_NICHES[mode], row, askReachExtra, his: rbStats && rbStats.his, days: rbStats && rbStats.days });
+    const { reachFrac: digestReach, reachHit: digestReachHit, reachDays: digestReachDays, reachBasis: digestReachBasis, askPlacement: digestAskPlacement, marginTrend: digestMarginTrend, placementDiverges: digestPlacementDiverges } = digestReachAndPlacement({ spec: FLIP_NICHES[mode], row, askReachExtra, his: rbStats && rbStats.his, days: rbStats && rbStats.days });
     // PLAN-OSCILLATION-CYCLE Chunk 6 — the per-thesis drift-adjusted EXIT inform note (band/churn/scalp).
     // Slopes + the diurnal projection come from data ALREADY in hand — `rbStats.days` (the daily windowStats
     // buckets, ZERO new fetch) → floorCeilingTrack's ceiling/floor slope, `prof` (the hourProfile) →
@@ -1579,7 +1590,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // EF-0a: carry the admission-provenance stamps (s.via — reserve/explore tag; s.preRank/s.prePool —
     // the pre-fetch-ordering position, stamped in admission.mjs) onto the row so the ledger log below
     // can record them. Inform-only pass-through — read by nothing else here.
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, rankPre, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, timedLap, ts, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, ovWeight, digestReach, digestReachBasis, digestAskPlacement, digestMarginTrend, digestPlacementDiverges, cappedBy, softBuyFc, durable: durableFloorRead(vres), via: s.via, preRank: s.preRank, prePool: s.prePool });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, rankPre, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, timedLap, ts, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, ovWeight, digestReach, digestReachHit, digestReachDays, digestReachBasis, digestAskPlacement, digestMarginTrend, digestPlacementDiverges, cappedBy, softBuyFc, durable: durableFloorRead(vres), via: s.via, preRank: s.preRank, prePool: s.prePool });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -1645,7 +1656,8 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // cross-niche decision digest (printed ONCE after every niche in main() under --digest). collectDigestRow
   // excludes sub-floor + held rows. This never reorders/alters `rows` — the per-niche table + screen.json
   // are untouched (§1.4: the digest is a DIGEST-ONLY presentation choice, not the table's sort key).
-  for (const r of rows) collectDigestRow({ id: r.id, name: map.byId[r.id]?.name || ('#' + r.id), spec: FLIP_NICHES[mode], row: r.row, er: r.er, grade: r.grade, reachFrac: r.digestReach, reachBasis: r.digestReachBasis, askPlacement: r.digestAskPlacement, marginTrend: r.digestMarginTrend, placementDiverges: r.digestPlacementDiverges, prof: r.prof, ts1h: (series1h && series1h.get(r.id)) || null, lap: r.timedLap || null, fc: r.softBuyFc, durable: r.durable, subFloor });
+  const shownPair = r => (r.estShown && r.estShown.estNet != null) ? { bid: r.estShown.estBuy, ask: r.estShown.estSell, net: r.estShown.estNet, be: r.estShown.be } : null;
+  for (const r of rows) collectDigestRow({ id: r.id, name: map.byId[r.id]?.name || ('#' + r.id), spec: FLIP_NICHES[mode], row: r.row, er: r.er, grade: r.grade, shown: shownPair(r), reachFrac: r.digestReach, reachHit: r.digestReachHit, reachDays: r.digestReachDays, reachBasis: r.digestReachBasis, askPlacement: r.digestAskPlacement, marginTrend: r.digestMarginTrend, placementDiverges: r.digestPlacementDiverges, prof: r.prof, ts1h: (series1h && series1h.get(r.id)) || null, lap: r.timedLap || null, fc: r.softBuyFc, durable: r.durable, subFloor });
 
   // O1 suggestions ledger: log every rated (surfaced) row at emit time, unconditionally. The niche
   // is `mode`; the emitted "verdict" is the letter grade the row was surfaced under.
@@ -2367,7 +2379,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
     const ampEr = { pair: { bid: ar.ampBid, ask: ar.ampAsk }, net: (driftShadow && driftShadow.margin != null) ? driftShadow.margin : ar.netPerCycle, ttf, pFill, rank, lapUnits };
     // softBuyFc off the in-hand amplitude windowStats days + forming (EC2) → digestSoftBuy's @floor cue.
     const softBuyFc = (stats && stats.days) ? floorCeilingTrack(stats.days, { forming: stats.forming }) : null;
-    collectDigestRow({ id: s.id, name, spec: FLIP_NICHES.amplitude, row, er: ampEr, grade, reachFrac: null, askPlacement: null, prof, ts1h: ts1h || null, lap: null, fc: softBuyFc, subFloor: null });
+    collectDigestRow({ id: s.id, name, spec: FLIP_NICHES.amplitude, shown: { bid: ar.ampBid, ask: ar.ampAsk, net: ar.netPerCycle, be: breakEven(ar.ampBid, bondOpt) }, row, er: ampEr, grade, reachFrac: null, askPlacement: null, prof, ts1h: ts1h || null, lap: null, fc: softBuyFc, subFloor: null });
     // A3: the day-crossing day-of-week seasonality read (fires whenever holdDays > 1 — i.e. always at
     // the 4-day default since DT1; it originated with the 1.5-day experiment) (net-new — no day-of-week tooling existed).
     // Only surfaced when the hold crosses a day boundary (holdDays > 1) so leg-2 lands on a different weekday.
@@ -2950,10 +2962,13 @@ async function main() {
   // during the niche renders above (the watchClosely precedent). --digest-gated + printed via `realLog` so it
   // appears even under the AO1 quiet default (console.log is a no-op there) — its own gate, independent of
   // --verbose. It DOES ride the last-report dump; the scope lock it stays behind is screen.json / the app.
+  let digestRows = null;
   if (DIGEST) {
     const wfHd = wfArchive();
     const dislocFn = wfHd ? ((id, name) => formatDislocation(
       dislocationRead({ series1h: archiveSeries(wfHd, id, '1h', { days: 120 }), name, limit: map.byId[id]?.limit ?? null }), { fmt: fmtP })) : null;
+    const sel = selectDigestRows(DIGEST_ROWS);
+    digestRows = buildDigestRows([...sel.main, ...sel.bigExtra]);
     const digestBlock = buildDigestBlock(DIGEST_ROWS, { series1h, disloc: dislocFn });
     REPORTS.push({ kind: 'screen', generatedAt: null, sections: [{ type: 'lines', lines: digestBlock.split('\n'), blank: false }] });
     realLog('\n' + digestBlock + '\n');
@@ -3018,7 +3033,7 @@ async function main() {
   }
   // AO1: always write the pass's report objects to the last-report dump (one file per invocation), then
   // unless --verbose surface the ONE summary line + path in place of the suppressed markdown.
-  const rel = writeLastReport('screen', REPORTS);
+  const rel = writeLastReport('screen', REPORTS, digestRows ? { digestRows } : {});
   if (!VERBOSE) realLog(`# screen (quiet default; --verbose for the table) — mode ${MODE}: ${RUN_MODES.map(m => `${m} ${Array.isArray(niches[m]) ? niches[m].length : 0}`).join(', ')} → ${rel} (value/amplitude stay out of screen.json — the app — but ride the dump)`);
 }
 

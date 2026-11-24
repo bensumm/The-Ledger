@@ -24,15 +24,18 @@ export function digestReachAndPlacement({ spec, row, askReachExtra, his, days } 
   // Placement-bounded, matching families.mjs symmetricExemptionHolds at the same bound and refLevel: an
   // above-distribution churn ask takes the full read so the verdict can name the mirage, not exempt it.
   const exempt = symmetric && !(askPlacement != null && askPlacement > MIRAGE_PLACEMENT);
-  let reachFrac, basis = null;
+  let reachFrac, basis = null, reachHit = null, reachDays = null;
   if (exempt) reachFrac = null;
   else if (guarded && his && his.length) {
     // The validator's reach was scored at the stale optSell.
-    reachFrac = his.filter(h => h != null && h >= refLevel).length / his.length;
+    reachHit = his.filter(h => h != null && h >= refLevel).length; reachDays = his.length;
+    reachFrac = reachHit / reachDays;
     basis = 'guarded';
   } else {
     reachFrac = digestReachFrac(askReachExtra);
     if (reachFrac != null) basis = reachBasis(askReachExtra, { prefer: 'recent' });
+    if (basis === 'recent') { reachHit = askReachExtra.recentHit; reachDays = askReachExtra.recentDays; }
+    else if (basis === 'full') { reachHit = askReachExtra.reachedDays; reachDays = askReachExtra.nDays; }
   }
   // Zero new fetch; degrades to null rather than inventing a read.
   const marginTrend = (!exempt && Array.isArray(days) && days.length && refLevel != null)
@@ -47,5 +50,5 @@ export function digestReachAndPlacement({ spec, row, askReachExtra, his, days } 
       placementDiverges = (recentPlacement - askPlacement) >= RECENCY_DIVERGE;
     }
   }
-  return { reachFrac, reachBasis: basis, askPlacement, staleGuarded: guarded, marginTrend, placementDiverges };
+  return { reachFrac, reachHit, reachDays, reachBasis: basis, askPlacement, staleGuarded: guarded, marginTrend, placementDiverges };
 }
