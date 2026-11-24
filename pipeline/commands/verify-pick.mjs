@@ -21,7 +21,7 @@ import { MODE_KEYS } from '../../js/flip-niches.mjs';
 
 const TRIO = path.join(path.dirname(fileURLToPath(import.meta.url)), 'read-window-range.mjs');
 const USAGE = `usage: node pipeline/commands/verify-pick.mjs "<item>@<bid>:<ask>[@<flip-niche>]" [...more] [--why]   niche: ${MODE_KEYS.join('|')} (default band)
-       node pipeline/commands/verify-pick.mjs --scan [N] [--all] [--why]   the last scan's digest, churn and top N band rows (default 25)`;
+       node pipeline/commands/verify-pick.mjs --scan [N] [--all] [--why]   the last scan's digest, churn and band rows (default all; N = top N)`;
 const TRIO_NICHES = ['band', 'churn', 'scalp'];
 const fin = Number.isFinite;
 const fmt = n => fin(n) ? n.toLocaleString('en-US') : '—';
@@ -203,7 +203,7 @@ async function checkPick(p, { map, buys, latest = fetchLatest }) {
     limit: buys && limitWindow({ buys: buys.get(r.id) || [], limit: map.byId[r.id]?.limit ?? null }) });
 }
 
-export const SCAN_BAND_DEFAULT = 25;
+export const SCAN_BAND_DEFAULT = Infinity;
 const SCAN_CONCURRENCY = 4;
 const SCREEN_DUMP = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.cache', 'last-report', 'screen.json');
 

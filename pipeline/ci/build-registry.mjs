@@ -47,7 +47,7 @@ export function parseTags(text) {
 
 const cell = s => s.replace(/\|/g, '\\|');
 export function askTable(reg) {
-  const rows = reg.flatMap(r => r.asks.map(a => `| ${cell(a.ask)} | \`${cell(`${r.name} ${a.args}`.trim())}\`${r.read ? ' — ' + cell(r.read) : ''} |`));
+  const rows = reg.flatMap(r => r.asks.map((a, i) => `| ${cell(a.ask)} | \`${cell(`${r.name} ${a.args}`.trim())}\`${r.read ? ' — ' + (i ? 'caveat above' : cell(r.read)) : ''} |`));
   return ['| Ask | `node pipeline/commands/…` |', '| --- | --- |', ...rows].join('\n');
 }
 export const commandList = reg => reg.map(r => `- \`${r.name}\` — ${r.does}`).join('\n');

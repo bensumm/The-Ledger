@@ -32,6 +32,10 @@ ok('the table escapes pipes, carries the caveat, and lists only asked commands',
   assert.equal(askTable(reg).split('\n').slice(2).join('\n'), '| "x" | `a.mjs --type buy\\|sell` — careful |');
   assert.equal(commandList(reg), '- `a.mjs` — Does A\n- `b.mjs` — Does B');
 });
+ok('a command asked twice prints its caveat once', () => {
+  const rows = askTable([{ ...reg[0], asks: [{ ask: '"x"', args: '' }, { ask: '"y"', args: '--b' }] }]).split('\n').slice(2);
+  assert.match(rows[0], /careful/); assert.match(rows[1], /caveat above/);
+});
 ok('splice replaces only its region and refuses missing or repeated markers', () => {
   const doc = 'top\n<!-- registry:asks -->\nold\n<!-- /registry:asks -->\nend';
   assert.equal(splice(doc, 'asks', 'new'), 'top\n<!-- registry:asks -->\nnew\n<!-- /registry:asks -->\nend');

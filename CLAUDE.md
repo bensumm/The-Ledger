@@ -1,4 +1,4 @@
-# The Coffer / The-Ledger
+# The Coffer / The-Ledger — instructions for Claude Code
 
 This repo is worked in repeated sessions. Check `git log` and this file before assuming something is new.
 
@@ -32,6 +32,7 @@ This repo is worked in repeated sessions. Check `git log` and this file before a
     `js/money-format.js`): README "Map of the repo".
 
 ## Where shipped work is documented (check before assuming something is new)
+Much of what feels new already exists: check `git log` and `CHANGELOG.md` before building.
 
 | Need | Home |
 | --- | --- |
@@ -75,10 +76,10 @@ import `js/quotecore.js`, so their numbers match the app's.
 | Ask | `node pipeline/commands/…` |
 | --- | --- |
 | "I bought/sold X on mobile", "log this trade" | `add-manual-fill.mjs --item "<item>" --type buy\|sell\|banked --qty N --price gp --time <YYYY-MM-DDTHH:MM local>` — a personal-use mention IS the instruction; --time is the real trade time (omitting it mis-pairs lots); then sync |
-| "X is personal use" | `add-manual-fill.mjs --item "<item>" --type withdraw --qty N --time <YYYY-MM-DDTHH:MM, after the buy>` — a personal-use mention IS the instruction; --time is the real trade time (omitting it mis-pairs lots); then sync |
+| "X is personal use" | `add-manual-fill.mjs --item "<item>" --type withdraw --qty N --time <YYYY-MM-DDTHH:MM, after the buy>` — caveat above |
 | "back up my data", "is the backup current?" | `backup-data.mjs [--status]` |
 | "what's my idle cash?" | `derive-cash.mjs` — an amount overwrites the anchor; a session budget goes to --capital instead |
-| "re-anchor my cash to X" | `derive-cash.mjs 16m` — an amount overwrites the anchor; a session budget goes to --capital instead |
+| "re-anchor my cash to X" | `derive-cash.mjs 16m` — caveat above |
 | "is the patient pair real?", "does the deep bid fill?" | `join-asym-outcomes.mjs [--entry H] [--horizon H] [--item "<item>"]` — the pair rarely completes, worst on big-ticket; a random-offset null was rejected (header) |
 | "did buying the dump work?", "score the crash-entry rules" | `join-crash-entry.mjs [--items N]` — read its verdict line and plans/PLAN-CRASH-REPLAY.md first; every fill is an upper bound |
 | "does askStar beat what we have?", "which exit ask makes the most gp?" | `join-exit-ev.mjs [--items N] [--horizon H]` — the null branch fired: the reach surface only describes; retire nothing on a gap under the instrument's noise |
@@ -94,13 +95,13 @@ import `js/quotecore.js`, so their numbers match the app's.
 | "how's X trending?", "today vs prior days", "where's X likely tomorrow?" | `read-trajectory.mjs "<item>" [...]` — inform-only |
 | "how's my watchlist?", "the items I track/follow" | `read-watchlist.mjs --verbose` — rows are gate-exempt and the grade is always (thin): read the net, not the letter |
 | "is X a falling knife?", "stepping down by the hour?", "does the ask clear midday?" | `read-window-range.mjs "<item>" --hourly --days 3 [--ask gp]` — hourly: read the raw per-day columns (the drift slope was a non-signal, deleted) |
-| "does this ask clear?", "price my exit" | `read-window-range.mjs "<item>" --ask <gp> --window peak` — hourly: read the raw per-day columns (the drift slope was a non-signal, deleted) |
+| "does this ask clear?", "price my exit" | `read-window-range.mjs "<item>" --ask <gp> --window peak` — caveat above |
 | "reconcile my reverse-flip", "I sold a keep first", "backfill the banked basis" | `reconcile-reverse-flip.mjs ["<item>"]` |
 | "loop positions AND scan", "check positions every X and scan every Y" | `run-loop.mjs [--watch min] [--scan min] [--min-idle gp] [--no-sync]` — the scan runs only when deployable capital clears --min-idle; /loop at the gcd of the two cadences |
 | "what can I reverse-flip?", "sell a keep into the peak", "harvest a held item" | `screen-flip-niches.mjs --mode reverse` — reverse: the regime read is INVERTED (rising is bad), inform-only, owned keeps only |
 | "sync", "refresh the book" (scan and positions already do it) | `sync-fills.mjs` — --publish pushes to main: only when Ben asks |
 | "verify X at bid/ask", "is this pick still good?", "re-check my picks" | `verify-pick.mjs "<item>@<bid>:<ask>[@<flip-niche>]" [...] [--why]` — run in the same turn as the rec; pitch only a PASS (no fill guarantee) |
-| "verify the whole scan", "does anything clear?" | `verify-pick.mjs --scan [N] [--all]` — run in the same turn as the rec; pitch only a PASS (no fill guarantee) |
+| "verify the whole scan", "does anything clear?" | `verify-pick.mjs --scan [N] [--all]` — caveat above |
 | "watch/monitor my positions", "run a flipping session", "keep an eye on X" (drive with /loop, pipeline/MONITORING.md) | `watch-positions.mjs ["<item>" ...]` |
 | "watch for dips/flushes", "run the dip loop" | `watch-positions.mjs --dip ["<item>" ...]` |
 <!-- /registry:asks -->
@@ -171,7 +172,7 @@ leak.
       occurs. Require "measured on <path>, N of M" or "shape only — unmeasured", and rank latent below live.
     - **Prose fixes regress; code fixes converge.** A prose correction is a fresh set of claims that can
       drift. **Derived numbers (counts, timings, call-site tallies) never go in
-      prose**: delete the number or encode the check.
+      prose**: delete the number or encode the check; do not re-derive it.
 13. **Prevent, don't accumulate.** (a) A lesson becomes a test, script output, or nothing; prose only for
     real judgment, and doc ceilings (`pipeline/ci/doc-budget.json`) only come down — after trimming run
     `lint-budget.mjs --bless`. (b) Anything inform-only or unproven ships with a `pipeline/ci/provisional.json`
@@ -194,7 +195,7 @@ imported `let` binding. Put new shared mutable state on `STATE`, never a new bar
 never-reassigned constants stay `export const`. Full rule: the header of `js/state.js`.
 
 ## Time display convention — displayed times are LOCAL
-Every rendered timestamp uses the local-time `Date` getters (`getHours`, `getDate`, `getDay`,
+Every timestamp the app renders uses the local-time `Date` getters (`getHours`, `getDate`, `getDay`,
 `getMonth`, `toLocaleTimeString`), never `getUTC*` or `toISOString`. UTC/ISO is storage and wire format only
 (epoch-second `ts` fields, backup metadata, the backup filename). Manual-log `date`/`time` strings are
 already local wall-clock (written by `fillsLogLine` and `add-manual-fill.mjs`), so render them raw.
