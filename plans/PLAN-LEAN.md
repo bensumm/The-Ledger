@@ -1,6 +1,6 @@
 # PLAN-LEAN — cut the instruction text, generate the registry
 
-Status: ACTIVE. Prefix `LN`. LN1–LN5 shipped 2026-11-24 (bug 4 measured null, bug 9 dropped: `docs/BACKLOG.md`). LN0 metrics done; the frozen capture waits for a normal market.
+Status: ACTIVE. Prefix `LN`. LN1–LN5 shipped 2026-11-24 (bug 4 measured null, bug 9 dropped: `docs/BACKLOG.md`). LN0 metrics done; the frozen snapshot is captured (2026-11-24 10:51).
 
 **Decision it changes:** what an agent reads before every scan (about 42k tokens) and what every code change must
 also edit. **If it has no effect** (agents still hand-write `node -e`, or errors rise): revert the skill commits.
@@ -23,9 +23,14 @@ Measured 2026-11-24 over the 7 session files on disk: 89 of 278 shell calls were
 opening, so some calls count twice). Only two distinct `/scan` turns exist: 18 and 8 tool calls, `node -e` 9 and 0,
 context +74k and +69k tokens. No `/positions` sample. Skill text: scan 102,976 bytes, positions 60,372.
 
-Freeze: `pipeline/experiments/frozen-market.mjs` (record, then replay, byte-identical on a two-item quote). Capture
-after the 2026-11-24 game update settles, in a separate clone with its own archive copy, recording `/timeseries` for
-every scan and book item. Run the 5 asks with the old skill text just before LN4: `git show a3e08de:.claude/skills/`.
+Freeze: `pipeline/experiments/frozen-market.mjs`. Snapshot, isolated home and scripts: `<home>/The-Ledger-frozen`
+(`record.mjs`, `replay.sh`, `ask.sh`, `cmp.mjs`, `out/`; copy `archive.sqlite` to `<run>/pipeline/.market-archive.sqlite`).
+Replay of the scan is identical to the recording except its own since-last-scan lines.
+
+LN4 check, 5 asks, headless Sonnet, old against new CLAUDE.md, one run each: same skill or command, same verdicts and
+the same main prices on all five; final context 39→34k (quote), 82→82k (scan), 67→63k (positions), 78→73k (overnight),
+38→34k (reverse). One run per arm, so wording differences are noise. These runs are the LN6 baseline: the skills still
+send agents to `node -e` over the saved reports, and no run used `verify-pick` because no skill names it yet.
 
 ## Chunks, in order
 
