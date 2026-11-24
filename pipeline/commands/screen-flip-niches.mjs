@@ -647,7 +647,7 @@ const LAPS_PER_DAY_CEIL = Math.floor(86400 / LIMIT_WINDOW_SEC);   // = 6 — the
 // MIRAGE_PLACEMENT (the "mirage top" ask-side placement bar, PLACEHOLDER n≈0) MOVED to
 // js/estimators/families.mjs (EF1(b), PLAN-ESTIMATOR-FIDELITY) — it now also bounds the churn
 // ask-reach exemption there, so the digest rule and the rank/fold bound share ONE constant (imported above).
-import { buildDigestRows, sizeDigestRow, sizeLine, digestDiffLine, readDigestPrev, writeDigestPrev } from '../lib/render/digest-extras.mjs';
+import { buildDigestRows, sizeDigestRow, sizeLine, digestDiffLine, readDigestPrev, writeDigestPrev, nicheLine, coverageLine } from '../lib/render/digest-extras.mjs';
 import { MIRAGE_REACH_FRAC, digestReachAndPlacement } from '../lib/signal/digest.mjs';
 
 // roiPct(er): after-tax per-TURN ROI% off the rank estimate — er.net (per-unit tax-net) ÷ er.pair.bid.
@@ -752,6 +752,7 @@ const DIGEST_ROWS = [];
 const digestPrevPath = () => join(REPO_ROOT, 'pipeline', '.cache', 'digest-prev.json');
 const DISPLAY_FLAGS = ['mode', 'digest', 'verbose', 'full', 'stats', 'publish', 'raw'];
 const digestScope = () => JSON.stringify([RUN_MODES, POSTURE, Object.entries(A).filter(([k]) => !DISPLAY_FLAGS.includes(k)).sort()]);
+const SHOWN_N = {};   // mode -> rows its printed table shows
 const DROP_WHY = new Map();   // 'mode:id' -> why a fetched candidate is not in that niche's rows
 const PARTITION_WHY = 'shown in band';
 const dropWhy = (mode, id, why) => DROP_WHY.set(mode + ':' + id, why);
@@ -818,7 +819,7 @@ function digestSoftBuy(ts1h, row, fc = null, durable = null, lap = null) {
 // pure function of peak.startH/endH, so fitting it over a different window makes the digest row's phase
 // disagree with the window rendered beside it. `prof` survives ONLY as the no-lap fallback. See
 // phaseFromLap's header in js/windowread.mjs.
-function collectDigestRow({ id, name, shown = null, spec, row, er, grade, reachFrac, reachHit = null, reachDays = null, reachBasis = null, askPlacement, marginTrend = null, placementDiverges = false, prof, ts1h = null, lap = null, fc = null, durable = null, subFloor }) {
+function collectDigestRow({ id, name, shown = null, expGpDay = null, spec, row, er, grade, reachFrac, reachHit = null, reachDays = null, reachBasis = null, askPlacement, marginTrend = null, placementDiverges = false, prof, ts1h = null, lap = null, fc = null, durable = null, subFloor }) {
   if (subFloor) return;                       // sub-floor fallback rows are never "top-8 decision" candidates
   if (HELD_IDS.has(id)) return;               // a held item's read belongs to the positions surface, not the buy-triage digest
   const ph = (lap ? phaseFromLap(lap)?.phase : null) ?? (prof ? (diurnalPhase(prof)?.phase ?? null) : null);
@@ -840,7 +841,7 @@ function collectDigestRow({ id, name, shown = null, spec, row, er, grade, reachF
     bid: pair.bid ?? null, ask: pair.ask ?? null, netEach: pair.net ?? null,
     be: pair.be ?? (pair.bid > 0 ? breakEven(pair.bid, row?.bond ? { bond: true, guide: row.guide } : undefined) : null),
     limit: row?.limit ?? null, volDay: row?.volDay ?? null, deployUnits: units,
-    reachHit, reachDays,
+    reachHit, reachDays, expGpDay,
     capEff,
     deployable,
     rankKey: (capEff != null && deployable != null) ? capEff * deployable : null,
@@ -1665,7 +1666,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // excludes sub-floor + held rows. This never reorders/alters `rows` — the per-niche table + screen.json
   // are untouched (§1.4: the digest is a DIGEST-ONLY presentation choice, not the table's sort key).
   const shownPair = r => (r.estShown && r.estShown.estNet != null) ? { bid: r.estShown.estBuy, ask: r.estShown.estSell, net: r.estShown.estNet, be: r.estShown.be } : null;
-  for (const r of rows) collectDigestRow({ id: r.id, name: map.byId[r.id]?.name || ('#' + r.id), spec: FLIP_NICHES[mode], row: r.row, er: r.er, grade: r.grade, shown: shownPair(r), reachFrac: r.digestReach, reachHit: r.digestReachHit, reachDays: r.digestReachDays, reachBasis: r.digestReachBasis, askPlacement: r.digestAskPlacement, marginTrend: r.digestMarginTrend, placementDiverges: r.digestPlacementDiverges, prof: r.prof, ts1h: (series1h && series1h.get(r.id)) || null, lap: r.timedLap || null, fc: r.softBuyFc, durable: r.durable, subFloor });
+  for (const r of rows) collectDigestRow({ id: r.id, name: map.byId[r.id]?.name || ('#' + r.id), spec: FLIP_NICHES[mode], row: r.row, er: r.er, grade: r.grade, shown: shownPair(r), expGpDay: r.expGpDay, reachFrac: r.digestReach, reachHit: r.digestReachHit, reachDays: r.digestReachDays, reachBasis: r.digestReachBasis, askPlacement: r.digestAskPlacement, marginTrend: r.digestMarginTrend, placementDiverges: r.digestPlacementDiverges, prof: r.prof, ts1h: (series1h && series1h.get(r.id)) || null, lap: r.timedLap || null, fc: r.softBuyFc, durable: r.durable, subFloor });
 
   // O1 suggestions ledger: log every rated (surfaced) row at emit time, unconditionally. The niche
   // is `mode`; the emitted "verdict" is the letter grade the row was surfaced under.
@@ -1749,6 +1750,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // slot, hiding one undoes the reserve, and a negative net on one is a position/watch signal, not a loser.
   const isWinner = r => HELD_IDS.has(r.id) || WATCHLIST_IDS.has(r.id) || (n => n == null || n > 0)(shownNet(r));
   const dietRows = rows.filter(isWinner);
+  SHOWN_N[mode] = subFloor ? 0 : dietRows.length;
   const dietLosers = rows.filter(r => !isWinner(r));
   // FD7: the pre-formatted drop-accounting input, built ONCE per niche for dropAccounting().
   const dropInput = {
@@ -2542,7 +2544,7 @@ function runDipNominations(v24, bands, map, qcache, series5m) {
     }
     cands.push({ id, name, track: nom.track, score, amplitude: nom.amplitude, limitVol: nom.limitVol, flushingNow });
   }
-  if (!cands.length) return;
+  if (!cands.length) return { added: 0, watched: 0 };
   // 3) dedup vs the current file + cap. Preserve existing entries verbatim (polymorphic legacy/object).
   let existing = [];
   try { const raw = JSON.parse(readFileSync(DIP_WATCHLIST_PATH, 'utf8')); if (Array.isArray(raw)) existing = raw; } catch { /* absent/garbled → treat as empty */ }
@@ -2563,6 +2565,7 @@ function runDipNominations(v24, bands, map, qcache, series5m) {
   console.log(`## Dip pool — ${liqPool.length} liquid (watched live by --dip) / ${illiqPool.length} illiquid (DL3 backlog); ${added.length} added this scan → dip-watchlist.json (flush-suitability PROPOSALS, quality-capped; n=2 placeholders)`);
   for (const p of added.slice(0, 10)) console.log(`- ${p.name} — ${p.track}${flushNow.has(p.id) ? ' ⚡flushing-now' : ''}`);
   console.log('');
+  return { added: added.length, watched: liqPool.length };
 }
 
 // --- RF2 (PLAN-REVERSE-FLIP): the `--mode reverse` OWNED-item harvest table -----------------------
@@ -3011,11 +3014,35 @@ async function main() {
   });
   // DL4: nominate flush-suitable dip candidates into dip-watchlist.json — only in the routine `--mode all`
   // scan Ben runs (not a single-niche run), best-effort so a failure never breaks the scan output.
-  if (MODE === 'all') { try { captureReport(() => runDipNominations(v24, bands, map, qcache, series5m)); } catch (err) { console.error('(dip-nominate: pass failed — ' + ((err && err.message) || err) + ')'); } }
+  let dips = null;
+  if (MODE === 'all') { try { dips = captureReport(() => runDipNominations(v24, bands, map, qcache, series5m)); } catch (err) { console.error('(dip-nominate: pass failed — ' + ((err && err.message) || err) + ')'); } }
   const watchlist = await captureReport(() => runWatchlist(map, ctx, guide, latest, qcache));   // S3: always-scanned watchlist
 
+  const nicheCoverage = () => {
+    const nm = id => map.byId[id]?.name || ('#' + id);
+    const rated = new Set(DIGEST_ROWS.map(r => r.id));
+    const stat = m => {
+      const g = gated[m], why = [...DROP_WHY].filter(([k]) => k.startsWith(m + ':')).map(([, w]) => w);
+      return { mode: m, gated: g.cand.length, fetched: g.survivors.length, shown: SHOWN_N[m] ?? niches[m].length,
+        elsewhere: why.filter(w => w === PARTITION_WHY).length, why,
+        subFloor: g.subFloor ? `sub-floor fallback (${g.subFloor.relaxed})` : null,
+        excluded: g.excluded.filter(e => !rated.has(e.id) && !HELD_IDS.has(e.id)).map(e => ({ id: e.id, name: nm(e.id), expGpDay: e.expGpDay, reason: e.reason })),
+        picks: DIGEST_ROWS.filter(r => r.nicheKey === m && digestRows.some(d => d.itemId === r.id && d.mode === m)) };
+    };
+    const lane = (label, m, want = () => true) => {
+      if (!RUN_MODES.includes(m)) return { label, n: null };
+      const rs = DIGEST_ROWS.filter(r => r.nicheKey === m && want(r));
+      const top = rs.filter(r => r.crossable !== false).sort((a, b) => (b.rank ?? -Infinity) - (a.rank ?? -Infinity))[0];
+      return { label, n: rs.length, top: top?.name };
+    };
+    return [...RUN_MODES.map(m => nicheLine(stat(m))), coverageLine([
+      { label: 'Dips', n: dips ? dips.added : null, note: dips ? `added / ${dips.watched} watched` : null },
+      lane('Band big-tickets', 'band', r => r.bigTicket), lane('Churn', 'churn'), lane('Amplitude', 'amplitude'),
+      { label: 'Watchlist', n: watchlist ? watchlist.rows.length : 0 },
+    ])];
+  };
   if (digestRows) {
-    const under = [sizeLine(digestRows), diffLine].filter(Boolean);
+    const under = [sizeLine(digestRows), diffLine, ...nicheCoverage()].filter(Boolean);
     if (under.length) {
       REPORTS.push({ kind: 'screen', generatedAt: null, sections: [{ type: 'lines', lines: under, blank: false }] });
       realLog(under.join('\n') + '\n');

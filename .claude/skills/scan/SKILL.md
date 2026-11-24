@@ -906,8 +906,8 @@ This is the tribal layer the script can't do — apply ALL of these:
   single pass), the DEFAULT admission path ranks the thin/big-ticket lane on real after-tax edge
   instead of raw turnover, rotates in starved candidates on a bounded exploration reserve, and
   records every excluded candidate with a reason instead of dropping it silently. That record lands
-  in each flip-niche report's `drops.crowdedOut` (count + best excluded + reason) on every run and prints
-  as a line under `--full` only — so the protection is exercised in the §2 judgment pass, not by
+  in each flip-niche report's `drops.crowdedOut` on every run; the digest prints the
+  name only when it beats its lane's weakest digest row. So the protection is exercised in the §2 judgment pass, not by
   relay: when an expected item is absent from the tables, check `drops` before concluding it has no
   edge, and name the best-excluded item to Ben only if it's genuinely close. `--admission legacy`
   restores the old raw-gp-flow thin-lane rank (rollback/comparison

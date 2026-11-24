@@ -14,6 +14,7 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 - When the drift projection degrades (`driftExitFrom` null, or `floorSlope` null/non-finite) an oscillating row printed "trough phase — floor holding". It now prints "oscillating — floor slope unavailable". Display only; no gate or rank change; no APP_VERSION bump.
 - `REPO_DIR` is the checkout the code lives in; a worktree sync no longer writes the live book.
 - One manual-slot rule (slot 8 and up); the book is unchanged.
+- Scan digest (LN5): `digestRows` in the screen dump; under the block, a per-4h-window size line, a `Δ vs` line against the last complete same-scope scan (`pipeline/.cache/digest-prev.json`), one counts line per flip-niche, and a coverage line. No change to rows, order, grade, rank or the ledger.
 - `own-picks.json`: buys the owner picked are reported as `ownPick`, outside every niche. `deriveCandidates` proposes real niches only.
 
 ## pipeline 1.9.0 — 2026-11-23 — the circular asym probabilities and `--asym` retired (APP_VERSION 0.76.3)

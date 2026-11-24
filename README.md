@@ -1660,18 +1660,17 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
     (`digestReachFrac` → the one shared `reachFraction` on the recent-3 basis), the stale-live-print guard
     that recomputes reach/placement/cushion-trend against the fresher instasell before any of them are
     scored (`digestReachAndPlacement`), and the `MIRAGE_REACH_FRAC` threshold. **Why it exists as a module:**
-    the threshold was a bare module-private `const` inside a 3,000-line command, so nothing could import it —
-    and `join-reach-basis.mjs`, the script written to SCORE that very threshold, had to keep a hand-copied
-    duplicate with a comment warning the copy would not track the source. That comment's line reference had
-    itself gone stale. The scorer now imports it; verified by changing the value at the source and watching
-    the scorer follow. **A byte-identical move** — the extraction changed no logic, and the falsifier was two
-    back-to-back screen runs across the change with zero structural stdout diff (a later comparison showed
-    472 diff lines, which reproduces identically between two runs of the SAME code twenty minutes apart:
-    that is market drift, not regression — check the drift baseline before reading a diff as a defect).
-    **`digestVerdict` and `capEfficiency` deliberately did NOT move**: both reach into command-local helpers
-    (`weakDeploy` → `isBigTicket`, `gradeAtLeast`, `holdDays`), so moving them now would drag those along or
-    create an import cycle, and `isBigTicket` is itself slated for replacement by two explicitly-named
-    predicates. They follow once that lands.
+    `join-reach-basis.mjs` scores that threshold and must import it, not copy it. `digestVerdict` and
+    `capEfficiency` stay in the command because they reach into command-local helpers.
+
+    **`pipeline/lib/render/digest-extras.mjs`** — the lines printed UNDER the digest, and the numeric rows
+    behind them: `buildDigestRows` (the dump's top-level `digestRows`, one object per printed digest row,
+    numbers or null; `bid`/`ask` are the pair the row's printed net uses), the per-4h-window size line
+    (the book's `sizeTranche`, whole pool per row; NOT the 2-day `deploy` column), the `Δ vs` line, one
+    shown/rejected/crowded-out line per flip-niche, and the coverage line. Inform-only: no row, order,
+    grade, rank or ledger effect. State: `pipeline/.cache/digest-prev.json` (gitignored) — the last
+    COMPLETE digest per scan scope (modes, posture, filter flags); a partial, failed or empty scan never
+    writes it, and deleting it costs one `Δ` line. Test: `pipeline/test/digest-extras.test.mjs`.
 
     **`join-asym-outcomes.mjs`** (2026-08-24, PLAN-PATIENT-PAIR §7 — replaces the asym pair's
     READ-BACK QUANTILE CONSTANTS with forward-measured rates. PRODUCER: `asymShadow` on
@@ -3369,7 +3368,7 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
     whole-fleet, never fetched by the app. Missing/corrupt → `{}`, never throws. Disposable), and the AO1
     `last-report/<kind>.json`
     dumps (`screen.json`/`quote.json`/`watch.json`/`watchlist.json`, plus `exit-surface.json` — which is NOT a render.mjs
-report object but `read-exit-surface.mjs`'s own report array) — the compact-JSON render.mjs report object(s)
+report object but `read-exit-surface.mjs`'s own report array; a `--digest` screen dump also carries `digestRows`) — the compact-JSON render.mjs report object(s)
     the last run of each market-read CLI built, overwritten with "last run" semantics. **NOT written on
     every run** — three of the four producers return before their dump on a degenerate path
     (`quote-items.mjs` exits at `:618`/`:655`; `watch-positions.mjs` returns on "Nothing to watch";

@@ -52,8 +52,8 @@ const age = ms => ms < 3600e3 ? `${Math.max(0, Math.round(ms / 60e3))}m` : ms < 
 
 /* prev = { ts, rows: { [id]: { name, mode, verdict, grade } } } for the SAME scan scope, or null. */
 export function digestDiffLine(prev, digestRows, { now = Date.now(), goneWhy = () => null, partial = [] } = {}) {
-  if (partial.length) return `Δ skipped: partial scan (${partial.join('; ')})${prev ? `; baseline from ${age(now - prev.ts)} ago kept` : ''}`;
   if (!prev) return null;
+  if (partial.length) return `Δ skipped: partial scan (${partial.join('; ')}); baseline from ${age(now - prev.ts)} ago kept`;
   const ids = new Set(digestRows.map(d => String(d.itemId)));
   const fresh = digestRows.filter(d => !prev.rows[d.itemId]).map(d => d.name);
   const turned = digestRows.filter(d => prev.rows[d.itemId] && prev.rows[d.itemId].verdict !== d.verdict)
@@ -83,4 +83,30 @@ export function writeDigestPrev(file, scope, digestRows, { now = Date.now(), par
     renameSync(file + '.tmp', file);
     return true;
   } catch { return false; }
+}
+
+/* s = { mode, gated, fetched, shown, elsewhere, why: [reason…], excluded: [{id,name,expGpDay,reason}],
+ *       picks: [{name,expGpDay}] (this niche's digest rows) }. A crowded-out name prints only when its gp/day
+ * beats the weakest of this niche's digest rows. */
+export function nicheLine(s) {
+  const lost = (s.excluded || []).filter(e => e.reason !== 'watch-reserve-full');
+  const rejected = Math.max(0, s.fetched - s.shown - (s.elsewhere || 0));
+  const bits = [`${s.shown} shown`, `${rejected} rejected`, s.elsewhere ? `${s.elsewhere} shown in band` : null, `${lost.length} crowded out`].filter(Boolean);
+  const best = lost.filter(e => num(e.expGpDay) > 0).sort((a, b) => b.expGpDay - a.expGpDay)[0];
+  const weak = (s.picks || []).filter(p => num(p.expGpDay) != null).sort((a, b) => a.expGpDay - b.expGpDay)[0];
+  if (best && weak && best.expGpDay > weak.expGpDay)
+    bits.push(`⚠ ${best.name} ~${fmtP(best.expGpDay)}/d beats digest row ${weak.name} ~${fmtP(weak.expGpDay)}/d (${best.reason}, never fetched)`);
+  if (!s.shown) bits.push('nothing: ' + (s.subFloor || (!s.gated ? 'gate empty' : topReason(s.why) || 'no row survived')));
+  return `${s.mode}: ${bits.join(' · ')}`;
+}
+function topReason(why = []) {
+  const n = new Map();
+  for (const w of why) n.set(w, (n.get(w) || 0) + 1);
+  const [top] = [...n].sort((a, b) => b[1] - a[1]);
+  return top ? `${top[0]} x${top[1]}` : null;
+}
+
+/* Every lane gets a slot. lanes = [{ label, n, top, note }]; n null = the lane did not run. */
+export function coverageLine(lanes) {
+  return 'coverage: ' + lanes.map(l => l.n == null ? `${l.label} NOT RUN` : `${l.label} ${l.n}${l.top ? ` (top ${l.top})` : ''}${l.note ? ` ${l.note}` : ''}`).join(' · ');
 }

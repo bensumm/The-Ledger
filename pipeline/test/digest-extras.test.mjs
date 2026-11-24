@@ -5,7 +5,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sizeTranche } from '../lib/capital/book-model.mjs';
-import { buildDigestRows, sizeDigestRow, sizeLine, digestDiffLine, readDigestPrev, writeDigestPrev } from '../lib/render/digest-extras.mjs';
+import { buildDigestRows, sizeDigestRow, sizeLine, digestDiffLine, readDigestPrev, writeDigestPrev, nicheLine, coverageLine } from '../lib/render/digest-extras.mjs';
 import { selectDigestRows, buildDigestBlock } from '../commands/screen-flip-niches.mjs';
 import { digestReachAndPlacement } from '../lib/signal/digest.mjs';
 
@@ -79,6 +79,7 @@ test('diff: NEW, changed and GONE with a reason only when known', () => {
 });
 test('diff: first run prints nothing, a partial scan never reports GONE', () => {
   assert.equal(digestDiffLine(null, [D(1, 'fill-now')]), null);
+  assert.equal(digestDiffLine(null, [], { partial: ['digest empty'] }), null);
   const line = digestDiffLine(PREV, [D(1, 'fill-now')], { now: 1e12, partial: ['band windows 3/24'] });
   assert.match(line, /^Δ skipped: partial scan \(band windows 3\/24\); baseline from 0m ago kept$/);
 });
@@ -99,4 +100,24 @@ test('digest-prev: scoped, survives corruption, never overwritten by a partial o
     assert.equal(Object.keys(JSON.parse(readFileSync(f, 'utf8')).scopes).length, 8);
     assert.ok(readDigestPrev(f, 's19'));
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+const N = { mode: 'band', gated: 192, fetched: 103, shown: 44, excluded: [{ id: 1, name: 'Maul', expGpDay: 5e6, reason: 'thin-reserve-full' }, { id: 2, name: 'Rune', expGpDay: 1e5, reason: 'top-n-full' }], picks: [{ name: 'A', expGpDay: 9e6 }, { name: 'B', expGpDay: 3e6 }] };
+test('niche line: counts close, and the crowded-out name prints only when it beats the weakest digest row', () => {
+  assert.equal(nicheLine(N), 'band: 44 shown · 59 rejected · 2 crowded out · ⚠ Maul ~5m/d beats digest row B ~3m/d (thin-reserve-full, never fetched)');
+  assert.equal(nicheLine({ ...N, picks: [{ name: 'B', expGpDay: 5e6 }] }), 'band: 44 shown · 59 rejected · 2 crowded out');
+  assert.ok(!nicheLine({ ...N, picks: [] }).includes('Maul'));
+  assert.ok(!nicheLine({ ...N, picks: [{ name: 'B', expGpDay: null }] }).includes('Maul'));
+  const watch = nicheLine({ ...N, excluded: [{ ...N.excluded[0], reason: 'watch-reserve-full' }] });
+  assert.match(watch, /0 crowded out$/);
+  assert.match(nicheLine({ ...N, mode: 'churn', elsewhere: 50 }), /44 shown · 9 rejected · 50 shown in band/);
+});
+test('niche line: an empty niche says why', () => {
+  assert.match(nicheLine({ mode: 'churn', gated: 0, fetched: 0, shown: 0 }), /nothing: gate empty$/);
+  assert.match(nicheLine({ mode: 'churn', gated: 9, fetched: 3, shown: 0, why: ['falling', 'x', 'falling'] }), /nothing: falling x2$/);
+  assert.match(nicheLine({ mode: 'band', gated: 9, fetched: 3, shown: 0, subFloor: 'sub-floor fallback (liquidity)' }), /nothing: sub-floor fallback \(liquidity\)$/);
+});
+test('coverage line: a lane that did not run says so', () => {
+  assert.equal(coverageLine([{ label: 'Dips', n: 4, note: 'added / 15 watched' }, { label: 'Band big-tickets', n: 0 }, { label: 'Churn', n: 6, top: 'Rune' }, { label: 'Amplitude', n: null }]),
+    'coverage: Dips 4 added / 15 watched · Band big-tickets 0 · Churn 6 (top Rune) · Amplitude NOT RUN');
 });

@@ -114,5 +114,13 @@
     "files": [
       "pipeline/commands/verify-pick.mjs"
     ]
+  },
+  {
+    "id": "digest-size-line",
+    "decideBy": "2027-02-28",
+    "passTest": "the owner used the printed window size on 5+ scan buys; otherwise delete the size line and its digestRows fields",
+    "files": [
+      "pipeline/lib/render/digest-extras.mjs"
+    ]
   }
 ]
