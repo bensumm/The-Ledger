@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @does One PASS/FAIL/UNKNOWN line per pick: fresh trio at your bid and ask, print age, break-even, buy limit
-// @ask "verify X at bid/ask", "is this pick still good?", "re-check my picks" => "<item>@<bid>:<ask>" [...] [--why]
+// @ask "verify X at bid/ask", "is this pick still good?", "re-check my picks" => "<item>@<bid>:<ask>[@<flip-niche>]" [...] [--why]
 // @read run in the same turn as the rec; pitch only a PASS, which is not a fill guarantee
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,18 +15,20 @@ import { regenerate } from './sync-fills.mjs';
 import { windowStats, hourProfile, reachMargin, reachMarginTrigger, recencySplit, RECENT_NIGHTS, floorCeilingTrack, formatFloorCeiling } from '../../js/windowread.mjs';
 import { breakEven, QUICK_FRESH_MIN } from '../../js/quotecore.js';
 import { netMargin, isBond } from '../../js/money-math.js';
+import { MODE_KEYS } from '../../js/flip-niches.mjs';
 
 const TRIO = path.join(path.dirname(fileURLToPath(import.meta.url)), 'read-window-range.mjs');
-const USAGE = 'usage: node pipeline/commands/verify-pick.mjs "<item>@<bid>:<ask>" [...more] [--why]';
+const USAGE = `usage: node pipeline/commands/verify-pick.mjs "<item>@<bid>:<ask>[@<flip-niche>]" [...more] [--why]   niche: ${MODE_KEYS.join('|')} (default band)`;
+const TRIO_NICHES = ['band', 'churn', 'scalp'];
 const fin = Number.isFinite;
 const fmt = n => fin(n) ? n.toLocaleString('en-US') : '—';
 const signed = n => fin(n) ? (n < 0 ? '−' : '+') + fmt(Math.abs(n)) : '—';
 
 export function parsePick(text) {
-  const m = /^([^@]+)@([^:@]+):([^:@]+)$/.exec(text);
+  const m = /^([^@]+)@([^:@]+):([^:@]+)(?:@([^:@]+))?$/.exec(text);
   if (!m || !m[1].trim()) return null;
-  const bid = parseGp(m[2]), ask = parseGp(m[3]);
-  return bid > 0 && ask > 0 ? { item: m[1].trim(), bid, ask } : null;
+  const bid = parseGp(m[2]), ask = parseGp(m[3]), niche = m[4] ? m[4].trim().toLowerCase() : 'band';
+  return bid > 0 && ask > 0 && MODE_KEYS.includes(niche) ? { item: m[1].trim(), bid, ask, niche } : null;
 }
 
 // A rule returns {} (clean), { fail } or { unknown }.
@@ -116,12 +118,14 @@ export function noListedLimit(f) { return f.limit && f.limit.limit == null ? { f
 
 export function peakWindowMissing(f) { return f.peak?.resolved ? {} : { unknown: 'no peak window could be derived' }; }
 
+export function nicheUnfolded(f) { return f.niche && !TRIO_NICHES.includes(f.niche) ? { fail: `niche ${f.niche}: read-window-range has no ${f.niche} fold, so the band fold judged this` } : {}; }
+
 export function bondFee(f) { return f.bond ? { unknown: 'bond retrade fee not modelled here' } : {}; }
 
 // WARN never changes the status: a skill caution, not one of the owner's FAIL conditions.
-export const WARN_RULES = new Set([bidPullingAway, askAbovePeakLevel, staleReach, bidNotTouched, noListedLimit]);
+export const WARN_RULES = new Set([bidPullingAway, askAbovePeakLevel, staleReach, bidNotTouched, noListedLimit, nicheUnfolded]);
 export const RULES = [staleLivePrint, sellEarlyTrigger, bidPullingAway, foldUnderBreakEven, fadingBidAboveTodaysLow, exitRarelyPrints,
-  noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, noListedLimit, peakWindowMissing, bondFee];
+  noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, noListedLimit, peakWindowMissing, bondFee, nicheUnfolded];
 
 export function judge(f) {
   const gate = RULES.filter(r => !WARN_RULES.has(r)).map(r => r(f));
@@ -150,7 +154,7 @@ export function formatWhy(f) {
   ].map(s => '    ' + s).join('\n');
 }
 
-export function fieldsFrom({ name, bid, ask, trio, series, latest, limit, bond = false, now = new Date() }) {
+export function fieldsFrom({ name, bid, ask, niche = null, trio, series, latest, limit, bond = false, now = new Date() }) {
   const ageMin = t => fin(t) ? (now / 1000 - t) / 60 : null;
   const live = latest && { low: latest.low ?? null, high: latest.high ?? null, lowAgeMin: ageMin(latest.lowTime), highAgeMin: ageMin(latest.highTime) };
   const isStale = age => !(fin(age) && age <= QUICK_FRESH_MIN);
@@ -164,7 +168,7 @@ export function fieldsFrom({ name, bid, ask, trio, series, latest, limit, bond =
   const trioLeg = (l, hit) => l ? { hit, n: l.nDays, recency: l.recency, rm: l.reachMargin } : null;
   const pk = trio?.windowScored?.peak;
   return {
-    name, bid, ask, bond, be: breakEven(bid), net: netMargin(bid, ask), maxBuy: trio?.exit?.maxBuy, live, fold: trio?.fold ?? null, limit,
+    name, bid, ask, niche, bond, be: breakEven(bid), net: netMargin(bid, ask), maxBuy: trio?.exit?.maxBuy, live, fold: trio?.fold ?? null, limit,
     track: st ? formatFloorCeiling(floorCeilingTrack(st.days, { forming: st.forming }), fmt) : null,
     day: st && { bid: dayLeg('bid', bid), ask: dayLeg('ask', ask), todayLow: st.forming?.low ?? null },
     peak: trio ? { resolved: trio.window?.resolvedFrom === 'peak', window: trio.window, level: pk?.level, gap: pk?.user?.gap ?? null, rarelyPrints: trio.exit?.rarelyPrints,
@@ -172,7 +176,7 @@ export function fieldsFrom({ name, bid, ask, trio, series, latest, limit, bond =
   };
 }
 
-export const trioArgs = (id, { bid, ask }) => [String(id), '--ask', String(ask), '--bid', String(bid), '--exit', String(ask), '--window', 'peak', '--profile', '--json'];
+export const trioArgs = (id, { bid, ask, niche }) => [String(id), '--ask', String(ask), '--bid', String(bid), '--exit', String(ask), '--window', 'peak', '--profile', '--json', ...(TRIO_NICHES.includes(niche) ? ['--niche', niche] : [])];
 async function runTrio(id, p) {
   const { stdout } = await promisify(execFile)(process.execPath, [TRIO, ...trioArgs(id, p)], { maxBuffer: 1 << 26, timeout: 60000 });
   return JSON.parse(stdout).items[0];
@@ -198,7 +202,7 @@ async function main() {
     if (r) {
       const or = v => v.catch(() => null);
       const [latest, series, trio] = await Promise.all([or(fetchLatest(r.id)), or(fetchTs(r.id, '1h')), or(runTrio(r.id, p))]);
-      f = fieldsFrom({ name: r.name, bid: p.bid, ask: p.ask, trio, series, latest, bond: isBond(r.id),
+      f = fieldsFrom({ name: r.name, bid: p.bid, ask: p.ask, niche: p.niche, trio, series, latest, bond: isBond(r.id),
         limit: buys && limitWindow({ buys: buys.get(r.id) || [], limit: map.byId[r.id]?.limit ?? null }) });
     }
     console.log(formatLine(f, judge(f)));

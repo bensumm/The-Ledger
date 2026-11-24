@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parsePick, judge, formatLine, formatWhy, fieldsFrom, RULES, staleLivePrint, sellEarlyTrigger, bidPullingAway, foldUnderBreakEven,
-  fadingBidAboveTodaysLow, exitRarelyPrints, noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, peakWindowMissing, bondFee, noListedLimit, trioArgs, WARN_RULES } from '../commands/verify-pick.mjs';
+  fadingBidAboveTodaysLow, exitRarelyPrints, noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, peakWindowMissing, bondFee, noListedLimit, trioArgs, nicheUnfolded, WARN_RULES } from '../commands/verify-pick.mjs';
 import { breakEven, maxBuyForExit, QUICK_FRESH_MIN } from '../../js/quotecore.js';
 import { netMargin } from '../../js/money-math.js';
 
@@ -32,7 +32,7 @@ ok('the clean fixture passes every rule', () => { assert.deepEqual(judge(base())
 ok('a skill caution warns and never changes the status', () => {
   const f = base({ peak: peak({ gap: 5, level: 1095 }) }), j = judge(f);
   assert.equal(j.status, 'PASS'); assert.equal(j.warns.length, 1); assert.match(formatLine(f, j), /warn: ask 5 above/);
-  assert.deepEqual([...WARN_RULES].map(r => r.name).sort(), ['askAbovePeakLevel', 'bidNotTouched', 'bidPullingAway', 'noListedLimit', 'staleReach']);
+  assert.deepEqual([...WARN_RULES].map(r => r.name).sort(), ['askAbovePeakLevel', 'bidNotTouched', 'bidPullingAway', 'nicheUnfolded', 'noListedLimit', 'staleReach']);
   assert.equal(judge(base({ day: day({ bid: leg({ recency: null }) }) })).status, 'PASS');
 });
 ok('a bid out of reach at the peak is not a warning: only the all-day bid counts', () => { assert.deepEqual(bidPullingAway(base({ peak: peak({ bid: leg({ rm: bad }) }) })), {}); });
@@ -84,7 +84,7 @@ for (const [rule, name, f, re, u] of cases) {
   ok(`${rule.name}: silent on the clean fixture (${name})`, () => assert.deepEqual(rule(base()), {}));
 }
 ok('every rule in RULES has a flipping case or the window case', () => {
-  const tested = new Set([...cases.map(c => c[0]), peakWindowMissing, bondFee, noListedLimit]);
+  const tested = new Set([...cases.map(c => c[0]), peakWindowMissing, bondFee, noListedLimit, nicheUnfolded]);
   for (const r of RULES) assert.ok(tested.has(r), r.name);
   assert.equal(tested.size, RULES.length);
 });
@@ -123,10 +123,21 @@ ok('bid above ask on real numbers fails', () => {
 });
 
 ok('parsePick accepts k/m/b, decimals, commas and an id', () => {
-  assert.deepEqual(parsePick('Soul rune@371:395'), { item: 'Soul rune', bid: 371, ask: 395 });
-  assert.deepEqual(parsePick('566@1.2k:1.25k'), { item: '566', bid: 1200, ask: 1250 });
-  assert.deepEqual(parsePick('Twisted bow@1.5b:1.61b'), { item: 'Twisted bow', bid: 1.5e9, ask: 1.61e9 });
-  assert.deepEqual(parsePick('Fang@30.1m:31,200,000'), { item: 'Fang', bid: 30100000, ask: 31200000 });
+  assert.deepEqual(parsePick('Soul rune@371:395'), { item: 'Soul rune', bid: 371, ask: 395, niche: 'band' });
+  assert.deepEqual(parsePick('566@1.2k:1.25k'), { item: '566', bid: 1200, ask: 1250, niche: 'band' });
+  assert.deepEqual(parsePick('Twisted bow@1.5b:1.61b'), { item: 'Twisted bow', bid: 1.5e9, ask: 1.61e9, niche: 'band' });
+  assert.deepEqual(parsePick('Fang@30.1m:31,200,000'), { item: 'Fang', bid: 30100000, ask: 31200000, niche: 'band' });
+});
+ok('parsePick takes a niche suffix and refuses an unknown one', () => {
+  assert.equal(parsePick('Soul rune@371:395@Churn').niche, 'churn');
+  assert.equal(parsePick('Fang@30m:31m@amplitude').niche, 'amplitude');
+  assert.equal(parsePick('Fang@30m:31m@nope'), null);
+});
+ok('trioArgs passes --niche only where read-window-range has that fold; the rest is a warn', () => {
+  assert.deepEqual(trioArgs(566, { bid: 371, ask: 395, niche: 'churn' }).slice(-2), ['--niche', 'churn']);
+  assert.ok(!trioArgs(566, { bid: 371, ask: 395, niche: 'amplitude' }).includes('--niche'));
+  assert.match(nicheUnfolded(base({ niche: 'amplitude' })).fail, /no amplitude fold/);
+  assert.deepEqual(nicheUnfolded(base({ niche: 'churn' })), {});
 });
 for (const s of ['', 'Soul rune', 'Soul rune@371', '@371:395', 'Soul rune@x:395', 'Soul rune@371:', 'Soul rune@0:395', 'Soul rune@-5:395', 'Soul rune@371:395:400', 'a@b@1:2'])
   ok(`parsePick refuses ${JSON.stringify(s)}`, () => assert.equal(parsePick(s), null));

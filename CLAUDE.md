@@ -91,7 +91,7 @@ import `js/quotecore.js`, so their numbers match the app's.
 | "show my open lots", "last closed flips", "what did I do with X?", "lots of X" | `read-book.mjs --lots [N] [--item "<item or id>"]` — offline after the local sync: lots only, no live fetch; times are local |
 | "can I buy more X?", "how much limit left?", "when does it reset?" | `read-buy-limits.mjs ["<item>" ...]` |
 | "what should I ask if I'll wait H?", "how long to clear at price P?", "the EV-max ask?" | `read-exit-surface.mjs "<item>" [--horizon 6,24,48] [--price gp]` — askStar LOST the backtest (join-exit-ev): description only, price nothing off it |
-| "is X in the last scan?", "what grade was X?", "why isn't X in the scan?", "what got crowded out?" | `read-rows.mjs [screen\|quote\|watch] --item "<item>" [--mode band] [--cols a,b] [--limit N] [--drops] [--digest] [--list]` — reads the saved report only, never the market: check the printed age and re-run the read when it says STALE |
+| "is X in the last scan?", "what grade was X?", "why isn't X in the scan?", "what got crowded out?" | `read-rows.mjs [screen\|quote\|watch] --item "<item>" [--mode M] [--drops] [--digest] [--list] [--notes]` — reads the saved report only, never the market: check the printed age and re-run the read when it says STALE |
 | "how's X trending?", "today vs prior days", "where's X likely tomorrow?" | `read-trajectory.mjs "<item>" [...]` — inform-only |
 | "how's my watchlist?", "the items I track/follow" | `read-watchlist.mjs --verbose` — rows are gate-exempt and the grade is always (thin): read the net, not the letter |
 | "is X a falling knife?", "stepping down by the hour?", "does the ask clear midday?" | `read-window-range.mjs "<item>" --hourly --days 3 [--ask gp]` — hourly: read the raw per-day columns (the drift slope was a non-signal, deleted) |
@@ -100,7 +100,7 @@ import `js/quotecore.js`, so their numbers match the app's.
 | "loop positions AND scan", "check positions every X and scan every Y" | `run-loop.mjs [--watch min] [--scan min] [--min-idle gp] [--no-sync]` — the scan runs only when deployable capital clears --min-idle; /loop at the gcd of the two cadences |
 | "what can I reverse-flip?", "sell a keep into the peak", "harvest a held item" | `screen-flip-niches.mjs --mode reverse` — reverse: the regime read is INVERTED (rising is bad), inform-only, owned keeps only |
 | "sync", "refresh the book" (scan and positions already do it) | `sync-fills.mjs` — --publish pushes to main: only when Ben asks |
-| "verify X at bid/ask", "is this pick still good?", "re-check my picks" | `verify-pick.mjs "<item>@<bid>:<ask>" [...] [--why]` — run in the same turn as the rec; pitch only a PASS, which is not a fill guarantee |
+| "verify X at bid/ask", "is this pick still good?", "re-check my picks" | `verify-pick.mjs "<item>@<bid>:<ask>[@<flip-niche>]" [...] [--why]` — run in the same turn as the rec; pitch only a PASS, which is not a fill guarantee |
 | "watch/monitor my positions", "run a flipping session", "keep an eye on X" (drive with /loop, pipeline/MONITORING.md) | `watch-positions.mjs ["<item>" ...]` |
 | "watch for dips/flushes", "run the dip loop" | `watch-positions.mjs --dip ["<item>" ...]` |
 <!-- /registry:asks -->
