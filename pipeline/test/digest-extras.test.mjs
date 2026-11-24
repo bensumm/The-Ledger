@@ -1,8 +1,11 @@
 /** digest-extras.test.mjs — the lines under the scan digest and the numeric rows behind them. PURE. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { sizeTranche } from '../lib/capital/book-model.mjs';
-import { buildDigestRows, sizeDigestRow, sizeLine } from '../lib/render/digest-extras.mjs';
+import { buildDigestRows, sizeDigestRow, sizeLine, digestDiffLine, readDigestPrev, writeDigestPrev } from '../lib/render/digest-extras.mjs';
 import { selectDigestRows, buildDigestBlock } from '../commands/screen-flip-niches.mjs';
 import { digestReachAndPlacement } from '../lib/signal/digest.mjs';
 
@@ -65,4 +68,35 @@ test('size line: null limit prints limit unknown; the label separates it from de
   assert.ok(!/Infinity|NaN|unlimited/.test(line));
   assert.equal(line.split('\n').length, 1);
   assert.equal(sizeLine([]), null);
+});
+
+const D = (itemId, verdict) => ({ itemId, name: 'i' + itemId, mode: 'band', verdict, grade: 'A' });
+const PREV = { ts: 1e12, rows: { 1: { name: 'i1', mode: 'band', verdict: 'fill-now' }, 2: { name: 'i2', mode: 'band', verdict: 'fill-now' }, 9: { name: 'i9', mode: 'churn', verdict: 'fill-now' }, 8: { name: 'i8', mode: 'band', verdict: 'fill-now' } } };
+test('diff: NEW, changed and GONE with a reason only when known', () => {
+  const line = digestDiffLine(PREV, [D(1, 'fill-now'), D(2, 'mirage top'), D(3, 'fill-now')], { now: 1e12 + 14 * 60e3, goneWhy: (id, p) => id === 9 ? `${p.mode} falling` : null });
+  assert.equal(line, 'Δ vs 14m ago: NEW i3 · i2 fill-now→mirage top · GONE i8, i9 (churn falling)');
+  assert.equal(digestDiffLine({ ts: 1e12, rows: { 1: PREV.rows[1] } }, [D(1, 'fill-now')], { now: 1e12 + 3 * 3600e3 }), 'Δ vs 3.0h ago: no change');
+});
+test('diff: first run prints nothing, a partial scan never reports GONE', () => {
+  assert.equal(digestDiffLine(null, [D(1, 'fill-now')]), null);
+  const line = digestDiffLine(PREV, [D(1, 'fill-now')], { now: 1e12, partial: ['band windows 3/24'] });
+  assert.match(line, /^Δ skipped: partial scan \(band windows 3\/24\); baseline from 0m ago kept$/);
+});
+test('digest-prev: scoped, survives corruption, never overwritten by a partial or empty scan', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'digest-prev-')), f = join(dir, 'digest-prev.json');
+  try {
+    assert.equal(readDigestPrev(f, 'all'), null);
+    assert.equal(writeDigestPrev(f, 'all', [D(1, 'a')], { now: 5 }), true);
+    assert.equal(writeDigestPrev(f, 'band', [D(2, 'b')], { now: 6 }), true);
+    assert.equal(writeDigestPrev(f, 'all', [D(3, 'c')], { now: 7, partial: ['x'] }), false);
+    assert.equal(writeDigestPrev(f, 'all', [], { now: 8 }), false);
+    assert.deepEqual(readDigestPrev(f, 'all'), { ts: 5, rows: { 1: { name: 'i1', mode: 'band', verdict: 'a', grade: 'A' } } });
+    assert.ok(readDigestPrev(f, 'band').rows[2]);
+    writeFileSync(f, '{oops');
+    assert.equal(readDigestPrev(f, 'all'), null);
+    assert.equal(writeDigestPrev(f, 'all', [D(4, 'd')]), true);
+    for (let i = 0; i < 20; i++) writeDigestPrev(f, 's' + i, [D(1, 'a')], { now: 1e15 + i });
+    assert.equal(Object.keys(JSON.parse(readFileSync(f, 'utf8')).scopes).length, 8);
+    assert.ok(readDigestPrev(f, 's19'));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

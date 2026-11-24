@@ -647,7 +647,7 @@ const LAPS_PER_DAY_CEIL = Math.floor(86400 / LIMIT_WINDOW_SEC);   // = 6 — the
 // MIRAGE_PLACEMENT (the "mirage top" ask-side placement bar, PLACEHOLDER n≈0) MOVED to
 // js/estimators/families.mjs (EF1(b), PLAN-ESTIMATOR-FIDELITY) — it now also bounds the churn
 // ask-reach exemption there, so the digest rule and the rank/fold bound share ONE constant (imported above).
-import { buildDigestRows, sizeDigestRow, sizeLine } from '../lib/render/digest-extras.mjs';
+import { buildDigestRows, sizeDigestRow, sizeLine, digestDiffLine, readDigestPrev, writeDigestPrev } from '../lib/render/digest-extras.mjs';
 import { MIRAGE_REACH_FRAC, digestReachAndPlacement } from '../lib/signal/digest.mjs';
 
 // roiPct(er): after-tax per-TURN ROI% off the rank estimate — er.net (per-unit tax-net) ÷ er.pair.bid.
@@ -749,6 +749,12 @@ export function digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, m
 // The cross-niche digest candidate pool, filled while niches render and printed ONCE after the RUN_MODES
 // loop via realLog. --digest-gated. Rides the last-report dump; stays out of screen.json (the app).
 const DIGEST_ROWS = [];
+const digestPrevPath = () => join(REPO_ROOT, 'pipeline', '.cache', 'digest-prev.json');
+const DISPLAY_FLAGS = ['mode', 'digest', 'verbose', 'full', 'stats', 'publish', 'raw'];
+const digestScope = () => JSON.stringify([RUN_MODES, POSTURE, Object.entries(A).filter(([k]) => !DISPLAY_FLAGS.includes(k)).sort()]);
+const DROP_WHY = new Map();   // 'mode:id' -> why a fetched candidate is not in that niche's rows
+const PARTITION_WHY = 'shown in band';
+const dropWhy = (mode, id, why) => DROP_WHY.set(mode + ':' + id, why);
 // collectDigestRow(...): compute the realizable capEff + the `rankKey` TIE-BREAK + the verdict for
 // one surfaced candidate and push it into DIGEST_ROWS. Skips sub-floor rows (NOT qualified picks, §3.4) and
 // held rows (Workstream B's positions read owns those). rankKey = capEff × deployable capital ≈ after-tax
@@ -1146,7 +1152,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // rescue (even if a later gate drops the row), and discardReason maps 1:1 onto the disc counters.
     const sv = surviveMode(mode, row, ph, { phaseRescue: PHASE_RESCUE, posture: POSTURE, thin: s.thin, series5m: series5m && series5m.get(s.id), held: HELD_IDS.has(s.id) });
     if (sv.rescued) disc.rescued++;
-    if (!sv.keep) { disc[sv.discardReason]++; continue; }
+    if (!sv.keep) { disc[sv.discardReason]++; dropWhy(mode, s.id, sv.discardReason); continue; }
     const rescued = sv.rescued;
     const name = map.byId[s.id]?.name || ('#' + s.id);
     if (sv.heldFallingOverride) informNotes.push({ id: s.id, text: `⚠ ${name}: shown despite falling (${mode} normally excludes fallers) — you HOLD this item; price-to-clear, not a buy signal` });
@@ -1188,6 +1194,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     const vworst = worstStatus(vres);
     if (vworst === 'reject') {
       disc.reject++;
+      dropWhy(mode, s.id, flags(vres).filter(f => f.status === 'reject').map(f => f.key).join('+') + ' reject');
       for (const f of flags(vres)) if (f.status === 'reject') rejReasons[f.reason] = (rejReasons[f.reason] || 0) + 1;
       continue;
     }
@@ -1442,7 +1449,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // whose retrade fee eats the spread, a spread niche's 24h-avg pair underwater after tax, a ZGS-style
     // ROI-bind. Drop it silently (counted in --stats). This is a RENDER drop, NOT a gate/survive stage, so
     // the pinned gateCandidates→rankAndSlice→surviveMode funnel + the replay goldens are unaffected.
-    if (er.net <= 0) { disc.negNet++; continue; }
+    if (er.net <= 0) { disc.negNet++; dropWhy(mode, s.id, 'net under 0'); continue; }
     // Step 2b: the same test against the pair we actually PRINT. Step 2 above reads the thesis's posted
     // pair; this reads estimatePair's net at the rendered Est. buy/Est. sell, which differs whenever the
     // sell model moves the exit. Why the second gate exists, and why the floor is per-niche: the
@@ -1459,6 +1466,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     if (estShown && !HELD_IDS.has(s.id) && !WATCHLIST_IDS.has(s.id)
         && belowAdmitNet(FLIP_NICHES[mode], estShown.estNet)) {
       disc.subBeNet++;
+      dropWhy(mode, s.id, 'net under 0 at the shown pair');
       skippedNames.push(`${name} (net ${fmt(estShown.estNet)}/u shown)`);
       // PP0: asymEr rides along so the ledger entry below can log the SAME asym shadow a surfaced row
       // carries. It is in scope here — computed earlier in this same `for (const s of survivors)`
@@ -1473,7 +1481,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // high-volume commodities. Disjoint by margin, ZERO loss (band's gate never showed a sub-MIN_ROI row).
     // Render-stage + --mode-all-only (the `partition` flag) → standalone --mode churn is unchanged and the
     // gate-stage replay goldens are unaffected.
-    if (partition && er.pair.bid > 0 && (er.net / er.pair.bid * 100) >= MIN_ROI) { disc.partition++; continue; }
+    if (partition && er.pair.bid > 0 && (er.net / er.pair.bid * 100) >= MIN_ROI) { disc.partition++; dropWhy(mode, s.id, PARTITION_WHY); continue; }
     // G1 (PLAN-GRADE-REWORK — Fix F): the four-cap chain now lives INSIDE rateItem (js/rating.mjs
     // applyGradeCaps), applied in ONE fixed order (thin → phase-basing → sub-floor → reach). The render
     // site simply hands rateItem the cap VALUES/flags for this row instead of stacking capGrade calls
@@ -2269,7 +2277,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
     const stats = ts1h ? windowStats(ts1h, { nights: AMP_NIGHTS, wStart: 0, wEnd: 0 }) : null;
     const bondOpt = { bond: isBond(s.id), guide: (guide && guide[s.id] != null) ? guide[s.id] : null };
     const ar = amplitudeRanges(stats, live, { holdDays: AMP_HOLD_DAYS, askQ: AMP_ASK_Q_EFF, bidQ: AMP_BID_Q_EFF, ...bondOpt });
-    if (!ar.hasData) { dropped.noHistory++; continue; }
+    if (!ar.hasData) { dropped.noHistory++; dropWhy('amplitude', s.id, 'no history'); continue; }
     // trend / knife guard: hourProfile's trendDominates (the "amplitude is drift" test) + the warm 1h
     // trajectory shape ('knife' = monotone decline). Oscillation around a flat level is the thesis.
     const prof = hourProfile(ts1h, { nights: DIURNAL_NIGHTS });
@@ -2299,7 +2307,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
     }, { holdHorizonDays: AMP_HOLD_DAYS });
     const driftShadow = amplitudeDriftMargin(dae, { entry: ar.ampBid, ...bondOpt });
     const g = amplitudeGate(ar, { trendDominates, knife, oscillating: !!(osc && osc.oscillating), driftMargin: driftShadow });
-    if (!g.pass) { dropped[DROP_KEY[g.reason] ?? 'ampFloor']++; continue; }
+    if (!g.pass) { dropped[DROP_KEY[g.reason] ?? 'ampFloor']++; dropWhy('amplitude', s.id, g.reason); continue; }
     // rank via the EXISTING spine: the 'amplitude' estimator family (pFill = the measured walk-forward
     // round-trip rate (DT1b), ttf =
     // hold horizon, lapUnits = deployable min) → rankScore(net×P÷TTF). capGp = TOTAL REALIZABLE capital
@@ -2309,7 +2317,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series6h, series1
     // The ONLY sizing gate that matters: can you afford ≥1 unit if all lots were liquid?
     // lapUnits floors to 0 when capGp < the trough-bid → the pick is genuinely UNAFFORDABLE at this capital.
     // DROP it (don't show a phantom ~1u); these thin big-tickets legitimately need a bigger pool.
-    if (!(lapUnits >= 1)) { dropped.unaffordable++; continue; }
+    if (!(lapUnits >= 1)) { dropped.unaffordable++; dropWhy('amplitude', s.id, 'unaffordable'); continue; }
     // DT1b: the MEASURED round-trip rate, fitted strictly pre-origin at THIS row's effective quantiles
     // (--amp-ask-q/--amp-bid-q move the levels, so the measurement has to follow them) and at the hold
     // horizon actually being quoted. Falls back to the prior on a thin/absent read — see pFillAmplitude.
@@ -2962,15 +2970,33 @@ async function main() {
   // during the niche renders above (the watchClosely precedent). --digest-gated + printed via `realLog` so it
   // appears even under the AO1 quiet default (console.log is a no-op there) — its own gate, independent of
   // --verbose. It DOES ride the last-report dump; the scope lock it stays behind is screen.json / the app.
-  let digestRows = null;
+  let digestRows = null, diffLine = null, partial = [];
   if (DIGEST) {
     const wfHd = wfArchive();
     const dislocFn = wfHd ? ((id, name) => formatDislocation(
       dislocationRead({ series1h: archiveSeries(wfHd, id, '1h', { days: 120 }), name, limit: map.byId[id]?.limit ?? null }), { fmt: fmtP })) : null;
     const sel = selectDigestRows(DIGEST_ROWS);
+    const prevScan = readDigestPrev(digestPrevPath(), digestScope());
     digestRows = buildDigestRows([...sel.main, ...sel.bigExtra], {
+      prevOf: id => prevScan?.rows[id]?.verdict ?? null,
       sizeOf: r => sizeDigestRow(r, { capital: VALUE_CAPITAL, bought: limitWindow({ buys: BUYS_BY_ITEM.get(r.id), limit: r.limit }).boughtInWindow }),
     });
+    const bandWins = bands ? Object.values(bands).reduce((m, b) => Math.max(m, b.tradedWin), 0) : N_WIN;
+    partial = [
+      !digestRows.length ? 'digest empty' : null,
+      bandWins < N_WIN * 0.75 ? `band windows ${bandWins}/${N_WIN}` : null,
+      coverageWindows < DAILY_COLD ? 'regime archive cold' : null,
+      ...RUN_MODES.filter(m => gated[m].subFloor || !gated[m].cand.length).map(m => `${m} gate empty`),
+    ].filter(Boolean);
+    diffLine = digestDiffLine(prevScan, digestRows, { partial, goneWhy: (id, p) => {
+      if (HELD_IDS.has(id)) return 'now held';
+      if (DIGEST_ROWS.some(r => r.id === id)) return 'ranked out';
+      const g = gated[p.mode], why = DROP_WHY.get(p.mode + ':' + id);
+      if (why) return why;
+      const ex = g?.excluded.find(e => e.id === id);
+      if (ex) return 'no fetch slot: ' + ex.reason;
+      return g && !g.cand.some(c => c.id === id) ? 'off the ' + p.mode + ' gate' : null;
+    } });
     const digestBlock = buildDigestBlock(DIGEST_ROWS, { series1h, disloc: dislocFn });
     REPORTS.push({ kind: 'screen', generatedAt: null, sections: [{ type: 'lines', lines: digestBlock.split('\n'), blank: false }] });
     realLog('\n' + digestBlock + '\n');
@@ -2989,7 +3015,7 @@ async function main() {
   const watchlist = await captureReport(() => runWatchlist(map, ctx, guide, latest, qcache));   // S3: always-scanned watchlist
 
   if (digestRows) {
-    const under = [sizeLine(digestRows)].filter(Boolean);
+    const under = [sizeLine(digestRows), diffLine].filter(Boolean);
     if (under.length) {
       REPORTS.push({ kind: 'screen', generatedAt: null, sections: [{ type: 'lines', lines: under, blank: false }] });
       realLog(under.join('\n') + '\n');
@@ -3044,6 +3070,7 @@ async function main() {
   // AO1: always write the pass's report objects to the last-report dump (one file per invocation), then
   // unless --verbose surface the ONE summary line + path in place of the suppressed markdown.
   const rel = writeLastReport('screen', REPORTS, digestRows ? { digestRows } : {});
+  if (digestRows) writeDigestPrev(digestPrevPath(), digestScope(), digestRows, { partial });
   if (!VERBOSE) realLog(`# screen (quiet default; --verbose for the table) — mode ${MODE}: ${RUN_MODES.map(m => `${m} ${Array.isArray(niches[m]) ? niches[m].length : 0}`).join(', ')} → ${rel} (value/amplitude stay out of screen.json — the app — but ride the dump)`);
 }
 
