@@ -13,6 +13,7 @@
  * signal into a confident claim.
  */
 import { fmt, fmtTurn } from '../../../js/money-format.js';
+import { MODE_KEYS } from '../../../js/flip-niches.mjs';
 import { tax } from '../../../js/quotecore.js';   // the ONE tax impl — shadow net is after-tax like the realized net
 
 // --- NAMED PLACEHOLDER thresholds (audit SHAPE, not tuned magnitudes) --------------------------------
@@ -209,6 +210,9 @@ export function askHeadroomAudit(sugRows = [], retroRows = []) {
   };
 }
 
+// registry niches + the two DELETED ones (spread, rising) whose rows survive in the archive
+const TUNABLE_NICHES = new Set([...MODE_KEYS, 'spread', 'rising']);
+
 /* deriveCandidates(perNiche, sug, opts) → an array of { kind, signal, evidence, pointsAt }.
  * kind ∈ { 'context', 'candidate', 'inform' }. Only 'candidate' is a real tunable anomaly.
  *
@@ -226,7 +230,7 @@ export function deriveCandidates(perNiche, sug, { minN = MIN_N_CANDIDATE } = {})
       evidence: { totalTaken, n: rowsN },
       pointsAt: `no niche-gate change is warranted on taken-rate yet; re-run once fills accumulate` });
   for (const g of perNiche) {
-    if (g.key === '(none)') continue;   // the mode-less bucket (quotes + --positions) is not a niche to tune
+    if (!TUNABLE_NICHES.has(g.key)) continue;   // '(none)' and 'watchlist' are buckets, not niches to tune
     if (g.realisedN >= minN && g.realisedPerAttention != null && g.realisedPerAttention < 0)
       cands.push({ kind: 'candidate', signal: `niche '${g.key}' realized NET-NEGATIVE per unit of attention (${gp(Math.round(g.realisedPerAttention))}/row over realisedN=${g.realisedN})`,
         evidence: { niche: g.key, realisedPerAttention: g.realisedPerAttention, realisedSum: g.realisedSum, n: g.realisedN },

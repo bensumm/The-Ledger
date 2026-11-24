@@ -132,6 +132,12 @@ ok('DOES emit a candidate for a net-negative niche AT/ABOVE the n-floor', () => 
   assert.equal(cand.evidence.niche, 'band');
 });
 
+ok('a non-niche key (watchlist) is never proposed as a niche to tune, a real or historical niche still is', () => {
+  const neg = { realisedN: MIN_N_CANDIDATE, realisedPerAttention: -500, realisedSum: -12000 };
+  const c = deriveCandidates([nicheStat('watchlist', neg), nicheStat('(none)', neg), nicheStat('spread', neg), nicheStat('amplitude', neg)], { rows: [] });
+  assert.deepEqual(c.filter(x => x.kind === 'candidate').map(x => x.evidence.niche).sort(), ['amplitude', 'spread']);
+});
+
 ok('a POSITIVE net-per-attention niche is not a candidate', () => {
   const perNiche = [nicheStat('band', { realisedN: MIN_N_CANDIDATE + 50, realisedPerAttention: 300, realisedSum: 21000 })];
   const c = deriveCandidates(perNiche, { rows: [] });
