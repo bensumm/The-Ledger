@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 3.14
+version: 3.15
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -85,27 +85,18 @@ identical under quiet / `--verbose` / `--full` (modulo `generatedAt`), because t
 render-only — plus `pipeline/.cache/last-report/verify.json` for a candidate you dumped with `--out`
 in §2. Reach for `--full` only when you are debugging the renderer itself.
 
-- **The `◆ asym fill` counts are QUANTILE CONSTANTS read back, not per-item fill rates — relay the
-  whole clause, never just the price and the tally.** _(judgment: honesty discipline over an
-  inform-only note; the wording is enforced in `pipeline/lib/render/emit.mjs` `formatAsymFill`, the ONE
-  home)_ `js/windowread.mjs`'s `asymPair` scores each level against the SAME array the level was drawn
-  from, so `pAsk` comes back 0.86 on the large majority of logged rows and `pBid` 0.29 likewise — 12/14 and
-  4/14, the `ASYM_P_LO`/`ASYM_P_HI` quantiles restated. Treat "printed 12/14d" as a rank position in an
-  in-sample window, never as a probability the offer fills, and never build a ranking or a
-  recommendation on it. Two more things ride with that: the ask ordering guard BINDS on ~71% of rows
-  (the denominator grows with accrual, so ~70% is the durable claim — re-derive the digits rather than
-  quoting them, which is why none appear here), which is why the clause splits `ask X (= live instabuy, above the Y
-  level that printed N/14d)` — the price and the level the count belongs to are DIFFERENT numbers and
-  relaying one as the other is the specific error this wording exists to prevent; and the deep bid is
-  touched roughly 4 days in 14, so it is a resting level to leave sitting, not a fill to plan around.
-  **And the measurement now exists — relay the footer line, it is the number Ben actually needs.**
-  `join-asym-outcomes.mjs` forward-scored the pair off the 1h archive over the accruing pool:
-  the deep bid is touched **17.8%** of the time within 24h (logged `pBid` claims 31.1%), the ask is
-  reached **~24%** given that touch (logged `pAsk` claims 86.8%), and the **round trip completes
-  4.3%** — **1.5% on big-ticket**. The screen prints that once as a trailing `◆ asym fill —` footer
-  under the per-row notes; it is a CLASS rate over the measured pool, never this row's, and touched/reached ≠
-  filled so it bounds a real offer from ABOVE. Read it as: the patient pair is a level worth resting
-  at, not a trade to plan a day around, and on a big-ticket item least of all.
+- **The `◆ asym fill` levels are in-sample QUANTILES, not fill rates — relay the whole clause, never just the
+  price.** _(judgment: honesty discipline over an inform-only note; the wording is enforced in
+  `pipeline/lib/render/emit.mjs` `formatAsymFill`, the ONE home)_ The pair is the 25th-percentile daily low
+  (deep bid) and 80th-percentile daily high (ask) of the last ~14 days; the per-level hit tally was removed
+  because it scored each level against the array it was drawn from (12/14 and 4/14 by construction). The ask
+  ordering guard BINDS on ~70% of rows, which is why the clause splits `ask X (= live instabuy, above the Y
+  high-reach level)` — the price and the quantile level are DIFFERENT numbers and relaying one as the other
+  is the specific error this wording exists to prevent. **Relay the trailing `◆ asym fill —` footer, it is the
+  number Ben needs:** `join-asym-outcomes.mjs` forward-scored the pair off the 1h archive — deep bid touched
+  17.8% within 24h, ask reached ~24% given that touch, round trip **4.3%** (**1.5% on big-ticket**); a CLASS
+  rate, never this row's, and touched/reached ≠ filled so it bounds a real offer from ABOVE. The patient pair
+  is a level worth resting at, not a trade to plan a day around, least of all on a big-ticket item.
 - **A BE-floored `Est. sell` cell is not the whole verdict — read the `patient:` clause inside it
   (PP2).** _(judgment: read-the-row discipline; rendered by `js/estimators/cells.mjs`)_ When the
   reach-fold lands under break-even the cell says `reach-fold floored to BE X — nothing to price above
@@ -202,11 +193,11 @@ by the join commands; the bid/band pressure reads survive.
 
 **Publishing (writing `screen.json`) is now the DEFAULT, every run (Ben, 2026-07-16 — was opt-in
 behind `--publish`).** Publishing here means the LOCAL FILE WRITE only — it is NOT a git commit;
-committing/pushing `screen.json` to `main` stays a wholly separate, deliberate step (the once-a-day
-`/overnight` `sync-fills.mjs --publish` is the only thing that commits it, unrelated to this flag).
+committing/pushing `screen.json` to `main` stays a wholly separate, deliberate step (the on-request
+`sync-fills.mjs --publish` is the only thing that commits it, unrelated to this flag).
 So a bare `screen-flip-niches.mjs` run now keeps the local app's Scan tab (and a future git commit,
 whenever one happens) current with zero extra step. Use `--no-publish` for a throwaway filtered
-console read you don't want left written to disk. `--asym` (or any non-neutral `--est-sell` model)
+console read you don't want left written to disk. Any non-neutral `--est-sell` model (`--asym` is retired)
 still keeps screen.json F1-gated on the neutral estimator — running one just silently skips the
 write that pass instead of erroring (only an EXPLICIT `--publish` alongside it still hard-refuses,
 since that's a real conflict, not an accidental default).
@@ -370,7 +361,7 @@ pass and the held-item exception both read Ben's current book without a separate
 closed a real gap: the prose "sync first, always" was skippable and got skipped (an agent — this
 one — declared a real closed position "just a bug" mid-session off a stale book; the anglerfish
 anchor incident, CHANGELOG 2026-07-16). Phone-trade caveat unchanged: the local sync doesn't ff-pull,
-so an un-pulled *phone* trade only folds in at the once-a-day `/overnight` `sync-fills.mjs --publish`;
+so an un-pulled *phone* trade only folds in at the on-request `sync-fills.mjs --publish`;
 desktop trades are always captured. When `/scan` runs inside `/overnight`, Phase 1 already synced (and
 now the screen syncs again itself regardless — redundant but harmless, both are local/zero-git).
 
@@ -456,7 +447,7 @@ This is the tribal layer the script can't do — apply ALL of these:
     +292k). A band-floor bid watching a riser run away costs more in missed cycles than the floor
     discount saves — that day's chin/ring/jaw floor bids never filled.
   - **away-hours** (~2–8h) and **overnight**: BOTH legs price off the **REST-DAY column of the
-    `⇄ dwell` line** — the full-day distribution levels with their touch tallies — never the live
+    `⇄ dwell` line** — the full-day distribution levels — never the live
     edges. A resting ask at the live instabuy gives away the day's distribution for free (the
     Marlin 3,885 miss), exactly as a near-live chase bid left resting fills into the first dip
     with nobody watching. Size for the good payout if hit (`/overnight`'s fill-realism check
@@ -1025,9 +1016,9 @@ to ask "are we looking at other flip-niches?"; the miss was omission, not a bad 
 
 **Every recommended price states its timing target AND its basis (Ben, 2026-07-05; basis token
 2026-09-10):** a pick's bid and sell are each "X **(basis)**, targeting Y" — the basis is the
-`⇄ dwell` line's own token, `(fill-now)` or `(rest-day, touched k/Nd)`, QUOTED never recomputed —
-and the number is bound to the window/mechanism expected to fill it (e.g. "bid 17.00m (rest-day,
-touched 4/14d) — tonight's 18:00–23:00 trough" / "sell 17.55m (rest-day, reached 7/7d) — the
+`⇄ dwell` line's own token, `(fill-now)` or `(rest-day)`, QUOTED never recomputed —
+and the number is bound to the window/mechanism expected to fill it (e.g. "bid 17.00m (rest-day)
+— tonight's 18:00–23:00 trough" / "sell 17.55m (rest-day, reached 7/7d) — the
 23:00–03:00 UK-morning lift"; a churn item's target can simply be "(fill-now) normal daily
 churn"). A fill-now price is not wrong — it is wrong UNDECLARED on a leg that will rest; the
 dwell-horizon rule (§2) picks the basis. Run the time-of-day `read-window-range.mjs` read the

@@ -58,7 +58,7 @@ import { buysByItem, limitWindow } from '../lib/capital/limits.mjs';   // LM1 �
 import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/market/guideanchor.mjs';   // YP1 advisory
 import { buildItemContext, renderHeldVerdict, renderPathLine, staleBookBanner } from '../lib/market/item-context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line; COD-4 — the shared positions.json-age banner
-import { formatTimedLap, formatAsymFill, asymClassRateNote, dwellSellClassRateNote, formatReachMargin, formatDwell, tallyCounts } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site); formatAsymFill — the shared ◆ asym fill clause pair (screen emits the same line)
+import { formatTimedLap, formatAsymFill, asymClassRateNote, dwellSellClassRateNote, formatReachMargin, formatDwell } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site); formatAsymFill — the shared ◆ asym fill clause pair (screen emits the same line)
 import { loadState, ALERT_PERSIST_MS } from '../lib/thesis/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/thesis/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 additive reverse-flip pending block (read-only)
@@ -290,8 +290,8 @@ export function buildQuoteReport({
   // The gate covers BOTH kinds that print asym-quantile tallies: 'asym' (runItems only — the
   // held-lot asym note was BUILT and REVERTED: on a surface with a Break-even column its net is
   // computed against the asym deep bid, not the lot's basis) and 'dwell' (BOTH surfaces — its
-  // REST-DAY half prints the same in-sample tallies, so positions must carry a class-rate footer
-  // too; a tallies-without-footer surface is the misread the footer exists to kill). A dwell-ONLY
+  // REST-DAY half prints the same quantile levels, so positions must carry a class-rate footer
+  // too; a levels-without-footer surface is the misread the footer exists to kill). A dwell-ONLY
   // surface (positions) gets the SELL-LEG variant — the round-trip rate has no held-lot meaning.
   const noteItems = notes.some(n => n && n.kind === 'asym')
     ? [...notes, { kind: 'asym', text: `asym fill — ${asymClassRateNote()}` }]
@@ -471,7 +471,7 @@ async function runItems() {
     // PART II (PLAN-GRADE-REACH): the asym-fill inform line — deep flush bid → high-reach ask off the
     // day-level quantiles of the SAME in-hand ts1h (zero new fetch; full-day window, ~14 nights). Same
     // inform pattern as the diurnal line above: decision support, never a table/verdict/price input.
-    // P_bid is "rest it as optionality", NEVER a rank weight (doctrine: js/estimators.mjs asymEstimate).
+    // The deep bid is "rest it as optionality" (doctrine: js/estimators.mjs asymEstimate).
     const ast = inp.ts1h ? windowStats(inp.ts1h, { nights: 14, wStart: 0, wEnd: 0 }) : null;
     const ap = ast ? asymPair(ast) : null;
     const ae = ap ? asymEstimate(FLIP_NICHES.band, row, ap) : null;
@@ -480,7 +480,7 @@ async function runItems() {
     const af = ae ? formatAsymFill(ae, ap) : null;
     if (ae) {
       const roi = ae.bid > 0 ? (ae.net / ae.bid * 100).toFixed(1) : null;
-      if (af) notes.push({ kind: 'asym', itemId: id, text: `asym fill: ${af.bidTxt} → ${af.askTxt} · net ${fmt(ae.net)}/u${roi != null ? ` (${roi}%)` : ''} (in-sample quantiles, n≈${ap.nDays})` });
+      if (af) notes.push({ kind: 'asym', itemId: id, text: `asym fill: ${af.bidTxt} → ${af.askTxt} · net ${fmt(ae.net)}/u${roi != null ? ` (${roi}%)` : ''} (quantile levels, n≈${ap.nDays}d)` });
     }
     // ⇄ DWELL — FILL-NOW vs REST-DAY. REST-DAY prints the RAW quantile levels (NOT asymEstimate's
     // guarded pair — its guards pull toward live, the very basis this line separates), net AT them.
@@ -496,7 +496,6 @@ async function runItems() {
         restDay: {
           bid: ap.deepBid, ask: ap.highReachAsk,
           net: (ap.deepBid != null && ap.highReachAsk != null) ? netMargin(ap.deepBid, ap.highReachAsk, bopt) : null,
-          ...(tallyCounts(ap) ?? {}),
           bidReality: ast?.days ? computeReality(ast.days, ap.deepBid, 'bid') : null,
           askReality: ast?.days ? computeReality(ast.days, ap.highReachAsk, 'ask') : null,
           poolLo: ast?.medVolLo ?? null, poolHi: ast?.medVolHi ?? null,
@@ -978,7 +977,7 @@ async function runPositions() {
             sellTag: row.quickStale?.sell ? liveAgeTag(row.quoteAgeMin?.sell, { freshMin: QUICK_FRESH_MIN }) : '',
           },
           restDay: {
-            ask: restAsk, askHit: reachedDays(astHeld.his, restAsk), askN: astHeld.his.length,
+            ask: restAsk, ...(declaredHeld != null ? { askHit: reachedDays(astHeld.his, restAsk), askN: astHeld.his.length } : {}),
             askReality: declaredHeld != null ? null : computeReality(astHeld.days, restAsk, 'ask'),
             askLabel: declaredHeld != null ? 'declared exit' : null,
             net: netMargin(avgCost, restAsk, boptHeld),

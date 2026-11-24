@@ -345,8 +345,8 @@ a harmless NO-OP** (`watch-positions.mjs:55`), kept only for external callers th
 
 **The old "ATTENDED-ONLY by contract" warning here was WRONG and has been deleted.** It stated that the
 sync "pushes to `main` on every filled pass" and that such a loop "must not be left running unattended".
-Neither is true: the local sync is zero-git and pushes nothing — publishing is exclusively the once-a-day
-`/overnight` `sync-fills.mjs --publish`. The mechanism is `runLocalSync`
+Neither is true: the local sync is zero-git and pushes nothing — publishing is exclusively the on-request
+`sync-fills.mjs --publish`. The mechanism is `runLocalSync`
 (`pipeline/lib/reconstruct/sync-invoke.mjs`), which never passes `--publish`. (`check-daemon-safety.mjs`
 is NOT the guard here — it scans `pipeline/daemons/` only, and `watch-positions.mjs` is a command, so it
 is unscanned; citing it would be right-for-the-wrong-reason.) The stale warning was actively harmful: it would make an agent
@@ -721,7 +721,7 @@ print Y+ within 8h)">
 
 Context:
 <the action plan: exact prices with timing targets AND their dwell basis ("X (fill-now |
-rest-day, touched k/Nd), targeting Y" — the `⇄ dwell` line's token), tripwires /
+rest-day), targeting Y" — the `⇄ dwell` line's token), tripwires /
 step-down triggers named, override reason if the dot disagrees with the script>
 
 ────────────────────────────────────────  (separator between items)

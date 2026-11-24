@@ -8,6 +8,18 @@ recent block; the ordering below preserves the original CLAUDE.md sequence.
 
 For anything older or not captured here, the commit history + `git show <sha>` is canonical.
 
+## pipeline 1.9.0 — 2026-11-23 — the circular asym probabilities and `--asym` retired (APP_VERSION 0.76.3)
+
+- **`pAsk`/`pBid` are gone** (`asymPair`, `asymEstimate`, the `asym` shadow, and every "printed/touched k/Nd" tally
+  built on them: `◆ asym fill`, the `⇄ dwell` REST-DAY half, the accumulation table's Day-low bid). Each level was
+  scored against the array it was drawn from, so the tally was the quantile read back. The prices survive and the ask
+  is still a live exit estimator. The asym rank and `screen-flip-niches.mjs --asym` (now a one-line "retired" error)
+  went with them; `tallyCounts` is deleted. Logged history keeps the old fields; `join-asym-outcomes.mjs` tolerates
+  rows without them.
+- **Process guards.** `lint-budget.mjs` (size ceilings, plan cap, provisional expiry), `chores.mjs` +
+  `backup-data.mjs` (self-run private backup, announced outcomes staleness), and tests pinning the archive query
+  plan and `analyze-record` output size. Nightly publish is now on request only.
+
 ## pipeline 1.8.0 — 2026-11-23 — indexed archive reads, the depth model retired, a readable analyze-record (no APP_VERSION bump)
 
 - **`seriesFor` pins `INDEXED BY obs_item`.** With no planner statistics SQLite chose the primary key and

@@ -65,8 +65,8 @@ gh pr merge --squash                # or --squash --auto (auto-merge on green)
 
 **Only `sync-fills.mjs --publish` touches git — a BARE sync pushes NOTHING.** _(judgment: process guardrail)_
 `sync-fills.mjs:87`: `--publish` is the ONLY path that fetches/ff-pulls, commits and pushes; the default
-(and the `--local` synonym) is ZERO-git and just writes the artifacts. That publish runs once a day, at
-`/overnight`, and it rides the admin bypass with a clobber-guard that fast-forwards onto the current
+(and the `--local` synonym) is ZERO-git and just writes the artifacts. That publish runs on request
+and rides the admin bypass with a clobber-guard that fast-forwards onto the current
 `main` before committing. Its add-list is **eight** files — one home, `FILLS-PIPELINE.md` §13.3. On a
 rebase conflict on those files, take the remote side; they're pipeline-owned. No unattended writer exists
 (the 20-min `CofferFillsSync` job was eliminated, §12).

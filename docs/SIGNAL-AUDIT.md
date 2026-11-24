@@ -24,7 +24,7 @@ window, no recency split.
 | `trajectoryRead` (R6: shape retired) | ~~one-shot SHAPE label~~ NO LONGER PRINTED; only floor/ceiling band + `livePos` survive (folded into the fcTrack note); oscillation migrated to `fc.oscillating` | 1h, ~14d | quote + `--positions` (auto) — via the fcTrack note now | ✅ shape retired; unique fields folded (R6) | quote-items / read-window-range notes (fcTrack) |
 | `floorCeilingTrack` (PLAN-DRIFT-VS-CRASH) | floor(lows)/ceiling(highs) tracked SEPARATELY: least-squares slope over recent-N + a floor-BREAK vs prior lookback | 1h, ~14d, recent-5 slope window | quote + `--positions` (auto) | ✅ (best trend primitive in the repo — see §4) | quote-items notes only |
 | `reachMargin` (2026-07-20; R4/R4b slope+wired) | cushion-over/under-level TREND (`projectTrajectory` least-squares SLOPE of the cushion over the last 7 days — R4, was mean-of-halves) + today's live pace vs the reaching-day median | 1h, 7-day recent window, `projectTrajectory` slope | folded automatically into `askExitRead` whenever an ask is scored | ✅ slope-based (R4 fixed the mean-of-halves) | `askExitRead` → quote-items (`quote` + `--positions`) + `read-window-range --ask/--bid`; **now ALSO the digest `trend` column (R4b — the ask-side cushion trend beside reach ✓/✗)** |
-| `asymPair` | day-level deep-bid (p25 quantile) / high-reach-ask (p80 quantile) pair | 1h, ~14d | quote (`asym` note), screen `--asym` (opt-in, unpublished) | ❌ whole-window quantile | quote notes, `asymEstimate` |
+| `asymPair` | day-level deep-bid (p25 quantile) / high-reach-ask (p80 quantile) pair | 1h, ~14d | quote + screen (`asym` note, shadow) | ❌ whole-window quantile | quote notes, `asymEstimate` |
 | `windowClear`/`windowClearDiverges` | within-target-window (not whole-day) reach fraction + volume-pool absorption check | 1h, re-bucketed to the target window | held big-ticket lots (`--positions`), `--ask` reads | ❌ whole-window reach inside the narrower window | quote-items `windowExit` note |
 | `hourProfile` | per-local-hour dip/peak SHAPE (de-trended by day) + trend-dominates flag | 1h, ~14d full-window shape / recent-3 LEVEL | diurnal note, digest soft-buy, forecast anchor | ⚠️ shape=full-window, level=recent-3 | `deriveDiurnalRange`, `softBuyRead`, `diurnalPhase`, `forecast.diurnalForecast`, digest |
 | `deriveDiurnalRange` | bid=dip level (live-guarded), ask=peak level | derived from `hourProfile` | quote diurnal note, `--positions` | inherits `hourProfile` | quote notes, `rebidAdvice` |
@@ -101,10 +101,9 @@ read burns, worst first:
    history: the pre-R5 rule was a whole-window CDF with no recency split, so a fading top still clearing
    the recent-3 bar sailed through — the Searing-page "+7.3% reaching p100/never-prints" shape.
 3. **`asymPair`'s deep-bid/high-reach-ask** — both legs are **whole-14-day quantiles**
-   (`quantLow`/`quantHigh`), with no recency check at all before `asymEstimate` ranks off them. On
-   a regime-shifted item the p80 "reaches 11/14 days" ask can be entirely pre-shift days, same
-   failure as the fang. Currently console/shadow-only (not published), which limits blast radius,
-   but it is the ONE quoted price under `--asym`.
+   (`quantLow`/`quantHigh`), with no recency check at all before `asymEstimate` quotes off them. On
+   a regime-shifted item the p80 ask can be entirely pre-shift days, same
+   failure as the fang. Console/shadow-only (not published), which limits blast radius.
 4. **`windowClear`'s within-window reach fraction** — same whole-window-reach shape as the core
    reach validator, but scoped to a narrower target window (so thinner samples, worse noise) and
    with **no recency split at all** (unlike `reachValidator`/`askExitRead`, which both fold RC1 in).

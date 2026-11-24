@@ -57,7 +57,7 @@ On `screen-flip-niches.mjs` and `quote-items.mjs`, STDOUT replaces Quick+Optimis
 reconciliation-estimator pair + `Net/u (ROI)` + `BE` columns (`js/estimators/pair.mjs` `estimatePair`
 is the full synthesis: Optimistic ∩ diurnal ∩ reach ∩ anchor, with break-even as a display ANNOTATION —
 not an overwrite — since E1). `--raw` restores the
-model-free Quick/Optimistic (and `--asym` implies `--raw`). The app + `screen.json` render the raw
+model-free Quick/Optimistic. The app + `screen.json` render the raw
 table-v2 **decision** cells — the Grade, the rank, and the sort stay F1-gated on the NEUTRAL
 estimator. (The PB4 per-row `reachable` band and the app Scan tab's trial column it fed were RETIRED
 2026-08-30 with the pressure exit estimator — CHANGELOG 0.76.0.) Operating summary:
@@ -129,7 +129,7 @@ estimator. (The PB4 per-row `reachable` band and the app Scan tab's trial column
   The model only PROPOSES a
   price — the shell keeps the non-skippable floors (ordering clamps, BE floor, declared-exit anchor) so no
   model can price past break-even or the live book. A NON-NEUTRAL active model keeps its uncalibrated
-  prices out of `screen.json` — since publishing is default-on, such a pass (like `--asym`) **silently
+  prices out of `screen.json` — since publishing is default-on, such a pass **silently
   downgrades** the publish to off; only an EXPLICIT `--publish` alongside it hard-REFUSES (loud stderr +
   exit). Either way the deployed app + `screen.json` + the grade cutoffs stay F1-gated on the NEUTRAL
   estimator, and the neutral `reach-fold` runs as a SHADOW every pass (the resolver's `shadow` list) so
@@ -746,17 +746,13 @@ placeholder cutoffs.
   band (per-unit lane) are DISJOINT by margin — churn drops any row clearing `--min-roi`, band shows it.
 - **Asymmetric fill (inform):** the ideal flip is a rare deep entry + a near-certain exit; the
   symmetric p10/p90 pair is 50/50. A `◆ asym fill` line shows the day-level deep-bid → high-reach-ask
-  pair (`asymPair`) with `P_ask` (the rank weight) and `P_bid` as "rest as optionality" (never a rank
-  multiplier). `--asym` flips the whole objective but is F1-gated OFF (it silently downgrades the
-  default-on publish; an explicit `--publish --asym` hard-refuses). **Reading the counts (2026-08-12):**
-  they are PAST TENSE and IN-SAMPLE — `printed 12/14d` is a tally over the days that fitted the quantile,
-  not a forward fill rate. When an ordering guard binds (the live instabuy/instasell has already passed
-  the patient level) the clause names the quoted price and the measured level separately —
-  `ask 220,200 (= live instabuy, above the 218,500 level that printed 12/14d)` — because the count
-  belongs to 218,500, not to 220,200. It deliberately makes NO execution claim about the guarded price:
-  whether `P_ask` is a floor there (the leg transacts now) or a mild overstatement is unresolved, and on
-  a bound row the `⊙ reach/placement` note prints reach at the quoted price on the same basis — read that
-  number rather than transferring this one. Doctrine:
+  pair (`asymPair`) — quantile LEVELS, not fill rates: the in-sample hit tally (`pAsk`/`pBid`) and the
+  asym rank and `--asym` mode were removed (pipeline 1.9.0) because each level was scored against the array
+  it was drawn from. The ask is still a live exit estimator; the forward-measured class rate is the footer
+  (`join-asym-outcomes.mjs`). When an ordering guard binds (the live instabuy/instasell has already passed
+  the patient level) the clause names the quoted price and the quantile level separately —
+  `ask 220,200 (= live instabuy, above the 218,500 high-reach level)` — and makes NO execution claim about
+  the guarded price; the `⊙ reach/placement` note prints independent reach at the quoted price. Doctrine:
   the `asymEstimate` header in `js/estimators/reach.mjs`.
 - **Path-A gp/day is the CONSOLE PRIMARY sort; the grade is a shown BACKUP + live A/B (PLAN-LANE-ADMISSION
   Chunks D+E, owner decision H4).** On the band/churn console + last-report tables the surviving rows are
@@ -813,8 +809,8 @@ accumulation table carries a `Day-low bid` column beside its 2h-band `Bid`. Whic
 the DWELL HORIZON — how long the offer rests unattended (attended / away-hours / overnight) — per
 `/scan` §2 "Entry AND exit aggression follow the DWELL HORIZON", and every relayed price carries
 its basis token (`/scan` §4's output contract). State the horizon with `--dwell=…` so the ledger's
-`dwell` field accrues the fill-now-vs-rest-day retro. The rest-day tallies are in-sample day
-counts, never fill rates (§ the asym honesty rules above); `read-window-range.mjs --window 0-23`
+`dwell` field accrues the fill-now-vs-rest-day retro. The rest-day levels are quantiles,
+never fill rates (§ the asym honesty rules above); `read-window-range.mjs --window 0-23`
 stays the full expansion surface behind the one-line comparison.
 
 When the dip/peak summary isn't enough — sizing a large position, or a break-even that looks stranded —
@@ -1175,7 +1171,7 @@ response an agent needs). Current per-script behavior (facts, not doctrine):
   (`nominateDip` → `dip-watchlist.json`, the "B feeds A" half). A flip-niche empty at the floors re-runs
   beneath it (`subFloorFallback`, grade-capped `C (sub-floor)`, stdout-only). Writing repo-root
   `screen.json` (the app Scan tab) is **DEFAULT-ON every run** (2026-07-16) — `--no-publish` opts out
-  (a throwaway filtered console read). An un-calibrated estimator DOWNGRADES that write: `--asym` or a
+  (a throwaway filtered console read). An un-calibrated estimator DOWNGRADES that write: A
   non-neutral `--est-sell` model **silently skips** the publish so an exploration run needs no
   `--no-publish`; only an EXPLICIT `--publish` alongside one hard-REFUSES
   (loud stderr + exit — `refusePublishIfNonNeutral`). **`--archive-regime` (AF5b) joins that refusal
@@ -1189,7 +1185,7 @@ response an agent needs). Current per-script behavior (facts, not doctrine):
   `flat`→`falling/crash-risk` on a hair-width floor break and vanished from the board — so treat it as
   ~1.7% flip risk (the 2/120 crash-risk study), not the 0/165 same-span headline. Committing
   `screen.json` to git is a separate step
-  (`sync-fills.mjs --publish`, once-a-day `/overnight`); the local write itself touches no git.
+  (`sync-fills.mjs --publish`, on request); the local write itself touches no git.
 - **`watch-positions.mjs`** — watches every position = any committed capital (held inventory PLUS every
   active GE offer). Output: headline alerts → numbers-only table → per-item note block → summary footer.
   Load-bearing: the **sell/list-at + break-even line is ALWAYS emitted on a held lot** (a fill you

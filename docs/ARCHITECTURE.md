@@ -69,6 +69,7 @@ structurally prevented.
 | E14 | Comment volume and dated narrative only ever ratchet DOWN | `pipeline/ci/lint-comments.mjs` (+ `comment-budget.json`) | a file over its baseline, or a new file over NEW_FILE_CAPS |
 | E15 | Every `PLAN-*` reference resolves to a plan on disk | `pipeline/ci/lint-plan-refs.mjs` | a citation to a deleted plan — the only existence guard `plans/` has |
 | E16 | Every gating guard is NAMED in each doc that enumerates the `checks` job | `pipeline/ci/lint-guard-lists.mjs` | a guard added to `checks.yml` but absent from a governed doc — including this table |
+| E17 | Docs and `plans/` only shrink; provisional features expire | `pipeline/ci/lint-budget.mjs` | a doc over its ceiling, an unregistered or expired provisional feature |
 
 E8–E9 are *proposed*: their rule is real but the guard isn't built yet. Until then they're ⚖️ judgment.
 E10–E16 were absent for the whole life of this table, so seven CI-ENFORCED rules read here as ⚖️

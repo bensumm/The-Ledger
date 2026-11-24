@@ -52,7 +52,7 @@
  * estimators + the ESTIMATORS registry + the rank composite (rankScore/estimateRank/quotedPair/fmtTtf).
  * The reach-conditioning helpers moved to ./reach.mjs, the reconciliation price estimator to ./pair.mjs,
  * the render cells to ./cells.mjs; `js/estimators.mjs` is now the barrel re-exporting all four. The
- * families↔reach edge is a runtime function-reference cycle (asymEstimate needs estimatorFor/rankScore;
+ * families↔reach edge is a runtime cycle (reach needs PFILL_ASKREACH_FLOOR;
  * estimateRank needs askReachFactor) — ESM-safe because both uses are at call time, not module eval.
  */
 import { netMargin, clamp } from '../money-math.js';

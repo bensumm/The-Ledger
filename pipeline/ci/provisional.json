@@ -1,0 +1,110 @@
+[
+  {
+    "id": "reach-surface-asks",
+    "decideBy": "2026-12-31",
+    "passTest": "a re-run of join-exit-ev.mjs shows askStar beating the live instabuy; otherwise delete the surface and read-exit-surface.mjs",
+    "files": [
+      "js/reach-surface.mjs",
+      "js/exit-ev.mjs",
+      "pipeline/commands/read-exit-surface.mjs"
+    ]
+  },
+  {
+    "id": "pressure-band",
+    "decideBy": "2026-12-31",
+    "passTest": "a logged bid/band read beats its null in join-reach-outcomes.mjs, or reverse-flip still depends on it; otherwise delete",
+    "files": [
+      "js/windowread.mjs"
+    ]
+  },
+  {
+    "id": "est-blend-weights",
+    "decideBy": "2027-02-28",
+    "passTest": "F1 fits the weights; otherwise replace with the single best estimator",
+    "files": [
+      "js/estimators/sell-models/reach-fold.mjs"
+    ]
+  },
+  {
+    "id": "forecast-horizon-knob",
+    "decideBy": "2027-01-31",
+    "passTest": "a PF2-PF8 surface consumes it; otherwise inline the default",
+    "files": [
+      "js/forecast.mjs"
+    ]
+  },
+  {
+    "id": "reverse-flip-gates",
+    "decideBy": "2027-02-28",
+    "passTest": "at least 5 completed reverse-flip round trips recorded; otherwise delete the mode",
+    "files": [
+      "js/reverseflip.mjs",
+      "pipeline/lib/capital/ownedledger.mjs"
+    ]
+  },
+  {
+    "id": "daemon-accessors",
+    "decideBy": "2027-01-31",
+    "passTest": "read-daemons or a command consumes the export; otherwise unexport",
+    "files": [
+      "pipeline/daemons/cache-warm.mjs",
+      "pipeline/daemons/registry.mjs"
+    ]
+  },
+  {
+    "id": "adaptive-loop-pace",
+    "decideBy": "2027-01-31",
+    "passTest": "AL2 wires pace() into run-loop; otherwise delete pace.mjs",
+    "files": [
+      "pipeline/lib/loop/pace.mjs"
+    ]
+  },
+  {
+    "id": "archive-series-adapter",
+    "decideBy": "2027-01-31",
+    "passTest": "AF5 consumes it on a live surface; otherwise delete",
+    "files": [
+      "pipeline/lib/market/archive-series.mjs"
+    ]
+  },
+  {
+    "id": "fill-surface",
+    "decideBy": "2027-01-31",
+    "passTest": "AB7 ships a consumer; otherwise delete with build-fill-surface.mjs",
+    "files": [
+      "pipeline/lib/market/fill-surface.mjs"
+    ]
+  },
+  {
+    "id": "bulk-range-and-freshness-loaders",
+    "decideBy": "2027-01-31",
+    "passTest": "a ranker or the warm daemon consumes the export; otherwise unexport",
+    "files": [
+      "pipeline/lib/market/marketfetch.mjs"
+    ]
+  },
+  {
+    "id": "probes",
+    "decideBy": "2026-12-31",
+    "passTest": "a probe predicts realized outcomes against its null; otherwise delete the framework and its logs",
+    "files": [
+      "pipeline/lib/market/probes.mjs"
+    ]
+  },
+  {
+    "id": "path-a-ranking",
+    "decideBy": "2027-01-31",
+    "passTest": "Path-A picks out-earn the default lane in join-outcomes; otherwise delete",
+    "files": [
+      "pipeline/lib/signal/patha.mjs"
+    ]
+  },
+  {
+    "id": "fade-alert",
+    "decideBy": "2027-02-28",
+    "passTest": "join-fade-outcomes.mjs still beats the baseline at r=3 on post-2026-09-30 data; otherwise demote FADE to a note",
+    "files": [
+      "pipeline/commands/join-fade-outcomes.mjs"
+    ]
+  }
+]

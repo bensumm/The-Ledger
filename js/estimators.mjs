@@ -23,8 +23,8 @@
  *                              (The PB4 pressure trial is RETIRED — see sell-models/index.mjs.)
  *   ./estimators/cells.mjs     the render/shadow projections: EST_HEADERS, estPairCells, estConfLean.
  *
- * NOTE the families↔reach edge is a runtime function-reference cycle (reach's asymEstimate calls
- * families' estimatorFor/rankScore; families' estimateRank calls reach's askReachFactor) — ESM handles
+ * NOTE the families↔reach edge is a runtime function-reference cycle (reach's askReachFactor reads
+ * families' PFILL_ASKREACH_FLOOR; families' estimateRank calls reach's askReachFactor) — ESM handles
  * it because every use is at call time, not module-evaluation top level. Do NOT add logic to this
  * barrel — it is re-exports only; edit the split files.
  */

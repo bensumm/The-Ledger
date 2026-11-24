@@ -76,7 +76,7 @@ import { resolve, loadPipelineConfig, refusePublishIfNonNeutral, shadowModelsOf 
 import { open as openArchive } from '../lib/market/archive.mjs';   // AF5b — READONLY handle for --archive-regime's 6h read (open() runs schema DDL unless readonly; never take that path on the live DB)
 import { sixHourReader, archiveSeries, LIVE_TS6H_BUCKETS, REGIME_MIN_6H_BUCKETS } from '../lib/market/archive-series.mjs';   // archiveSeries (DT1b) = the ts→timestamp adapter the amplitude walk-forward reads long 1h history through; AF5b — the ONE 6h seam, its 365-bucket pin (phase() depth stability) and the depth floor below which it serves live.
 import { renderReport, renderHtmlTable } from '../lib/render/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer: a niche's table + footer notes build a screen-report printed via renderReport. renderHtmlTable = the Stage-2 HTML twin published into screen.json for the app's Scan tab.
-import { formatTimedLap, formatBasePosition, formatAsymFill, asymClassRateNote, tallyCounts } from '../lib/render/emit.mjs';   // tallyCounts — the accumulation table's Day-low-bid tally   // PLAN-DIURNAL-TIMING DT2 — the ONE shared diurnalTimedLap renderer (also DT3's future quote/watch call site); DT6 — the base-position note renderer; formatAsymFill — the shared ◆ asym fill clause pair (quote emits the same line)
+import { formatTimedLap, formatBasePosition, formatAsymFill, asymClassRateNote } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT2 — the ONE shared diurnalTimedLap renderer (also DT3's future quote/watch call site); DT6 — the base-position note renderer; formatAsymFill — the shared ◆ asym fill clause pair (quote emits the same line)
 // P1: the pure candidate-selection + survival doctrine lives in lib/gatecandidates.mjs —
 // gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice plus renderMode's post-fetch surviveMode.
 // screen-flip-niches.mjs passes its CLI THRESHOLDS / sizing explicitly; fixtures drive them in
@@ -397,15 +397,7 @@ if (!SELL_TOP_MODELS[SELL_MODEL.active]) { console.error(`! unknown --est-sell "
 // PLAN-GRADE-REWORK): this constant is passed in as `phaseCap`, not stacked with a capGrade call here.
 const PHASE_RESCUE = resolve('phaseRescue', { flag: A['phase-rescue'] === true ? true : undefined, config: CONFIG.phaseRescue, fallback: false }).active;
 const PHASE_BASING_GRADE_CAP = 'B';   // named ceiling for a provisional basing-rescue surface
-// --- PART II (PLAN-GRADE-REACH, opt-in): --asym flips the 'asym'-fillShape niches (band/scalp) to the
-// asymmetric deep-buy/reliable-sell objective AS THE QUOTED PRICES AND SORT — optBuy→the flush bid,
-// optSell→the high-reach ask (min/max ordering guards in asymEstimate), rank = net × P_ask ÷ TTF.
-// OFF BY DEFAULT and F1-GATED: the quantiles (ASYM_P_LO/ASYM_P_HI) are n≈14 PLACEHOLDERS, so the
-// DEFAULT table stays byte-identical (the asym read ships only as the inform line + the shadow
-// suggestions.jsonl `asym` field until the shadow A/B graduates it). --publish is refused under --asym
-// so uncalibrated prices can never reach screen.json/the app. Estimate/render-stage only — the pinned
-// gateCandidates→rankAndSlice→surviveMode funnel (replay goldens) is untouched either way.
-const ASYM = resolve('asym', { flag: A.asym === true ? true : undefined, config: CONFIG.asym, fallback: false }).active;
+if (A.asym !== undefined) { console.error('error: --asym was retired — its pAsk/pBid were the quantiles read back, not fill rates (CHANGELOG, pipeline 1.9.0)'); process.exit(1); }
 // --- AF5b (PLAN-ARCHIVE-FIRST-FUNNEL): --archive-regime sources the 6h REGIME series from the LOCAL
 // SQLite archive (1h rows aggregated to aligned 6h windows) instead of a per-item /timeseries call.
 // OFF BY DEFAULT — and off means byte-identical, not "close": the seam (sixHourReader with no handle)
@@ -420,14 +412,13 @@ const ASYM = resolve('asym', { flag: A.asym === true ? true : undefined, config:
 // 20-day appetite).
 const ARCHIVE_REGIME = A['archive-regime'] === true;
 // PC1: the ONE shared publish-refusal guard (replaces the two inline per-flag copies that used to sit
-// beside the PUBLISH declaration). An UN-CALIBRATED / F1-ungraduated estimator (--asym, or a config
+// beside the PUBLISH declaration). An UN-CALIBRATED / F1-ungraduated estimator (a config
 // that enables one) must never reach screen.json / the deployed app: an EXPLICIT
 // --publish under one is a hard user error (loud stderr + exit); a default-on publish is quietly
 // downgraded to off (so an exploration run needs no --no-publish).
 PUBLISH = refusePublishIfNonNeutral({
   publish: PUBLISH, publishExplicit: PUBLISH_EXPLICIT,
   checks: [
-    { on: ASYM, message: '! --asym is experimental (F1-ungraduated) — refusing --publish under it.' },
     { on: SELL_MODEL.active !== 'reach-fold', message: '! a non-neutral --est-sell model is F1-ungraduated — refusing --publish under it (the deployed app + screen.json stay on the neutral estimator).' },
     { on: ARCHIVE_REGIME, message: '! --archive-regime is an UNPROMOTED data-source swap (AF5b) — refusing --publish under it (screen.json + the deployed app stay on the live 6h series until AF6 promotes it).' },
   ],
@@ -455,13 +446,10 @@ const VOL_SRC_LABEL = VOL_SOURCE === 'rolling' ? 'rolling' : 'bulk';
 // --- PLAN-OUTPUT-TABLE: the DEFAULT niche-table stdout view is the reconciliation-
 // estimator pair — Est. buy / Est. sell / Net/u (ROI) / BE with confidence riding in the price cells
 // (js/estimators.mjs estimatePair — reach-folded, BE-floored, PLACEHOLDER model n≈14). `--raw`
-// restores the model-free Quick + Optimistic columns (the honest arithmetic underneath). --asym
-// IMPLIES --raw: under --asym the QUOTED Quick/Optimistic prices ARE the experimental asym pair, so
-// the raw view is the one that shows them (blending two experimental reprices in one cell would be
-// unreadable; the est pair is still computed off the DEFAULT row + logged for F1 either way).
+// restores the model-free Quick + Optimistic columns (the honest arithmetic underneath).
 // STDOUT-ONLY: the --publish screen.json cells are built from the SAME raw stdCells path as before,
 // byte-identical regardless of this flag — the app contract is untouched (no APP_VERSION bump).
-const RAW = A.raw === true || ASYM;
+const RAW = A.raw === true;
 // PART II asym-pair read parameters: full-local-day window (wStart 0 → wEnd 0 wraps to all 24h — the
 // day-level deep-low/high-reach read, distinct from reachValidator's coming-8h window) over ~14 nights.
 const ASYM_NIGHTS = 14;
@@ -1123,11 +1111,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   const headroomNotes = []; // Bar E ask-headroom (PLAN Bar-E-signal): the robust p90 shaved a TRADED in-band top off the quoted ask — sibling inform note, never a gate/drop/grade/screen.json input
   const windowClearNotes = []; // PLAN-WINDOW-CLEAR B2 (churn/scalp): the ask reaches on days but rarely IN its peak window / size ≫ window pool — sibling inform note, never a gate/drop/grade/screen.json input
   const driftNotes = []; // PLAN-OSCILLATION-CYCLE Chunk 6 (band/churn/scalp): the per-thesis drift-adjusted exit — sibling inform note off the shared driftExitFrom, never a gate/drop/grade/screen.json input
-  const asymNotes = [];     // PART II asym-fill (PLAN-GRADE-REACH): deep-bid → high-reach-ask realizable pair + P_ask/P_bid split — sibling inform note, never a gate/drop/grade/screen.json input
+  const asymNotes = [];     // PART II asym-fill (PLAN-GRADE-REACH): deep-bid → high-reach-ask realizable pair — sibling inform note, never a gate/drop/grade/screen.json input
   const repriceNotes = []; // EF1(a) (PLAN-ESTIMATOR-FIDELITY): the dead-bid ↻ repriced-entry alternative — a labeled sibling line, the headline rank/sort untouched (R-1)
   const exemptNotes = [];  // EF1(b): the placement-bounded churn-exemption R-1 visible swap — pre/post rank+P printed on every row the bound de-exempted
   for (const s of survivors) {
-    let row = qcache.get(s.id);   // PART II: reassigned to a repriced CLONE only under --asym (qcache never mutated)
+    const row = qcache.get(s.id);
     if (!row) continue;
     // Part A: phase() over the SAME ts6h this row was already quoted from (zero new fetch) —
     // observational trajectory shape, folded into the Regime cell below when informative.
@@ -1248,8 +1236,8 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // series ALREADY in hand (zero new fetch). 'asym'-fillShape niches only (band/scalp — churn fills
     // every lap, value prices its own term pair). By DEFAULT this is inform+shadow ONLY: an `◆ asym fill`
     // note (same pattern as askHeadroom/diurnal — never a gate/drop/grade/screen.json input) + the lean
-    // `asym` field on suggestions.jsonl beside the symmetric rank (the F1 shadow A/B). P_bid is surfaced
-    // as "rest it as optionality", NEVER a rank multiplier (asymEstimate header is the doctrine home).
+    // `asym` field on suggestions.jsonl beside the symmetric rank (forward-scored by
+    // join-asym-outcomes.mjs). The deep bid is "rest it as optionality" (asymEstimate header is the doctrine home).
     let asymRead = null, asymEr = null;
     if (FLIP_NICHES[mode].fillShape === 'asym' && series1h && series1h.get(s.id)) {
       const st = windowStats(series1h.get(s.id), { nights: ASYM_NIGHTS, wStart: 0, wEnd: 0 });
@@ -1260,7 +1248,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // patient pair inline). Still the ONE formatAsymFill call for this row — the ◆ note below reuses `af`.
     const af = asymEr ? formatAsymFill(asymEr, asymRead) : null;
     // PLAN-OUTPUT-TABLE: the diurnal profile + the reconciliation estimate (Est. buy/sell) — computed
-    // off the DEFAULT row (before any --asym reprice) from data ALREADY in hand (the Leg-B 1h series,
+    // off the row from data ALREADY in hand (the Leg-B 1h series,
     // the bid/ask reach reads above) — zero new fetch. prof/dr are stored on the row and REUSED by the
     // Diurnal timing block below (same pure math, computed once). The est pair is logged to the
     // suggestions ledger unconditionally (the F1 accrual) and rendered as the DEFAULT table columns
@@ -1396,14 +1384,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       const rl = est.confidence.relief;
       informNotes.push({ id: s.id, text: `${name}: reach-relief — liquid book (${fmt(row.volDay)}/d, buy limit ~${(rl.sizeRatio * 100).toFixed(1)}% of flow) softens the ask-reach fold ${Math.round(rl.relief * 100)}%${rl.debiasedTop != null ? `; top de-biased to ${fmt(rl.debiasedTop)} (≤ observed 24h high)` : ''} (PLACEHOLDER, n=1)` });
     }
-    // --asym (F1-GATED, off by default): the asym pair BECOMES the quoted prices — a repriced CLONE
-    // (ordering guards already applied by asymEstimate; qcache and the raw momentum tell untouched).
-    if (ASYM && asymEr) row = { ...row, optBuy: asymEr.bid, optSell: asymEr.ask, optNet: asymEr.net };
     // P6b: the per-thesis RANK at the thesis's OWN quoted pair (spec.priceBasis) — net, P(fill), TTF all
     // evaluated at that same pair. reach = the BID-fill prob (entry); askReach = the two-leg exit discount.
     // EF1 (PLAN-ESTIMATOR-FIDELITY): askPlacement bounds the churn exemption (b); er also carries the
     // dead-bid `repriced` alternative (a) and the `pLegs` split (c) — all additive, null/false when idle.
-    let er = estimateRank(FLIP_NICHES[mode], row, { reach: reachExtra, askReach: askReachExtra, askPlacement: digestAskPlacement });
+    const er = estimateRank(FLIP_NICHES[mode], row, { reach: reachExtra, askReach: askReachExtra, askPlacement: digestAskPlacement });
     // EF1(b) R-1 visible swap: when the placement bound DROPPED this row's churn exemption, the rank/P
     // changed (a real reorder of the churn board) — print pre AND post on the row's note + log rankPre,
     // so the first passes carry both numbers (gate-on-error-cost-not-n: visible, cheap, reversible).
@@ -1429,15 +1414,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       const roiR = rp.bid > 0 ? (rp.net / rp.bid * 100).toFixed(1) : null;
       repriceNotes.push({ id: s.id, text: `${name}: quoted bid ${fmt(er.pair.bid)} is DEAD (entry P~${er.pLegs.entry.toFixed(2)} < ${DEADBID_PFILL_FLOOR} floor — ${bidTok}) → repriced entry at live ${fmt(rp.bid)}: net ${rp.net >= 0 ? '+' : ''}${fmt(rp.net)}/u${roiR != null ? ` (${roiR}%)` : ''} · rank ~${fmtP(Math.round(rp.rank))} P~${rp.pFill.toFixed(2)} (sell ${fmt(rp.ask)} ${askTok}) — alternative only, headline rank/sort unchanged (EF1(a), PLACEHOLDER n≈0)` });
     }
-    // --asym sort flip: rank = net(asym pair) × P_ask ÷ TTF — P_ask is the ONLY fill weight (§II.1; the
-    // bid-reach P and the Part-I ask-reach discount both step aside), and r.score/sort follow the rank.
-    if (ASYM && asymEr) er = { ...er, pFill: { value: asymEr.pAsk, n: asymRead.nDays, basis: 'ask-reach-asym' }, rank: rankScore({ net: er.net * er.lapUnits, pFill: asymEr.pAsk, ttfSec: er.ttf.value }) };
-    // the ◆ asym fill inform line (one line per item — the compact-output rule). Shows the realizable
-    // asymmetric pair + both reach fractions; the deep bid is FREE OPTIONALITY (rest it, expect ~pBid×n
-    // fills), the ask is the near-certain exit. Under --asym these ARE the quoted numbers (say so).
+    // the ◆ asym fill inform line (one line per item — the compact-output rule): the realizable asymmetric
+    // pair; the deep bid is FREE OPTIONALITY (rest it), the ask a high-reach exit level.
     if (asymEr) {
       const roi = asymEr.bid > 0 ? (asymEr.net / asymEr.bid * 100).toFixed(1) : null;
-      if (af) asymNotes.push({ id: s.id, text: `${name}: ${af.bidTxt} → ${af.askTxt} · net ${fmt(asymEr.net)}/u${roi != null ? ` (${roi}%)` : ''} · asym-rank ${fmtP(Math.round(asymEr.rank))}${ASYM ? ' — QUOTED (--asym)' : ''}` });
+      if (af) asymNotes.push({ id: s.id, text: `${name}: ${af.bidTxt} → ${af.askTxt} · net ${fmt(asymEr.net)}/u${roi != null ? ` (${roi}%)` : ''}` });
     }
     // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2: no DC3 demand-tilt inform note here — it went with
     // `demandRegime` (an Extension-B demand-cycle read, never a rank/gate input).
@@ -1780,7 +1761,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // the app render) — an app Probes column is a separate, APP_VERSION-bumping step (out of PM1 scope).
   const anyProbe = useRows.some(r => r.probeStr);
   // PLAN-OUTPUT-TABLE: the DEFAULT print is the reconciliation-estimate view (Est. buy/sell replace
-  // Quick+Optimistic; Grade moves after Regime); --raw (and --asym, which implies it) prints the
+  // Quick+Optimistic; Grade moves after Regime); --raw prints the
   // model-free view exactly as before. STDOUT-ONLY: r.cells (the raw layout) is what --publish ships
   // to screen.json either way, so the app contract is byte-identical regardless of the view.
   let printHeaders, printCells, estExplainer = null;
@@ -1837,8 +1818,8 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   for (const n of noteTexts(headroomNotes)) footerLines.push(`⤴ ask headroom — ${n}`);
   for (const n of noteTexts(windowClearNotes)) footerLines.push(`ℹ window-clear — ${n} — days-reach ≠ lap-clear (placeholder, n≈0)`);
   for (const n of noteTexts(driftNotes)) footerLines.push(`ℹ drift-exit — ${n}`);
-  // PART II: the asym-fill inform block — decision support only (P_bid = optionality annotation, never a
-  // rank input by default; the shadow `asym` ledger field is the F1 A/B data). The class-rate line is
+  // PART II: the asym-fill inform block — decision support only (the shadow `asym` ledger field is the
+  // forward-scoring data). The class-rate line is
   // emitted ONCE, after the rows, and only when a row actually printed: it is a CLASS rate over the
   // measured pool, so per-row placement would read as this item's fill probability. Wording — and the
   // pool size — are emit.mjs's constants, never restated here.
@@ -1944,8 +1925,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       const tsAcc = series1h && series1h.get(r.id);
       if (tsAcc) {
         const apAcc = asymPair(windowStats(tsAcc, { nights: 14, wStart: 0, wEnd: 0 }));
-        const tAcc = apAcc ? tallyCounts(apAcc) : null;
-        if (apAcc && apAcc.deepBid != null && tAcc) { dayLow = `${fmtP(apAcc.deepBid)} (touched ${tAcc.hB}/${tAcc.nB}d)`; anyDayLow = true; }
+        if (apAcc && apAcc.deepBid != null) { dayLow = fmtP(apAcc.deepBid); anyDayLow = true; }
       }
       accCells.push([
         { t: String(i + 1) },
@@ -1962,8 +1942,8 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     });
     stanza.push({ type: 'lines', blank: false, lines: [`Overnight accumulation & capital (~${OVERNIGHT_SPAN_H}h span; bid→sell + up-to units + running capital — take lines top-down until your stated capital runs out):`] });
     stanza.push({ type: 'table', blank: false, headers: accHeaders, rows: accCells });
-    const accFootLines = [`(Up-to units = min(buy limit × 2, 8/24 × 10% × Vol/d) — an UPPER BOUND: assumes fills at your bid, prorates daily volume flat across the quiet hours, prices in no fill probability. Pair it with the fill-realism / Diurnal read above. Sell never below break-even. Day-low bid = the REST-DAY deep level (in-sample touch tally, not a fill rate) — an unattended overnight bid's honest home; the Capital math still keys the Bid column.)`];
-    if (anyDayLow) accFootLines.push(`(Day-low tallies — ${asymClassRateNote()})`);
+    const accFootLines = [`(Up-to units = min(buy limit × 2, 8/24 × 10% × Vol/d) — an UPPER BOUND: assumes fills at your bid, prorates daily volume flat across the quiet hours, prices in no fill probability. Pair it with the fill-realism / Diurnal read above. Sell never below break-even. Day-low bid = the REST-DAY deep level (a quantile, not a fill rate) — an unattended overnight bid's honest home; the Capital math still keys the Bid column.)`];
+    if (anyDayLow) accFootLines.push(`(Day-low bid — ${asymClassRateNote()})`);
     stanza.push({ type: 'lines', blank: false, lines: accFootLines });
   }
   // Build 2 — per-row velocity tag: descriptive per-item velocity (fast/slow · median fill · % unfilled)
@@ -2939,8 +2919,6 @@ async function main() {
   // AF5b: name the data source and the archive/live split HONESTLY — an all-archive claim would be
   // wrong the moment one item is missing from the archive, and the fallback is silent by design.
   if (ARCHIVE_REGIME) printArchiveRegimeBanner('survivor pool; watchlist quotes below add more', realLog);
-  // PART II: --asym is loudly experimental — repriced quotes + asym sort on the 'asym'-fillShape niches.
-  if (ASYM) console.log(`⚠ --asym EXPERIMENTAL (F1-ungraduated): band/scalp QUOTED prices are the asymmetric deep-bid → high-reach-ask pair and the sort is net × P_ask ÷ TTF — placeholder quantiles (n≈14), NOT the calibrated default. churn/value unchanged.`);
   // realLog, not console.log: a degradation disclosure a verbosity flag can suppress is not a disclosure
   // (printArchiveRegimeBanner's rule, applied at one site and missed at this one).
   if (coverageWindows < DAILY_COLD) realLog(`(⚠ regime-proxy archive is COLD — only ${coverageWindows}/${Math.round(DAILY_DAYS * 24 / DAILY_STEP_H)} windows; fetch-pool ordering is degraded until it warms up)`);

@@ -49,8 +49,8 @@ so `positions.json`/`fills.json` reflect everything the exchange log captured ov
 them below. The DEFAULT is **local / zero-git** (rebuild only, no fetch/commit/push), so it's cheap; run
 it unconditionally, never inferring freshness from how long you were away. **Phone-trade caveat:** the
 local read doesn't ff-pull, so an un-pulled *phone* overnight trade folds in only at the next `/overnight`
-`sync-fills.mjs --publish` (or a manual `git fetch`); a desktop-RuneLite overnight session is captured
-locally. Publishing to the deployed app is the once-a-day `/overnight` job — `/morning` is a local read.
+`sync-fills.mjs --publish` (on request, or a manual `git fetch`); a desktop-RuneLite overnight session is captured
+locally. Publishing to the deployed app is on request — `/morning` is a local read.
 
 - **Booked numbers** ← `positions.json` (`closed` = after-tax realized P/L; `open` = new
   inventory) + new `fills.json` events — fresh as of the sync you just ran.

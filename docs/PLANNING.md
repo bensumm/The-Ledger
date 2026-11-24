@@ -17,6 +17,12 @@ itself proves wrong, fix it HERE (reconciliation, not append — the CLAUDE.md r
 4. **Execute** per PLAN.md's Executor rules + dispatch model (coordinator + Opus subagents,
    worktree lanes only for parallel work, hand-serialized landing).
 
+## Before opening a plan
+
+- Name the **decision it would change**, and what gets **deleted** if the answer is "no effect".
+- `plans/` has a ceiling that only comes down (`lint-budget.mjs`): finish or delete one first. Target: five.
+- An unproven feature it ships gets a `pipeline/ci/provisional.json` entry in the same commit.
+
 ## Required sections of any plan
 
 - **Context / diagnosis.** The problem in the owner's words + root causes CONFIRMED in code

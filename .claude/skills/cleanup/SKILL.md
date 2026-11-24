@@ -38,6 +38,7 @@ node pipeline/ci/lint-skills.mjs
 node pipeline/ci/lint-docs.mjs
 node pipeline/ci/lint-comments.mjs
 node pipeline/ci/lint-plan-refs.mjs
+node pipeline/ci/lint-budget.mjs
 node pipeline/ci/lint-guard-lists.mjs
 ```
   ⚠ This list must stay BYTE-FOR-BYTE the gating set in `checks.yml`'s `checks` job — and

@@ -290,7 +290,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `quote-items.mjs` renders it as the `⏳ softBuy` note on held lots + bare quotes (threading the `fc`
   `pushTrajectory` returns), and `screen-flip-niches.mjs`'s digest soft-buy column delegates to the SAME
   helper (ONE implementation); inform-only, n≈0, null profile / no fc ⇒ plain cue) + `asymPair` (PART II PLAN-GRADE-REACH 2026-07-12 — the day-level
-  deep-bid/high-reach-ask realizable pair + P_ask/P_bid, consumed by `js/estimators.mjs` `asymEstimate`
+  deep-bid/high-reach-ask realizable pair (levels only; no in-sample probabilities), consumed by `js/estimators.mjs` `asymEstimate`
   for the `◆ asym fill` inform line + the `asym` suggestions-ledger shadow field) + `demandPressure`/`reachableBand`
   (depth-exit Extension A PB1 2026-07-15 — the pressure-driven reachable band: `s=ln(medVolHi/medVolLo)`
   sets each side's headroom `base ± band·φ(±s)·reliability` off the recent central daily level (RC1 reused)
@@ -959,7 +959,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `pipeline/lib/market/compose.mjs` `resolve()` precedence chain (**CLI flag > this file > hardcoded fallback**).
   Its ABSENCE is the default state and produces byte-identical behavior to the pre-PC1 inline defaults;
   do not commit one just to have it. Read (once, cached) by `loadPipelineConfig()`. Minimal shape:
-  `{ "mode": "band", "volSource": "rolling", "sellModel": "reach-fold", "asym": false, "phaseRescue": false }`
+  `{ "mode": "band", "volSource": "rolling", "sellModel": "reach-fold", "phaseRescue": false }`
   (any subset — an unset key falls through to the hardcoded fallback). Consumer: `compose.mjs`, via
   `screen-flip-niches.mjs`/`quote-items.mjs`/`watch-positions.mjs`.
 - `suggestions.jsonl` — tracked, append-only suggestions ledger (O1): every emitted
@@ -1108,7 +1108,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   present, falling back to client-side rendering for a screen.json published before this field
   existed. **Publishing is now the DEFAULT every run**
   (2026-07-16, `--no-publish` opts out) — the local file write only, never a git commit (that stays the
-  once-a-day `/overnight` `sync-fills.mjs --publish`). Also carries an OPTIONAL top-level `analysis`
+  on-request `sync-fills.mjs --publish`). Also carries an OPTIONAL top-level `analysis`
   string (2026-07-16) — a judgment blurb rendered above the tables on the Scan tab (`#scanAnalysis`,
   `js/ui.js` `renderScan`), set via `pipeline/commands/set-scan-analysis.mjs` (a separate, zero-refetch
   patch command — the analysis is the judgment PASS OVER an already-published scan, not part of the
@@ -1297,7 +1297,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `*.test.mjs` suites + `fixtures/`; plus the two pipeline docs and generated data files.
   - **Workflow CLIs (`pipeline/commands/*.mjs`, run directly):** `sync-fills.mjs` (parse logs →
     `fills.json`/`positions.json`/`offers.json`; **DEFAULT is LOCAL / zero-git** — the cheap in-session
-    book read run at the top of every `/scan` + `/positions`; **`--publish` is the once-a-day `/overnight`
+    book read run at the top of every `/scan` + `/positions`; **`--publish` is the on-request
     commit + push** that fetches/ff-pulls phone trades and updates the deployed app; `--local` = an
     explicit synonym for the default — LW1, exported `regenerate()` core),
     `watch-log.mjs` (LW1 local daemon — `fs.watch` the exchange-logger dir + `regenerate()`
@@ -1393,7 +1393,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     multi-GB live DB) and best-effort — an unavailable/locked archive degrades every read to live. PRICES
     are untouched (live) and **`--publish` is REFUSED** under it; the flag is ALSO stamped into
     `suggestions.jsonl`'s logged params as `archiveRegime:true`, because that ledger is TRACKED and pushed
-    to main by the once-a-day `/overnight` publish and the `--publish` refusal does NOT cover it — without
+    to main by the on-request publish and the `--publish` refusal does NOT cover it — without
     the marker an unpromoted-source run is indistinguishable from a live one in the F1 record forever
     (any F1/retro consumer must EXCLUDE flagged rows until AF6 promotes). Prints the archive/live split,
     the `shallow` count (series too short for `regimeDrift`, served live instead — see
@@ -1446,7 +1446,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     escrow — a small live fetch of the resting-bid ids classifies each bid deep-vs-committed); a **sync step rides with the watch pass
     by default** (2026-07-12 — `sync-fills.mjs --local`: rebuilds fills/positions/offers.json from the
     exchange logs so positions always reads a FRESH book, ZERO git like the watch-log daemon — the loop never
-    pushes to `main`, so publishing stays the overnight flow's attended job and cron-firing the loop can't
+    pushes to `main`, so publishing stays an attended, on-request job and cron-firing the loop can't
     breach the no-unattended-writer invariant; `--no-sync` opts out); state in `.cache/loop-state.json`;
     prints a `next due:` footer naming each action's next-due LOCAL time + the earliest; pure driver, streams
     the sub-scripts' stdout, no fetch/writes of its own), `declare-thesis.mjs` (YT1 #4 — CLI to set/clear/list the SESSION
@@ -1688,6 +1688,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     falsifier for the §4 make-or-break question; the realized truth is `retrojoin.mjs`→`/analyze`. Pure
     core `replayAmplitudePick`/`dayBuckets` fixture-pinned `pipeline/test/join-amplitude.test.mjs`; `--json`
     dumps the per-pick array),
+    **`backup-data.mjs`** (private off-repo copy of the trading record to `COFFER_BACKUP_DIR` or
+    `~/The-Ledger-backup`; zero-git; stamps `.cache/last-backup`. Pinned by `process-guards.test.mjs`),
+    **`pipeline/lib/config/chores.mjs`** (`dueChores`/`runChores` — runs the backup and announces stale
+    outcomes from `runLocalSync`; `COFFER_NO_CHORES` opts out),
+    **`pipeline/ci/lint-budget.mjs`** (doc-size and plan-count ceilings in `doc-budget.json`, expiry dates in
+    `provisional.json`; gating),
     **`pipeline/lib/signal/digest.mjs`** (2026-08-25, PLAN-PIPELINE-SEPARATION) — the digest's ask-reach
     INTERPRETATION, extracted from `screen-flip-niches.mjs`: which basis the reach column reads
     (`digestReachFrac` → the one shared `reachFraction` on the recent-3 basis), the stale-live-print guard
@@ -1713,8 +1719,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     measured: was the deep bid actually TOUCHED, and if so was the high ask REACHED within H hours?
     **The measured pair is nothing like the displayed one.** Over the pool `ASYM_MEASURED_ROWS`/
     `ASYM_MEASURED_ITEMS` record (`emit.mjs` — read them there, they accrue) at the locked
-    decisive spec (entry ≤24h, exit ≤24h from the touch): entry **17.8%** against a logged `pBid` of
-    31.1%, exit-given-entry **24.2%** against a logged `pAsk` of **86.8%**, and a **4.3% round trip**.
+    decisive spec (entry ≤24h, exit ≤24h from the touch): entry **17.8%** against a (since-removed) logged `pBid` of
+    31.1%, exit-given-entry **24.2%** against a logged `pAsk` of **86.8%**, and a **4.3% round trip**. Rows logged
+    before pipeline 1.9.0 still carry those fields; newer rows do not, and the scorer tolerates both.
     The logged numbers are the `ASYM_P_LO`/`ASYM_P_HI` quantiles read back out (PLAN §2b), so this is
     the size of the fiction, NOT a model comparison — do not report it as "the estimator was 62pp
     optimistic". **DT1 GENERALISES, and hardest exactly where the anchor lived**: big-ticket rows
@@ -2403,7 +2410,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (the OPTIONAL config, read once + cached, absent ⇒ `{}` ⇒ every default stands byte-identically) + the ONE
     shared `refusePublishIfNonNeutral({publish, publishExplicit, checks})` guard (replaces the per-flag inline
     publish-refusal copies in `screen-flip-niches.mjs`). No fetch/clock; pure of side
-    effects on import (config read is lazy). Consumers: `screen-flip-niches.mjs` (mode/vol-source/asym/phase-rescue/
+    effects on import (config read is lazy). Consumers: `screen-flip-niches.mjs` (mode/vol-source/phase-rescue/
     `sellModel` via `--est-sell` + the `modes` config array driving `--mode all`'s flip-niche set), `quote-items.mjs` +
     `watch-positions.mjs` (`sellModel` via `--est-sell=…`; the retired pressure-exit sugar now errors). Pinned by `compose.test.mjs`),
     `render.mjs` (PLAN-VIZ-LAYER — the ONE render layer between the pipeline's DATA and the
@@ -2453,9 +2460,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     repriced-entry alternative, `DEADBID_PFILL_FLOOR` 0.10 n≈0 — a labeled alternative, never the headline
     rank). Callers passing no `askPlacement` (quote/watch/app Finder/amplitude) are byte-identical**);
     `asymEstimate(spec,row,asymPair)`
-    (PART II PLAN-GRADE-REACH — the asymmetric deep-buy/reliable-sell estimate: rank = net × P_ask ÷ TTF,
-    P_bid is annotation-only, ordering guards; feeds the inform line + the `asym` ledger shadow field +
-    `screen-flip-niches.mjs --asym`); `estimatePair(spec,row,extra,{nudge,sellModel})` + `entryDoctrine`/`estPairCells`/`estConfLean`/
+    (PART II PLAN-GRADE-REACH — the asymmetric deep-buy/reliable-sell pair `{bid, ask, net, nDays}` with the
+    ordering guards; feeds the inform line + the `asym` ledger shadow field; `--asym`, the asym rank and the
+    in-sample `pAsk`/`pBid` were removed in pipeline 1.9.0); `estimatePair(spec,row,extra,{nudge,sellModel})` + `entryDoctrine`/`estPairCells`/`estConfLean`/
     `EST_HEADERS` (PLAN-OUTPUT-TABLE 2026-07-13 + REVISIONS — the RECONCILIATION estimator behind the
     console-default `Est. buy`/`Est. sell` columns: `Est. buy` is STRATEGY-AWARE (`entryDoctrine(spec)` off
     the existing falling/priceBasis fields — scalp near-live · value trough · **band + churn both price the
@@ -2599,8 +2606,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     consumers, not note-render sites, so only the computation moved, not the output shape).
     **`asymClassRateNote()` + `ASYM_RT_24H_PCT` / `ASYM_RT_24H_BIG_PCT` / `ASYM_MEASURED_ROWS` /
     `ASYM_MEASURED_ITEMS`** (PLAN-PATIENT-PAIR §7, 2026-08-24) — the ONE-TIME class-rate FOOTER that rides
-    under the per-row clauses above. `formatAsymFill`'s counts are in-sample tallies, which each row says;
-    what no row could say is how often the shape actually completes. `join-asym-outcomes.mjs` measured it:
+    under the per-row clauses above. `formatAsymFill`'s levels are in-sample quantiles; what no row could say
+    is how often the shape actually completes. `join-asym-outcomes.mjs` measured it:
     round trip **~4.3%** within 24h, **~1.5%** big-ticket. It is a FUNCTION, not a template literal, so no
     call site can restate the wording, and it is emitted ONCE per surface — `screen-flip-niches.mjs` pushes
     it into `footerLines` gated on `asymNotes.length`, `quote-items.mjs`'s `buildQuoteReport` appends it to a
@@ -2619,35 +2626,28 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     with the `◆` sigil, deriving the expected line from this function rather than pasting it.
 
     **`formatAsymFill(ae, ap, {fmt})` (2026-08-12)** is the ONE home for the `◆ asym fill` clause pair —
-    `quote-items.mjs` and `screen-flip-niches.mjs` both emit that line and had written the wording twice.
-    Returns `{bidTxt, askTxt}`; it exists so a reach COUNT is never printed against a price it was not
-    measured at. `asymEstimate`'s ordering guards can move bid/ask off the quantile levels `pAsk`/`pBid`
-    were counted at, so when a guard binds the clause names the quoted price and the measured level
-    separately — `ask 220,200 (= live instabuy, above the 218,500 level that printed 12/14d)` — and makes
-    **no execution claim**: an earlier draft said "clears now", which `js/quotecore.js`'s own header
-    contradicts (n=4 real round trips, the quick legs reversed against the true fill order). Whether `pAsk`
-    is a floor or a mild overstatement at the guarded price is UNRESOLVED — on a bound row the adjacent
-    `⊙ reach/placement` note prints reach at that price on the same basis and comes in below `pAsk`, so
-    this clause states only what was measured and leaves the reader the neighbouring number. Counts are
-    past tense (in-sample tallies, never forward rates) and use `pAsk`'s OWN denominator via `asymPair`'s
-    `nAsk`/`nBid` — `nDays` includes days with no print, which rendered 10/12 as "12/14d". `fmtP`, not
-    `fmt`: bucketed rendering collapsed a sub-bucket guard gap into two identical prices. Null-degrades.
+    `quote-items.mjs` and `screen-flip-niches.mjs` both emit that line. Returns `{bidTxt, askTxt}` — quantile
+    LEVELS with no hit-count tally (the `pAsk`/`pBid` tally was the quantile read back out and was removed in
+    pipeline 1.9.0). `asymEstimate`'s ordering guards can move bid/ask off the quantile levels, so when a guard
+    binds the clause names the quoted price and the level separately — `ask 220,200 (= live instabuy, above
+    the 218,500 high-reach level)` — and makes **no execution claim**: an earlier draft said "clears now",
+    which `js/quotecore.js`'s own header contradicts. `fmtP`, not `fmt`: bucketed rendering collapsed a
+    sub-bucket guard gap into two identical prices. Null-degrades.
     **DT6** (2026-07-23) adds `formatBasePosition(bp)` — a one-liner over `js/termstructure.mjs`
     `basePosition()`'s already-computed `{pct,days,n,label}`: `"base pXX of the <N>d range · <label>"`,
     or null on a degraded read (never a fabricated percentile). `screen-flip-niches.mjs` calls it for
     every band/churn/amplitude survivor off the SAME `termStructure()` result already computed for
     `floorValidator`.
-    **`formatDwell({fillNow, restDay, side}, {fmt})` + `tallyCounts` (dwell-aware pricing, 2026-09-10)** —
+    **`formatDwell({fillNow, restDay, side}, {fmt})` (dwell-aware pricing, 2026-09-10)** —
     the ONE renderer for the core-tier `⇄ dwell` line: FILL-NOW (live edges, per-TIME) vs REST-DAY (the
-    full-day distribution levels + in-sample touch tallies, per-FLIP) side by side, born of two
+    full-day distribution levels + reality clauses, per-FLIP) side by side, born of two
     rest-all-day legs priced at the live edges (the bludgeon/Marlin miss). Consumers: `quote-items.mjs`
     runItems (`side:'both'` — REST-DAY = `asymPair`'s RAW quantile levels, never `asymEstimate`'s
     guarded pair, net computed AT those levels) and runPositions (`side:'ask'`, ALL lots — REST-DAY =
-    the declared thesis exit when set (labelled, never claused) else the asym high-reach ask, nets vs
-    the LOT via `netMargin(avgCost, level)`); `screen-flip-niches.mjs` uses `tallyCounts` for the
-    overnight accumulation table's `Day-low bid` column. `tallyCounts` is the extracted one-home tally
-    arithmetic (`formatAsymFill` now calls it too): p-fractions × their OWN `nAsk`/`nBid` denominators.
-    Same honesty rules as `formatAsymFill` (no execution verb, tallies never fill rates, reality
+    the declared thesis exit when set (labelled, with its independent reach count) else the asym high-reach
+    ask, nets vs the LOT via `netMargin(avgCost, level)`); `screen-flip-niches.mjs`'s overnight
+    accumulation table prints the `Day-low bid` level. No tally is printed at a quantile level (circular).
+    Same honesty rules as `formatAsymFill` (no execution verb, levels never fill rates, reality
     clauses ride with their level, null-degrade on a missing basis). Pinned by
     `pipeline/test/dwell.test.mjs`. Doctrine: `/scan` §2's dwell-horizon rule +
     `docs/MARKET-ANALYSIS.md` "Two objectives, two prices"),
@@ -3481,7 +3481,7 @@ deployed-phone change (not a rename):
 | `screen.json` | app fetches same-origin (`js/ui.js` Scan tab) |
 | `watchlist.json` | app fetches same-origin (`js/ui.js`) **and** the phone writes it back via the contents API (`js/github.js` `WATCHLIST_PATH`) |
 | `mobile-fills.log` | the phone appends slot-9 lines via the contents API (`js/github.js` `MOBILE_LOG_PATH`); `sync-fills.mjs` reads it |
-| `fills.json` | the pipeline source `positions.json` is FIFO-reconstructed from; `sync-fills.mjs --publish` commits it at the root nightly (a bare run rebuilds it locally, zero-git; not app-fetched directly, but coupled to the same convention) |
+| `fills.json` | the pipeline source `positions.json` is FIFO-reconstructed from; `sync-fills.mjs --publish` commits it at the root on request (a bare run rebuilds it locally, zero-git; not app-fetched directly, but coupled to the same convention) |
 
 **Pipeline-only / movable** — no app fetch and no hardcoded remote path; a single path
 constant governs each, so these can move without touching the deployed app or phone:

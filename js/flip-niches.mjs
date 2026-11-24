@@ -255,7 +255,7 @@ function churnEdge(inp, t) {
                    'asym'      — deep-buy / reliable-sell (Ben: "I'd much rather hit a 2/14 buy and a
                                  12/14 sell than 50/50 both sides"). band + scalp. Gets the Part-I
                                  ask-reach rank discount + REACH_GRADE_CAP, the asym-fill inform line,
-                                 and the shadow asym-rank field on suggestions.jsonl.
+                                 and the shadow asym pair on suggestions.jsonl.
                    'symmetric' — fill-every-lap / own-pricing. churn (sells into continuous two-sided
                                  flow near a tight band top; the day-level ask-reach read mismeasures
                                  it and a deep-flush bid is anti-churn — EXEMPT from the Part-I

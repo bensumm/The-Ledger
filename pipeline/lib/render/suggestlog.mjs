@@ -103,11 +103,9 @@
  *              {spikeTop,staleOptimistic,typicalLevel,reachedDays,nDays,recentHit,recentDays,placement}|null }.
  *              ⚠ bidBasis ('patient-dip'|'live') and fitNights are REQUIRED to interpret dipReality and the
  *              LEVEL fields — see timedLapShadow. n≈0; screen survivors supply it, quote/watch are UN-WIRED.
- *   asym?      asymmetric-fill estimate { bid, ask, pAsk, pBid, pAskAt, pBidAt, n, rank } — the deep-bid →
- *              high-reach-ask pair off asymPair (guarded), its reach fractions, and the asymmetric rank
- *              (net × P_ask ÷ TTF); pAskAt/pBidAt are the LEVELS pAsk/pBid were measured at (see asymShadow).
- *              The row's plain `rank` stays the SYMMETRIC rank so both ride one row for the F1 A/B — graduate
- *              the sort flip ONLY if asym.rank predicts realized exit-safe edge better. n≈14.
+ *   asym?      asymmetric-fill estimate { bid, ask, n } — the guarded deep-bid → high-reach-ask pair off
+ *              asymPair; scored forward by join-asym-outcomes.mjs. HISTORICAL rows (before pipeline 1.9.0)
+ *              also carry pAsk/pBid/pAskAt/pBidAt/rank — the quantiles read back, not fill rates; ignore them.
  *   amplitude?  amplitude-lane block { ampBid, ampAsk, holdDays, bidTouchRecent/Days, askReachRecent/Days, nDays,
  *              medAmpPct, cycle?, walkForward?, dipWindow?, peakWindow?, drift?, askQ?, bidQ? }. Screen amplitude
  *              rows only; see amplitudeShadow for which of the two completion reads is the honest one.
@@ -136,7 +134,7 @@
  *     across that boundary without splitting on it.
  *   · timedLap.peakReality / dipReality / bidBasis — absent before 2026-08-12. The reality flag was rendered but
  *     never written until then, so the guard is unmeasurable on older rows: absent ≠ clean.
- *   · asym — pAskAt/pBidAt null on pairs predating them ⇒ guarded/unguarded indistinguishable there. The WHOLE object is absent on
+ *   · asym — pAskAt/pBidAt exist only on 2026-08-12..pipeline 1.9.0 rows (guarded/unguarded indistinguishable elsewhere). The WHOLE object is absent on
  *     admitSkip rows before 2026-08-21 (first 44 unthreaded) and on ANY churn skip row (symmetric ⇒ none computed): split on mode AND date.
  *   · grade — absent on all rows before 2026-07-12.
  */
@@ -394,13 +392,8 @@ export function excludedShadow(excluded) {
 // the same shape screen/quote/watch all log for the head-to-head. Null when there is no pair.
 export function asymShadow(ae) {
   if (!ae || ae.ask == null) return null;
-  const r2 = x => x == null ? null : Math.round(x * 100) / 100;
-  // pAskAt/pBidAt ride along so the join can separate GUARDED rows (bid/ask moved off the measured
-  // level by asymEstimate's min/max ordering guards) from unguarded ones. Without them the pair
-  // (ask, pAsk) mixes two levels with no way to recover which — see js/estimators.mjs asymEstimate.
-  return { bid: ae.bid, ask: ae.ask, pAsk: r2(ae.pAsk), pBid: r2(ae.pBid),
-    pAskAt: ae.pAskAt ?? null, pBidAt: ae.pBidAt ?? null,
-    n: ae.nDays, rank: ae.rank == null ? null : Math.round(ae.rank) };
+  // the unguarded levels: join-asym-outcomes splits guarded rows on them
+  return { bid: ae.bid, ask: ae.ask, pAskAt: ae.pAskAt ?? null, pBidAt: ae.pBidAt ?? null, n: ae.nDays };
 }
 
 // WC1 (PLAN-WINDOW-CLEAR-OUTCOMES) — the window-clear ask-rung FORWARD record. A big-ticket held lot is

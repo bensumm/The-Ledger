@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.72
+version: 1.73
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -53,9 +53,9 @@ sections plus your own prose:
   for the patient clause to live in, and the class-rate footer gates on a `kind:'asym'` note this
   surface never pushes. Two separate mechanisms — do not expect either here, and do not go hunting for
   them (tracked in `PLAN.md`'s folded PLAN-PATIENT-PAIR section, open item 1). What to carry into any
-  read of the pair wherever it DOES render: the counts are in-sample quantile ranks, not fill rates,
-  and forward measurement puts the deep bid touched **17.8%** within 24h (logged `pBid` 31.1%), the ask
-  reached **~24%** given that touch (logged `pAsk` 86.8%), and the round trip completing **4.3%** —
+  read of the pair wherever it DOES render: the levels are in-sample quantiles, not fill rates,
+  and forward measurement puts the deep bid touched **17.8%** within 24h, the ask
+  reached **~24%** given that touch, and the round trip completing **4.3%** —
   **1.5% on big-ticket** (`join-asym-outcomes.mjs`; touched/reached ≠ filled, so these bound a real
   offer from ABOVE). **Check the book before choosing between those two columns:** with no open lot
   whose UNIT price clears `BIG_TICKET_GP` the applicable figure is the pooled **4.3%** (lots by count),
@@ -206,11 +206,11 @@ auto-synced commands (`monitor-offers.mjs` reads the live exchange log directly 
 just-made trade matters even more immediately than the synced book).
 
 - **Phone trades caveat:** the local default of `pipeline/commands/sync-fills.mjs` does NOT ff-pull
-  `origin/main`, so an un-pulled *phone* (`mobile-fills.log`) trade won't fold in until the once-a-day
-  `/overnight` publish (that path runs it with `--publish`) or a manual `git fetch`. Desktop RuneLite
+  `origin/main`, so an un-pulled *phone* (`mobile-fills.log`) trade won't fold in until the next on-request
+  publish (that path runs it with `--publish`) or a manual `git fetch`. Desktop RuneLite
   trades — the common case — are always captured locally.
 - **No worktree concern anymore:** the default is git-free, so the old "run from the main checkout / never a
-  worktree" caveat only applies to `--publish` (the /overnight publish that commits+pushes), not to the
+  worktree" caveat only applies to `--publish` (the publish that commits+pushes), not to the
   in-session local read.
 
 **Act on the stale-book banner — re-sync, don't just note it (Ben, 2026-07-06).** When
@@ -482,7 +482,7 @@ Grouped by urgency: **cuts → list-to-clear → holds/watches**. One line each:
 **Every action price states its timing target AND its basis (Ben, 2026-07-05; basis token
 2026-09-10 — the rule's one home is `/scan` §4, this restates only the token):** a recommended
 price is "X **(basis)**, targeting Y" — basis = the `⇄ dwell` line's own token, `(fill-now)` or
-`(rest-day, printed k/Nd)`, quoted never recomputed — and the number is bound to the
+`(rest-day)`, quoted never recomputed — and the number is bound to the
 window/mechanism expected to fill it, e.g. "17.55m (rest-day, reached 7/7d) — targets the
 23:00–03:00 UK-morning lift" or "10.70m (fill-now) — velocity clear, fills on current prints".
 A fill-now basis on an ask that will rest unattended is the Marlin miss — declare it and the

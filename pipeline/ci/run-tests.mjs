@@ -71,7 +71,7 @@ function main() {
     // CAPTURE, don't inherit — emptiness is only observable if we hold the bytes. Re-emitted verbatim
     // on the next two lines, so the pass-through contract above is unchanged. maxBuffer sits well clear
     // of the measured worst case (largest suite ~13 KB, whole run ~172 KB).
-    const res = spawnSync(process.execPath, [suite], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+    const res = spawnSync(process.execPath, [suite], { env: { ...process.env, COFFER_NO_CHORES: '1' }, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
     if (res.stdout) process.stdout.write(res.stdout);
     if (res.stderr) process.stderr.write(res.stderr);
     const spoke = !isSilent(res);

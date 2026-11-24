@@ -257,55 +257,19 @@ export function formatBasePosition(bp) {
 
 /**
  * formatAsymFill(ae, ap, { fmt }) → { bidTxt, askTxt } | null — the shared clause pair for the
- * ◆ asym fill inform line. Both quote-items.mjs and screen-flip-niches.mjs emit that line, so the
- * wording lives HERE (one home) rather than being written twice and drifting apart.
+ * ◆ asym fill inform line (quote-items + screen-flip-niches), so the wording lives in ONE home.
  *
- * WHY THE MEASURED LEVEL IS NAMED SEPARATELY (2026-08-12). asymEstimate's ordering guards set
- * bid = min(quickBuy, deepBid) and ask = max(quickSell, highReachAsk), so a BOUND guard moves the
- * quoted price OFF the quantile level pAsk/pBid were counted at (asymEstimate header §II.2). The old
- * wording — `ask 871 (prints ~12/14d)` — read as "871 printed on 12 of 14 days" when 12/14 was
- * measured at 846. So when a guard binds, name the quoted price and the measured level SEPARATELY.
- *
- * WHY NO EXECUTION VERB. An earlier draft of this clause said "live instabuy — clears now", on the
- * argument that a bound guard means the leg transacts immediately and the count is therefore a floor.
- * That verb was REMOVED after review, for two reasons, and must not come back without new evidence:
- *   (1) quotecore.js's own header (lines ~17-33) records Ben running five real 1-unit round trips —
- *       the model's quickBuy/quickSell came out REVERSED against the true fill order, round-trip loss
- *       3-5x worse than quoted. `latest.high` is the price recent BUYERS paid; selling there is a
- *       passive limit ask, not a click. So "clears now" is an execution claim the repo already
- *       measured as false, and the freshness caveat (QUICK_FRESH_MIN, quickStale.sell) makes it worse
- *       rather than rescuing it — this clause has no staleness input at all.
- *   (2) It was unnecessary. On a bound row the ⊙ reach/placement note one line below ALREADY prints
- *       reach at the guarded price on the same 1h daily-high basis (Dragon boots 2026-08-12: this
- *       clause said 218.5k printed 12/14d; the next line said ask 220.2k reached 11/14d). Whether
- *       pAsk is a floor or an overstatement at the quoted price is UNRESOLVED — so this clause states
- *       only what is measured and leaves the reader the adjacent number, rather than asserting either.
- *
- * PAST TENSE is deliberate (Ben, 2026-08-12): every count is IN-SAMPLE over the days that fitted the
- * quantiles — backward-looking, never a forward fill rate. DENOMINATORS come from asymPair's nAsk/nBid
- * (pAsk's own denominator), NOT nDays: windowStats drops days with no print, so pAsk 10/12 rendered
- * against nDays printed "12/14d" — a tally over days the fraction never scored. fmtP (full gp), never
- * fmt: a guard binding by less than fmt's bucket rendered both prices identically ("ask 5.2k … 5.2k
- * printed 12/14d"), the same resolution bug d37e818 fixed for offer prices. Null-degrades like the
- * rest of this module (no pair / no days ⇒ null ⇒ the caller prints nothing, never a fabricated count).
+ * No hit-count tally: at a quantile level the count is the quantile read back, not evidence. When an
+ * ordering guard binds (asymEstimate: bid = min(quickBuy, deepBid), ask = max(quickSell, highReachAsk))
+ * the quoted price sits OFF the quantile level, so name the price and the level SEPARATELY. No
+ * execution verb ("clears now" was removed: quickBuy/quickSell are measured-reversed against true fill
+ * order, quotecore.js header). fmtP (full gp), never fmt: a guard binding by less than fmt's bucket
+ * would render both prices identically. Null when there is no pair.
  */
-/* tallyCounts — the ONE home for the in-sample tally arithmetic (formatAsymFill + formatDwell):
- * p-fractions × their OWN denominators (nAsk/nBid, never bare nDays — see the header above). */
-export function tallyCounts({ pAsk, pBid, nAsk, nBid, nDays } = {}) {
-  const nA = nAsk ?? nDays, nB = nBid ?? nDays;
-  if (!nA || !nB) return null;
-  return { hA: Math.round((pAsk ?? 0) * nA), nA, hB: Math.round((pBid ?? 0) * nB), nB };
-}
-
 export function formatAsymFill(ae, ap, { fmt: fmtFn = fmtP } = {}) {
   if (!ae || !ap || ae.bid == null || ae.ask == null) return null;
-  const t = tallyCounts({ pAsk: ae.pAsk, pBid: ae.pBid, nAsk: ap.nAsk, nBid: ap.nBid, nDays: ap.nDays });
-  if (!t) return null;                                          // no denominator ⇒ no honest tally
-  const { hB, nB, hA, nA } = t;
-  // A guard only gets NAMED when the two prices actually RENDER differently. fmtP is full-gp under
-  // 100k but falls back to fmt's 0.1k buckets above it, so a big-ticket guard binding by a few gp
-  // would otherwise print "ask 219.9k (= live instabuy, above the 219.9k level …)" — nonsense. When
-  // they collapse at display resolution they ARE the same level as shown, so the plain form is honest.
+  // A guard only gets NAMED when the two prices actually RENDER differently (fmtP falls back to fmt's
+  // 0.1k buckets above 100k, so a few-gp guard on a big-ticket would otherwise read "above the <same> level").
   const px = (price, level, guarded) => {
     const p = fmtFn(price);
     return { p, named: guarded && level != null && fmtFn(level) !== p ? fmtFn(level) : null };
@@ -313,16 +277,16 @@ export function formatAsymFill(ae, ap, { fmt: fmtFn = fmtP } = {}) {
   const b = px(ae.bid, ap.deepBid, ap.deepBid != null && ae.bid < ap.deepBid);
   const a = px(ae.ask, ap.highReachAsk, ap.highReachAsk != null && ae.ask > ap.highReachAsk);
   const bidTxt = b.named
-    ? `deep-bid ${b.p} (= live instasell, below the ${b.named} level that touched ${hB}/${nB}d — rest as optionality)`
-    : `deep-bid ${b.p} (touched ${hB}/${nB}d — rest as optionality)`;
+    ? `deep-bid ${b.p} (= live instasell, below the ${b.named} flush level — rest as optionality)`
+    : `deep-bid ${b.p} (rest as optionality)`;
   const askTxt = a.named
-    ? `ask ${a.p} (= live instabuy, above the ${a.named} level that printed ${hA}/${nA}d)`
-    : `ask ${a.p} (printed ${hA}/${nA}d)`;
+    ? `ask ${a.p} (= live instabuy, above the ${a.named} high-reach level)`
+    : `ask ${a.p}`;
   return { bidTxt, askTxt };
 }
 
 /* formatDwell({ fillNow, restDay, side }, { fmt }) → string | null — the ⇄ dwell line: FILL-NOW
- * (live edges, per-TIME) vs REST-DAY (full-day distribution levels + in-sample tallies, per-FLIP).
+ * (live edges, per-TIME) vs REST-DAY (full-day distribution levels + reality clauses, per-FLIP).
  * PURE; no execution verb (formatAsymFill's rule binds); a DECLARED exit is labelled, never claused;
  * side 'ask' = held sell leg, nets vs the LOT's cost. Null on a missing basis. → CHANGELOG.md */
 export function formatDwell({ fillNow, restDay, side = 'both' }, { fmt: fmtFn = fmtP } = {}) {
@@ -337,31 +301,29 @@ export function formatDwell({ fillNow, restDay, side = 'both' }, { fmt: fmtFn = 
     if (fillNow.sell == null || restDay.ask == null) return null;
     const tok = restDay.askN ? `${restDay.askLabel ? restDay.askLabel + ' — ' : ''}printed ${restDay.askHit}/${restDay.askN}d` : (restDay.askLabel || '');
     const tailAsk = (restDay.net != null && restDay.net < 0)
-      ? ` — rest-day rung sits BELOW break-even; the BE floor governs (touched ≠ filled, in-sample)`
+      ? ` — rest-day rung sits BELOW break-even; the BE floor governs (touched ≠ filled)`
       : (restDay.net == null)
-        ? ` — no cost basis on this lot: verify vs break-even before resting (touched ≠ filled, in-sample)`
-        : ` — resting all day? price the REST-DAY rung (touched ≠ filled, in-sample)`;
+        ? ` — no cost basis on this lot: verify vs break-even before resting (touched ≠ filled)`
+        : ` — resting all day? price the REST-DAY rung (touched ≠ filled)`;
     return `dwell (sell): FILL-NOW @${fmtFn(fillNow.sell)}${fillNow.sellTag || ''} ${netTxt(fillNow.net)} vs cost`
       + ` | REST-DAY @${fmtFn(restDay.ask)}${tok ? ` (${tok})` : ''}${rc(restDay.askReality, restDay.ask)} ${netTxt(restDay.net)} vs cost`
       + tailAsk;
   }
   if (fillNow.buy == null || fillNow.sell == null || restDay.bid == null || restDay.ask == null) return null;
-  if (restDay.hB == null || restDay.hA == null) return null;    // no honest tally ⇒ no line
   const pools = (restDay.poolLo != null || restDay.poolHi != null)
     ? ` · pools ~${fmt(restDay.poolLo ?? 0)}/~${fmt(restDay.poolHi ?? 0)} u/d` : '';
   const tail = (restDay.net != null && restDay.net < 0)
     ? ` — rest-day pair nets NEGATIVE — no resting edge here`
     : ` — resting away-hours/overnight? price off REST-DAY`;
   return `dwell: FILL-NOW ${fmtFn(fillNow.buy)}${fillNow.buyTag || ''}→${fmtFn(fillNow.sell)}${fillNow.sellTag || ''} ${netTxt(fillNow.net)} (live edges — pays per-TIME)`
-    + ` | REST-DAY bid ${fmtFn(restDay.bid)} (touched ${restDay.hB}/${restDay.nB}d)${rc(restDay.bidReality, restDay.bid)}`
-    + ` → ask ${fmtFn(restDay.ask)} (printed ${restDay.hA}/${restDay.nA}d)${rc(restDay.askReality, restDay.ask)}`
-    + ` ${netTxt(restDay.net)}${pools} (pays per-FLIP; touched ≠ filled, in-sample)`
+    + ` | REST-DAY bid ${fmtFn(restDay.bid)}${rc(restDay.bidReality, restDay.bid)}`
+    + ` → ask ${fmtFn(restDay.ask)}${rc(restDay.askReality, restDay.ask)}`
+    + ` ${netTxt(restDay.net)}${pools} (pays per-FLIP; quantile levels, not fill rates)`
     + tail;
 }
 
 /* THE MEASURED CLASS RATE — join-asym-outcomes.mjs (PLAN-PATIENT-PAIR §7).
- * formatAsymFill's per-row counts are IN-SAMPLE quantile tallies over the days that fitted the
- * quantiles. That is stated on each row, but a reader still has to supply "…and so how often does
+ * The pair's levels are in-sample quantiles. A reader still has to supply "…and so how often does
  * this actually complete?" from nowhere. These are that number, forward-measured off the 1h archive.
  *
  * It belongs in a FOOTER, emitted ONCE per surface, and not on the row — it is a CLASS rate over the
@@ -383,7 +345,7 @@ export const ASYM_MEASURED_ITEMS = 768;
 /* asymClassRateNote() → the one-time footer sentence. A function rather than a template literal so
  * the numbers cannot be restated at a call site; every surface that prints an asym note prints THIS. */
 export function asymClassRateNote() {
-  return `the counts above are IN-SAMPLE quantile tallies, NOT fill rates — measured forward, this `
+  return `the levels above are in-sample quantiles, NOT fill rates — measured forward, this `
     + `shape completes a round trip ~${ASYM_RT_24H_PCT}% within 24h (~${ASYM_RT_24H_BIG_PCT}% on `
     + `big-ticket) over ~${Math.round(ASYM_MEASURED_ROWS / 1000)}k rows / ~${Math.round(ASYM_MEASURED_ITEMS / 10) * 10} items. `
     + `A CLASS rate, not this row's; touched/reached ≠ filled, so it bounds a real offer from above. `
@@ -393,8 +355,8 @@ export function asymClassRateNote() {
 /* SELL-LEG footer for a dwell-only surface — a held lot's resting ask has no round trip to quote (the ~4% rate would overstate pessimism ~6x there). Same source and rules. */
 const ASYM_ASK_24H_PCT = 24.2, ASYM_ASK_24H_BIG_PCT = 6.4;
 export function dwellSellClassRateNote() {
-  return `dwell (sell) — the printed k/Nd counts are IN-SAMPLE reach tallies at the printed level, NOT `
-    + `fill rates. The nearest measured class rate is CONDITIONAL: given the paired deep bid touched `
+  return `dwell (sell) — the REST-DAY rung is a quantile level, NOT `
+    + `a fill rate. The nearest measured class rate is CONDITIONAL: given the paired deep bid touched `
     + `first, the ask leg is reached within 24h of that touch in ~${ASYM_ASK_24H_PCT}% of cases `
     + `(~${ASYM_ASK_24H_BIG_PCT}% on big-ticket). A CLASS rate under that conditioning, not this row's `
     + `odds; touched/reached ≠ filled, so it bounds a resting ask from above. Re-derive: join-asym-outcomes.mjs`;

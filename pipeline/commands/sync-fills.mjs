@@ -7,9 +7,9 @@
  *
  * DEFAULT IS LOCAL — ZERO GIT. A bare run REBUILDS fills/positions/offers.json in the working tree
  * with NO git of any kind: the cheap, always-fresh in-session read every /scan//positions//morning
- * runs at the top. **Publishing is ONCE A DAY, at the `/overnight` boundary, via `--publish`** — the
+ * runs at the top. **Publishing is ON REQUEST, via `--publish`** — the
  * only path that fetches/ff-pulls (folding phone trades) + commits + pushes. So the DEPLOYED book
- * updates nightly; the LOCALHOST desk reads the working-tree rebuild all day.
+ * updates then; the LOCALHOST desk reads the working-tree rebuild all day.
  *
  * Sync is ON-DEMAND ONLY — no scheduler (the CofferFillsSync job was excised 2026-07-05, chunk X2;
  * FILLS-PIPELINE.md §12). Each `--publish` is a fresh checkpoint commit; git history is the recovery story.
@@ -18,7 +18,7 @@
  *   node sync-fills.mjs            DEFAULT: parse -> merge -> write fills/positions/offers.json,
  *                                  ZERO git. The in-session book read (cheap, always current).
  *   node sync-fills.mjs --publish  parse -> fetch/ff-pull (fold phone trades) -> merge -> write ->
- *                                  commit -> push to main. The ONCE-A-DAY publish (run by /overnight)
+ *                                  commit -> push to main. The on-request publish
  *                                  that updates the deployed app's fills.json.
  *   node sync-fills.mjs --local    accepted SYNONYM for the default (kept for back-compat: run-loop's
  *                                  watch pass + the watch-log.mjs daemon's in-process regenerate()).
@@ -86,7 +86,7 @@ const GIT_PUSH  = true;     // set false to stage commits without pushing
 
 const args = new Set(process.argv.slice(2));
 const PROBE = args.has('--probe'), DRY = args.has('--dry');   // chunk 6: dropped unused LOCAL (local is the default mode; --local is a no-op synonym)
-const PUBLISH = args.has('--publish');   // the ONLY path that touches git (fetch/ff + commit + push) — the once-a-day /overnight publish; default + --local are ZERO-git
+const PUBLISH = args.has('--publish');   // the ONLY path that touches git (fetch/ff + commit + push) — the on-request publish; default + --local are ZERO-git
 
 /* ---------------------------------------------------------------------
  * ADAPTER + reconstruction now live in reconstruct.mjs (chunk 8) — the ONE
@@ -366,7 +366,7 @@ function main() {
   // DEFAULT (and --local): regenerate + write fills/positions/offers.json, but NO git of any kind (no
   // fetch/ff, no commit, no push, no syncMainToRemote). The cheap, always-fresh in-session book read —
   // run this at the top of every /scan and /positions. Publishing to the deployed app is --publish's
-  // job, once a day at /overnight (below). --dry falls through to the preview branch.
+  // job, on request (below). --dry falls through to the preview branch.
   if (!PUBLISH && !DRY) {
     const r = regenerate({ write: true, warn: false }); // desk-side freshness — drop phantoms, but stay quiet (no per-event spam)
     if (r.reEmitDropped) console.log(`(${r.reEmitDropped} suspected re-emit(s) dropped — run --publish for the per-event detail)`);
@@ -374,7 +374,7 @@ function main() {
     console.log(`${r.sources.length} log source(s)${r.mobilePresent ? ' (incl. ' + MOBILE_REL + ')' : ''}, ${r.rawLines} lines (${r.parsedLines} valid trade line(s)), ${r.parsed} events, ${r.merged.length} after merge${r.eventsChanged ? '' : ' (no change)'}`);
     printShortHeuristic(r);
     console.log(`positions: ${r.pos.closed.length} closed, ${r.pos.open.length} open, ${r.pos.unmatched.length} unmatched, ${r.pos.settled.length} settled · offers: ${r.offersSnap.offers.length} open${r.offersChanged ? '' : ' (no change)'}`);
-    console.log(`local rebuild — NO git (desk-side freshness). Publish to the deployed app nightly with --publish (/overnight).`);
+    console.log(`local rebuild — NO git (desk-side freshness). Publish to the deployed app on request with --publish.`);
     return;
   }
 
@@ -407,7 +407,7 @@ function main() {
   }
   // NOTE: --publish must NOT gate the commit on `changed` (the fresh-merge-vs-disk diff). In-session
   // /scan & /positions local syncs (§14) already rewrite fills/positions/offers.json all day, so by
-  // the nightly --publish the merge shows zero DISK diff → `changed=false` even though those daily
+  // the next --publish the merge shows zero DISK diff → `changed=false` even though those daily
   // rewrites are sitting uncommitted vs HEAD. Gating on `changed` here silently no-op'd the publish
   // and froze the deployed app's book (audit finding 1, 2026-07-19). The ONLY correct commit gate is
   // the `git status --porcelain` check below (diff vs HEAD/index), which the `git add` block reaches
@@ -437,7 +437,7 @@ function main() {
     // That dir is DELIBERATELY ABSENT from this commit set (Ben, 2026-08-07): it is gitignored,
     // local-only history (75MB, ~13k rows/day) and is no longer published. Do NOT re-add it —
     // `git()` runs execSync with stdio:'pipe' and THROWS on a non-zero exit, and `git add` on an
-    // ignored path exits 1, so listing it here would abort every `--publish` run and break /overnight.
+    // ignored path exits 1, so listing it here would abort every `--publish` run.
     const DIP_WATCHLIST_REL = 'dip-watchlist.json';
     const HOLD_THESIS_REL = 'hold-thesis.json';
     const BID_THESIS_REL = 'bid-thesis.json';

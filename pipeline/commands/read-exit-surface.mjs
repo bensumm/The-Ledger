@@ -149,7 +149,7 @@ export function incumbentAsks({ stats, live }) {
   // (`pressure` was placed here as an incumbent until 2026-08-30 — RETIRED from exit pricing by
   // join-exit-ev.mjs's pre-registered criterion; it is no longer computed as an exit-price candidate.)
   const ap = stats ? asymPair(stats) : null;
-  if (ap) push('asym', ap.highReachAsk, `quantile level — its printed pAsk ${pct(ap.pAsk)} is that quantile read back, not a fill rate`);
+  if (ap) push('asym', ap.highReachAsk, 'quantile level — not a fill rate');
   const fold = foldAsk({ stats, live });
   if (fold != null) push('fold', fold, 'RECONSTRUCTED reach-fold — the deployed estimator sees inputs this surface does not build');
   return out;

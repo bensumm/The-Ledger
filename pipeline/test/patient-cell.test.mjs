@@ -24,8 +24,8 @@ const OPEN_ROW = { quickBuy: 1000, quickSell: 1600, optBuy: 950, optSell: 1650, 
 const BASE_EXTRA = { bidReach: { reachedDays: 4, nDays: 14 }, askReach: { reachedDays: 12, nDays: 14 } };
 // the UNGUARDED asymPair read; asymEstimate's ordering guards raise the ask off highReachAsk on the
 // floored row, which is the 69.7%-of-rows case §2d is about.
-const AP = { deepBid: 14_570_000, highReachAsk: 14_800_000, pAsk: 12 / 14, pBid: 4 / 14, nAsk: 14, nBid: 14, nDays: 14 };
-const AE = { bid: 14_570_000, ask: 15_300_000, net: 427_000, pAsk: 12 / 14, pBid: 4 / 14, pAskAt: AP.highReachAsk, pBidAt: AP.deepBid, nDays: 14 };
+const AP = { deepBid: 14_570_000, highReachAsk: 14_800_000, nDays: 14 };
+const AE = { bid: 14_570_000, ask: 15_300_000, net: 427_000, nDays: 14 };
 
 // CONTROL = the pre-PP2 extra, asym pair INCLUDED. `extra.asym` is a pre-existing sell-fold input
 // (reach-fold reads highReachAsk), so comparing against an extra without it would measure that instead
@@ -49,21 +49,20 @@ test('the clause is the CALLER\'s formatAsymFill text — cells.mjs never re-der
   // MUTANT: in pair.mjs build bidTxt/askTxt inline from extra.asym's prices (`deep-bid X` / `ask Y`)
   // instead of the caller's formatAsymFill clause — red, because the guard-bound phrasing below cannot
   // be reconstructed from the prices alone.
-  // §2d: asymEstimate's ask guard binds on 69.7% of rows, so the QUOTED price is not the level pAsk was
-  // measured at. formatAsymFill is the ONE home for saying that; PP2 must route through it, not invent.
+  // §2d: asymEstimate's ask guard binds on 69.7% of rows, so the QUOTED price is not the quantile level.
+  // formatAsymFill is the ONE home for saying that; PP2 must route through it, not invent.
   const af = formatAsymFill(AE, AP);
-  assert.match(af.askTxt, /= live instabuy, above the .* level that printed 12\/14d/, 'fixture must be guard-bound');
+  assert.match(af.askTxt, /= live instabuy, above the .* high-reach level/, 'fixture must be guard-bound');
   const t = sellText(FLOORED_ROW, withAsym());
   assert.ok(t.includes(af.bidTxt), 'bid clause passed through verbatim');
   assert.ok(t.includes(af.askTxt), 'ask clause passed through verbatim — including the level/price split');
 });
 
 test('the patient number never reads as achievable — no execution verb, and the caveat rides with it', () => {
-  // MUTANT: delete the ` — resting levels, in-sample counts, not a fill rate` tail — red. The deep bid
-  // fills roughly 4 days in 14 and pAsk/pBid are ASYM_P_LO/ASYM_P_HI quantile constants read back
-  // (0.86 on 89.9% of 8,300 rows; 0.29 on 86.5%), so the counts are in-sample ranks, not fill rates.
+  // MUTANT: delete the ` — resting levels, not a fill rate` tail — red. The levels are ASYM_P_LO/ASYM_P_HI
+  // quantiles, not fill rates.
   const t = sellText(FLOORED_ROW, withAsym());
-  assert.match(t, /resting levels, in-sample counts, not a fill rate/);
+  assert.match(t, /resting levels, not a fill rate/);
   assert.match(t, /rest as optionality/, 'the bid stays optionality (formatAsymFill\'s own word)');
   assert.doesNotMatch(t, /clears now|will fill|guaranteed/i, 'no execution claim — quotecore measured that false');
 });

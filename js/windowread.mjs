@@ -852,11 +852,9 @@ export function reachMarginTrigger(rm) {
 // his arrays (the same quantile machinery the reach validator scores against — one vocabulary):
 //   deepBid      = quantLow(lows, ASYM_P_LO)   — touched on only ~ASYM_P_LO of nights (the flush)
 //   highReachAsk = quantHigh(his, ASYM_P_HI)   — reached on ~ASYM_P_HI of nights (near-certain exit)
-//   pAsk / pBid  = the realized reach/touch fractions AT those levels (ties can push them past p)
-// DOCTRINE (§II.1): pAsk is the fill WEIGHT of the asymmetric rank (the exit is the flip's big
-// assumption); pBid is an ANNOTATION ONLY — "rest the bid as optionality, expect ~pBid×n fills" —
-// NEVER a rank multiplier (that would re-punish exactly the deep entry the shape wants). The deep
-// bid's value is already captured by the larger net. asymEstimate (js/estimators.mjs) is the consumer.
+// No reach/touch fraction is returned: at the quantile it is the quantile read back (circular). Score the
+// pair forward with join-asym-outcomes.mjs. The deep bid is rest-as-optionality, never a rank multiplier.
+// asymEstimate (js/estimators.mjs) is the consumer.
 // HONESTY (rule 4): n≈14 nights per item — every quantile below is a PLACEHOLDER pending F1/retro
 // calibration; a sample thinner than ASYM_MIN_DAYS returns null (degrade, never a fake pair).
 export const ASYM_P_LO = 0.25;    // flush-bid quantile — fills ~3-4/14 nights (PLACEHOLDER, F1 tunes)
@@ -872,14 +870,7 @@ export function asymPair(stats, { pLo = ASYM_P_LO, pHi = ASYM_P_HI, minDays = AS
   const highReachAsk = quantHigh(stats.his, pHi);
   return {
     deepBid, highReachAsk,
-    pAsk: reachedDays(stats.his, highReachAsk) / stats.his.length,
-    pBid: touchedDays(stats.lows, deepBid) / stats.lows.length,
     nDays,
-    // pAsk/pBid's OWN denominators. windowStats drops days with no print, so his/lows can be SHORTER
-    // than nDays — rendering `pAsk × nDays` then prints a count over days the fraction never scored
-    // (pAsk 10/12 → "12/14d"). Callers that display a tally must use these, not nDays.
-    nAsk: stats.his.length,
-    nBid: stats.lows.length,
   };
 }
 

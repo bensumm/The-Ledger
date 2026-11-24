@@ -145,84 +145,68 @@ ok('RETIRED: depthReachClause and the --pressure-exit gate are gone from watch/q
   }
 });
 
-/* formatAsymFill — the ◆ asym fill clause pair. The BUSINESS REQUIREMENT: a reach count must never be
-   printed as though it described a price it was not measured at. asymEstimate's ordering guards can
-   move bid/ask off the quantile levels pAsk/pBid were counted at, and when they do the quoted price is
-   a live transact-now one — so the clause has to name the measured LEVEL beside its count. (The counts
-   stay honest either way: a bound guard means that leg fills now, so the count is a floor. It was the
-   sentence that lied, not the number — see the formatAsymFill header.) */
-const AP = { deepBid: 100, highReachAsk: 140, nDays: 14, nAsk: 14, nBid: 14 };
-const AE = { bid: 100, ask: 140, pAsk: 12 / 14, pBid: 5 / 14, nDays: 14 };
+/* formatAsymFill — the ◆ asym fill clause pair. The BUSINESS REQUIREMENT: a quoted price must never be
+   presented as the quantile level it was not measured at. asymEstimate's ordering guards can move
+   bid/ask off the quantile levels, and when they do the clause names the LEVEL beside the price. No
+   hit-count tally is printed (it was the quantile read back). */
+const AP = { deepBid: 100, highReachAsk: 140, nDays: 14 };
+const AE = { bid: 100, ask: 140, nDays: 14 };
 
-ok('formatAsymFill: neither guard binds ⇒ the count attaches to the quoted price directly', () => {
+ok('formatAsymFill: neither guard binds ⇒ plain price, no tally', () => {
   const af = formatAsymFill(AE, AP);
-  assert.equal(af.askTxt, 'ask 140 (printed 12/14d)');
-  assert.equal(af.bidTxt, 'deep-bid 100 (touched 5/14d — rest as optionality)');
+  assert.equal(af.askTxt, 'ask 140');
+  assert.equal(af.bidTxt, 'deep-bid 100 (rest as optionality)');
 });
 
-ok('formatAsymFill: ask guard BINDS ⇒ names the live price AND the level the count belongs to', () => {
+ok('formatAsymFill: ask guard BINDS ⇒ names the live price AND the quantile level', () => {
   const af = formatAsymFill({ ...AE, ask: 150 }, AP);
-  assert.equal(af.askTxt, 'ask 150 (= live instabuy, above the 140 level that printed 12/14d)');
-  // the regression this pins: the OLD wording rendered `ask 150 (prints ~12/14d)`, asserting a reach
-  // for 150 that was measured at 140. The quoted price must never sit directly against the count.
-  assert.ok(!/150 \(printed/.test(af.askTxt), 'the count must not be attached to the guarded price');
+  assert.equal(af.askTxt, 'ask 150 (= live instabuy, above the 140 high-reach level)');
 });
 
 ok('formatAsymFill: bid guard BINDS ⇒ same treatment, and it stays resting optionality', () => {
   const af = formatAsymFill({ ...AE, bid: 90 }, AP);
-  assert.equal(af.bidTxt, 'deep-bid 90 (= live instasell, below the 100 level that touched 5/14d — rest as optionality)');
+  assert.equal(af.bidTxt, 'deep-bid 90 (= live instasell, below the 100 flush level — rest as optionality)');
 });
 
-ok('formatAsymFill: states no EXECUTION claim — the repo measured quickBuy/quickSell as not click-prices', () => {
+ok('formatAsymFill: states no EXECUTION claim and prints no k/Nd tally', () => {
   // quotecore.js's header records n=4 real round trips coming out REVERSED against the model's
   // quick legs. A draft of this clause said "clears now"/"buys now"; that verb must not return.
   const bound = formatAsymFill({ ...AE, ask: 150, bid: 90 }, AP);
   for (const t of [bound.askTxt, bound.bidTxt]) {
     assert.ok(!/clears now|buys now|fills now/.test(t), `execution claim leaked: ${t}`);
     assert.ok(!/\bprints\b|\bfills ~/.test(t), `present-tense reach claim leaked: ${t}`);
+    assert.ok(!/\d+\/\d+d/.test(t), `in-sample tally leaked: ${t}`);
   }
-});
-
-ok('formatAsymFill: the tally uses pAsk\'s OWN denominator, never nDays', () => {
-  // windowStats drops days with no print, so his/lows can be shorter than nDays. Rendering
-  // pAsk × nDays printed a count over days the fraction never scored (10/12 → "12/14d").
-  const af = formatAsymFill({ ...AE, pAsk: 10 / 12, pBid: 3 / 11 }, { ...AP, nAsk: 12, nBid: 11 });
-  assert.equal(af.askTxt, 'ask 140 (printed 10/12d)');
-  assert.equal(af.bidTxt, 'deep-bid 100 (touched 3/11d — rest as optionality)');
-  const legacy = formatAsymFill(AE, { deepBid: 100, highReachAsk: 140, nDays: 14 });
-  assert.equal(legacy.askTxt, 'ask 140 (printed 12/14d)', 'a pair without nAsk/nBid falls back to nDays');
 });
 
 ok('formatAsymFill: full-gp resolution — a sub-bucket guard gap must not render as two equal prices', () => {
   // `fmt` buckets to 0.1k above 1e3, which collapsed `ask 5,240 … 5,220` into "5.2k … 5.2k" —
   // a self-contradicting sentence. Same class d37e818 fixed for offer prices in read-schedule.
   const af = formatAsymFill({ ...AE, bid: 5000, ask: 5240 }, { ...AP, deepBid: 5000, highReachAsk: 5220 });
-  assert.equal(af.askTxt, 'ask 5,240 (= live instabuy, above the 5,220 level that printed 12/14d)');
+  assert.equal(af.askTxt, 'ask 5,240 (= live instabuy, above the 5,220 high-reach level)');
   assert.ok(!/5\.2k/.test(af.askTxt), 'bucketed rendering would make the two prices indistinguishable');
 });
 
 ok('formatAsymFill: above fmtP\'s 100k full-gp cutoff, a sub-bucket gap drops the level clause', () => {
   // fmtP falls back to fmt (0.1k buckets) at/above 100k, so a big-ticket guard binding by a few gp
-  // renders both prices identically. Naming a level that displays the same as the price is nonsense;
-  // at that resolution they ARE the same level, so the plain form is the honest one.
+  // renders both prices identically; at that resolution they ARE the same level, so plain is honest.
   const af = formatAsymFill({ ...AE, bid: 219_910, ask: 219_940 }, { ...AP, deepBid: 219_950, highReachAsk: 219_910 });
-  assert.equal(af.askTxt, 'ask 219.9k (printed 12/14d)', 'collapsed pair ⇒ no self-contradicting clause');
+  assert.equal(af.askTxt, 'ask 219.9k', 'collapsed pair ⇒ no self-contradicting clause');
   assert.ok(!/above the/.test(af.askTxt) && !/below the/.test(af.bidTxt));
   // but a gap the display CAN resolve is still named
   const wide = formatAsymFill({ ...AE, ask: 220_200 }, { ...AP, highReachAsk: 218_500 });
-  assert.equal(wide.askTxt, 'ask 220.2k (= live instabuy, above the 218.5k level that printed 12/14d)');
+  assert.equal(wide.askTxt, 'ask 220.2k (= live instabuy, above the 218.5k high-reach level)');
 });
 
-ok('formatAsymFill: degrades to null rather than inventing a count', () => {
+ok('formatAsymFill: degrades to null when there is no pair', () => {
   assert.equal(formatAsymFill(null, AP), null);
   assert.equal(formatAsymFill(AE, null), null);
   assert.equal(formatAsymFill({ ...AE, ask: null }, AP), null, 'no ask ⇒ nothing to say');
-  assert.equal(formatAsymFill(AE, { ...AP, nAsk: 0, nBid: 0, nDays: 0 }), null, 'no scored days ⇒ no denominator');
 });
 
 
 /* asymClassRateNote — the ONE-TIME class-rate footer (PLAN-PATIENT-PAIR §7). It exists because the
-   per-row counts are in-sample tallies and a reader had to supply "so how often does this complete?"
+   levels are in-sample quantiles and a reader had to supply "so how often does this complete?"
    from nowhere. The measured answer is ~4.3%, so the wording has to survive being read by someone
    who wants it to be good news. */
 ok('asymClassRateNote: names the measured rate, both strata, and refuses to be a per-row number', () => {
@@ -231,7 +215,7 @@ ok('asymClassRateNote: names the measured rate, both strata, and refuses to be a
   assert.match(t, /1\.5%/, 'the big-ticket stratum is named — it is the class the plan was written about');
   assert.match(t, /CLASS rate, not this row/, 'MUTANT: drop the class-vs-row disclaimer — red. 766 items, not this item');
   assert.match(t, /touched\/reached ≠ filled/, 'MUTANT: drop the upper-bound caveat — red');
-  assert.match(t, /IN-SAMPLE/, 'MUTANT: call the per-row counts a fill rate — red');
+  assert.match(t, /in-sample quantiles, NOT fill rates/, 'MUTANT: call the levels a fill rate — red');
   assert.doesNotMatch(t, /placeholder/i, 'they are no longer placeholders; they are measured, and measured wrong');
 });
 

@@ -693,11 +693,8 @@ ok('asymPair: deep bid = the ASYM_P_LO low quantile (rare fill), ask = the ASYM_
   const p = asymPair(asymStats(lows, his));
   assert.equal(p.deepBid, quantLow(lows, ASYM_P_LO), 'deep bid is the flush quantile');
   assert.equal(p.highReachAsk, quantHigh(his, ASYM_P_HI), 'ask is the high-reach quantile');
-  // the realized fractions are consistent with the quantile definitions (ties can only push them ≥ p)
-  assert.equal(p.pBid, touchedDays(lows, p.deepBid) / 14);
-  assert.equal(p.pAsk, reachedDays(his, p.highReachAsk) / 14);
-  assert.ok(p.pBid <= 0.5, 'the deep bid fills on a MINORITY of nights (the rare flush)');
-  assert.ok(p.pAsk >= 0.75, 'the ask prints on a large MAJORITY of nights (the near-certain exit)');
+  // the in-sample fractions are the quantiles read back (circular): not returned
+  for (const k of ['pAsk', 'pBid', 'nAsk', 'nBid']) assert.equal(k in p, false, k + ' is gone');
   assert.equal(p.nDays, 14);
 });
 

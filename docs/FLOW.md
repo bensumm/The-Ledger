@@ -140,7 +140,7 @@ mobile-fills.log (phone, contents API)                       ┘        │
                                                     │
               DEFAULT: written to the working tree, ZERO git ──► localhost desk + every node surface read fresh
                                                     │
-              --publish (once a day, /overnight): fetch/ff (fold phone) + commit + push to main ──► deployed app fetches same-origin
+              --publish (on request only): fetch/ff (fold phone) + commit + push to main ──► deployed app fetches same-origin
 ```
 
 - The logger's sources are `exchange_*.log` **and, since the 2026-08-26 plugin format switch,
@@ -153,9 +153,8 @@ mobile-fills.log (phone, contents API)                       ┘        │
   §12), and the **DEFAULT is LOCAL / zero-git** (Ben 2026-07-15): a bare run rebuilds the artifacts in
   the working tree with no fetch/commit/push — the cheap in-session read run at the top of every
   `/scan`/`/positions` (the `run-loop.mjs` watch pass does it every tick). **Publishing to the deployed
-  app is once a day at `/overnight` via `sync-fills.mjs --publish`** — the only path that fetches/ff-pulls
-  (folding phone trades) + commits + pushes. So the deployed book updates nightly, the desk reads fresh
-  all day.
+  app is on request only, via `sync-fills.mjs --publish`** — the only path that fetches/ff-pulls
+  (folding phone trades) + commits + pushes. The desk reads fresh all day.
 - `positions.json` is the FIFO-reconstructed truth: `closed` = after-tax realised P/L, `open` =
   inventory at real average cost, `unmatched` = pre-log sells, **`awaitingRebuy`** = a `keep` sold and
   not yet rebought (SM1), **`settled`** = a short that aged out undeclared past `SHORT_MAX_AGE_DAYS`
@@ -232,5 +231,5 @@ this table is the flow view, not a second inventory.
 - **CI** (`.github/workflows/checks.yml`) runs the `pipeline/ci/` guards on every push/PR: the
   cheap `checks` job (syntax, `run-tests`, `check-imports`, `check-dead-exports`, `check-daemon-safety`,
   `check-forecast-guards`, `check-verdict-guards`, `lint-arch`, `lint-docs`, `lint-skills`, `lint-comments`,
-  `lint-plan-refs`, `lint-guard-lists`, fills/positions parse) + the `smoke` job (headless-chromium app load).
+  `lint-plan-refs`, `lint-budget`, `lint-guard-lists`, fills/positions parse) + the `smoke` job (headless-chromium app load).
   This list is the whole `checks` job and `lint-guard-lists.mjs` fails if it drifts from `checks.yml`.

@@ -1,52 +1,36 @@
 #!/usr/bin/env node
 /**
- * dwell.test.mjs — pins formatDwell / tallyCounts (emit.mjs) + the lean `dwell` ledger field
+ * dwell.test.mjs — pins formatDwell (emit.mjs) + the lean `dwell` ledger field
  * (suggestlog.mjs). The ⇄ dwell line is the fill-now vs rest-day pricing comparison (the
  * bludgeon/Marlin 2026-09-10 anchor: two rest-all-day legs priced at live edges); these pins keep
  * its honesty properties from regressing:
- *   - counts render over nAsk/nBid, NEVER nDays (the asymPair denominator trap, windowread.mjs
- *     ~:866 — his/lows can be SHORTER than nDays, so a nDays tally counts days the fraction never
- *     scored);
+ *   - the rest-day quantile levels print NO in-sample tally (it is the quantile read back);
  *   - a missing basis degrades to null (honest absence, never a fabricated comparison);
  *   - a rest-day level carries its reality clause; a declared exit carries a label, never a clause;
  *   - the ledger field is lean-included (absent flag ⇒ byte-absent field).
  * Run: `node pipeline/test/dwell.test.mjs`  (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { formatDwell, tallyCounts, dwellSellClassRateNote } from '../lib/render/emit.mjs';
+import { formatDwell, dwellSellClassRateNote } from '../lib/render/emit.mjs';
 import { suggestionEntry } from '../lib/render/suggestlog.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
-
-// --- tallyCounts ---------------------------------------------------------------------------------
-ok('tallyCounts uses nAsk/nBid as denominators, not nDays', () => {
-  const t = tallyCounts({ pAsk: 10 / 12, pBid: 4 / 13, nAsk: 12, nBid: 13, nDays: 14 });
-  assert.deepEqual(t, { hA: 10, nA: 12, hB: 4, nB: 13 });   // 10/12, never "12/14"
-});
-ok('tallyCounts falls back to nDays only when the side denominators are absent', () => {
-  assert.deepEqual(tallyCounts({ pAsk: 0.5, pBid: 0.25, nDays: 12 }), { hA: 6, nA: 12, hB: 3, nB: 12 });
-});
-ok('tallyCounts null-degrades with no denominator at all', () => {
-  assert.equal(tallyCounts({ pAsk: 0.5, pBid: 0.25 }), null);
-  assert.equal(tallyCounts(), null);
-});
 
 // --- formatDwell, items surface (side both) ------------------------------------------------------
 const itemsInput = {
   fillNow: { buy: 17_835_594, sell: 17_900_000, net: 64_706 },
   restDay: {
     bid: 17_420_000, ask: 18_050_000, net: 268_000,
-    hB: 4, nB: 14, hA: 11, nA: 14,
     bidReality: null, askReality: null, poolLo: 120, poolHi: 95,
   },
 };
-ok('items line: both bases, tallies, pools, per-TIME/per-FLIP framing, rest-day routing clause', () => {
+ok('items line: both bases, no tallies, pools, per-TIME/per-FLIP framing, rest-day routing clause', () => {
   const s = formatDwell(itemsInput);
   assert.equal(s,
     'dwell: FILL-NOW 17.84m→17.90m net +64.7k/u (live edges — pays per-TIME)'
-    + ' | REST-DAY bid 17.42m (touched 4/14d) → ask 18.05m (printed 11/14d)'
-    + ' net +268k/u · pools ~120/~95 u/d (pays per-FLIP; touched ≠ filled, in-sample)'
+    + ' | REST-DAY bid 17.42m → ask 18.05m'
+    + ' net +268k/u · pools ~120/~95 u/d (pays per-FLIP; quantile levels, not fill rates)'
     + ' — resting away-hours/overnight? price off REST-DAY');
 });
 ok('no execution verb on the fill-now half (quotecore measured the live edges REVERSED on real fills)', () => {
@@ -56,13 +40,12 @@ ok('no execution verb on the fill-now half (quotecore measured the live edges RE
 ok('a firing reality clause rides WITH its rest-day level', () => {
   const s = formatDwell({ ...itemsInput, restDay: { ...itemsInput.restDay,
     askReality: { spikeTop: true, staleOptimistic: false, typicalLevel: 17_600_000 } } });
-  assert.ok(s.includes('ask 18.05m (printed 11/14d) ⚠ spike-top ~17.60m'));
+  assert.ok(s.includes('ask 18.05m ⚠ spike-top ~17.60m'));
 });
 ok('items line null-degrades when either basis is incomplete', () => {
   assert.equal(formatDwell({ ...itemsInput, restDay: null }), null);
   assert.equal(formatDwell({ ...itemsInput, restDay: { ...itemsInput.restDay, ask: null } }), null);
   assert.equal(formatDwell({ ...itemsInput, fillNow: { ...itemsInput.fillNow, buy: null } }), null);
-  assert.equal(formatDwell({ ...itemsInput, restDay: { ...itemsInput.restDay, hA: null } }), null);
 });
 ok('a null net renders as n/a, never a fabricated number', () => {
   const s = formatDwell({ ...itemsInput, fillNow: { ...itemsInput.fillNow, net: null } });
@@ -79,7 +62,7 @@ ok('positions sell leg: nets vs cost, asym rest-day rung with tally', () => {
   assert.equal(s,
     'dwell (sell): FILL-NOW @3,885 net −12/u vs cost'
     + ' | REST-DAY @4,050 (printed 11/14d) net +153/u vs cost'
-    + ' — resting all day? price the REST-DAY rung (touched ≠ filled, in-sample)');
+    + ' — resting all day? price the REST-DAY rung (touched ≠ filled)');
 });
 ok('a DECLARED exit carries its label and never a reality clause (item-context refusal)', () => {
   const s = formatDwell({
@@ -106,7 +89,7 @@ ok('a null-net (no cost basis) sell leg gets the verify-vs-BE tail, not the rout
 ok('dwellSellClassRateNote is the ask-leg footer — conditional stated, big-ticket split, no round trip', () => {
   const s = dwellSellClassRateNote();
   assert.ok(s.startsWith('dwell (sell) — '));
-  assert.ok(s.includes('NOT') && s.includes('fill rates'));
+  assert.ok(s.includes('NOT') && s.includes('fill rate'));
   assert.ok(s.includes('given the paired deep bid touched'));   // the conditioning may never be dropped
   assert.ok(s.includes('big-ticket'));                          // the split held lots concentrate in
   assert.ok(!s.includes('round trip'));                         // the round-trip rate has no held-lot meaning
@@ -130,7 +113,7 @@ ok('a negative rest-day pair on the items surface drops the routing imperative t
 ok('a reality clause whose typical renders IDENTICAL to its level is suppressed (same-render rule)', () => {
   const s = formatDwell({ ...itemsInput, restDay: { ...itemsInput.restDay,
     bidReality: { spikeTop: false, staleOptimistic: true, typicalLevel: 17_420_000 } } });
-  assert.ok(s.includes('bid 17.42m (touched 4/14d) → ask'));   // no dangling "⚠ stale ~17.42m"
+  assert.ok(s.includes('bid 17.42m → ask'));   // no dangling "⚠ stale ~17.42m"
   assert.ok(!s.includes('⚠ stale ~17.42m'));
 });
 

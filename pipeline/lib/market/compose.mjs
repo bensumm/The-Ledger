@@ -31,7 +31,7 @@
    it must not touch the filesystem on import). A minimal shape:
      { "sellModel": "reach-fold", "volSource": "rolling", "modes": ["band","churn","value"] }
 
-   Consumers: screen-flip-niches.mjs (mode / vol-source / asym / phase-rescue / est-sell),
+   Consumers: screen-flip-niches.mjs (mode / vol-source / phase-rescue / est-sell),
    quote-items.mjs + watch-positions.mjs (est-sell). */
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -85,7 +85,7 @@ export function shadowModelsOf(registry) {
 
 /* refusePublishIfNonNeutral({ publish, publishExplicit, checks }) → the (possibly downgraded) publish
    flag. The ONE shared guard that used to be hand-copied per non-neutral estimator flag in
-   screen-flip-niches.mjs (--asym, and the since-retired --pressure-exit): an UN-CALIBRATED / F1-ungraduated estimator must
+   screen-flip-niches.mjs (--archive-regime / non-neutral --est-sell; the retired --asym and --pressure-exit once rode it): an UN-CALIBRATED / F1-ungraduated estimator must
    never reach screen.json / the deployed app. `checks` is an ORDERED list of { on, message }: when a
    check is `on` and publishing is still live, an EXPLICIT `--publish` is a hard user error (print the
    check's message to stderr + exit 1), while default-on publish is quietly downgraded to off (so an

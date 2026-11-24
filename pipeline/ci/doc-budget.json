@@ -1,0 +1,27 @@
+{
+  "plans": 49,
+  "docs": {
+    "CLAUDE.md": 42594,
+    "README.md": 382645,
+    "PLAN.md": 254655,
+    "pipeline/MONITORING.md": 70332,
+    "pipeline/FILLS-PIPELINE.md": 74770,
+    "docs/ARCHITECTURE.md": 18819,
+    "docs/FLOW.md": 15787,
+    "docs/GLOSSARY.md": 14085,
+    "docs/LORE.md": 11956,
+    "docs/MARKET-ANALYSIS.md": 116820,
+    "docs/PLANNING.md": 6810,
+    "docs/SIGNAL-AUDIT.md": 46169,
+    "docs/SKILL-TRIAGE.md": 18900,
+    ".claude/skills/analyze/SKILL.md": 7248,
+    ".claude/skills/book/SKILL.md": 6436,
+    ".claude/skills/cleanup/SKILL.md": 12164,
+    ".claude/skills/morning/SKILL.md": 16062,
+    ".claude/skills/overnight/SKILL.md": 18060,
+    ".claude/skills/positions/SKILL.md": 60402,
+    ".claude/skills/scan/SKILL.md": 102976,
+    ".claude/skills/schedule/SKILL.md": 8030,
+    ".claude/skills/ship/SKILL.md": 11550
+  }
+}

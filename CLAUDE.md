@@ -27,9 +27,9 @@ push to `main`).
   and `/positions` read commands (`screen-flip-niches.mjs`, `quote-items.mjs --positions`) now **auto-run
   this local sync themselves before the read** (SY1, 2026-07-16 — enforced in-code, was a repeatedly-skipped
   doctrine); run it MANUALLY only for OTHER surfaces that don't (e.g. a bare quote, `/morning`, a hand
-  read of `positions.json`). **Publishing is ONCE A DAY at `/overnight` via `sync-fills.mjs
-  --publish`** (the only path that fetches/ff-pulls phone trades + commits + pushes) — so the deployed
-  app's book updates nightly while the localhost desk reads the fresh rebuild all day. `positions.json` is the FIFO-reconstructed view (`collapseOffers` +
+  read of `positions.json`). **The book is not published by default** — `sync-fills.mjs --publish` (the only path that
+  fetches phone trades, commits and pushes) runs only when Ben asks. The record is protected by the private
+  `backup-data.mjs`, which the sync runs itself when due (`pipeline/lib/config/chores.mjs`). `positions.json` is the FIFO-reconstructed view (`collapseOffers` +
   `matchTrades`): `closed` after-tax realised P/L, `open` inventory at real avg cost, `unmatched`
   pre-log sells, `awaitingRebuy` a **keep** sold and not yet rebought (SM1 — matching is SYMMETRIC:
   sell→buy closes a `keepRoundTrip` just as buy→sell closes a flip; `beRebuy` is the break-even on
@@ -107,7 +107,7 @@ deliberate):**
 | "set up for **overnight**", "what should I leave running overnight", "**going to bed**" | **`/overnight` skill** — two-phase: `/positions` → pause for stated capital → `/scan` + accumulation sizing |
 | "what happened **overnight**?", "**morning** review", "what **filled**?", "catch me up" | **`/morning` skill** — positions.json/fills.json + `monitor-offers.mjs` + re-verdict stale bids |
 | "watch/**monitor** my positions", "run a flipping **session**", "poll/keep an eye on **X**" | `node pipeline/commands/watch-positions.mjs ["<target>" …]`  (drive with `/loop`, see `pipeline/MONITORING.md`) |
-| "**loop** positions AND scan", "monitor **and** discover", "check positions every X **and** scan every Y" | `node pipeline/commands/run-loop.mjs [--watch <min>] [--scan <min>] [--min-idle <gp>] [--no-sync]` (multi-action `/loop` driver — time-gated multiplexer runs `watch-positions.mjs` + `screen-flip-niches.mjs --mode all` on independent cadences from ONE loop; scan gated on DEPLOYABLE capital ≥ `--min-idle` (`derive-cash-tiers.mjs` `deployablePool` = free cash + reclaimable DEEP-bid escrow — the three-tier `availableCash ≤ deployablePool ≤ liquidCapital` model; the gate does a small live fetch of just the resting-bid ids to classify each bid deep-vs-committed, degrading to `availableCash` if that fetch fails). **A local book-refresh rides with the watch pass by default** — `sync-fills.mjs --local` (now the default behavior, kept as an explicit synonym) rebuilds fills/positions/offers.json from the exchange logs (ZERO git, no push) so positions always reads a fresh book; the loop never pushes to `main` — publishing is the once-a-day `/overnight` `sync-fills.mjs --publish`; `--no-sync` opts out. Drive with `/loop <gcd>m node pipeline/commands/run-loop.mjs --watch 30 --scan 15`) |
+| "**loop** positions AND scan", "monitor **and** discover", "check positions every X **and** scan every Y" | `node pipeline/commands/run-loop.mjs [--watch <min>] [--scan <min>] [--min-idle <gp>] [--no-sync]` (multi-action `/loop` driver — time-gated multiplexer runs `watch-positions.mjs` + `screen-flip-niches.mjs --mode all` on independent cadences from ONE loop; scan gated on DEPLOYABLE capital ≥ `--min-idle` (`derive-cash-tiers.mjs` `deployablePool` = free cash + reclaimable DEEP-bid escrow — the three-tier `availableCash ≤ deployablePool ≤ liquidCapital` model; the gate does a small live fetch of just the resting-bid ids to classify each bid deep-vs-committed, degrading to `availableCash` if that fetch fails). **A local book-refresh rides with the watch pass by default** — `sync-fills.mjs --local` (now the default behavior, kept as an explicit synonym) rebuilds fills/positions/offers.json from the exchange logs (ZERO git, no push) so positions always reads a fresh book; the loop never pushes to `main` — publishing is on request only; `--no-sync` opts out. Drive with `/loop <gcd>m node pipeline/commands/run-loop.mjs --watch 30 --scan 15`) |
 | "watch for **dips/flushes**", "run the **dip loop**", "catch a **liquid flush**" | `node pipeline/commands/watch-positions.mjs --dip ["<target>" …]` (DL2 — folds `dip-watchlist.json`; fires a reactive FLUSH bid-into-the-fall alert on a LIQUID dumping item; 5m cadence floor) |
 | "can I **buy more** X?", "how much **buy limit** left [on X]?", "have I hit my **limit**?", "when does X's limit **reset**?" | `node pipeline/commands/read-buy-limits.mjs "<item or id>" [...]` (no args → every item bought in the last 4h) |
 | "what's my **book** look like?", "what's **deployed vs idle**?", "how many **slots free**?", "**capital dashboard**", "how much **X can I buy** right now?" | **`/book` skill** — runs `node pipeline/commands/read-book.mjs` (GE slots + working/parked/idle capital split + grouped per-lot P&L board); add `--size "<item>" [--capital <gp>]` for the tranche sizer (min of buy-limit × clearability × capital + the binding bound + net-if-cycled). Inform-only; live marks age-labelled, free-slot count a log-derived UPPER bound (a completed-but-uncollected slot reads as free — "at most N free") |
@@ -115,7 +115,7 @@ deliberate):**
 | "what's my **agenda**", "what should I **buy/sell and when**", "when's the **next window**", "what's **coming up**", "**schedule**" | **`/schedule` skill** — runs `node pipeline/commands/read-schedule.mjs [-c\|-w] [--audit]` (default `-c` = current positions ∪ open offers; `-w` = watchlist; `--audit` = flipped-but-not-watchlisted review) → ONE time-sorted `In (h)` agenda of each item's buy(dip)/sell(peak) windows off the same `hourProfile` `read-window-range.mjs --profile` prints, then a spoken agenda. INFORM-ONLY n≈0 (plans, never gates). `run-loop.mjs` prints a `⏭ next:` one-liner off this each watch tick |
 | "**analyze** our track record", "**what should we tune?**", "did we **log everything**?", "run a **retro**", "how are our **suggestions** doing?" | **`/analyze` skill** — runs `node pipeline/commands/analyze-record.mjs` (read-only dataset audit + per-flip-niche retro rollup + n-gated tuning candidates; `--json` for the brief) then interprets it into a retro + F1-routed improvement proposals + a project-guidelines checklist over the session's edits |
 | "which **reach basis** is right?", "is **recent-3** or the **full window** better?", "is the **`sell unreliable`** tag any good?", "score the **digest reach** column" | `node pipeline/commands/join-reach-basis.mjs [--horizon H] [--min-days N] [--cost-ratio r] [--item "<item>"] [--json]` (2026-08-13 — forward-scores both ask-reach bases off the SAME logged row against the 1h archive, settling the split `screen-flip-niches.mjs`'s header flagged as undecided. **Settled, and NOT in favour of either basis — read the result before quoting it.** FOUR cost regimes: `never-gate < 1.29 · recent-3 < 1.76 · full-window < 2.05 · gate-all above`. Quote the regime map and r\*, never the accuracy number (a class-imbalance artifact). Code unchanged; threshold work belongs to F1. Which pre-registered branch fired, the null-model costs, and the rejected-estimator note: README's `join-reach-basis.mjs` entry and PLAN.md Discovered — don't restate them here) |
-| "is the **patient pair** real?", "does the **deep bid** actually fill?", "measure **pAsk/pBid**", "score the **asym** pair" | `node pipeline/commands/join-asym-outcomes.mjs [--entry H] [--horizon H] [--item "<item>"] [--json]` (2026-08-24, PLAN-PATIENT-PAIR §7 — forward-measures the asym pair's two legs off the 1h archive, replacing constants that measure nothing. **Read the result before quoting it: the displayed `pAsk` 86.8% measures 24.2%, `pBid` 31.1% measures 17.8%, round trip 4.3%** — and the logged pair is quantiles read back out, so that is the size of a fiction, not an estimator's error. **DT1 generalises and bites hardest on big-ticket** (6.4% exit-given-entry vs 28.6% sub-big-ticket). A random-offset null was tried and REJECTED as a starting-price artifact — the header says why before you reinstate one. Inform-only, gates nothing. Full result + limits: README's `join-asym-outcomes.mjs` entry — don't restate them here) |
+| "is the **patient pair** real?", "does the **deep bid** actually fill?", "score the **asym** pair" | `node pipeline/commands/join-asym-outcomes.mjs [--entry H] [--horizon H] [--item "<item>"] [--json]` (2026-08-24, PLAN-PATIENT-PAIR §7 — forward-measures the asym pair's two legs off the 1h archive, replacing constants that measure nothing. **Read the result before quoting it: exit-given-entry measures 24.2%, entry 17.8%, round trip 4.3%.** The in-sample `pAsk`/`pBid` it once compared against (86.8% / 31.1%) were quantiles read back out and were removed in pipeline 1.9.0 (old logged rows still carry them). **DT1 generalises and bites hardest on big-ticket** (6.4% exit-given-entry vs 28.6% sub-big-ticket). A random-offset null was tried and REJECTED as a starting-price artifact — the header says why before you reinstate one. Inform-only, gates nothing. Full result + limits: README's `join-asym-outcomes.mjs` entry — don't restate them here) |
 | "which **exit estimator** is best?", "is **pressure** any good?", "should we **retire** reachRelief/asym?", "score the **reachability** head-to-head" | `node pipeline/commands/join-reach-outcomes.mjs [--horizon H] [--min-n N] [--item "<item>"] [--json]` (2026-08-27, PLAN-REACHABILITY-CONSOLIDATION — forward-scores the co-logged exit estimators against the 1h archive, per (side × class × regime) cell. **It DESCRIBES; it does NOT rank — do not quote a winner off it.** The reach and gap columns are two different statistics of ONE per-row comparison, so they can order the estimators differently and neither order is a quality order — README explains why; ranking waits on the cost model `join-reach-basis.mjs` already carries. **Read the MATCHED tables, not the pooled ones**, and note no matched pool holds more than THREE contenders. **Every claim here is horizon-conditional — always state which `--horizon` produced it.** RC1/RC2 must not be executed on this evidence (the retirement that DID execute — pressure's ASK leg, 2026-08-30 — ran on `join-exit-ev.mjs`'s realized-EV criterion, not this scorer; this command keeps scoring the logged history). Inform-only, gates nothing; ASK leg only. Full result, the horizon table + limits: README's `join-reach-outcomes.mjs` entry — don't restate them here) |
 | "what should I **ask** for X if I'll **wait** H?", "how **long** to clear X **at price P**?", "show me the **reach surface**", "what's the **EV-max ask**?" | `node pipeline/commands/read-exit-surface.mjs "<item or id>" [--horizon 6,24,48] [--price <gp>] [--qty N] [--delay-cost <gp>] [--json]` (PLAN-REACH-SURFACE chunk 3 — the first surface that ships a PRICE off the measured reach surface `p(ask,H)`. **Two questions, never blended**: `askStar` is the price (printed as a BAND over its plateau, never a point), `--price` gives the HORIZON read. The p≥pTarget level is deliberately NOT offered as an ask — §1c measured it as the worst pricing rule tried at short horizons. Also places the incumbent exit estimators on that one ruler as (ask, z, p@H) rows. Each horizon reports the smallest cost-of-waiting at which its own answer changes, and the two forces behind a high argmax are measured per item rather than asserted. Refusals carry no price at either level (whole-item and per-horizon) — README owns the mechanics. **⚠ chunk 4 has now scored this against realized gp and `askStar` LOST — see the `join-exit-ev.mjs` row below before pricing anything off this command, and note that charging for the wait does not rescue it at any cost in range.** INFORM-ONLY, gates nothing. Full behaviour + limits: README's entry — don't restate them here) |
 | "did the **reach surface** actually work?", "does **askStar** beat what we have?", "which **exit ask** makes the most gp?", "**backtest** the exit price" | `node pipeline/commands/join-exit-ev.mjs [--items N] [--stride H] [--horizon H] [--bail low\|high] [--json]` (2026-08-29, PLAN-REACH-SURFACE chunk 4 — the decisive backtest: at each archive origin, list at each contender's ask for H hours, credit `net(ask)` if the market reaches it, else the bail. **THE PRE-REGISTERED NULL BRANCH FIRED — read it before quoting anything off the reach surface: `askStar` LOSES to an incumbent, so the surface is a DESCRIPTION layer, the chunk-5 default swap is CANCELLED, and `read-exit-surface.mjs` prices nothing you should trade off.** The two incumbents at the top (`asym`, `reachFold`) are TIED, and the surface lands below both AND below the live instabuy. It also NOMINATES estimators for exit-pricing retirement under a criterion pre-registered in the file header — **the one live nomination (`pressure`, ASK leg) was EXECUTED 2026-08-30**: the pressure sell model/trial flags/app trial column are gone, the `reachable.ask` co-log stopped, and the BID/band reads + logged history survive (CHANGELOG 0.76.0). `reachFold` stays BLOCKED by the resolution floor — nothing may be retired on a gap narrower than the instrument's noise. Inform-only, gates nothing; the ASK leg only. Full result, the acceptance check that once inverted it, and the three sensitivities: README's `join-exit-ev.mjs` entry — don't restate them here) |
@@ -192,10 +192,8 @@ metadata, not a leak; the concern is content, not commit authorship.
    practical path today is attended direct-push under the admin bypass** (`git fetch &&
    rebase origin/main && push`); the PR-for-everything flow is the intent once the token is
    refreshed — full state in `/ship` §2/§6. Describe the change to Ben before landing it.
-   The once-a-day `sync-fills.mjs --publish` (run at `/overnight`) pushes an explicit **NINE-file** add-list
-   direct to `main` (pipeline-owned; clobber-guard reconciles) — the list's one home is `pipeline/FILLS-PIPELINE.md`
-   §13.3; this line named three until 2026-08-09. A bare `sync-fills.mjs` is local/zero-git and pushes nothing. No unattended writer
-   remains (the schedule was eliminated — `pipeline/FILLS-PIPELINE.md` §12).
+   `sync-fills.mjs --publish` (on request only) pushes an explicit add-list direct to `main` — its one home is
+   `pipeline/FILLS-PIPELINE.md` §13.3. A bare `sync-fills.mjs` pushes nothing; no unattended writer exists.
 7. Ben doesn't have a separate git GUI client on the Windows machine — git CLI + SSH
    auth to GitHub is already working and is the only tool needed for git operations;
    don't suggest installing anything else for those. The GitHub CLI (`gh`) IS
@@ -204,7 +202,7 @@ metadata, not a leak; the concern is content, not commit authorship.
    section and the `/ship` skill.
 8. **A documentation pass is part of every change — not optional, and not append-only.**
    Before calling a change done, update the docs the change touches: this `CLAUDE.md`
-   (a "Done" pointer, plus any workflow/section it affects), and any affected doc
+   (any workflow/section it affects), and any affected doc
    (`pipeline/MONITORING.md`, `pipeline/FILLS-PIPELINE.md`, `README.md`). Crucially, this is
    a *reconciliation* pass, not just new prose: **grep the docs for statements the change now
    supersedes or contradicts and fix them in place** (e.g. a superseded matrix/table, a stale
@@ -282,6 +280,13 @@ metadata, not a leak; the concern is content, not commit authorship.
     directly above its own warning that the count had been wrong four rounds running. Delete the
     number or encode the check; do not re-derive it.
 
+13. **Prevent, don't accumulate.** (a) A lesson becomes a test, script output, or nothing; prose only for
+    real judgment, and doc ceilings (`pipeline/ci/doc-budget.json`) only come down — after trimming run
+    `lint-budget.mjs --bless`. (b) Anything inform-only or unproven ships with a `pipeline/ci/provisional.json`
+    entry: a decide-by date and a pass test. Past the date CI fails until it is promoted or deleted; a null
+    result deletes the live feature in the same change. (c) Recurring upkeep goes in `chores.mjs`, never in a
+    skill step. (d) Finish or delete a plan before opening one; target five open.
+
 ## GitHub CLI (`gh`), Actions CI, and shipping — mechanics live in `/ship`
 - **`main` is protected by a ruleset** (G1, 2026-07-04): PR + `checks` required, no
   force-push/deletion, repository-admin **always** bypass (ruleset id `18520289`). Two live
@@ -292,57 +297,13 @@ metadata, not a leak; the concern is content, not commit authorship.
   flow is the intent once the token is refreshed. Full honest state: `/ship` §2/§6.
 - `gh` (installed + authed 2026-07-04) is the API + ruleset/PR management layer; git
   operations stay on git-over-SSH. **Never run `gh auth setup-git`** (details in `/ship` §5).
-- **The once-a-day `sync-fills.mjs --publish` (at `/overnight`) pushes go direct to `main`** riding the
-  admin bypass (pipeline-owned artifacts; clobber-guard reconciles). A bare `sync-fills.mjs` is
-  local/zero-git (the default in-session book read) and pushes nothing. No unattended writer / machine
-  bypass identity exists — the schedule was eliminated (`pipeline/FILLS-PIPELINE.md` §12).
-- **CI: `.github/workflows/checks.yml`** — a cheap `checks` job (JS syntax sweep, the auto-discovered
-  acceptance fixtures **`run-tests.mjs`**, **`check-dead-exports.mjs`**, **`lint-arch.mjs`**, **`check-imports.mjs`** — TWO static binding guards over every
-  `pipeline/commands/*.mjs` entrypoint: (1) import RESOLUTION — every name imported exists in the target
-  module's exports (catches a missing-export that `node --check`'s syntax-only pass lets through); and
-  (2) UNBOUND CONSTANTS — every SCREAMING_SNAKE name USED is imported or declared, which is the reverse
-  direction and the one that caught a shipped `ReferenceError`. **Coverage is the ENTRYPOINTS ⋃ `js/**` ⋃
-  `pipeline/lib/**`** since 2026-08-10 (was entrypoints only — the rationale, the measurements and the
-  browser-module shim live in README's `check-imports.mjs` entry, the ONE home)), `fills.json`/`positions.json` parse, `lint-skills.mjs`, and
-  `lint-docs.mjs` — DL1's structural doc-drift lint: a denylist of superseded terms/commands,
-  a single-source duplicate-phrase check on the CLAUDE.md ⇆ README axis, and a **constant-drift**
-  check (the stale-NUMBER class the denylist cannot see) that reads each SCREAMING_SNAKE value from
-  SOURCE and fails a governed doc quoting a different literal beside that name — the anchor is the
-  `MIN_GPD` floor left stale at 2× in eleven places; the dated record (CHANGELOG/LORE/plans) is
-  excluded because restating an old value is its job, and the design + limits live in README's
-  `lint-docs.mjs` entry, the ONE home; **must stay a denylist +
-  structural checker, never a semantic/LLM one**, and `lint-comments.mjs` — the comment-doctrine
-  ratchet, and `lint-plan-refs.mjs` — the plan-reference gate, the only existence guard `plans/` has.
-  **Run `lint-plan-refs.mjs --refs <NAME>` BEFORE deleting any plan** — it lists every referencing
-  file, and nothing else in CI will tell you. Both guards' design + limits live in their README
-  entries, the ONE home. And **`check-verdict-guards.mjs`** — every production `momVerdict()` threads
-  `lotCtx` (the dropped-softening pin). And **`lint-guard-lists.mjs`** — the guard-list drift gate:
-  every `pipeline/ci/*.mjs` the `checks` job runs must be NAMED in each doc that enumerates that job
-  (this file, `docs/FLOW.md`, `/cleanup`), because the list had silently drifted in two of the three.
-  It is job-scoped and reads only the script steps, so it checks "pipeline/ci scripts in the `checks`
-  job", never "the gating set" — design + limits in README's entry, the ONE home. And `check-daemon-safety.mjs`
-  — the daemon zero-git guard (fails if any local/auto-runnable daemon imports or shells the git-writer;
-  same denylist philosophy). **Its scope is REGISTRY-DERIVED, not a directory listing — don't narrow it
-  back:** it was a `readdirSync(pipeline/daemons)` while 3 of the 4 registered daemons live in
-  `pipeline/commands/`, so it read a quarter of the fleet and still printed a clean run. It now also pins
-  `sync-fills.mjs`'s own invocation guard + export surface (the two properties that make importing it
-  safe), and `--publish` alone is NOT treated as a git signal — `screen-flip-niches.mjs --publish` writes
-  only a local file. Design + limits: README's entry, the ONE home. And `check-forecast-guards.mjs` — the FAIL-OPEN-refusal pin: every
-  `diurnalForecast`/`driftExitFrom` call must pass `phase` **as a resolvable VALUE**, since an omitted
-  OR undefined guard field silently disables the `post-shock-shape` refusal (the 2026-08-06 Snape grass
-  miss — the verification trio projected a mid-decay item for a day; CHANGELOG 0.71.1). **The v1 guard
-  was itself fail-open (fixed 0.71.8): it matched the WORD `phase` in the argument text, so the seven
-  sites passing `phase: row.phase` — a field `computeQuote` does not return — read `undefined` and
-  passed green, including the one feeding `amplitudeGate`. It now duck-types the source object against
-  `computeQuote`'s REAL key set (obtained by calling it, so it self-heals) and rejects a phase read off
-  a quote row.** Anchor for the class: a guard's own header claiming "these call sites had always
-  passed the fields" is a verification claim, and it was false for two commits)) plus a separate
-  **`smoke` job** (CI1) that loads `index.html` in headless Playwright chromium with all
-  external network stubbed and fails on any page error / app console error / empty pane —
-  the "syntax passed but the app broke" class the process rules warn about (`pipeline/ci/smoke-test.mjs`).
-  Both run on push, PR, and `merge_group`; the cheap job is split out so it fails fast. Agents
-  may add/improve workflows within the constraints in `/ship` §4 (public logs, no `~/.runelite`,
-  seconds-fast, no secrets).
+- **CI: `.github/workflows/checks.yml`** — a fast offline `checks` job (JS syntax, `run-tests.mjs`,
+  `check-imports.mjs`, `check-dead-exports.mjs`, `check-daemon-safety.mjs`, `check-forecast-guards.mjs`,
+  `check-verdict-guards.mjs`, `lint-arch.mjs`, `lint-skills.mjs`, `lint-docs.mjs`, `lint-comments.mjs`,
+  `lint-budget.mjs`, `lint-plan-refs.mjs`, `lint-guard-lists.mjs`, fills/positions parse) plus a `smoke` job (headless app
+  load, `smoke-test.mjs`). Each guard's header owns its design and limits; read it before changing the guard.
+  Guards are structural, never semantic/LLM. **Run `lint-plan-refs.mjs --refs <NAME>` BEFORE deleting any plan.**
+  Workflow constraints: `/ship` §4.
 
 ## The `STATE` object (js/state.js) — read before editing shared state
 The rule (all app-wide mutable state lives as properties on one exported `STATE` object,

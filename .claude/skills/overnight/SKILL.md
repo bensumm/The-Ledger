@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.31
+version: 1.32
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -58,22 +58,8 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    boundary below owns it. **Freshness (SY1):** `/positions` runs `node pipeline/commands/sync-fills.mjs`
    first (the local/zero-git default), so the book is fresh for the whole composition; don't re-run the
    sync when `/scan` runs in Phase 2.
-   **THE ONCE-A-DAY PUBLISH lives here (Ben 2026-07-15).** `/overnight` is the daily session boundary, so
-   this is where the book gets published to the deployed app: run `node pipeline/commands/sync-fills.mjs
-   --publish` once, from the MAIN checkout (`C:\dev\The-Ledger`, **never a worktree** — this is the path
-   that commits+pushes to `main`). It fetches/ff-pulls first (folding any phone `mobile-fills.log` trades,
-   the multi-writer contract, FILLS-PIPELINE §13.3) then commits+pushes an explicit **nine-file** add-list
-   (fills/positions/offers/screen/suggestions/dip-watchlist/hold-thesis/bid-thesis/alerts — §13.3 is its
-   one home; this line named two until 2026-08-09). Every
-   other read (in-session, `/scan`, `/positions`, `/morning`) stays local/zero-git; `--publish` runs ONLY
-   here, once per day. If you're in a worktree and can't reach the main checkout, SKIP the publish and note
-   the deployed app's book won't update tonight (the local reads are still fresh).
-   **Refresh the measurement spine (Ben, 2026-07-07).** Right after that sync, run
-   `node pipeline/commands/join-outcomes.mjs` once — the schema-v2 outcomes spine is NOT auto-updated by
-   watch/screen (it's gitignored/derived), so it drifts stale across a trading session;
-   `/overnight` is the daily session boundary where the day's completed fills + suggestion→fill
-   joins get folded into it. It's EXTEND-never-rebuild, so it's safe to run any time; do it here so
-   the F1-calibration accrual and the weekly `/morning` descriptive-outcomes read stay current.
+   Publishing is on request only, and backup and outcomes staleness are tracked by
+   `pipeline/lib/config/chores.mjs`; relay any `chore · ⚠` line the read prints, and run the command it names.
 2. **Chase-offer sweep — TWO-SIDED (Ben, 2026-07-05; sell side added 2026-09-10 — the Marlin
    ask-at-live-instabuy miss).** Attended sessions price offers at the live edges to fill;
    overnight inverts BOTH legs. Before the pause, list every RESTING offer

@@ -241,36 +241,20 @@ ok('estimateRank bundles pair/net/pFill/ttf/rank off a real archetype row (band 
 });
 
 /* --- PART II (PLAN-GRADE-REACH): asymmetric fill shape ---------------------------------------------- */
-ok('PART II golden (Lightbearer archetype): a 3/14-bid + 11/14-ask pick OUT-RANKS a 12/14-bid + 2/14-ask pick of EQUAL net', () => {
-  // same realizable pair (equal net), opposite fill shapes. A = Ben's ideal (rare deep entry, near-
-  // certain exit); B = the mirage-exit shape Part I diagnosed.
+ok('asymEstimate: the guarded pair + net, no in-sample probability or rank fields', () => {
   const row = { quickBuy: 3_900_000, quickSell: 3_950_000, volDay: 500 };
-  const A = { deepBid: 3_800_000, highReachAsk: 4_050_000, pAsk: 11 / 14, pBid: 3 / 14, nDays: 14 };
-  const B = { deepBid: 3_800_000, highReachAsk: 4_050_000, pAsk: 2 / 14, pBid: 12 / 14, nDays: 14 };
-  const eA = asymEstimate(FLIP_NICHES.band, row, A);
-  const eB = asymEstimate(FLIP_NICHES.band, row, B);
-  assert.equal(eA.net, eB.net, 'equal band net by construction');
-  assert.ok(eA.rank > eB.rank, 'asym objective: the near-certain EXIT wins the rank');
-  assert.ok(Math.abs(eA.rank / eB.rank - (11 / 2)) < 1e-9, 'rank scales by P_ask alone (11/14 vs 2/14)');
-  // …and under the OLD symmetric two-leg P (bid-fill × ask-reach factor) B would out-rank A — the
-  // exact inversion Part II exists to fix (pinned so the contrast can't silently regress).
-  const oldP = (pBid, pAsk) => pBid * askReachFactor({ reachedDays: pAsk * 14, nDays: 14 });
-  assert.ok(oldP(12 / 14, 2 / 14) > oldP(3 / 14, 11 / 14), 'the symmetric objective preferred the wrong shape');
-});
-
-ok('asymEstimate: P_bid NEVER multiplies the rank (a rare deep fill is a feature, not a defect)', () => {
-  const row = { quickBuy: 1000, quickSell: 1010, volDay: 5000 };
-  const base = { deepBid: 900, highReachAsk: 1100, pAsk: 0.8, nDays: 14 };
-  const rare = asymEstimate(FLIP_NICHES.band, row, { ...base, pBid: 1 / 14 });
-  const often = asymEstimate(FLIP_NICHES.band, row, { ...base, pBid: 13 / 14 });
-  assert.equal(rare.rank, often.rank, 'pBid is an annotation, not a weight');
-  assert.equal(rare.pBid, 1 / 14, 'but it IS surfaced for the rest-it-as-optionality line');
+  const e = asymEstimate(FLIP_NICHES.band, row, { deepBid: 3_800_000, highReachAsk: 4_050_000, nDays: 14 });
+  assert.equal(e.bid, 3_800_000);
+  assert.equal(e.ask, 4_050_000);
+  assert.ok(e.net > 0);
+  assert.equal(e.nDays, 14);
+  for (const k of ['pAsk', 'pBid', 'rank', 'ttf']) assert.equal(k in e, false, k + ' is gone');
 });
 
 ok('asymEstimate: ordering guards hold (bid ≤ quickBuy, ask ≥ quickSell); degrades to null without a pair', () => {
   const row = { quickBuy: 1000, quickSell: 1010, volDay: 5000 };
   // a deep bid ABOVE live clamps down to quickBuy; a high-reach ask BELOW live instabuy clamps up.
-  const e = asymEstimate(FLIP_NICHES.band, row, { deepBid: 1200, highReachAsk: 990, pAsk: 0.9, pBid: 0.9, nDays: 14 });
+  const e = asymEstimate(FLIP_NICHES.band, row, { deepBid: 1200, highReachAsk: 990, nDays: 14 });
   assert.ok(e.bid <= row.quickBuy, 'optBuy ≤ quickBuy guard');
   assert.ok(e.ask >= row.quickSell, 'optSell ≥ quickSell guard');
   assert.equal(asymEstimate(FLIP_NICHES.band, row, null), null);

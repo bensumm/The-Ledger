@@ -73,7 +73,7 @@ const REPO_ROOT = join(HERE, '..', '..');
 
 export const GIT_WRITER = Object.freeze({
   name: 'sync-fills-publish',
-  description: 'sync-fills.mjs --publish — the once-a-day /overnight book publish: fetch/ff-pull ' +
+  description: 'sync-fills.mjs --publish — the on-request book publish: fetch/ff-pull ' +
     '(fold phone trades) + commit + PUSH fills.json/positions.json to main. COMMITS TO MAIN — ' +
     'attended/on-demand FOREVER (the CofferFillsSync lesson). Never schedulable.',
   local: false,
@@ -121,7 +121,7 @@ export const DAEMONS = [
     kind: 'guard',
     local: true,
     autoRun: false,
-    trigger: 'runLocalSync (sync-invoke.mjs) at the top of every scan/positions/watch/loop read; attended --publish at /overnight.',
+    trigger: 'runLocalSync (sync-invoke.mjs) at the top of every scan/positions/watch/loop read; attended --publish on request.',
     // Freshness only — a plain fs.statSync on the rebuilt artifact. Deliberately does NOT import or spawn
     // sync-fills.mjs (that would trip check-daemon-safety and, more importantly, is not this guard's job).
     healthCheck() {
@@ -134,7 +134,7 @@ export const DAEMONS = [
         return { ok: false, detail: 'positions.json not found', lastRan: null };
       }
     },
-    start() { return { ok: null, detail: 'on-demand only — runs via runLocalSync every read (--local); attended at /overnight (--publish)' }; },
+    start() { return { ok: null, detail: 'on-demand only — runs via runLocalSync every read (--local); attended on request (--publish)' }; },
   },
   {
     name: 'watch-log',

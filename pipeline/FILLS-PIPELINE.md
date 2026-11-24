@@ -67,7 +67,7 @@ RuneLite + Exchange Logger plugin          (captures every GE offer state change
         │  writes .runelite/exchange-logger/*.log (JSON mode)
         ▼
 sync-fills.mjs  (this repo, run ON DEMAND. DEFAULT = LOCAL/ZERO-GIT (the in-session book read);
-        │             --publish = the once-a-day /overnight commit+push. The ~20-min Task Scheduler
+        │             --publish = the on-request commit+push. The ~20-min Task Scheduler
         │             cadence was ELIMINATED 2026-07-04, see §12)
         │  parse → normalize → dedupe → merge
         ▼
@@ -101,7 +101,7 @@ Claude is **not** in the runtime loop. The pipeline is plugin → file → git �
 7. ~~Register a Task Scheduler job~~ **— SUPERSEDED 2026-07-04 (G1, see §12).** The
    scheduled `CofferFillsSync` job was eliminated; **sync is now on-demand only**, and (Ben 2026-07-15)
    the **DEFAULT is LOCAL/ZERO-GIT** — run `node pipeline/commands/sync-fills.mjs` freely at the top of
-   every session read (it never touches git); the deployed app is published **once a day at `/overnight`
+   every session read (it never touches git); the deployed app is published **on request
    via `sync-fills.mjs --publish`** (fetch/ff + commit + push). The `--auto` amend/force-push flag was the scheduler's mechanism and was
    **excised** 2026-07-05 (chunk X2) — git history is the recovery story if a schedule is
    ever wanted again. Git auth is via SSH
@@ -177,8 +177,7 @@ exact bug §14.1 documents (a 2026-07-19 incident that FROZE the deployed app's 
 positions.json is "regenerated from the full merged event history every run", and "written + committed +
 pushed under the *same* change-gate as fills.json (`git add fills.json positions.json`)". In fact:
 
-1. **Nothing commits by default.** A bare run is LOCAL/ZERO-GIT; only `--publish` (once a day, at
-   `/overnight`) fetches, commits and pushes.
+1. **Nothing commits by default.** A bare run is LOCAL/ZERO-GIT; only `--publish` (on request) fetches, commits and pushes.
 2. **The published set is 8 files, not 2** — see the `--publish` path's add-list, not this paragraph.
 3. **Writes are per-artifact; the commit gate is `git status --porcelain`.** Conflating "this artifact
    changed" with "there is something to commit" is precisely the §14.1 failure: fills.json was unchanged,
@@ -692,7 +691,7 @@ the sample simply must accrue calendar time (why O1 starts now).
 
 **Decision (Ben, 2026-07-04):** delete the `CofferFillsSync` Task Scheduler job entirely.
 `sync-fills.mjs` becomes **on-demand only** — invoked (default = local/zero-git) at session start by
-the skills that need fresh data; the git commit+push is the once-a-day `--publish` at `/overnight`.
+the skills that need fresh data; the git commit+push is the on-request `--publish`.
 There is no longer any *unattended*
 writer to `main`. (Precision, added by LW1/§14: the invariant is specifically **no unattended
 writer to `main`**. The local log-watcher daemon — `watch-log.mjs`, 2026-07-05 — regenerates
@@ -742,7 +741,7 @@ separate machine/deploy-key bypass identity was created.**
   landed: **no merge queue** (this is a user-owned repo — the ruleset `merge_queue` rule is
   rejected; a queue needs an org on Team/Enterprise), and **PR creation is currently blocked
   by the gh token** (`createPullRequest` → `FORBIDDEN`; fix = `gh auth refresh -s repo`,
-  interactive/Ben-only). So the once-a-day `sync-fills.mjs --publish` (and attended work generally)
+  interactive/Ben-only). So the on-request `sync-fills.mjs --publish` (and attended work generally)
   pushes direct to `main` under Ben's admin bypass (verified working) — a bare `sync-fills.mjs` is
   local/zero-git and pushes nothing; the PR-for-everything flow is the
   intent once the token is refreshed. See the workflow docs (`/ship` §2/§6, CLAUDE.md gh
@@ -889,7 +888,7 @@ side effect, and crucially **no git**.
   ANYTHING in the commit set is uncommitted vs `HEAD` — the `git add <files>` + `git status
   --porcelain` check is the ONE gate. It does NOT gate on the fresh-merge-vs-disk diff (`changed`):
   in-session `/scan` & `/positions` local syncs (§14) rewrite `fills`/`positions`/`offers.json` all
-  day, so by the nightly `--publish` the merge shows zero *disk* diff (`changed=false`) even though
+  day, so by the next `--publish` the merge shows zero *disk* diff (`changed=false`) even though
   those daily rewrites sit uncommitted vs `HEAD`. Gating on `changed` there silently no-op'd the
   commit and froze the deployed app's book; `changed` now feeds only the `--dry` preview message.
 
