@@ -22,12 +22,10 @@
  */
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { REPO_DIR } from '../lib/paths.mjs';
 import { heartbeatHealth, httpProbeHealth } from '../daemons/health.mjs';   // Phase-2 Chunk 10: ONE source of truth
 
 const SERVER_URL = 'http://127.0.0.1:8000/';
-
-const argVal = name => { const i = process.argv.indexOf(name); return (i >= 0 && i + 1 < process.argv.length) ? process.argv[i + 1] : undefined; };
-const REPO_DIR = argVal('--repo-dir') || 'C:\\dev\\The-Ledger';
 
 // These two probes were the ORIGINAL hand-rolled versions this whole daemon subsystem generalized —
 // they now delegate to the shared health.mjs so ensure-server and the registry can never drift apart.

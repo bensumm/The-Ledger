@@ -12,7 +12,6 @@ claim, so re-check before building. Finish or delete a line; do not grow it into
 4. verified — `quotecore.js` `mom` is magnitude-blind: a 1 gp print under the 2h band is a `breakdown`, which can headline a CUT. Scale by noise (GN-0). M
 5. verified — held-lot exit rung (`quote-items.mjs` "typical exit") has no break-even term (EC5). S
 6. verified — `retrojoin.mjs` cannot tell an owner pick from a scan pick. Build before the next `/analyze`. S
-7. verified — `paths.mjs` hardcodes the repo dir, so a bare sync from a worktree writes the live book. S
 8. verified — `analyze.mjs` skips only `(none)`, so `watchlist` can be proposed as a niche to tune. S
 9. verified — `forecast.mjs` projects the peak off the live mid with no reachable-high floor, so a soft print drags it down (PF1b). S
 10. reported — `collapseOffers` merges two offers when a terminal row is lost and the slot relists: wrong unit cost. Read FILLS-PIPELINE §5.1. M

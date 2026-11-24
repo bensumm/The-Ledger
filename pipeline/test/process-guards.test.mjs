@@ -95,6 +95,19 @@ ok('analyze-record output stays small enough to read', () => {
 });
 
 
+ok('REPO_DIR is the checkout the code lives in, and --repo-dir overrides it', () => {
+  const t = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'rd-')));
+  const lib = path.join(t, 'pipeline', 'lib');
+  fs.mkdirSync(lib, { recursive: true });
+  fs.copyFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'lib', 'paths.mjs'), path.join(lib, 'paths.mjs'));
+  const probe = path.join(lib, 'p.mjs');
+  fs.writeFileSync(probe, "import { REPO_DIR } from './paths.mjs'; process.stdout.write(REPO_DIR);");
+  const run = (...args) => execFileSync(process.execPath, [probe, ...args], { encoding: 'utf8', cwd: os.homedir() });
+  assert.equal(run(), t);
+  assert.equal(run('--repo-dir', 'elsewhere'), 'elsewhere');
+  fs.rmSync(t, { recursive: true, force: true });
+});
+
 ok('the read-time sync calls the chores, after the book is written', () => {
   const src = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'lib', 'reconstruct', 'sync-invoke.mjs'), 'utf8');
   assert.ok(src.lastIndexOf('runChores()') > src.lastIndexOf('execFileSync('), 'hook missing or before the sync');

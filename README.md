@@ -2249,7 +2249,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (later wins), so re-emits and REMOVE-shaped lines still resolve; an unstamped row never displaces a
     stamped one. Pinned by `pipeline/test/offers.test.mjs`, including an end-to-end fixture log DIR whose
     cancel sits in the OLDER-mtime file),
-    `paths.mjs` (chunk 6 — the tiny shared `REPO_DIR` anchor, honoring `--repo-dir`, so `derive-cash-tiers.mjs`
+    `paths.mjs` (`REPO_DIR` = the checkout the code lives in, or `--repo-dir`, so `derive-cash-tiers.mjs`
     and `cash-anchor.mjs` no longer import it from the `sync-fills.mjs` COMMAND (a lib→command layering
     inversion that ran sync's module top-level as a side effect); `sync-fills.mjs` re-exports it so
     `watch-log.mjs`'s import is unchanged),
