@@ -73,6 +73,7 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
 - `read-buy-limits.mjs` — 4h buy limit used, left and reset time; no args = everything bought in the last 4h
 - `read-daemons.mjs` — Daemon health table
 - `read-exit-surface.mjs` — Reach surface p(ask, H) as an ask band or a time to clear
+- `read-rows.mjs` — Prints rows from the last saved screen/quote/watch report, no fetch
 - `read-schedule.mjs` — Time-sorted buy/sell window agenda (the /schedule engine)
 - `read-trajectory.mjs` — Per-day low/high table, floor/ceiling slope and a projected next-day band
 - `read-watchlist.mjs` — The watchlist's own table
@@ -1590,13 +1591,10 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
     "how are the things I track doing?" rather than the scan's "what should I buy?". Renders the same
     `Item | Grade | Guide | Quick | Optimistic | Vol/d | Momentum | Regime | Rank net·P/ttf | Note`
     table the scan's WATCHLIST section prints, from the ONE shared row builder
-    `lib/signal/watchlist-report.mjs`. **The TABLE LINES were byte-identical** to the in-scan
-    section on the same inputs when measured, grade column included (the Decision-2 tripwire) — but
-    that was one manual byte-diff, and NO standing test reproduces it. What IS enforced is narrower:
-    `watchlist-report.test.mjs` pins this surface's column sequence and pins that the scan binds its
-    headers to the same shared constant. Neither compares rendered output. Do not treat the two
-    surfaces as provably identical; the surrounding
-    SECTION is not, and deliberately so — `renderReport`'s `table` carries a leading blank line where
+    `lib/signal/watchlist-report.mjs`. The table lines matched the in-scan section in one manual
+    byte-diff; no standing test reproduces it. `watchlist-report.test.mjs` pins only the column sequence
+    and that the scan binds the same header constant, so do not treat the surfaces as provably identical.
+    The surrounding SECTION differs deliberately — `renderReport`'s `table` carries a leading blank line where
     the scan's raw `console.log` pair did not. Quiet by default per AO1 (`--verbose` for the table,
     `--json` for the structured read); `writeLastReport('watchlist', …)` fires on EVERY path —
     `--json` and the empty-watchlist case included, the latter writing a headline-only report so an
@@ -1604,11 +1602,7 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
     the fleet-standard `{kind, generatedAt, reports:[…]}`, while `--json` is the flatter
     `{kind, tracked, headers, rows}`. Builds its own context (`loadMapping`/`loadAllLatest`/
     `loadGuide`/`loadAll24hRolling`/`loadBands`) and pools per-item 5m+6h fetches at
-    `FETCH_CONCURRENCY=5` — runtime is dominated by that per-item
-    pool, so it is bimodal on `TS_TTL_5M`, NOT on how long ago you last ran it: **inside** the TTL the
-    context loads are all that remain and it returns in a fraction of a second; **outside** it, all
-    tracked items refetch 5m+6h and it takes several seconds. The slow case is the NORMAL one for a
-    real ask — the TTL is minutes, so any gap between two questions clears it. Measure if it matters;
+    `FETCH_CONCURRENCY=5` — runtime is bimodal on `TS_TTL_5M`: sub-second inside it, several seconds outside. Measure if it matters;
     do not quote a figure from here. Flags: `--verbose`, `--json`, `--band-hours`, `--floor`,
     `--gp-floor`, `--min-gpd`. (A `--posture` flag was documented here and REMOVED — it was inert:
     posture reaches `suggestionEntry` only, and this command discards those entries, so all three
@@ -2695,6 +2689,7 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
     pending" section (awaiting-rebuy/rebuy-armed cycles → rendered rows with sold/BE-rebuy/live/days-pending
     + `js/reverseflip.mjs` cycle notes; `[]` on an empty/all-holding store). Pinned by `book-model.test.mjs`
     + `reverseflip-surfacing.test.mjs`),
+    `last-report-rows.mjs` (PURE reader over a `last-report/<kind>.json` payload for `read-rows.mjs`: table rows by item/mode/column, `--drops`, `--digest`, age; display cells only, no numbers; pinned by `read-rows.test.mjs`),
     `staleexit.mjs` (Proposal C 2026-07-12 — PURE `staleExitRead({ts1h, exitLevel})`: scores a DECLARED
     hold-thesis exit against the recent full-day reach history via `js/windowread.mjs`'s own
     `windowStats`/`recencySplit`/`recentQuant` (min-sample floor imported from `reachValidator` — reuse,
