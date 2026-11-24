@@ -1291,7 +1291,7 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
     book, read-only watch-state + hold thesis, the shared `renderHeldVerdict`, and a read-only `pathsStage`
     `Paths` block — so it can't disagree with watch-positions.mjs; Proposal C (2026-07-12) adds the INFORM-ONLY
     stale declared-exit flag per held lot (`lib/staleexit.mjs` over a targeted TTL-cached 1h fetch —
-    declared-exit lots only); behavior detail in CLAUDE.md "Script facts".
+    declared-exit lots only); detail: MARKET-ANALYSIS §6.
     (The PB4 pressure-exit trial was RETIRED 2026-08-30 — join-exit-ev.mjs's pre-registered
     criterion; the retired trial flag now errors loudly instead of silently running the neutral model —
     every spelling incl. `=value`, pinned across all three CLIs by `pipeline/test/retired-flag.test.mjs`.) RF4 (2026-07-25) appends an

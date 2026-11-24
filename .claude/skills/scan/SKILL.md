@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 3.15
+version: 3.16
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -181,7 +181,7 @@ printing), or a fill. "Changed since last look" is a comparison YOU make by eye 
 to compare against" on the FIRST scan of a session, which is correct (no false "nothing changed"). Don't
 re-paste `/positions`' whole table — that's its own ask's job. The DURABLE fix for "positions read every loop
 pass" is running `run-loop.mjs --watch <min> --scan <min>` together so `watch-positions.mjs` (the richer,
-alert-raising positions surface) rides its own cadence alongside the scan (CLAUDE.md's `/loop` row) — prefer
+alert-raising positions surface) rides its own cadence alongside the scan (the `run-loop.mjs` row) — prefer
 that for an unattended session; this manual step covers a one-shot `/scan`.
 
 **The PB4 pressure-exit trial is RETIRED (2026-08-30, join-exit-ev.mjs's pre-registered criterion).**
@@ -1022,7 +1022,7 @@ and the number is bound to the window/mechanism expected to fill it (e.g. "bid 1
 23:00–03:00 UK-morning lift"; a churn item's target can simply be "(fill-now) normal daily
 churn"). A fill-now price is not wrong — it is wrong UNDECLARED on a leg that will rest; the
 dwell-horizon rule (§2) picks the basis. Run the time-of-day `read-window-range.mjs` read the
-CLAUDE.md doctrine already requires and quote it — never a bare number.
+doctrine requires (MARKET-ANALYSIS §5) and quote it — never a bare number.
 
 ## 5. Position-context pass (Ben, 2026-07-05) — read the shortlist against the current book
 

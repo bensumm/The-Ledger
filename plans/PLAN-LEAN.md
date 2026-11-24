@@ -1,6 +1,6 @@
 # PLAN-LEAN — cut the instruction text, generate the registry
 
-Status: ACTIVE. Prefix `LN`. LN1–LN3 and LN5 shipped 2026-11-24 (bug 4 measured null, bug 9 dropped: `docs/BACKLOG.md`). LN0 metrics done; the frozen capture waits for a normal market.
+Status: ACTIVE. Prefix `LN`. LN1–LN5 shipped 2026-11-24 (bug 4 measured null, bug 9 dropped: `docs/BACKLOG.md`). LN0 metrics done; the frozen capture waits for a normal market.
 
 **Decision it changes:** what an agent reads before every scan (about 42k tokens) and what every code change must
 also edit. **If it has no effect** (agents still hand-write `node -e`, or errors rise): revert the skill commits.

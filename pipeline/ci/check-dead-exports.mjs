@@ -3,7 +3,7 @@
  *
  * WHY (the root cause, PLAN-ARCH-DOCS-AUDIT Part 5 RC-A): the repo's recurring drift is vestigial
  * "kept for future re-add / until torn out" code — a concept's last real consumer gets deleted but the
- * exported function + its test are left behind, against CLAUDE.md's "git history is the reference" rule.
+ * exported function + its test are left behind, against "git history is the reference" (ARCHITECTURE).
  * It then rots and inflates every later read/rename. `check-imports.mjs` proves imports RESOLVE (forward:
  * entrypoint → target); this proves the INVERSE — that every export still has a real (non-test) consumer.
  * The motivating instance was `risingPoolFloor` (rising niche deleted, its predicate + RISE_* consts + test

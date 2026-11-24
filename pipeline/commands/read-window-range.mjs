@@ -5,7 +5,7 @@
 // @read hourly: read the raw per-day columns (the drift slope was a non-signal, deleted)
 /**
  * read-window-range.mjs — historical time-of-day RANGE read (lows AND highs) for price placement; the
- * standing time-of-day context CLAUDE.md's market-analysis contract requires on every price rec. A bid at
+ * standing time-of-day context MARKET-ANALYSIS §5 requires on every price rec. A bid at
  * the *evening* 2h-band floor answers the wrong question; an ask above what the window prints is stranded.
  *
  * Off the /timeseries 1h endpoint (~15 days): for each of the last N local days, the lowest traded

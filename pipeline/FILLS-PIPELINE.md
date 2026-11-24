@@ -744,8 +744,8 @@ separate machine/deploy-key bypass identity was created.**
   interactive/Ben-only). So the on-request `sync-fills.mjs --publish` (and attended work generally)
   pushes direct to `main` under Ben's admin bypass (verified working) — a bare `sync-fills.mjs` is
   local/zero-git and pushes nothing; the PR-for-everything flow is the
-  intent once the token is refreshed. See the workflow docs (`/ship` §2/§6, CLAUDE.md gh
-  section, PLAN.md dispatch model). **M1 must now assume no scheduled PC writer exists:**
+  intent once the token is refreshed. See the workflow docs (`/ship` §2/§6, CLAUDE.md
+  rule 6, PLAN.md dispatch model). **M1 must now assume no scheduled PC writer exists:**
   mobile freshness leans on the Refresh button + (optionally) the stretch in-cloud
   reconstruction Action, never on a background PC push.
 

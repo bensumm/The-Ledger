@@ -1,11 +1,11 @@
 {
   "plans": 5,
   "docs": {
-    "CLAUDE.md": 28564,
-    "README.md": 377752,
+    "CLAUDE.md": 18714,
+    "README.md": 377450,
     "PLAN.md": 6087,
     "pipeline/MONITORING.md": 70332,
-    "pipeline/FILLS-PIPELINE.md": 74768,
+    "pipeline/FILLS-PIPELINE.md": 74764,
     "docs/ARCHITECTURE.md": 18808,
     "docs/FLOW.md": 15783,
     "docs/GLOSSARY.md": 14082,
