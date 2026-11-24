@@ -125,7 +125,7 @@ function measure(rel, root = ROOT) {
   const datedLines = [];
   lines.forEach((line, i) => {
     const t = line.trim();
-    if (REGISTRY_TAG_RE.test(line)) return;
+    if (rel.startsWith('pipeline/commands/') && REGISTRY_TAG_RE.test(line)) return;
     let isComment = false;
     if (inBlock) { isComment = true; if (t.includes('*/')) inBlock = false; }
     else if (t.startsWith('/*')) { isComment = true; if (!t.includes('*/')) inBlock = true; }

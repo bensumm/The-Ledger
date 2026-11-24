@@ -53,6 +53,7 @@ import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';
 import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';
 import { fetchItemInputs } from '../lib/market/marketfetch.mjs';
 import { computeQuote } from '../../js/quotecore.js';
+import { parseGp } from '../lib/render/cli.mjs';
 import { buildAgenda, loopHeaderLine } from './read-schedule.mjs';
 import { ensure as ensureDaemons } from '../daemons/manager.mjs';   // PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook
 
@@ -67,7 +68,8 @@ const argOf = (flag, dflt) => { const i = argv.indexOf(flag); return i >= 0 && a
 const parseInterval = v => (v === 'off' || v === '0') ? null : Math.max(1, Math.round(Number(v)));
 const watchMin = parseInterval(argOf('--watch', '30'));
 const scanMin = parseInterval(argOf('--scan', '15'));
-const minIdle = Math.max(0, Math.round(Number(argOf('--min-idle', '20000000'))));
+const minIdle = Math.max(0, parseGp(argOf('--min-idle', '20m')));
+if (!Number.isFinite(minIdle)) { console.error('error: --min-idle is not a gp amount (e.g. 20m)'); process.exit(1); }
 // sync (local book rebuild) rides with the watch pass — on by default, coupled to --watch's cadence.
 const syncOn = watchMin != null && !argv.includes('--no-sync');
 

@@ -15,7 +15,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const at = process.argv.indexOf('--root');   // fixture tests only
+const ROOT = at > 0 ? process.argv[at + 1] : path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const COMMANDS = 'pipeline/commands';
 export const MAX_TAG = 220;
 const HEAD_LINES = 12;

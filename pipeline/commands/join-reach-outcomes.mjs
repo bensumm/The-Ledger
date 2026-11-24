@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @does Forward-scores the co-logged exit estimators per side, class and regime
-// @ask "which exit estimator is best?", "score the reachability head-to-head" => --horizon H [--item "<item>"]
+// @ask "which exit estimator is best?", "is pressure any good?", "score the reachability head-to-head" => --horizon H [--item "<item>"]
 // @read describes, never ranks: use the MATCHED tables, name the horizon, retire nothing on it
 /* join-reach-outcomes.mjs — the reachability head-to-head, FORWARD-SCORED (RC, PLAN-REACHABILITY-CONSOLIDATION).
  *

@@ -102,29 +102,30 @@ the numbers are byte-identical to the app's tables.
 <!-- registry:asks -->
 | Ask | `node pipeline/commands/…` |
 | --- | --- |
-| "I bought/sold X on mobile", "X is personal use", "log this trade" | `add-manual-fill.mjs --item "<item>" --type buy\|sell\|withdraw\|banked --qty N --price gp [--time local]` — a mention of personal use IS the instruction: --type withdraw, then sync |
+| "I bought/sold X on mobile", "log this trade" | `add-manual-fill.mjs --item "<item>" --type buy\|sell\|banked --qty N --price gp --time <when it happened>` — a personal-use mention IS the instruction; --time is the real trade time (omitting it mis-pairs lots); then sync |
+| "X is personal use" | `add-manual-fill.mjs --item "<item>" --type withdraw --qty N --time <after the buy>` — a personal-use mention IS the instruction; --time is the real trade time (omitting it mis-pairs lots); then sync |
 | "back up my data", "is the backup current?" | `backup-data.mjs [--status]` |
-| "I have Xm cash", "what's my idle cash?" | `derive-cash.mjs [16m]` |
+| "what's my idle cash?" | `derive-cash.mjs` — an amount overwrites the anchor; a session budget goes to --capital instead |
+| "re-anchor my cash to X" | `derive-cash.mjs 16m` — an amount overwrites the anchor; a session budget goes to --capital instead |
 | "is the patient pair real?", "does the deep bid fill?" | `join-asym-outcomes.mjs [--entry H] [--horizon H] [--item "<item>"]` — the pair rarely completes, worst on big-ticket; a random-offset null was rejected (header) |
 | "did buying the dump work?", "score the crash-entry rules" | `join-crash-entry.mjs [--items N]` — read its verdict line and plans/PLAN-CRASH-REPLAY.md first; every fill is an upper bound |
 | "does askStar beat what we have?", "which exit ask makes the most gp?" | `join-exit-ev.mjs [--items N] [--horizon H]` — the null branch fired: the reach surface only describes; retire nothing on a gap under the instrument's noise |
 | "does the fade alert measure anything?", "score hours-under-profile" | `join-fade-outcomes.mjs [--items N] [--cost-ratio r] [--item "<item>"]` — wins only at miss-cost ratio 3, loses at 2 and under, weakest on big-ticket |
 | "rebuild outcomes", "fill-time distributions" | `join-outcomes.mjs [--report]` — several minutes, networked |
 | "which reach basis is right?", "is the sell-unreliable tag any good?" | `join-reach-basis.mjs [--horizon H] [--item "<item>"]` — settled for neither basis; quote the cost-regime map and r*, never the accuracy number |
-| "which exit estimator is best?", "score the reachability head-to-head" | `join-reach-outcomes.mjs --horizon H [--item "<item>"]` — describes, never ranks: use the MATCHED tables, name the horizon, retire nothing on it |
+| "which exit estimator is best?", "is pressure any good?", "score the reachability head-to-head" | `join-reach-outcomes.mjs --horizon H [--item "<item>"]` — describes, never ranks: use the MATCHED tables, name the horizon, retire nothing on it |
 | "how's X?", "quote X", "what's X doing?", "check X and Y" | `quote-items.mjs "<item>" [...]` |
-| "how much X can I buy right now?" | `read-book.mjs --size "<item>" [--capital gp]` — free slots are an upper bound |
 | "can I buy more X?", "how much limit left?", "when does it reset?" | `read-buy-limits.mjs ["<item>" ...]` |
 | "what should I ask if I'll wait H?", "how long to clear at price P?", "the EV-max ask?" | `read-exit-surface.mjs "<item>" [--horizon 6,24,48] [--price gp]` — askStar LOST the backtest (join-exit-ev): description only, price nothing off it |
 | "how's X trending?", "today vs prior days", "where's X likely tomorrow?" | `read-trajectory.mjs "<item>" [...]` — inform-only |
 | "how's my watchlist?", "the items I track/follow" | `read-watchlist.mjs --verbose` — rows are gate-exempt and the grade is always (thin): read the net, not the letter |
 | "is X a falling knife?", "stepping down by the hour?", "does the ask clear midday?" | `read-window-range.mjs "<item>" --hourly --days 3 [--ask gp]` — hourly: read the raw per-day columns (the drift slope was a non-signal, deleted) |
-| "what clears X in this window?", "price my exit" | `read-window-range.mjs "<item>" --exit <gp> --window 0-8` — hourly: read the raw per-day columns (the drift slope was a non-signal, deleted) |
+| "does this ask clear?", "price my exit" | `read-window-range.mjs "<item>" --ask <gp> --window peak` — hourly: read the raw per-day columns (the drift slope was a non-signal, deleted) |
 | "reconcile my reverse-flip", "I sold a keep first", "backfill the banked basis" | `reconcile-reverse-flip.mjs ["<item>"]` |
 | "loop positions AND scan", "check positions every X and scan every Y" | `run-loop.mjs [--watch min] [--scan min] [--min-idle gp] [--no-sync]` — the scan runs only when deployable capital clears --min-idle; /loop at the gcd of the two cadences |
 | "what can I reverse-flip?", "sell a keep into the peak", "harvest a held item" | `screen-flip-niches.mjs --mode reverse` — reverse: the regime read is INVERTED (rising is bad), inform-only, owned keeps only |
 | "sync", "refresh the book" (scan and positions already do it) | `sync-fills.mjs` — --publish pushes to main: only when Ben asks |
-| "watch/monitor my positions", "run a session", "keep an eye on X" (drive with /loop, pipeline/MONITORING.md) | `watch-positions.mjs ["<item>" ...]` |
+| "watch/monitor my positions", "run a flipping session", "keep an eye on X" (drive with /loop, pipeline/MONITORING.md) | `watch-positions.mjs ["<item>" ...]` |
 | "watch for dips/flushes", "run the dip loop" | `watch-positions.mjs --dip ["<item>" ...]` |
 <!-- /registry:asks -->
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // @does Derives idle cash, or re-anchors it to a stated amount
-// @ask "I have Xm cash", "what's my idle cash?" => [16m]
+// @ask "what's my idle cash?" =>
+// @ask "re-anchor my cash to X" => 16m
+// @read an amount overwrites the anchor; a session budget goes to --capital instead
 /* derive-cash.mjs — DERIVE / re-anchor the idle-cash balance the total-capital footer uses (watch-positions.mjs).
  *
  *   node pipeline/commands/derive-cash.mjs          DERIVE cash now = anchor + Σ(sells after tax) − Σ(buys) − resting escrow
