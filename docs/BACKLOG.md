@@ -8,8 +8,6 @@ claim, so re-check before building. Finish or delete a line; do not grow it into
 
 4. verified — `quotecore.js` `mom` is magnitude-blind: a 1 gp print under the 2h band is a `breakdown`, which can headline a CUT. Scale by noise (GN-0). M
 5. verified — held-lot exit rung (`quote-items.mjs` "typical exit") has no break-even term (EC5). S
-6. verified — `retrojoin.mjs` cannot tell an owner pick from a scan pick. Build before the next `/analyze`. S
-8. verified — `analyze.mjs` skips only `(none)`, so `watchlist` can be proposed as a niche to tune. S
 10. reported — `collapseOffers` merges two offers when a terminal row is lost and the slot relists: wrong unit cost. Read FILLS-PIPELINE §5.1. M
 11. reported — `js/watch.js` shows UNDERWATER without the thesis silencing the console applies (AP3). M
 12. reported — capital is multiplied in three times (`THROUGHPUT_CAP_GP`, Path-A gp/d, digest `rankKey`, now only a tie-break); Path-A reads 0/d on a fully deployed book, and capEff is unbounded for dust items. Decide which ONE layer owns capital. M
@@ -20,6 +18,7 @@ claim, so re-check before building. Finish or delete a line; do not grow it into
 17. verified — `dedupeSnapshots` drops an identical repeat manual entry (two events on slot 8 today); people work round it by bumping the slot. Exempting manual slots double-counts those two until they are tombstoned. S
 18. verified — regime floor tests are bare thresholds (`windowread.mjs` `FC_FLAT_FRAC`): 0.2 gp/d of rounding flips falling to flat and opens the falling-exclusion gate. Measure how many items sit in the band; consider a deadband. M
 19. verified — `--mode reverse` header names rejected items without `r.gate.reasons`. S
+22. reported — `retrojoin.mjs` `rtByBuyTs` keys on buy time alone: two items opened the same second share a round trip. S
 20. reported — `logblind.mjs` misses the false-EMPTY restart snapshot (fresh log, every slot EMPTY, FIFO holds), so NOT LISTED prints for listed offers. Display only. M
 21. verified — `bondFee(null)` is fee-free while `amplitudescreen.mjs` refuses a bond with no guide; one refusal home in money-math. S
 

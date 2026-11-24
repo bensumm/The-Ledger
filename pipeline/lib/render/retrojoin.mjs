@@ -107,7 +107,8 @@ const q75 = a => quantileOf(a, 0.75);
  * for attribution (path absent on rows that predate P4c → grouped under mode only), and `amplitude`
  * carries the logged amplitude-shadow block through for F-G's shadow-vs-realized readout (null off
  * every non-amplitude row + all pre-F-G history). */
-export function retroJoin(suggestions, fillsEvents, { horizonByMode = HORIZON_BY_MODE } = {}) {
+export function retroJoin(suggestions, fillsEvents, { horizonByMode = HORIZON_BY_MODE, ownPicks = [] } = {}) {
+  const isOwn = o => ownPicks.some(p => p.itemId === o.itemId && o.tsFirstFill >= p.from && o.tsFirstFill <= p.to);
   const events = Array.isArray(fillsEvents) ? fillsEvents : [];
   const deduped = dedupeSnapshots(events);
   const offers = collapseOffers(deduped);
@@ -171,6 +172,10 @@ export function retroJoin(suggestions, fillsEvents, { horizonByMode = HORIZON_BY
     const fillEach = rawEach != null && first.worthNet ? grossFromNet(rawEach) : rawEach;
     const priceKnown = refBuy != null && fillEach != null;
     const outcome = !priceKnown ? 'filled' : (fillEach <= refBuy ? 'filled' : 'filled-worse');
+    if (isOwn(first)) {
+      return { ...base, outcome: 'ownPick', latencySec: null, fillEach: fillEach != null ? Math.round(fillEach) : null,
+        priceKnown, partial: false, realisedNet: null, realisedPerUnit: null, sellEach: null, holdSec: null };
+    }
     const rt = rtByBuyTs.get(first.tsOpen) || null;
     return {
       ...base,
@@ -191,6 +196,7 @@ export function retroJoin(suggestions, fillsEvents, { horizonByMode = HORIZON_BY
   const meta = {
     nSuggestions: suggestions.length,
     nBuyOffers: buyOffers.length,
+    nOwnPick: rows.filter(r => r.outcome === 'ownPick').length,
     nClaimed: [...claims.values()].reduce((a, arr) => a + arr.length, 0),
     horizon: { intradaySec: HORIZON_INTRADAY_SEC, multidaySec: HORIZON_MULTIDAY_SEC, defaultSec: HORIZON_DEFAULT_SEC },
   };
@@ -229,7 +235,8 @@ function groupStat(key, rs) {
 export function aggregateOutcomes(rows) {
   const niche = new Map(), pathG = new Map();
   for (const r of rows) {
-    const nk = r.mode != null ? r.mode : '(none)';
+    if (r.outcome === 'ownPick') continue;
+    const nk =r.mode != null ? r.mode : '(none)';
     const pk = nk + ' / ' + (r.path != null ? r.path : '(no-path)');
     (niche.get(nk) || niche.set(nk, []).get(nk)).push(r);
     (pathG.get(pk) || pathG.set(pk, []).get(pk)).push(r);

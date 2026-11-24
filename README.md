@@ -789,6 +789,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   quiets a known-expected signal, the TG1 exception). 14-day TTL (`BID_THESIS_TTL_DAYS`) prunes stale
   intent so a forgotten declaration re-arms the flag. Ships empty (`[]`); fixture-pinned in
   `pipeline/test/stalebid.test.mjs`.
+- `own-picks.json` — tracked repo-root, hand-edited `{picks:[{itemId, from, to, note}]}` (epoch s). `retroJoin` reports a buy first filled in a pick as `ownPick`, outside every flip-niche's numbers; `analyze-record` prints the count.
 - `owned-items.json` — tracked repo-root store (RF0, PLAN-REVERSE-FLIP, 2026-07-25): the OWNED-ITEM
   REGISTRY for reverse-flip eligibility. `{_doc, items:[{id,name,seedQty,seedTs,classification,source}]}`
   (mirrors `ignored-items.json`'s `{_doc, items:[]}` convention; an optional `pendingClassification[]`
@@ -802,13 +803,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   item MAY also carry an optional `seedBasis` (acquisition cost each) — the acquisition basis
   `reconcile-reverse-flip.mjs` (RF3) reads to build the BANKED-backfill command (absent → RF3 prints a
   "declare the seed first" note instead of a fabricated basis). **The COMMITTED copy ships EMPTY**
-  (`{_doc, items:[]}`); on Ben's desk it is populated locally with the ≥5m big-ticket bank keeps (27
-  items, from the data-export plugin's `container_bank.json`) but held OUT of the public repo via
-  `git update-index --skip-worktree owned-items.json` — so the file is full on disk (the reverse-flip
-  screen reads it) yet `git status` shows nothing and it never commits/pushes (his holdings stay off
-  GitHub; see memory `owned-items-skip-worktree`). To edit the committed stub's schema: clear
-  skip-worktree, edit to the EMPTY shape only, commit, re-set skip-worktree, repopulate locally. No PII
-  (ids/names only). Fixture-pinned in
+  (`{_doc, items:[]}`); on Ben's desk it is populated locally (big-ticket bank keeps) but held OUT of the public repo via
+  `git update-index --skip-worktree owned-items.json` (full on disk, never committed; memory
+  `owned-items-skip-worktree`). To edit the stub's schema: clear skip-worktree, edit to the EMPTY
+  shape only, commit, re-set it, repopulate locally. No PII (ids/names only). Fixture-pinned in
   `pipeline/test/ownedledger.test.mjs` + `pipeline/test/reverse-flip-cli.test.mjs`.
   `keepIds` (the SM1 round-trip gate) and `keepMisclassificationRisks` (the mis-seeded-keep hygiene
   warning `sync-fills.mjs` prints) also live here — pinned by `pipeline/test/symmetric-matching.test.mjs`,

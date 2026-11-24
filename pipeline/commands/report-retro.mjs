@@ -28,7 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from '../lib/render/cli.mjs';
-import { readSuggestionLines } from '../lib/render/suggestlog.mjs';
+import { readSuggestionLines, readOwnPicks } from '../lib/render/suggestlog.mjs';
 import { retroJoin, aggregateOutcomes } from '../lib/render/retrojoin.mjs';
 import { fmt, fmtTurn } from '../../js/money-format.js';
 
@@ -84,7 +84,7 @@ function printGroup(title, groups) {
 
 const events = loadFillsEvents();
 const suggestions = loadSuggestions();
-const { rows, meta } = retroJoin(suggestions, events);
+const { rows, meta } = retroJoin(suggestions, events, { ownPicks: readOwnPicks() });
 
 if (JSON_OUT) { console.log(JSON.stringify(rows, null, 2)); process.exit(0); }
 
@@ -95,7 +95,7 @@ const notTaken = rows.filter(r => r.outcome === 'not-taken').length;
 
 console.log(`# Retro-join — ${rows.length} suggestion rows × ${meta.nBuyOffers} buy offers (${meta.nClaimed} offers claimed)`);
 console.log(`  outcome mix: filled ${filled} · filled-worse ${worse} · not-taken ${notTaken}` +
-  (rows.length ? `  (${Math.round(notTaken / rows.length * 100)}% not-taken)` : ''));
+  (rows.length ? `  (${Math.round(notTaken / rows.length * 100)}% not-taken)` : '') + ` · own-pick (excluded) ${meta.nOwnPick}`);
 console.log(`  horizons (NAMED PLACEHOLDERS): intraday ${hrs(meta.horizon.intradaySec)} (scalp/band/spread/churn) · multi-day ${hrs(meta.horizon.multidaySec)} (rising/value) · default ${hrs(meta.horizon.defaultSec)} (quote/positions)`);
 console.log(`  ⚠ the suggestions archive began accruing 2026-07-08 — a mostly-not-taken sample is EXPECTED; n is printed on every aggregate, and there are deliberately NO grades/verdicts (process rule 4).`);
 

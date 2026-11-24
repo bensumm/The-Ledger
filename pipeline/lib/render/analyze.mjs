@@ -140,7 +140,7 @@ export function dipLoopAudit(sugRows = [], retroRows = []) {
       itemId: s.itemId, ts: s.ts, ...s.dipLoop,
       alerted: !!s.dipLoop.alerted, gatedReason: s.dipLoop.gatedReason ?? null,
       outcome: rj.outcome ?? null, latencySec: rj.latencySec ?? null,
-      fillable: rj.outcome != null && rj.outcome !== 'not-taken',
+      fillable: rj.outcome != null && rj.outcome !== 'not-taken' && rj.outcome !== 'ownPick',
     });
   }
   const alerted = firings.filter(f => f.alerted);
@@ -192,7 +192,7 @@ export function askHeadroomAudit(sugRows = [], retroRows = []) {
       itemId: s.itemId, ts: s.ts, ...s.askHeadroom,
       trusted: !!s.askHeadroom.trusted,
       outcome: rj.outcome ?? null, realisedPerUnit: rj.realisedPerUnit ?? null,
-      taken: rj.outcome != null && rj.outcome !== 'not-taken',
+      taken: rj.outcome != null && rj.outcome !== 'not-taken' && rj.outcome !== 'ownPick',
       sellEach,
     });
   }
@@ -210,7 +210,6 @@ export function askHeadroomAudit(sugRows = [], retroRows = []) {
   };
 }
 
-// registry niches + the two DELETED ones (spread, rising) whose rows survive in the archive
 const TUNABLE_NICHES = new Set([...MODE_KEYS, 'spread', 'rising']);
 
 /* deriveCandidates(perNiche, sug, opts) → an array of { kind, signal, evidence, pointsAt }.

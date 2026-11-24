@@ -213,4 +213,26 @@ ok('base.amplitude carries the logged amplitude shadow block through (null when 
   assert.equal(pre[0].amplitude, null, 'amplitude undefined on the suggestion → null, no throw');
 });
 
+ok('an owner-declared pick is reported as ownPick and excluded from per-niche taken/realised', () => {
+  const T = 1_800_000_000;
+  const events = [
+    ...buyOffer(1, 100, 90, 10, 10, T + 10, T + 100),
+    ...sellOffer(2, 100, 120, 10, 10, T + 500, T + 600),
+    ...buyOffer(3, 200, 40, 10, 10, T + 20, T + 100),
+  ];
+  const sugs = [sug(T, 100), sug(T, 200)];
+  assert.equal(retroJoin(sugs, events).rows[0].outcome, 'filled');
+  const { rows, meta } = retroJoin(sugs, events, { ownPicks: [{ itemId: 100, from: T + 50, to: T + 150 }] });
+  assert.equal(rows[0].outcome, 'ownPick');
+  assert.equal(rows[1].outcome, 'filled', 'a different item is unaffected');
+  assert.equal(meta.nOwnPick, 1);
+  const band = aggregateOutcomes(rows).perNiche.find(g => g.key === 'band');
+  assert.equal(band.n, 1, 'the ownPick row is not counted in the niche');
+  assert.equal(band.filled, 1);
+  assert.equal(band.realisedN, 0, 'its realised round-trip is excluded');
+  const out = retroJoin(sugs, events, { ownPicks: [{ itemId: 100, from: T + 5000, to: T + 6000 }] });
+  assert.equal(out.rows[0].outcome, 'filled', 'a fill outside the declared range stays a scan pick');
+  assert.equal(out.meta.nOwnPick, 0);
+});
+
 console.log(`\n✓ retrojoin.test.mjs — ${pass} assertions passed.`);

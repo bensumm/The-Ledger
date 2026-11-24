@@ -28,7 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from '../lib/render/cli.mjs';
-import { readSuggestionLines } from '../lib/render/suggestlog.mjs';
+import { readSuggestionLines, readOwnPicks } from '../lib/render/suggestlog.mjs';
 import { retroJoin, aggregateOutcomes } from '../lib/render/retrojoin.mjs';
 import { auditDataset, deriveCandidates, dipLoopAudit, askHeadroomAudit, amplitudeRetro, hrs, gp, pct, ALWAYS_FIELDS, OPTIONAL_FIELDS } from '../lib/render/analyze.mjs';
 
@@ -65,7 +65,7 @@ const sug = loadSuggestions();
 const fillsData = loadJson(FILLS);
 const posData = loadJson(POSITIONS);
 const fillsEvents = fillsData && Array.isArray(fillsData.events) ? fillsData.events : [];
-const { rows: retroRows, meta: retroMeta } = retroJoin(sug.rows, fillsEvents);
+const { rows: retroRows, meta: retroMeta } = retroJoin(sug.rows, fillsEvents, { ownPicks: readOwnPicks() });
 const { perNiche, perPath } = aggregateOutcomes(retroRows);
 const audit = auditDataset(sug, fillsData, posData, retroMeta, { nowSec, sinceH: SINCE_H });
 const MIN_N_DEFAULT = 20;   // mirrors lib/analyze.mjs MIN_N_CANDIDATE (the deriveCandidates default when --min-n is absent)
@@ -84,6 +84,7 @@ const brief = {
       filled: retroRows.filter(r => r.outcome === 'filled').length,
       filledWorse: retroRows.filter(r => r.outcome === 'filled-worse').length,
       notTaken: retroRows.filter(r => r.outcome === 'not-taken').length,
+      ownPick: retroMeta.nOwnPick,
     },
     perNiche, perPath,
   },
@@ -94,7 +95,7 @@ const brief = {
   minN,
 };
 
-const takenFlags = rows => (rows || []).filter(r => r.outcome && r.outcome !== 'not-taken');
+const takenFlags = rows => (rows || []).filter(r => r.outcome && r.outcome !== 'not-taken' && r.outcome !== 'ownPick');
 if (JSON_OUT) {
   const lean = { ...askHead, rows: undefined, trusted: takenFlags(askHead.trusted), untrusted: takenFlags(askHead.untrusted) };
   console.log(JSON.stringify({ ...brief, askHead: lean }, null, 2));
@@ -130,6 +131,7 @@ const line = r => r.map((c, i) => c.padEnd(w[i])).join('  ');
 console.log('  ' + line(rollupHead));
 console.log('  ' + w.map(x => '-'.repeat(x)).join('  '));
 for (const r of rollupRows) console.log('  ' + line(r));
+console.log(`  excluded: ${retroMeta.nOwnPick} owner own-pick suggestion row(s) (own-picks.json) — not in any niche's n, taken or realised`);
 console.log(`  (full band-percentile × liquidity fill-time cells: node pipeline/commands/join-outcomes.mjs --report)`);
 
 // ---- 2b. Amplitude shadow-vs-realized (F-G) ---------------------------------------------------------

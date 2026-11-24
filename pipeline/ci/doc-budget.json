@@ -12,7 +12,7 @@
     "docs/LORE.md": 11935,
     "docs/MARKET-ANALYSIS.md": 116803,
     "docs/PLANNING.md": 6651,
-    "docs/SIGNAL-AUDIT.md": 46169,
+    "docs/SIGNAL-AUDIT.md": 46167,
     "docs/SKILL-TRIAGE.md": 18900,
     ".claude/skills/analyze/SKILL.md": 7248,
     ".claude/skills/book/SKILL.md": 6436,
@@ -23,6 +23,6 @@
     ".claude/skills/scan/SKILL.md": 102976,
     ".claude/skills/schedule/SKILL.md": 8030,
     ".claude/skills/ship/SKILL.md": 11550,
-    "docs/BACKLOG.md": 13015
+    "docs/BACKLOG.md": 12923
   }
 }

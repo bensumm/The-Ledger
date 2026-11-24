@@ -149,6 +149,12 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 // suggestlog.test.mjs pins the resolved path to the repo root and has caught that twice. Re-count on any move.
 export const LEDGER = path.join(HERE, '..', '..', '..', 'suggestions.jsonl');
 
+// own-picks.json — owner-declared buys the retro-join must not credit to the scan; [] when absent/unparseable.
+export const OWN_PICKS = path.join(HERE, '..', '..', '..', 'own-picks.json');
+export function readOwnPicks(file = OWN_PICKS) {
+  try { const j = JSON.parse(fs.readFileSync(file, 'utf8')); return Array.isArray(j.picks) ? j.picks : []; } catch { return []; }
+}
+
 // SR1 — rotation/compaction. The active LEDGER lives in the DEPLOY ROOT and grows unbounded (~3k rows/day
 // ≈ >1MB/day). To keep the root file bounded to the CURRENT calendar month while never dropping a row (rows
 // are F1's calibration data — ARCHIVE, never delete), completed months move OUT of the root into monthly
