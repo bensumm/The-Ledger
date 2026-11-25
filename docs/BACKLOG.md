@@ -85,4 +85,4 @@ Keep `--raw`: a placeholder-model Est. column must never be the only number avai
 - N-day lows: best +0.26%/7d after tax. Range persistence adds nothing for commodities; big-ticket unmeasured. WK2's first-run 193 periods were an instrument artifact (rerun 0 of 2,516).
 - 2h-breakdown size does not predict a further drop (133 dates, 14,483 breaks; pct, band and swing scales): no noise cutoff on `mom`. Unsupported, not impossible; `break-size-study.mjs` header.
 - Digest reach filter (DS4): a 0/3 recent-reach ask still printed within 24h more often than not; a tilt, never a gate.
-- Guide re-anchor prediction: premise dead since 2026-09-30 (3h refresh, ±20% step).
+- Guide steps since 2026-09-30: direction predictable, price barely moves.

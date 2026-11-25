@@ -86,7 +86,7 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
 - `set-scan-analysis.mjs` — Attaches a judgment blurb to the published screen.json
 - `sync-fills.mjs` — Rebuilds fills/positions/offers from the RuneLite logs; local and zero-git
 - `trigger-alerts.mjs` — Emits market alert events as JSON lines
-- `verify-pick.mjs` — One PASS/FAIL/UNKNOWN line per pick: fresh trio at your bid and ask, print age, break-even, buy limit
+- `verify-pick.mjs` — One verdict line per pick: fresh trio at your bid and ask, print age, break-even, buy limit
 - `watch-log.mjs` — Local log-watcher daemon
 - `watch-positions.mjs` — Adaptive live monitor of positions and offers; --dip adds the flush loop
 <!-- /registry:commands -->

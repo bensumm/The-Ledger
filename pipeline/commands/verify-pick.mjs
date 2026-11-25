@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @does One PASS/FAIL/UNKNOWN line per pick: fresh trio at your bid and ask, print age, break-even, buy limit
+// @does One verdict line per pick: fresh trio at your bid and ask, print age, break-even, buy limit
 // @ask "verify X at bid/ask", "is this pick still good?", "re-check my picks" => "<item>@<bid>:<ask>[@<flip-niche>]" [...] [--why]
 // @ask "verify the whole scan", "does anything clear?" => --scan [N] [--all]
 // @read run in the same turn as the rec; pitch only a PASS (no fill guarantee)
@@ -73,9 +73,9 @@ export function fadingBidAboveTodaysLow(f) {
   return trends.includes(null) ? { unknown: 'bid cushion trend unknown' } : {};
 }
 
-export function exitRarelyPrints(f) {
+export function askRarelyReached(f) {
   const a = f.peak?.ask;
-  if (f.peak?.rarelyPrints === true) return { fail: `exit rarely prints in-window (${a?.hit ?? '—'}/${a?.n ?? '—'})` };
+  if (f.peak?.rarelyPrints === true) return { fail: `ask reached only ${reach(a)} peak-window days (${reach(f.day?.ask)} any hour)` };
   return f.peak?.rarelyPrints === false ? {} : { unknown: 'exit reach not scored in-window' };
 }
 
@@ -127,7 +127,7 @@ export function bondFee(f) { return f.bond ? { unknown: 'bond retrade fee not mo
 
 // WARN never changes the status: a skill caution, not one of the owner's FAIL conditions.
 export const WARN_RULES = new Set([bidPullingAway, askAbovePeakLevel, staleReach, bidNotTouched, noListedLimit, nicheUnfolded]);
-export const RULES = [staleLivePrint, sellEarlyTrigger, bidPullingAway, foldUnderBreakEven, fadingBidAboveTodaysLow, exitRarelyPrints,
+export const RULES = [staleLivePrint, sellEarlyTrigger, bidPullingAway, foldUnderBreakEven, fadingBidAboveTodaysLow, askRarelyReached,
   noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, noListedLimit, peakWindowMissing, bondFee, nicheUnfolded];
 
 export function judge(f) {
@@ -138,9 +138,10 @@ export function judge(f) {
 }
 
 const reach = l => l && fin(l.hit) && l.n > 0 ? `${l.hit}/${l.n}` : '—';
+const SHOWN = { FAIL: 'NOT NOW' };
 export function formatLine(f, j) {
   const left = fin(f.limit?.remaining) ? `${fmt(f.limit.remaining)} left` : 'limit left —';
-  return [`${j.status} ${f.name} ${fmt(f.bid)}→${fmt(f.ask)} ${signed(f.net)} BE ${fmt(f.be)}`,
+  return [`${SHOWN[j.status] ?? j.status} ${f.name} ${fmt(f.bid)}→${fmt(f.ask)} ${signed(f.net)} BE ${fmt(f.be)}`,
     `reach bid ${reach(f.day?.bid)} ask ${reach(f.day?.ask)} (peak ask ${reach(f.peak?.ask)})`, left,
     ...j.fails, ...(j.warns.length ? ['warn: ' + j.warns.join('; ')] : []), ...(j.unknowns.length ? ['unknown: ' + j.unknowns.join('; ')] : [])].join(' · ');
 }
@@ -249,7 +250,7 @@ export function scanReport(results, { all = false, why = false } = {}) {
   return [
     ...(passes.length ? [] : [`⚠ nothing clears at screen prices (${results.length} checked${unknowns.length ? `, ${unknowns.length} UNKNOWN` : ''})`]),
     ...passes.filter(x => !x.j.warns.length).flatMap(line), ...passes.filter(x => x.j.warns.length).flatMap(line),
-    `FAIL ${fails.length}${tally ? ': ' + tally : ''} · UNKNOWN ${unknowns.length}${unknowns.length ? ': ' + unknowns.map(x => x.f.name).join(', ') : ''}`,
+    `${SHOWN.FAIL} ${fails.length}${tally ? ': ' + tally : ''} · UNKNOWN ${unknowns.length}${unknowns.length ? ': ' + unknowns.map(x => x.f.name).join(', ') : ''}`,
     ...(all ? fails.flatMap(line) : []),
   ];
 }

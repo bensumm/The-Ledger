@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 4.0
+version: 4.1
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -184,7 +184,7 @@ node pipeline/commands/verify-pick.mjs "<A>@<bid>:<ask>@<lane>" "<B>@…" --why 
 
 `--scan` reads the dump the scan just wrote: the digest rows, every churn row and the band rows (N = top N only)
 by net × units per window, each at the screen's pair and judged for its own lane. It prints one line
-per PASS (a PASS carrying warnings is marked) and a count of FAILs by reason. The second form runs
+per PASS (a PASS carrying warnings is marked) and others by reason. The second form runs
 the fresh trio at your prices; `@churn` judges a churn lap with the churn fold. `--why` adds the live
 prints and their age, max profitable buy, the peak window and its level, the fold, the floor/ceiling
 track, and each rule's result.
@@ -197,10 +197,10 @@ track, and each rule's result.
 - **Read the floor/ceiling track before pitching a PASS.** _(judgment: read call; the line is `formatFloorCeiling` in `js/windowread.mjs`)_
   Price falling into the bid, or live pinned at the ceiling, outranks a clean reach count. The label
   is a prompt; the per-day lows and highs are the signal.
-- **FAIL.** _(judgment: what to do next)_ Drop the row silently. You may re-price ONCE from the
+- **NOT NOW.** _(judgment: what to do next)_ Drop the row silently. You may re-price ONCE from the
   failure's own numbers (bid above max profitable buy → bid at or under it) and re-verify at the new
-  exact prices. Never soften a FAIL into a caveat. An exit that rarely prints in its window fails on
-  any book, however deep.
+  exact prices. Never soften it into a caveat. It means the pair, not the
+  item. An ask rarely reached in-window fails on any book.
 - **UNKNOWN is never pitched.** _(judgment: what to do next)_ `--why` names the missing read. A stale
   live print is "unverified, re-check later": re-quoting does not refresh a print. Say "unverified"
   on its lane line.

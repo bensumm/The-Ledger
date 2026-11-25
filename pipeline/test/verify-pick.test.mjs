@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parsePick, judge, formatLine, formatWhy, fieldsFrom, RULES, staleLivePrint, sellEarlyTrigger, bidPullingAway, foldUnderBreakEven,
-  fadingBidAboveTodaysLow, exitRarelyPrints, noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, peakWindowMissing, bondFee, noListedLimit, trioArgs, nicheUnfolded, WARN_RULES, dumpRefusal, scanCandidates, scanReport, mapLimit } from '../commands/verify-pick.mjs';
+  fadingBidAboveTodaysLow, askRarelyReached, noMarginAfterTax, bidAboveMaxBuy, askAbovePeakLevel, staleReach, bidNotTouched, buyLimitSpent, peakWindowMissing, bondFee, noListedLimit, trioArgs, nicheUnfolded, WARN_RULES, dumpRefusal, scanCandidates, scanReport, mapLimit } from '../commands/verify-pick.mjs';
 import { breakEven, maxBuyForExit, QUICK_FRESH_MIN } from '../../js/quotecore.js';
 import { netMargin } from '../../js/money-math.js';
 
@@ -58,7 +58,7 @@ const cases = [
   [foldUnderBreakEven, 'no confidence bundle', { fold: { estSell: 1000, estSellForward: 1085 } }, /reach-fold/, { fold: { estSell: 1080, estSellForward: 1085 } }],
   [fadingBidAboveTodaysLow, 'fading bid under today’s low (all-day)', { day: day({ bid: leg({ rm: rm({ trend: 'fading' }) }) }) }, /today's low 1,010 is above the bid 1,000/, { day: day({ bid: leg({ rm: rm({ trend: 'fading' }) }), todayLow: null }) }],
   [fadingBidAboveTodaysLow, 'fading bid under today’s low (peak)', { peak: peak({ bid: leg({ rm: rm({ trend: 'fading' }) }) }) }, /FADING/, { day: day({ bid: leg({ rm: rm({ trend: null }) }) }) }],
-  [exitRarelyPrints, 'exit rarely prints in-window', { peak: peak({ rarelyPrints: true, ask: leg({ hit: 6, n: 14 }) }) }, /rarely prints in-window \(6\/14\)/, { peak: peak({ rarelyPrints: undefined }) }],
+  [askRarelyReached, 'ask reached on too few peak-window days', { peak: peak({ rarelyPrints: true, ask: leg({ hit: 6, n: 14 }) }) }, /ask reached only 6\/14 peak-window days \(12\/14 any hour\)/, { peak: peak({ rarelyPrints: undefined }) }],
   [noMarginAfterTax, 'no net after tax', { net: 0 }, /no margin after tax/, { net: null }],
   [noMarginAfterTax, 'ask under break-even', { ask: 1020, net: -1 }, /ask 1,020 vs BE 1,021/, { be: null }],
   [bidAboveMaxBuy, 'bid above the back-solved buy', { maxBuy: 999 }, /bid 1,000 above max profitable buy 999/, { maxBuy: undefined }],
@@ -145,7 +145,7 @@ for (const s of ['', 'Soul rune', 'Soul rune@371', '@371:395', 'Soul rune@x:395'
 ok('one line per pick, with the fields in order', () => {
   assert.equal(formatLine(base(), judge(base())), 'PASS Test rune 1,000→1,100 +78 BE 1,021 · reach bid 12/14 ask 12/14 (peak ask 12/14) · 10,000 left');
   const f = base({ maxBuy: 999 }), x = formatLine(f, judge(f));
-  assert.match(x, /^FAIL /); assert.ok(!x.includes('\n'));
+  assert.match(x, /^NOT NOW /); assert.ok(!x.includes('\n'));
   const u = formatLine({ name: 'x', bid: 1, ask: 2 }, judge({ name: 'x', bid: 1, ask: 2 }));
   assert.match(u, /^UNKNOWN x 1→2 — BE — · reach bid — ask —/); assert.ok(!u.includes('\n'));
 });
@@ -208,8 +208,8 @@ ok('--scan report: clean PASS, PASS ⚠, then one tally line; --all adds the FAI
   const rs = [res({ maxBuy: 999, name: 'F1' }), res({ peak: peak({ gap: 5, level: 1095 }), name: 'W' }), res({ limit: null, name: 'U' }), res({ name: 'P' }, { grade: null, mode: 'band' }), res({ maxBuy: null, net: 0, name: 'F2' })];
   const out = scanReport(rs);
   assert.match(out[0], /^PASS P .* · band —$/); assert.match(out[1], /^PASS ⚠ W .*warn: .* · churn B$/);
-  assert.equal(out[2], 'FAIL 2: bid above max buy 1, no margin after tax 1 · UNKNOWN 1: U'); assert.equal(out.length, 3);
-  assert.equal(scanReport(rs, { all: true }).filter(l => /^FAIL F/.test(l)).length, 2);
+  assert.equal(out[2], 'NOT NOW 2: bid above max buy 1, no margin after tax 1 · UNKNOWN 1: U'); assert.equal(out.length, 3);
+  assert.equal(scanReport(rs, { all: true }).filter(l => /^NOT NOW F/.test(l)).length, 2);
 });
 ok('--scan says so when nothing passes', () => {
   assert.match(scanReport([res({ net: 0 })])[0], /nothing clears at screen prices \(1 checked\)/);
