@@ -1945,7 +1945,7 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
     `beats`/`scoreItem` fixture-pinned in `pipeline/test/fade-outcomes.test.mjs` (incl. the
     Diamond-bolts 12h shape end-to-end). `--json`, `--items N`, `--cost-ratio r`,
     `--item <name|id>`; the 4h outcome horizon is part of the LOCKED spec, deliberately not a flag),
-    `join-crash-entry.mjs` (CRX2, `plans/PLAN-CRASH-REPLAY.md` — the crash-entry SCORER, read-only. One bulk
+    `join-crash-entry.mjs` (CRX2 — the crash-entry SCORER, read-only. One bulk
     read of the 1h archive; `crash-entry.mjs` detects per-item dump events and scores every rule at the
     plan's locked spec with each item's buy limit. Prints the pre-registered primary (ST-time vs RB1 on
     block P, paired, onset-day cluster bootstrap via `cluster-ci.mjs`; "beats" needs that CI, ST-time's own
@@ -1961,7 +1961,7 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
     interval. Below `MIN_CLUSTERS` onset days a contrast prints no interval. **Result: no rule beats
     never-enter on block P, and the pre-registered primary is "no detectable edge" — run the command for the
     numbers.** Block P is single-item repricings, not a crash; every
-    fill and reach is an upper bound; block R stays incomplete until 2026-11-13 (CRX4). Pure core
+    fill and reach is an upper bound; block R (re-run 2026-11-25): every rule's mean is negative, one cluster. Pure core
     `scoreEvent`/`contrast`/`holm`/`primaryVerdict`/`caseSeries`/`versusNothing`/`report` pinned by
     `pipeline/test/join-crash-entry.test.mjs`. `--json`, `--items N`. Inform-only, gates nothing),
     `join-window-clears.mjs` (WC2, PLAN-WINDOW-CLEAR-OUTCOMES — the window-clear ask-RUNG fill-attribution
@@ -2299,7 +2299,7 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
     the answer SHOWS both numbers without applying either: a decision-mover ships as a visible comparison,
     not a silent swap.
     Fixture-pinned by `pipeline/test/fill-surface.test.mjs`. NOT wired to any surface yet — AB7),
-    **`crash-entry.mjs`** (CRX1, `plans/PLAN-CRASH-REPLAY.md` — PURE per-item dump-event layer over
+    **`crash-entry.mjs`** (CRX1 — PURE per-item dump-event layer over
     archive-shaped 1h series: `detectEvents` (onset = first completed bucket ≤ `ONSET_FRAC` × the trailing
     `ONSET_LOOKBACK_H` max mid, liquid + ≥ `CRASH_MIN_PRICE`, `COOLDOWN_H` per item; cluster = onset UTC day,
     block P/R by `BLOCK_R_FIRST`/`BLOCK_R_LAST`), the entry rules `RULES` (RB0/RB1/RB2/R0/R2/R3/R4/R5, plus
@@ -2312,14 +2312,14 @@ Generated from the `@does` lines by `pipeline/ci/build-registry.mjs --write`.
     persistence and `PERSIST_MIN_UNITS` onset volume are readable), `pairedRows`
     (resolved rows for `cluster-ci.mjs` `pairedClusterCI` with the onset day as the unit; a pending leg
     is dropped), and
-    `breadthRead`/`stabilityRead` (the stability line CRX3 and the `/scan` header reuse). Every decision
+    `breadthRead`/`stabilityRead` (for a future `/scan` header line). Every decision
     at hour t reads only what `js/forward-reach.mjs` `readableCut` admits; forward reads are capped at
     `nowSec`, so an unresolved window is `pending`, never a miss. REUSES `breakEven`, `tax`,
     `floorCeilingTrack` (R2) and `dislocation.mjs` `trailingDeviation`/`bucketOf` (RB2, called with
     `{ utc: true }` so the replay is timezone-independent). A staged tranche smaller than one unit still
     buys one. Thresholds are the plan's
     pre-registered placeholders. Consumer: `join-crash-entry.mjs` (CRX2); `stabilityRead` keeps its
-    `@test-only` marker until the CRX3 live read consumes it. Inform-only, gates nothing. Pinned by
+    `@test-only` marker until that line is built. Inform-only, gates nothing. Pinned by
     `pipeline/test/crash-entry.test.mjs`),
     `marketfetch.mjs`
     (node-side price/guide fetch layer + historical bands `loadHistBands`/past-anchored 6h series

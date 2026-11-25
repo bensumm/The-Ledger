@@ -398,7 +398,7 @@ export function breadthRead(seriesById, nowSec) {
 }
 
 /* Stabilising per class = breadth < STABLE_BREADTH AND class median return > STABLE_RET on each of the last STABLE_RUN completed days. */
-// @test-only: no production consumer until CRX2 (join-crash-entry.mjs) / CRX3 (read-crash-entry.mjs) — drop this marker there.
+// @test-only: no production consumer until the owner-requested /scan breadth line; drop this marker there.
 export function stabilityRead(seriesById, nowSec) {
   const days = [];
   for (let k = STABLE_RUN - 1; k >= 0; k--) days.push(breadthRead(seriesById, dayStart(nowSec) - k * DAY));

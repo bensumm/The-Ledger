@@ -81,7 +81,7 @@ import `js/quotecore.js`, so their numbers match the app's.
 | "what's my idle cash?" | `derive-cash.mjs` — an amount overwrites the anchor; a session budget goes to --capital instead |
 | "re-anchor my cash to X" | `derive-cash.mjs 16m` — caveat above |
 | "is the patient pair real?", "does the deep bid fill?" | `join-asym-outcomes.mjs [--entry H] [--horizon H] [--item "<item>"]` — the pair rarely completes, worst on big-ticket; a random-offset null was rejected (header) |
-| "did buying the dump work?", "score the crash-entry rules" | `join-crash-entry.mjs [--items N]` — read its verdict line and plans/PLAN-CRASH-REPLAY.md first; every fill is an upper bound |
+| "did buying the dump work?", "score the crash-entry rules" | `join-crash-entry.mjs [--items N]` — read its verdict line first (no rule beat never buying); every fill is an upper bound |
 | "does askStar beat what we have?", "which exit ask makes the most gp?" | `join-exit-ev.mjs [--items N] [--horizon H]` — the null branch fired: the reach surface only describes; retire nothing on a gap under the instrument's noise |
 | "does the fade alert measure anything?", "score hours-under-profile" | `join-fade-outcomes.mjs [--items N] [--cost-ratio r] [--item "<item>"]` — wins only at miss-cost ratio 3, loses at 2 and under, weakest on big-ticket |
 | "rebuild outcomes", "fill-time distributions" | `join-outcomes.mjs [--report]` — several minutes, networked |

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // @does Replays the crash-entry rules on archived dump events
 // @ask "did buying the dump work?", "score the crash-entry rules" => [--items N]
-// @read read its verdict line and plans/PLAN-CRASH-REPLAY.md first; every fill is an upper bound
-/* join-crash-entry.mjs — CRX2 of plans/PLAN-CRASH-REPLAY.md: scores the crash-entry rules on per-item dump
+// @read read its verdict line first (no rule beat never buying); every fill is an upper bound
+/* join-crash-entry.mjs — CRX2 (spec: `git show c33dd66:plans/PLAN-CRASH-REPLAY.md`): scores the crash-entry rules on per-item dump
  * events from the 1h archive (read-only, one bulk read). The spec, the win criterion and the null branch
  * are the plan's "Statistics and win criterion" section, registered before this ran:
  *   primary   — block P, big + 1–10m, ST-time vs RB1, paired per event, onset-day cluster bootstrap.
@@ -200,7 +200,6 @@ function render(r, meta) {
   for (const x of r.blockR.rules) L.push(`  ${x.key.padEnd(12)} mean ${pct(x.mean).padStart(8)}  min ${pct(x.min)}  median ${pct(x.median)}  max ${pct(x.max)}  resolved ${x.n}  unresolved ${x.pending}`);
   const sg = r.blockR.primary.point;
   L.push(`  ST-time − RB1 on block R: ${pct(sg)} (sign ${sg > 0 ? '+' : sg < 0 ? '−' : '0/none'}) over n=${r.blockR.primary.n}${r.blockR.winner ? '' : '; no block-P winner to transfer'}`);
-  L.push('  Block R outcomes are incomplete until every onset has 14d of history (re-run on or after 2026-11-13).');
   return L.join('\n');
 }
 
